@@ -604,7 +604,7 @@ c:\04.budget_management_web\
 - [x] Tech stack finalized — **React + FastAPI** (Streamlit dropped)
 - [x] Database decision confirmed — Azure SQL (transactional) + Fabric Lakehouse (medallion)
 - [x] Developer machine: Python 3.14, Git, VS Code, ODBC Driver 17 installed
-- [x] GitHub repo created and connected
+- [x] GitHub repo created — **https://github.com/cmanpowerbi-chememan-com/budget-management-web**
 - [x] CLAUDE.md created and up to date
 - [x] Azure Entra ID configured (`cman-fabric-write` app registration, redirect URI `http://localhost:8501` registered)
 - [x] Azure SQL Database created and firewall configured (dev-open rule added)
@@ -616,7 +616,7 @@ c:\04.budget_management_web\
 - [x] `.env` file created with all credentials
 - [x] `db/connection.py` — Azure SQL connection working (tested SUCCESS)
 - [x] `mas_employee_data` — synced from C-POP HR API, 621 Active employees, incremental sync script ready (`setup/sync_employees.py`)
-- [ ] Deploy sync job to Azure Container Apps (`setup/deploy_sync_job.sh` via Cloud Shell)
+- [x] GitHub Actions daily sync — `.github/workflows/sync_employees.yml` running every 06:00 Bangkok, verified ✅
 - [ ] Restructure project folders → `backend/` + `frontend/`
 - [ ] `backend/main.py` — FastAPI app
 - [ ] `backend/utils/auth.py` — MSAL login with Entra ID
@@ -661,14 +661,20 @@ c:\04.budget_management_web\
 - `--dry-run` flag: shows what would change without writing to DB
 - Run: `python setup/sync_employees.py`
 
-### Scheduling (1x/day) — Azure Container Apps Job
-- Image: `cmanbudgetacr.azurecr.io/budget-sync-employees:latest`
-- Dockerfile: `Dockerfile.sync` (python:3.11-slim + ODBC Driver 17 + sync_employees.py)
-- Job name: `cman-budget-sync-employees` in `CMAN-BUDGET-MNGT-WEB-RG`
+### Scheduling (1x/day) — GitHub Actions ✅
+- Workflow: `.github/workflows/sync_employees.yml`
 - Cron: `0 23 * * *` (UTC) = **06:00 Bangkok time** daily
-- Deploy script: `setup/deploy_sync_job.sh` — run in Azure Cloud Shell after `git pull`
-- Manual trigger: `az containerapp job start --name cman-budget-sync-employees --resource-group CMAN-BUDGET-MNGT-WEB-RG`
-- Credentials passed as environment variables (not baked into image)
+- Runner: `ubuntu-22.04` (has Microsoft repo pre-installed — no need to add manually)
+- Manual trigger: GitHub → Actions → Daily Employee Sync → Run workflow
+- Secrets stored in GitHub repo Secrets (Settings → Secrets → Actions):
+  `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `CPOP_HR_SYSTEM_API_URL`, `CPOP_HR_SYSTEM_API_KEY`
+- **First verified run: 2026-05-05 23:03 Thai time** — Diff +0 ~0 -0 (621 rows in sync)
+- Maintenance: แก้ sync logic → `git push` → มีผลทันที ไม่ต้อง rebuild อะไร
+
+### Azure SQL Firewall
+- Rule `dev-open`: `0.0.0.0 → 255.255.255.255` — allows GitHub Actions runner IP
+- Safe เพราะยังต้องใช้ username/password เข้า DB ทุกครั้ง
+- To lock down later: ใช้ Service Principal + dynamic whitelist runner IP (ต้องการ Azure Owner role)
 
 ### Table Ordering
 - Rows ordered by `empcode` (id 1..N assigned in empcode sort order)
