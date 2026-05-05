@@ -1,0 +1,40 @@
+name: Daily Employee Sync
+
+on:
+  schedule:
+    - cron: "0 23 * * *"  # 06:00 Bangkok (UTC+7) every day
+  workflow_dispatch:        # manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ODBC Driver 17 for SQL Server
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: pip install pyodbc requests python-dotenv
+
+      - name: Run employee sync
+        env:
+          DB_SERVER: ${{ secrets.DB_SERVER }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          CPOP_HR_SYSTEM_API_URL: ${{ secrets.CPOP_HR_SYSTEM_API_URL }}
+          CPOP_HR_SYSTEM_API_KEY: ${{ secrets.CPOP_HR_SYSTEM_API_KEY }}
+        run: python setup/sync_employees.py

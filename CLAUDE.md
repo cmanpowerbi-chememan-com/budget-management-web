@@ -32,7 +32,7 @@ Do NOT delete this file.
 Internal OPEX budget system replacing manual SAP exports and Excel consolidation.
 Users fill budget by division → approval workflow → dashboard vs actuals.
 
-**GitHub:** https://github.com/tanasedw/budget_management_web.git
+**GitHub:** https://github.com/cmanpowerbi-chememan-com/budget-management-web
 **Working folder:** `c:\04.budget_management_web\`
 
 ---
@@ -41,13 +41,30 @@ Users fill budget by division → approval workflow → dashboard vs actuals.
 
 | Layer | Tool | Notes |
 |-------|------|-------|
-| Web UI | Streamlit (Python) | Local dev → deploy to Azure Container Apps |
+| Frontend | React + Vite (JavaScript) | SPA — replaces Streamlit |
+| Backend API | FastAPI (Python) | REST API — replaces Streamlit server |
 | Transactional DB | Azure SQL Database | Budget input, approvals, user roles |
-| Analytical DB | Fabric Lakehouse (OneLake) | SAP actuals, reporting, dashboards |
+| Analytical DB | Fabric Lakehouse (OneLake) | SAP actuals, medallion architecture (Bronze→Silver→Gold) |
 | Authentication | Azure Entra ID | Login + RLS by division |
 | Email Notifications | Fabric Notebook + Microsoft Graph API | No Power Automate |
 | Deployment | Azure Container Apps | Via Azure Cloud Shell (no local Docker/CLI) |
 | Version Control | GitHub | https://github.com/tanasedw/budget_management_web.git |
+
+### Database Decision — Why NOT CosmosDB or Lakehouse-only
+- **CosmosDB** ❌ — NoSQL, no SQL joins, expensive, overkill for structured budget rows
+- **Lakehouse only** ❌ — Bulk analytical reads only, terrible for one-row-at-a-time CRUD form updates
+- **Azure SQL** ✅ — Transactional CRUD: budget input forms, approval workflow, user roles
+- **Fabric Lakehouse** ✅ — Medallion architecture: SAP actuals Bronze→Silver→Gold, dashboard Gold layer
+
+```
+User fills form → FastAPI → Azure SQL (budget_submissions, approval_status)
+                                ↓
+                    Fabric Notebook pulls from Azure SQL
+                                ↓
+                    Bronze → Silver → Gold (Lakehouse)
+                                ↓
+                    Dashboard reads Gold layer
+```
 
 ---
 
@@ -60,7 +77,7 @@ Users fill budget by division → approval workflow → dashboard vs actuals.
 
 2. **No Power Automate**
    - Email notifications via Fabric Notebook + Microsoft Graph API instead
-   - Triggered by Fabric REST API call from Streamlit when approval status changes
+   - Triggered by Fabric REST API call from FastAPI backend when approval status changes
 
 3. **No local Docker/Azure CLI**
    - Machine does not have admin rights to install
@@ -229,8 +246,12 @@ User → VP/AVP (of user's division) → Nipapornt (Budget Staff) → Warapornt 
 ### SAP Export Settings
 - Company Code: 1000
 - Layout: /FORTEMPLATE
-- Exclude: Doc type=CO, Cost Centers: 10SC012000/CMRY01/CMKK01/CMPB01/MNLB00-04/(Blanks)
-- Exclude: Assignment=TFRS16
+- SAP exports **ALL rows** — ไม่มีการ filter ตอน export
+
+### Actuals Filter Rule (apply ตอน query — ใน Lakehouse/Warehouse ไม่ใช่ตอน load)
+- Exclude rows where **Document type** = `CO`
+- Exclude rows where **Cost Center** = `10SC012000`, `CMRY01`, `CMKK01`, `CMPB01`, `MNLB00-04`, หรือ *(Blanks)*
+- Exclude rows where **Assignment** = `TFRS16`
 
 ### Actuals Data Load Strategy — Replace by Month
 - ไม่มีวันปิดรับข้อมูล — สามารถ re-upload ข้อมูลเดือนที่ผ่านไปแล้วได้เสมอ
@@ -316,6 +337,85 @@ User → VP/AVP (of user's division) → Nipapornt (Budget Staff) → Warapornt 
 | 24 | Fiscal Year | INT | `2026` |
 | 25 | Object Class | VARCHAR | `Overhead` |
 | 26 | Debit/Credit ind | CHAR(1) | `S` |
+
+---
+
+## Data Platform Layer — Bronze → Silver Mapping
+
+**Spec file:** `docs/CMAN-DataPlatform_Mapping_Specification _V0.0.4.xlsx`
+
+### Table Names
+
+| Layer | Full Table Name | Col Count |
+|-------|----------------|-----------|
+| Landing (flat file) | `SAP_T_GL_TRANS_[COMPANY_CD]_YYYYMMDD.txt` | — |
+| Bronze | `bronze_src.ACDOCA` | 93 (85 SAP data + 1 pipeline + 7 control) |
+| Silver | `silver_src.sap_gl_trans` | 92 (85 data + 7 control) |
+
+### Key Facts
+- **Landing file naming:** `SAP_T_GL_TRANS_1000_YYYYMMDD.txt` — Company Code `1000` = CMAN TH, `2000` = CMAN AU
+- **Silver filter:** `WHERE RLDNR = '0L'` — only Ledger 0L rows promoted from bronze to silver
+- **Composite PK (5 cols):** `ledger + accounting_doc_number + company_code + fiscal_year + posting_item_number`
+- **Bronze-only col (not in silver):** `PRCS_FILE_NAME` — pipeline constant storing source filename
+- **2 cols with transform (not plain Move):** `exchange_rate` (BKPF_KURSF) and `group_exchange_rate` (BKPF_KURS2) — trailing `-` sign flipped to leading `-` before DECIMAL cast
+
+### FAGLL03H 26 cols → Silver Mapping (cols used by this project)
+
+| FAGLL03H Col | Silver col | Bronze col | Need |
+|---|---|---|---|
+| Company Code | `company_code` | `RBUKRS` | Filter `= '1000'` |
+| G/L Account | `gl_account_number` | `RACCT` | Join GL group → dashboard |
+| G/L Account: Long Text | **NO MAP** | — | ⚠️ Need `dim_gl_account` ref table |
+| Posting Date | `posting_date` | `BUDAT` | Extract month → monthly actuals |
+| Ledger | `ledger` | `RLDNR` | Filtered at silver already |
+| Company Code Currency Key | `company_curr` | `RHCUR` | Verify = `THB` |
+| Company Code Currency Value | `company_curr_amount` | `HSL` | **Main SUM amount for dashboard** |
+| Cost Center | `cost_center` | `RCNTR` | Filter excluded CC + join division |
+| Cost Center: Long Text | **NO MAP** | — | ⚠️ Need `dim_cost_center` ref table |
+| Profit Center | `profit_center` | `PRCTR` | Reference display |
+| Assignment | `assignment_number` | `ZUONR` | Filter `<> 'TFRS16'` |
+| Document Number | `accounting_doc_number` | `BELNR` | Reference display |
+| Document type | `doc_type` | `BLART` | Filter `<> 'CO'` |
+| Transaction Code | `trans_code` | `BKPF_TCODE` | Reference display |
+| Entry Date | **NO MAP** | `CPUDT` not in bronze | ⚠️ Gap — CPUDT not extracted into pipeline |
+| Order: Short Text | **NO MAP** | — | Display only — show NULL acceptable |
+| Text | `item_text` | `SGTXT` | Line item description display |
+| Order | **NO MAP** | — | Display only — show NULL acceptable |
+| Quantity | `quantity` | `MSL` | Reference display |
+| Unit of Measure | `base_unit_measure` | `RUNIT` | Reference display |
+| Purchasing Document | `purchase_order_number` | `EBELN` | Reference display |
+| Invoice Reference | `ref_doc_number2` | `BKPF_XBLNR` | Reference display |
+| G/L Account (dup col 23) | `gl_account_number` | `RACCT` | Duplicate — skip |
+| Fiscal Year | `fiscal_year` | `GJAHR` | Group by year |
+| Object Class | **NO MAP** | — | Display only — show NULL acceptable |
+| Debit/Credit ind | `debit_credit_ind` | `DRCRK` | `S`=expense `H`=reversal — sign logic for SUM |
+
+### Gaps — 4 Columns Missing from Pipeline
+
+| FAGLL03H Col | SAP Field | Gap | Action |
+|---|---|---|---|
+| G/L Account: Long Text | — | Not in ACDOCA | Create `dim_gl_account` in Azure SQL |
+| Cost Center: Long Text | — | Not in ACDOCA | Create `dim_cost_center` in Azure SQL (also needed for division mapping) |
+| Entry Date | `CPUDT` | Not extracted into bronze | Request data platform team to add, or load from raw flat file in `nb_upload_actuals` |
+| Order / Order: Short Text | — | Not in ACDOCA | Accept NULL on dashboard |
+
+### Dashboard Query Pattern
+```sql
+SELECT
+    fiscal_year,
+    MONTH(posting_date) AS month,
+    gl_account_number,
+    cost_center,
+    SUM(CASE WHEN debit_credit_ind = 'S' THEN company_curr_amount
+             WHEN debit_credit_ind = 'H' THEN -company_curr_amount END) AS actuals_thb
+FROM silver_src.sap_gl_trans
+WHERE company_code = '1000'
+  AND doc_type <> 'CO'
+  AND cost_center NOT IN ('10SC012000','CMRY01','CMKK01','CMPB01','MNLB00-04')
+  AND cost_center IS NOT NULL
+  AND assignment_number <> 'TFRS16'
+GROUP BY fiscal_year, month, gl_account_number, cost_center
+```
 
 ---
 
@@ -412,45 +512,83 @@ Sheet แบ่งเป็น **1 ตารางหลัก + 4 ตารา�
 
 > **DB Design Warning:** แต่ละตารางย่อยมี GL Account ของตัวเอง ต้องเก็บแยก row ตาม expense_type (เบี้ยเลี้ยง / ตั๋วเครื่องบิน / ที่พัก / อื่น) — ค่าตั๋วเครื่องบินมี "Flight Details" พิเศษ อาจต้องมี column เพิ่มใน DB
 
-### การสร้าง Template Opex ใน Streamlit (หน้า Submit Budget)
+### การสร้าง Template Opex ใน React (หน้า Submit Budget)
 
 **UI หลัก:** ตารางแบ่งตาม GL Group แสดง GL Account แต่ละตัวพร้อมข้อมูล reference และช่องกรอกงบรายเดือน
 
 **การ implement:**
-- ใช้ `st.data_editor` + `column_config` ล็อค column ที่ไม่ให้แก้ (read-only: รหัสบัญชี, ชื่อบัญชี, Budget prior year, Actuals)
+- React table component — lock read-only columns (รหัสบัญชี, ชื่อบัญชี, Budget prior year, Actuals)
 - column ที่ user กรอกได้: ม.ค.-ธ.ค. (12 cols) เท่านั้น
-- ยอดรวม Template 2026 = auto-sum ใน Python ก่อน render — ไม่ใช่ formula ใน UI
-- GL ที่ลิงก์ sub-template → แสดงเป็น read-only + ปุ่มไป sub-template page
+- ยอดรวม Template 2026 = auto-sum ใน frontend ก่อน render
+- GL ที่ลิงก์ sub-template → แสดงเป็น read-only + ปุ่ม navigate ไป sub-template route
 
 **Draft vs Submit:**
-- กด **Save** = บันทึก draft ลง DB (status = DRAFT) — กด save กี่ครั้งก็ได้
-- กด **Submit** = ส่งเข้า workflow อนุมัติ (status เปลี่ยนเป็น PENDING_VP)
+- กด **Save** = POST to FastAPI → บันทึก draft ลง DB (status = DRAFT)
+- กด **Submit** = POST to FastAPI → ส่งเข้า workflow อนุมัติ (status เปลี่ยนเป็น PENDING_VP)
 
 **Deadline:**
-- ดึงวันปิดรับจาก DB ทุกครั้งที่เปิดหน้า
-- ถึงวันปิด → ปิด form อัตโนมัติ ไม่ให้กรอกหรือแก้ไขได้
+- GET /api/deadline จาก FastAPI ทุกครั้งที่เปิดหน้า
+- ถึงวันปิด → disable form อัตโนมัติ
 
 ---
 
-## Streamlit Pages Plan
+## Pages / Routes Plan
 
-| Page | File | Role |
-|------|------|------|
-| Home / Login | `app.py` | All |
-| Submit Budget | `pages/01_submit_budget.py` | User |
-| VP Approval | `pages/02_approve_vp.py` | VP/AVP |
-| Staff Approval | `pages/03_approve_staff.py` | Nipapornt |
-| Manager Approval | `pages/04_approve_manager.py` | Warapornt |
-| Dashboard | `pages/05_dashboard.py` | All |
-| Admin Panel | `pages/06_admin.py` | Budget dept |
+### Frontend (React routes)
+| Page | Route | Role |
+|------|-------|------|
+| Login | `/` | All |
+| Submit Budget | `/submit` | User |
+| VP Approval | `/approve/vp` | VP/AVP |
+| Staff Approval | `/approve/staff` | Nipapornt |
+| Manager Approval | `/approve/manager` | Warapornt |
+| Dashboard | `/dashboard` | All |
+| Admin Panel | `/admin` | Budget dept |
+
+### Backend (FastAPI endpoints)
+| Group | Prefix |
+|-------|--------|
+| Auth | `/api/auth` |
+| Budget submission | `/api/budget` |
+| Approvals | `/api/approval` |
+| Dashboard data | `/api/dashboard` |
+| Admin | `/api/admin` |
 
 ---
+
+## Project Structure
+
+```
+c:\04.budget_management_web\
+├── backend/                  ← FastAPI (Python)
+│   ├── main.py
+│   ├── routers/              ← auth, budget, approval, dashboard, admin
+│   ├── db/                   ← connection.py (Azure SQL)
+│   ├── utils/                ← auth.py (MSAL), email.py
+│   ├── requirements.txt
+│   └── .env
+├── frontend/                 ← React + Vite
+│   ├── src/
+│   │   ├── main.jsx
+│   │   ├── App.jsx
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── services/         ← api.js (calls FastAPI)
+│   ├── package.json
+│   └── vite.config.js
+├── Dockerfile
+├── .github/workflows/deploy.yml
+├── .gitignore
+└── CLAUDE.md
+```
 
 ## Deployment Flow
 
 ```
 1. Write code → VS Code (local)
-2. Test locally → streamlit run app.py (localhost:8501)
+2. Test locally:
+   - backend:  cd backend && uvicorn main:app --reload  (localhost:8000)
+   - frontend: cd frontend && npm run dev               (localhost:5173)
 3. Push code → git push → GitHub
 4. Deploy → Azure Cloud Shell (portal.azure.com)
    git pull → docker build → docker push → az containerapp update
@@ -462,30 +600,29 @@ Sheet แบ่งเป็น **1 ตารางหลัก + 4 ตารา�
 ## Current Progress
 
 - [x] Requirements gathered from requirement_detail.xlsx
-- [x] Architecture decided (SQL + Lakehouse + Streamlit + Entra ID)
-- [x] Tech stack finalized
-- [x] Developer machine fully set up (all Python packages installed)
+- [x] Architecture decided (Azure SQL + Lakehouse + React + FastAPI + Entra ID)
+- [x] Tech stack finalized — **React + FastAPI** (Streamlit dropped)
+- [x] Database decision confirmed — Azure SQL (transactional) + Fabric Lakehouse (medallion)
+- [x] Developer machine: Python 3.14, Git, VS Code, ODBC Driver 17 installed
 - [x] GitHub repo created and connected
-- [x] README.md written (full project manual)
-- [x] CLAUDE.md created (this file)
-- [x] Virtual environment (venv) created
-- [x] requirements.txt created
-- [x] Project folder structure created (`app.py`, `pages/`, `utils/`, `db/`, `docs/`, `setup/`)
-- [x] Azure Entra ID configured (`cman-fabric-write` app registration reused)
-- [x] Azure SQL Database created (`budget-mngt-web-db` on `cman-budget-mngt-web-sql`)
+- [x] CLAUDE.md created and up to date
+- [x] Azure Entra ID configured (`cman-fabric-write` app registration, redirect URI `http://localhost:8501` registered)
+- [x] Azure SQL Database created and firewall configured (dev-open rule added)
 - [x] Database tables created (5 tables: `user_division_map`, `budget_submissions`, `approval_status`, `approval_log`, `submission_deadline`)
 - [x] Azure Container Registry created (`cmanbudgetacr.azurecr.io`)
 - [x] Azure Container Apps created (`cman-budget-mngt-web`)
 - [x] Fabric Workspace + Lakehouse ready (`budget_management_web`)
 - [x] Fabric Notebooks created (`nb_upload_actuals`, `nb_send_email`)
 - [x] `.env` file created with all credentials
-- [x] Dockerfile created
-- [x] UI theme set (Inner Peace style — `utils/styles.py` + `.streamlit/config.toml`)
-- [x] Streamlit running locally (`http://localhost:8501`)
-- [ ] `db/connection.py` — Azure SQL connection
-- [ ] `utils/auth.py` — MSAL login
-- [ ] `app.py` — Login page
-- [ ] Streamlit pages built
+- [x] `db/connection.py` — Azure SQL connection working (tested SUCCESS)
+- [x] `mas_employee_data` — synced from C-POP HR API, 621 Active employees, incremental sync script ready (`setup/sync_employees.py`)
+- [ ] Deploy sync job to Azure Container Apps (`setup/deploy_sync_job.sh` via Cloud Shell)
+- [ ] Restructure project folders → `backend/` + `frontend/`
+- [ ] `backend/main.py` — FastAPI app
+- [ ] `backend/utils/auth.py` — MSAL login with Entra ID
+- [ ] `frontend/` — React + Vite scaffold
+- [ ] API routes built (auth, budget, approval, dashboard, admin)
+- [ ] React pages built
 - [ ] Approval workflow built
 - [ ] Email notifications built
 - [ ] Dashboard built
@@ -493,14 +630,63 @@ Sheet แบ่งเป็น **1 ตารางหลัก + 4 ตารา�
 
 ---
 
+## Employee Data (mas_employee_data)
+
+- Table `mas_employee_data` created on `budget-mngt-web-db` ✅
+- Script source: `c:\01.besties\cman-prd-chatbot-backend\docs\sql_migration\create_tables.sql`
+- **Source: C-POP HR System API** ✅ (answered 2026-05-05)
+
+### C-POP HR System API
+| Field | Value |
+|-------|-------|
+| URL | `https://cman.ipop.iamconsulting.co.th/api/public/tenant/cman/employeedata` |
+| Method | POST |
+| Auth header | `Authorization: <api_key>` (no "Bearer" prefix) |
+| Body | `{"keyDate": "YYYY-MM-DD", "empCode": ""}` |
+| Env vars | `CPOP_HR_SYSTEM_API_URL`, `CPOP_HR_SYSTEM_API_KEY` in `.env` |
+| Response | `{"success": true, "employeeList": [...]}` |
+| Volume | ~799 total, ~621 Active, 87 fields per record |
+
+### Table Schema Notes
+- PK is on `id` (nvarchar(50), sequential number "1", "2", ...) — migrated from original empcode PK
+- Natural unique key per row: `(empcode, poscode)` — verified no duplicates among Active records
+- API field `hr status` (space) maps to DB column `hr_status` (underscore)
+- Only Active employees (`hr status = "Active"`) are synced — Inactive are deleted from DB
+
+### Sync Script: `setup/sync_employees.py`
+- **Incremental sync** — diffs API vs DB by `(empcode, poscode)` composite key
+- INSERT: new records in API not in DB
+- UPDATE: records in both but any field changed (MD5 hash comparison)
+- DELETE: records in DB no longer Active in API
+- `--dry-run` flag: shows what would change without writing to DB
+- Run: `python setup/sync_employees.py`
+
+### Scheduling (1x/day) — Azure Container Apps Job
+- Image: `cmanbudgetacr.azurecr.io/budget-sync-employees:latest`
+- Dockerfile: `Dockerfile.sync` (python:3.11-slim + ODBC Driver 17 + sync_employees.py)
+- Job name: `cman-budget-sync-employees` in `CMAN-BUDGET-MNGT-WEB-RG`
+- Cron: `0 23 * * *` (UTC) = **06:00 Bangkok time** daily
+- Deploy script: `setup/deploy_sync_job.sh` — run in Azure Cloud Shell after `git pull`
+- Manual trigger: `az containerapp job start --name cman-budget-sync-employees --resource-group CMAN-BUDGET-MNGT-WEB-RG`
+- Credentials passed as environment variables (not baked into image)
+
+### Table Ordering
+- Rows ordered by `empcode` (id 1..N assigned in empcode sort order)
+- `setup/reorder_emp_table.py` — one-time script to rebuild table in empcode order (run if table gets out of order)
+- Daily sync preserves order for new inserts (API records sorted by empcode before insert)
+
+---
+
 ## Next Steps (pick up from here)
 
-1. Build `db/connection.py` — connect to Azure SQL via pyodbc
-2. Build `utils/auth.py` — MSAL login with Entra ID
-3. Build `app.py` — Login page (home)
-3. Create Azure SQL Database (Azure Portal)
-4. Create `db_connection.py` and run table creation SQL
-5. Start building `app.py` and first Streamlit page
+1. ~~Answer pending question: employee data source~~ ✅ C-POP HR API
+2. ~~Build employee data load/sync into `mas_employee_data`~~ ✅ `setup/sync_employees.py`
+3. (Optional) Schedule daily sync — Windows Task Scheduler or Azure Container Apps Job
+4. Check Node.js installed (`node -v`) — required for React
+5. Restructure folders: create `backend/` and `frontend/`
+6. Build `backend/main.py` — FastAPI entry point
+7. Build `backend/utils/auth.py` — MSAL login with Entra ID
+8. Scaffold React frontend with Vite
 
 ---
 
