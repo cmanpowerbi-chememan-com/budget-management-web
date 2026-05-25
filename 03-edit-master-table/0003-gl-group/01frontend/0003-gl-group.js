@@ -45,6 +45,7 @@ let sortCol       = null;
 let sortDir       = 'asc';
 let selectedGlCode  = null;  // from dropdown
 let selectedGroupId = null;  // from dropdown OR null if creating new
+let filteredRows    = [];    // current visible rows — used by exportCsv
 
 /* ═══════════════════════════════════════════════════════════
    INIT — replaces the bottom of the original <script>
@@ -256,6 +257,18 @@ function renderTable() {
     });
   }
 
+  filteredRows = rows;
+
+  /* ── Filtered count status ── */
+  const countEl = document.getElementById('filteredCount');
+  if (countEl) {
+    const isFiltered = search.length > 0;
+    countEl.textContent = isFiltered
+      ? `${rows.length} GL codes (จาก ${masterData.length})`
+      : `${rows.length} GL codes`;
+    countEl.style.color = isFiltered ? 'var(--accent)' : 'var(--ink-3)';
+  }
+
   tbody.innerHTML = rows.length === 0
     ? `<tr class="empty"><td colspan="3">
          <div class="empty-title">No mappings</div>
@@ -310,14 +323,14 @@ function showErrorModal(err) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   EXPORT CSV — downloads all masterData as gl_group_mapping.csv
+   EXPORT CSV — downloads currently filtered rows
    ═══════════════════════════════════════════════════════════ */
 function exportCsv() {
-  if (!masterData.length) return;
+  if (!filteredRows.length) return;
 
   const rows = [
     ['GL Code', 'GL Group'],
-    ...masterData.map(r => [r.gl_code, r.group_name || '']),
+    ...filteredRows.map(r => [r.gl_code, r.group_name || '']),
   ];
 
   const csv = rows.map(cols =>
