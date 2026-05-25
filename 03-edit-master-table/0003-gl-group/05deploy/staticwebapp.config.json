@@ -12,6 +12,10 @@
   },
   "routes": [
     {
+      "route": "/0003budget-gl-master.html",
+      "allowedRoles": ["master-table-admins"]
+    },
+    {
       "route": "/master/*",
       "allowedRoles": ["master-table-admins"]
     },
