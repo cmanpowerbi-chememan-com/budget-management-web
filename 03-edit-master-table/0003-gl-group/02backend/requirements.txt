@@ -1,5 +1,3 @@
 azure-functions>=1.18.0
-pyjwt[crypto]>=2.8.0
-requests>=2.31.0
 pydantic>=2.5.0
 pyodbc>=5.0.0
