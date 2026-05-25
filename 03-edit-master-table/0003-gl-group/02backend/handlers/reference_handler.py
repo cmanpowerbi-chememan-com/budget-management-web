@@ -8,13 +8,15 @@ from auth import authenticate, AuthError
 from db import fetchall
 
 REFERENCE_MAP = {
+    # GL codes sourced from existing mapping table (all 137 codes already assigned).
+    # Switch to cfg_master.sap_gl_code_ref once that table is populated.
     "gl-codes": {
-        "table": "cfg_master.sap_gl_code_ref",
-        "columns": ["code", "name"],
+        "sql": "SELECT DISTINCT gl_code AS code, gl_code AS name"
+               " FROM cfg_master.gl_group_mapping ORDER BY gl_code",
     },
     "gl-groups": {
-        "table": "cfg_master.gl_group_dim",
-        "columns": ["group_id", "group_name"],
+        "sql": "SELECT group_id, group_name"
+               " FROM cfg_master.gl_group_dim ORDER BY group_name",
     },
 }
 
@@ -37,12 +39,8 @@ def handle(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    cfg = REFERENCE_MAP[ref_name]
-    cols = ", ".join(cfg["columns"])
     try:
-        rows = fetchall(
-            f"SELECT {cols} FROM {cfg['table']} ORDER BY {cfg['columns'][0]}"
-        )
+        rows = fetchall(REFERENCE_MAP[ref_name]["sql"])
     except Exception as e:
         return func.HttpResponse(
             json.dumps({"error": str(e), "type": type(e).__name__, "ref": ref_name}),
