@@ -52,6 +52,54 @@ let selectedGroupId = null;  // from dropdown OR null if creating new
 document.addEventListener('DOMContentLoaded', async () => {
   applyThemeFromStorage();
 
+  /* ── Static button wiring (replaces inline onclick in HTML) ── */
+  document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+  document.getElementById('saveBtn').addEventListener('click', saveRecord);
+  document.getElementById('tableSearch').addEventListener('input', renderTable);
+
+  /* Sort headers — event delegation on thead */
+  document.querySelector('.data-table thead').addEventListener('click', e => {
+    const th = e.target.closest('th[data-col]');
+    if (th) toggleSort(th.dataset.col);
+  });
+
+  /* Table action buttons — event delegation on table */
+  document.getElementById('dataTable').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-gl-code]');
+    if (!btn) return;
+    const code = btn.dataset.glCode;
+    if (btn.classList.contains('btn-edit'))   editRecord(code);
+    else if (btn.classList.contains('btn-danger')) confirmDelete(code);
+  });
+
+  /* Notice modal */
+  document.getElementById('noticeModal').addEventListener('click', e => { if (e.target.id === 'noticeModal') closeNotice(); });
+  document.getElementById('noticeCloseBtn').addEventListener('click', closeNotice);
+  document.getElementById('noticeOkBtn').addEventListener('click', closeNotice);
+
+  /* Delete modal */
+  document.getElementById('deleteModal').addEventListener('click', e => { if (e.target.id === 'deleteModal') closeDeleteModal(); });
+  document.getElementById('deleteCloseBtn').addEventListener('click', closeDeleteModal);
+  document.getElementById('deleteCancelBtn').addEventListener('click', closeDeleteModal);
+  document.getElementById('deleteConfirmBtn').addEventListener('click', executeDelete);
+
+  /* Error modal */
+  document.getElementById('errorModal').addEventListener('click', e => { if (e.target.id === 'errorModal') closeErrorModal(); });
+  document.getElementById('errorCloseBtn').addEventListener('click', closeErrorModal);
+  document.getElementById('errorOkBtn').addEventListener('click', closeErrorModal);
+
+  /* Dropdown item clicks — event delegation */
+  document.getElementById('glCodeList').addEventListener('click', e => {
+    const item = e.target.closest('.dropdown-item[data-code]');
+    if (item) selectGlCode(item.dataset.code);
+  });
+  document.getElementById('glGroupList').addEventListener('click', e => {
+    const item = e.target.closest('.dropdown-item');
+    if (!item) return;
+    if ('createName' in item.dataset) selectGlGroupNew(item.dataset.createName);
+    else if (item.dataset.groupId)    selectGlGroup(item.dataset.groupId, item.dataset.groupName);
+  });
+
   // Layer 1 of defense in depth: client-side group check
   const ok = await checkAdminAccess();
   if (!ok) return;
@@ -217,8 +265,8 @@ function renderTable() {
           <td><span class="badge-code">${escapeHtml(r.gl_code)}</span></td>
           <td><span class="badge-group">${escapeHtml(r.group_name || '—')}</span></td>
           <td class="action-col">
-            <button class="btn-sm btn-edit" onclick="editRecord('${escapeAttr(r.gl_code)}')">Edit</button>
-            <button class="btn-sm btn-danger" onclick="confirmDelete('${escapeAttr(r.gl_code)}')">Delete</button>
+            <button class="btn-sm btn-edit" data-gl-code="${escapeAttr(r.gl_code)}">Edit</button>
+            <button class="btn-sm btn-danger" data-gl-code="${escapeAttr(r.gl_code)}">Delete</button>
           </td>
         </tr>
       `).join('');
@@ -260,6 +308,10 @@ function showErrorModal(err) {
   modal.classList.add('show');
 }
 
+function closeErrorModal() {
+  document.getElementById('errorModal').classList.remove('show');
+}
+
 function showSuccessToast(message) {
   const toast = document.getElementById('successToast');
   if (!toast) return;
@@ -297,7 +349,7 @@ function renderGlCodeList(query) {
   list.innerHTML = hits.length === 0
     ? `<div class="dropdown-empty">ไม่พบ GL Code ที่ตรงกัน</div>`
     : hits.map(c =>
-        `<div class="dropdown-item" onclick="selectGlCode('${escapeAttr(c.code)}')">
+        `<div class="dropdown-item" data-code="${escapeAttr(c.code)}">
            <span class="code">${escapeHtml(c.code)}</span>
          </div>`
       ).join('');
@@ -318,13 +370,13 @@ function renderGlGroupList(query) {
 
   const exactMatch = glGroups.some(g => g.group_name.toLowerCase() === q);
   const createNew = query && !exactMatch
-    ? `<div class="dropdown-item create-new" onclick="selectGlGroupNew('${escapeAttr(query)}')">
+    ? `<div class="dropdown-item create-new" data-create-name="${escapeAttr(query)}">
          สร้างกลุ่มใหม่: "${escapeHtml(query)}"
        </div>`
     : '';
 
   list.innerHTML = hits.map(g =>
-    `<div class="dropdown-item" onclick="selectGlGroup('${escapeAttr(g.group_id)}','${escapeAttr(g.group_name)}')">
+    `<div class="dropdown-item" data-group-id="${escapeAttr(g.group_id)}" data-group-name="${escapeAttr(g.group_name)}">
        <span class="code">${escapeHtml(g.group_name)}</span>
      </div>`
   ).join('') + createNew || `<div class="dropdown-empty">ไม่มีกลุ่ม</div>`;
