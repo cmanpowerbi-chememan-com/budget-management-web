@@ -7,7 +7,7 @@ import pyodbc
 from functools import lru_cache
 
 CONN_STR = (
-    "DRIVER={ODBC Driver 17 for SQL Server};"
+    "DRIVER={ODBC Driver 18 for SQL Server};"
     f"SERVER={os.environ['FABRIC_SQL_SERVER']};"
     f"DATABASE={os.environ['FABRIC_SQL_DATABASE']};"
     "Authentication=ActiveDirectoryServicePrincipal;"
