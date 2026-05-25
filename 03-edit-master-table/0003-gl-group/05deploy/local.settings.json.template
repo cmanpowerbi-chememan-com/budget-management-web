@@ -10,8 +10,11 @@
     "AAD_CLIENT_ID":                    "<service-principal-client-id>",
     "AAD_CLIENT_SECRET":                "<service-principal-client-secret>",
 
-    "FABRIC_SQL_SERVER":                "<workspace-id>.datawarehouse.fabric.microsoft.com",
-    "FABRIC_SQL_DATABASE":              "<fabric-sql-database-name>"
+    "FABRIC_SQL_SERVER":                "<workspace-id>.database.fabric.microsoft.com",
+    "FABRIC_SQL_DATABASE":              "<fabric-sql-database-name>",
+
+    "FABRIC_LAKEHOUSE_SERVER":          "<workspace-id>.datawarehouse.fabric.microsoft.com",
+    "FABRIC_LAKEHOUSE_DATABASE":        "lakehouse"
   },
   "Host": {
     "LocalHttpPort": 7071,

@@ -113,8 +113,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       apiClient.list(),
     ]);
     sapGlCodes = glCodes;
-    glGroups   = groups;       // [{group_id, group_name}, ...]
-    masterData = mappings;     // [{gl_code, group_id, group_name}, ...]
+    glGroups   = groups;
+    masterData = mappings;
+
+    const elCount = document.getElementById('glCodeCount');
+    const elSap   = document.getElementById('stat-sap');
+    const elUnmap = document.getElementById('stat-unmapped');
+    const mapped  = new Set(mappings.map(m => m.gl_code));
+    if (elCount) elCount.textContent = `${glCodes.length} GL code`;
+    if (elSap)   elSap.textContent   = glCodes.length;
+    if (elUnmap) elUnmap.textContent = glCodes.filter(c => !mapped.has(c.code)).length;
+
     renderTable();
     initDropdowns();
   } catch (err) {
@@ -386,13 +395,16 @@ function renderGlCodeList(query) {
   const list = document.getElementById('glCodeList');
   const drop = document.getElementById('glCodeDropdown');
   const q = query.toLowerCase();
-  const hits = q ? sapGlCodes.filter(c => c.code.toLowerCase().includes(q)) : sapGlCodes;
+  const hits = q
+    ? sapGlCodes.filter(c => c.code.toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q))
+    : sapGlCodes;
 
   list.innerHTML = hits.length === 0
     ? `<div class="dropdown-empty">ไม่พบ GL Code ที่ตรงกัน</div>`
     : hits.map(c =>
         `<div class="dropdown-item" data-code="${escapeAttr(c.code)}">
            <span class="code">${escapeHtml(c.code)}</span>
+           <span style="color:var(--ink-3);font-size:11px;margin-left:8px">${escapeHtml(c.name || '')}</span>
          </div>`
       ).join('');
   drop.classList.add('open');

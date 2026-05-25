@@ -1,4 +1,4 @@
-"""pyodbc connection to Fabric SQL Database.
+"""pyodbc connections — Fabric SQL Database + Fabric Lakehouse SQL Analytics Endpoint.
 
 Identical across all entities in the master-table skill.
 """
@@ -6,32 +6,45 @@ import os
 import threading
 import pyodbc
 
-_local = threading.local()
+_local           = threading.local()
+_lakehouse_local = threading.local()
+
+_DRIVERS = ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server")
 
 
-def _conn_str(driver: str) -> str:
+def _conn_str(server: str, database: str, driver: str) -> str:
     return (
         f"DRIVER={{{driver}}};"
-        f"SERVER={os.environ['FABRIC_SQL_SERVER']};"
-        f"DATABASE={os.environ['FABRIC_SQL_DATABASE']};"
+        f"SERVER={server};"
+        f"DATABASE={database};"
         "Authentication=ActiveDirectoryServicePrincipal;"
         f"UID={os.environ['AAD_CLIENT_ID']};"
         f"PWD={os.environ['AAD_CLIENT_SECRET']};"
     )
 
 
+def _open_conn(server: str, database: str) -> pyodbc.Connection:
+    for driver in _DRIVERS:
+        if driver in pyodbc.drivers():
+            return pyodbc.connect(_conn_str(server, database, driver), autocommit=False)
+    raise RuntimeError("No supported ODBC driver found (need 17 or 18)")
+
+
 def get_conn() -> pyodbc.Connection:
-    """Return a per-thread connection. Each request thread gets its own
-    connection so concurrent requests don't collide (avoids 'busy' error)."""
+    """Per-thread connection to Fabric SQL Database."""
     conn = getattr(_local, "conn", None)
     if conn is None:
-        for driver in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
-            if driver in pyodbc.drivers():
-                conn = pyodbc.connect(_conn_str(driver), autocommit=False)
-                _local.conn = conn
-                break
-        else:
-            raise RuntimeError("No supported ODBC driver found (need 17 or 18)")
+        conn = _open_conn(os.environ['FABRIC_SQL_SERVER'], os.environ['FABRIC_SQL_DATABASE'])
+        _local.conn = conn
+    return conn
+
+
+def get_lakehouse_conn() -> pyodbc.Connection:
+    """Per-thread connection to Fabric Lakehouse SQL Analytics Endpoint."""
+    conn = getattr(_lakehouse_local, "conn", None)
+    if conn is None:
+        conn = _open_conn(os.environ['FABRIC_LAKEHOUSE_SERVER'], os.environ['FABRIC_LAKEHOUSE_DATABASE'])
+        _lakehouse_local.conn = conn
     return conn
 
 
@@ -54,6 +67,14 @@ def fetchone(sql: str, params: tuple = ()) -> dict | None:
 
 def fetchall(sql: str, params: tuple = ()) -> list[dict]:
     conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(sql, params)
+    cols = [d[0] for d in cursor.description]
+    return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+
+def fetchall_lakehouse(sql: str, params: tuple = ()) -> list[dict]:
+    conn = get_lakehouse_conn()
     cursor = conn.cursor()
     cursor.execute(sql, params)
     cols = [d[0] for d in cursor.description]
