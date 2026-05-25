@@ -79,8 +79,6 @@ jobs:
     needs: [unit-tests]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-22.04
-    environment:
-      name: production
 
     steps:
       - uses: actions/checkout@v4
