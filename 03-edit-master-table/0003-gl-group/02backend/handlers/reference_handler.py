@@ -39,9 +39,16 @@ def handle(req: func.HttpRequest) -> func.HttpResponse:
 
     cfg = REFERENCE_MAP[ref_name]
     cols = ", ".join(cfg["columns"])
-    rows = fetchall(
-        f"SELECT {cols} FROM {cfg['table']} ORDER BY {cfg['columns'][0]}"
-    )
+    try:
+        rows = fetchall(
+            f"SELECT {cols} FROM {cfg['table']} ORDER BY {cfg['columns'][0]}"
+        )
+    except Exception as e:
+        return func.HttpResponse(
+            json.dumps({"error": str(e), "type": type(e).__name__, "ref": ref_name}),
+            status_code=500,
+            mimetype="application/json",
+        )
 
     return func.HttpResponse(
         json.dumps(rows),

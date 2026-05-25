@@ -36,7 +36,7 @@ def authenticate(req) -> dict:
 
     allowed = _allowed_emails()
     if allowed and email not in allowed:
-        raise AuthError(403, "Forbidden — not in admin list")
+        raise AuthError(403, f"Forbidden — not in admin list (got: {email})")
 
     return {
         "sub":   principal.get("userId", ""),
