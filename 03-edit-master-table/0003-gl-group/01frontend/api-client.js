@@ -58,7 +58,7 @@ async function checkAdminAccess() {
     return false;
   }
 
-  const isAdmin = (clientPrincipal.userRoles || []).includes('master-table-admins');
+  const isAdmin = (clientPrincipal.userRoles || []).includes('master_table_admins');
   if (!isAdmin) {
     window.location.href = '/access-denied.html';
     return false;
