@@ -21,7 +21,7 @@ TEST_GROUP_NAME = "__integ_test_group__"
 ADMIN_CLAIMS = {
     "sub": "integ-test",
     "email": "test@chememan.com",
-    "groups": ["master-table-admins"],
+    "groups": ["master_table_admins"],
 }
 
 

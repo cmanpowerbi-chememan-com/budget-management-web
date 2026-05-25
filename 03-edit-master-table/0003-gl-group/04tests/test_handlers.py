@@ -16,7 +16,7 @@ def admin_claims():
     return {
         "sub": "user-uuid-1",
         "email": "volks@chememan.com",
-        "groups": ["master-table-admins"],
+        "groups": ["master_table_admins"],
     }
 
 
