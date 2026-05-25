@@ -72,6 +72,85 @@
   .btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
   .btn-ghost:hover{color:var(--ink);background:transparent}
 
+  /* Glassy yellow Edit button */
+  .btn-edit{
+    position:relative;overflow:hidden;isolation:isolate;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #F5BA2A 0%, #D49810 55%, #A87400 100%);
+    color:#2A1800;
+    border:1px solid rgba(255,255,255,0.22);
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;white-space:nowrap;
+    font-family:inherit;font-weight:700;letter-spacing:-0.005em;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -1px 0 rgba(0,0,0,0.20), 0 5px 12px -5px rgba(0,0,0,0.38);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .btn-edit::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.45) 50%, transparent 62%, transparent 100%);
+    transform:translateX(-110%);
+    animation:glassSweep 3.6s ease-in-out infinite;
+    pointer-events:none;z-index:1;
+  }
+  .btn-edit::after{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:
+      radial-gradient(circle 1px at 16% 36%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 70% 26%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 44% 72%, rgba(255,255,255,0.95) 0%, transparent 80%);
+    animation:twinkle 2.4s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-edit > *{position:relative;z-index:3}
+  .btn-edit:hover{
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0) 60%),
+      linear-gradient(180deg, #E8A820 0%, #C08800 100%);
+    color:#1A0E00;
+    border-color:rgba(255,220,80,0.45);
+    transform:translateY(-1px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -1px 0 rgba(0,0,0,0.26), 0 8px 18px -6px rgba(0,0,0,0.45);
+  }
+
+  /* Glassy red Delete button */
+  .btn-danger{
+    position:relative;overflow:hidden;isolation:isolate;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #F04040 0%, #C82020 55%, #9A1010 100%);
+    color:#FFF0F0;
+    border:1px solid rgba(255,255,255,0.18);
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;white-space:nowrap;
+    font-family:inherit;font-weight:700;letter-spacing:-0.005em;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.30), 0 5px 12px -5px rgba(0,0,0,0.42);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .btn-danger::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.35) 50%, transparent 62%, transparent 100%);
+    transform:translateX(-110%);
+    animation:glassSweep 3.6s ease-in-out infinite 0.8s;
+    pointer-events:none;z-index:1;
+  }
+  .btn-danger::after{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:
+      radial-gradient(circle 1px at 22% 34%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 66% 28%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 46% 74%, rgba(255,255,255,0.95) 0%, transparent 80%);
+    animation:twinkle 2.8s ease-in-out infinite 0.4s;
+    mix-blend-mode:screen;
+  }
+  .btn-danger > *{position:relative;z-index:3}
+  .btn-danger:hover{
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 60%),
+      linear-gradient(180deg, #D43030 0%, #880808 100%);
+    border-color:rgba(255,120,120,0.45);
+    transform:translateY(-1px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.38), 0 8px 18px -6px rgba(0,0,0,0.52);
+  }
+
   /* Glassy black "Back to home" (idle glassy, fade-to-deep-black hover) */
   .btn-back{
     position:relative;overflow:hidden;isolation:isolate;

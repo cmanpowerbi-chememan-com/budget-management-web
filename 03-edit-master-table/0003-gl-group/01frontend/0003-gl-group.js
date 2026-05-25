@@ -217,7 +217,7 @@ function renderTable() {
           <td><span class="badge-code">${escapeHtml(r.gl_code)}</span></td>
           <td><span class="badge-group">${escapeHtml(r.group_name || '—')}</span></td>
           <td class="action-col">
-            <button class="btn-sm" onclick="editRecord('${escapeAttr(r.gl_code)}')">Edit</button>
+            <button class="btn-sm btn-edit" onclick="editRecord('${escapeAttr(r.gl_code)}')">Edit</button>
             <button class="btn-sm btn-danger" onclick="confirmDelete('${escapeAttr(r.gl_code)}')">Delete</button>
           </td>
         </tr>

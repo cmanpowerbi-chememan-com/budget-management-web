@@ -3,22 +3,36 @@
 Identical across all entities in the master-table skill.
 """
 import os
+import threading
 import pyodbc
-from functools import lru_cache
 
-CONN_STR = (
-    "DRIVER={ODBC Driver 18 for SQL Server};"
-    f"SERVER={os.environ['FABRIC_SQL_SERVER']};"
-    f"DATABASE={os.environ['FABRIC_SQL_DATABASE']};"
-    "Authentication=ActiveDirectoryServicePrincipal;"
-    f"UID={os.environ['AAD_CLIENT_ID']};"
-    f"PWD={os.environ['AAD_CLIENT_SECRET']};"
-)
+_local = threading.local()
 
 
-@lru_cache(maxsize=1)
+def _conn_str(driver: str) -> str:
+    return (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={os.environ['FABRIC_SQL_SERVER']};"
+        f"DATABASE={os.environ['FABRIC_SQL_DATABASE']};"
+        "Authentication=ActiveDirectoryServicePrincipal;"
+        f"UID={os.environ['AAD_CLIENT_ID']};"
+        f"PWD={os.environ['AAD_CLIENT_SECRET']};"
+    )
+
+
 def get_conn() -> pyodbc.Connection:
-    return pyodbc.connect(CONN_STR, autocommit=False)
+    """Return a per-thread connection. Each request thread gets its own
+    connection so concurrent requests don't collide (avoids 'busy' error)."""
+    conn = getattr(_local, "conn", None)
+    if conn is None:
+        for driver in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
+            if driver in pyodbc.drivers():
+                conn = pyodbc.connect(_conn_str(driver), autocommit=False)
+                _local.conn = conn
+                break
+        else:
+            raise RuntimeError("No supported ODBC driver found (need 17 or 18)")
+    return conn
 
 
 def execute(sql: str, params: tuple = ()) -> None:
