@@ -1,0 +1,35 @@
+{
+  "routes": [
+    {
+      "route": "/0003budget-gl-master.html",
+      "allowedRoles": ["master_table_admins"]
+    },
+    {
+      "route": "/master/*",
+      "allowedRoles": ["master_table_admins"]
+    },
+    {
+      "route": "/api/master/*",
+      "allowedRoles": ["master_table_admins"]
+    },
+    {
+      "route": "/access-denied.html",
+      "allowedRoles": ["anonymous", "authenticated"]
+    },
+    {
+      "route": "/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "responseOverrides": {
+    "401": { "redirect": "/.auth/login/aad" },
+    "403": { "rewrite": "/access-denied.html" }
+  },
+  "globalHeaders": {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self';"
+  }
+}
