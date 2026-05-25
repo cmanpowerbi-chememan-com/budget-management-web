@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
   document.getElementById('saveBtn').addEventListener('click', saveRecord);
   document.getElementById('tableSearch').addEventListener('input', renderTable);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
 
   /* Sort headers — event delegation on thead */
   document.querySelector('.data-table thead').addEventListener('click', e => {
@@ -306,6 +307,30 @@ function showErrorModal(err) {
     body.message_th || body.message_en || err.message || 'ไม่ทราบสาเหตุ';
   modal.querySelector('.modal-details').textContent = JSON.stringify(body, null, 2);
   modal.classList.add('show');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORT CSV — downloads all masterData as gl_group_mapping.csv
+   ═══════════════════════════════════════════════════════════ */
+function exportCsv() {
+  if (!masterData.length) return;
+
+  const rows = [
+    ['GL Code', 'GL Group'],
+    ...masterData.map(r => [r.gl_code, r.group_name || '']),
+  ];
+
+  const csv = rows.map(cols =>
+    cols.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `gl_group_mapping_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function closeNotice() {
