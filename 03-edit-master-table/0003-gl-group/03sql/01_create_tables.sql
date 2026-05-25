@@ -60,7 +60,18 @@ CREATE TABLE cfg_master.gl_group_mapping (
 GO
 
 -- ───────────────────────────────────────────────────────────
--- Reference table: NOT created here
--- cfg_master.sap_gl_code_ref is populated by the nightly SAP
--- sync pipeline. This skill consumes it read-only.
+-- Reference table: GL Code master
+-- Seeded from docs/04gl code & gl group & gl thai name (master).xlsx
+-- (137 rows). Until a nightly SAP sync is built, this is static.
 -- ───────────────────────────────────────────────────────────
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE s.name = 'cfg_master' AND t.name = 'sap_gl_code_ref'
+)
+CREATE TABLE cfg_master.sap_gl_code_ref (
+    code  NVARCHAR(20)  NOT NULL,
+    name  NVARCHAR(200) NOT NULL,
+    CONSTRAINT pk_sap_gl_code_ref PRIMARY KEY (code)
+);
+GO

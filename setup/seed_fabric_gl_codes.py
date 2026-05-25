@@ -1,31 +1,51 @@
--- ═══════════════════════════════════════════════════════════
--- 02_seed_reference.sql — reference table seed data
--- Source: docs/04gl code & gl group & gl thai name (master).xlsx
--- Seeded: 2026-05-25 — 18 groups, 137 GL codes
--- Safe to re-run (INSERT only if table is empty)
--- ═══════════════════════════════════════════════════════════
+"""One-time script: create cfg_master.sap_gl_code_ref and seed 137 GL codes.
 
-INSERT INTO cfg_master.gl_group_dim (group_id, group_name) VALUES
-    ('6bb0620e-21f8-4b7b-a2e1-55130db8c702', 'Bank Charge'),
-    ('c9937804-141f-483b-b0a5-7a134c7941d8', 'Communication Expense'),
-    ('0f879748-1b5d-416d-b9ca-960a9528418d', 'Electricity & Water'),
-    ('2b99c080-34dd-41b6-9061-dcfff4687270', 'Employee benefits'),
-    ('0d935c42-2722-4ce9-8c0a-f2aa8e353a05', 'Entertainment'),
-    ('4a2d19a5-90f1-4114-92f1-4ae2e325781d', 'Insurance Premium'),
-    ('176d5f59-bf00-4f89-8d0c-80f4777a8f93', 'Lease & Rental'),
-    ('dd44508c-c6d1-45b3-9861-38c6a40c9b84', 'Maintenance - License for software'),
-    ('afc09935-39df-4b02-a679-b02dc2127996', 'Office expenses'),
-    ('0cbdd0e4-51fb-4bde-9ca0-031891f8f685', 'Other admin. Expenses'),
-    ('9c62d57c-f7bf-40b1-b032-6e49f0e0ff18', 'Other manpower exp (Per diem,Health check,Uniform…etc)'),
-    ('bc4109ac-5062-47a5-a664-c5ca2606029e', 'Personal expenses'),
-    ('18ed8d80-a050-4ff5-9c25-ce2da319f4b4', 'Professional & Legal Fee'),
-    ('76c73dd0-aaab-493b-b0fd-13cdc8df37b0', 'Public Relation & Donation'),
-    ('393b2bf7-6d68-4310-baff-dde5c480e90e', 'Remuneration of director'),
-    ('704d9090-4e41-4a80-931c-db76644af1ec', 'Repair & Maintenance'),
-    ('8eb7e169-4454-41eb-a47f-61217f6e81ae', 'Training & Seminar'),
-    ('4df65d86-feaf-4f34-aaa6-40fe3652c1d5', 'Travelling Expense');
+Run from repo root:
+    python setup/seed_fabric_gl_codes.py
 
--- ── GL Code master (137 rows) ────────────────────────────────
+Requires .env with:
+    FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE, AAD_CLIENT_ID, AAD_CLIENT_SECRET
+"""
+import os
+import sys
+from pathlib import Path
+
+# Load .env
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+import pyodbc
+
+CONN_STR = (
+    "DRIVER={ODBC Driver 17 for SQL Server};"
+    f"SERVER={os.environ['FABRIC_SQL_SERVER']};"
+    f"DATABASE={os.environ['FABRIC_SQL_DATABASE']};"
+    "Authentication=ActiveDirectoryServicePrincipal;"
+    f"UID={os.environ['AAD_CLIENT_ID']};"
+    f"PWD={os.environ['AAD_CLIENT_SECRET']};"
+)
+
+SQL_DIR = Path(__file__).parent.parent / "03-edit-master-table/0003-gl-group/03sql"
+
+CREATE_SQL = """
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE s.name = 'cfg_master' AND t.name = 'sap_gl_code_ref'
+)
+CREATE TABLE cfg_master.sap_gl_code_ref (
+    code  NVARCHAR(20)  NOT NULL,
+    name  NVARCHAR(200) NOT NULL,
+    CONSTRAINT pk_sap_gl_code_ref PRIMARY KEY (code)
+);
+"""
+
+SEED_SQL = """
 IF NOT EXISTS (SELECT 1 FROM cfg_master.sap_gl_code_ref)
 INSERT INTO cfg_master.sap_gl_code_ref (code, name) VALUES
     ('5211900030', 'Entertainment Expenses'),
@@ -165,3 +185,32 @@ INSERT INTO cfg_master.sap_gl_code_ref (code, name) VALUES
     ('5210400999', 'Other Travelling Expenses'),
     ('5210400020', 'Transportation'),
     ('6210400020', 'Transportation');
+"""
+
+
+def main():
+    print("Connecting to Fabric SQL Database...")
+    try:
+        conn = pyodbc.connect(CONN_STR, autocommit=True)
+    except Exception as e:
+        print(f"Connection failed: {e}")
+        sys.exit(1)
+
+    cursor = conn.cursor()
+
+    print("Creating cfg_master.sap_gl_code_ref (if not exists)...")
+    cursor.execute(CREATE_SQL)
+    print("  Done.")
+
+    print("Seeding 137 GL codes (skipped if table already has rows)...")
+    cursor.execute(SEED_SQL)
+    print("  Done.")
+
+    count = cursor.execute("SELECT COUNT(*) FROM cfg_master.sap_gl_code_ref").fetchone()[0]
+    print(f"Rows in sap_gl_code_ref: {count}")
+    conn.close()
+    print("All done.")
+
+
+if __name__ == "__main__":
+    main()

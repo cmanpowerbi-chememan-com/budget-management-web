@@ -20,25 +20,29 @@ def _allowed_emails() -> set:
 
 
 def authenticate(req) -> dict:
-    """Read SWA-injected principal, check email allowlist. Raise AuthError on failure."""
-    header = req.headers.get("x-ms-client-principal", "")
-    if not header:
-        raise AuthError(401, "Not authenticated")
+    """Read SWA-injected headers, check email allowlist. Raise AuthError on failure."""
+    # x-ms-client-principal-name gives the email/UPN directly — preferred path.
+    # More reliable than decoding x-ms-client-principal for dynamic-route endpoints.
+    email = req.headers.get("x-ms-client-principal-name", "").lower()
+    user_id = req.headers.get("x-ms-client-principal-id", "")
 
-    try:
-        principal = json.loads(base64.b64decode(header).decode("utf-8"))
-    except Exception:
-        raise AuthError(401, "Invalid principal header")
-
-    email = principal.get("userDetails", "").lower()
     if not email:
-        raise AuthError(401, "No user identity found")
+        # Fallback: decode full principal JSON (base64, add padding if missing)
+        header = req.headers.get("x-ms-client-principal", "")
+        if not header:
+            raise AuthError(401, "Not authenticated")
+        try:
+            padded = header + "=" * (-len(header) % 4)
+            principal = json.loads(base64.b64decode(padded).decode("utf-8"))
+        except Exception:
+            raise AuthError(401, "Invalid principal header")
+        email = principal.get("userDetails", "").lower()
+        user_id = principal.get("userId", "")
+        if not email:
+            raise AuthError(401, "No user identity found")
 
     allowed = _allowed_emails()
     if allowed and email not in allowed:
         raise AuthError(403, f"Forbidden — not in admin list (got: {email})")
 
-    return {
-        "sub":   principal.get("userId", ""),
-        "email": email,
-    }
+    return {"sub": user_id, "email": email}
