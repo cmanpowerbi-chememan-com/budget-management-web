@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Orgcode &amp; Cost center Master — Chememan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --c-forest:#00522C; --c-mint:#1FA378; --c-gold:#C9963D; --c-blue:#3C60A5; --c-sky:#5ECDF6;
+    --accent: var(--c-forest); --accent-2: var(--c-mint); --accent-3: var(--c-gold);
+    --gl-code:#1FA378;   /* mint green for Orgcode badge */
+    --gl-group:#1B7BA8;  /* sky blue for Cost Center badge */
+    --ink:#0B1A12; --ink-2:#3F4D45; --ink-3:#7A867E;
+    --paper:#F7F5EF; --paper-2:#EFEBE1; --surface:#FFFFFF;
+    --line:rgba(11,26,18,0.10); --line-2:rgba(11,26,18,0.06);
+    --serif:'Instrument Serif', Georgia, serif;
+    --sans:'IBM Plex Sans','IBM Plex Sans Thai',-apple-system,system-ui,sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  [data-theme="dark"]{
+    --ink:#FFFFFF; --ink-2:#C2CEC7; --ink-3:#7A8780;
+    --paper:#0B1A12; --paper-2:#0F2218; --surface:#142A1F;
+    --line:rgba(255,255,255,0.10); --line-2:rgba(255,255,255,0.06);
+    --gl-code:#37D6A2; --gl-group:#5ECDF6;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);background:var(--paper);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;transition:background 240ms ease, color 240ms ease}
+  a{color:inherit;text-decoration:none}
+  button,input,select{font-family:inherit;color:inherit}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 28px}
+
+  /* ─── Nav ─── */
+  .nav{
+    position:sticky;top:0;z-index:100;
+    background:color-mix(in oklab, var(--paper) 80%, transparent);
+    backdrop-filter:blur(18px) saturate(160%); -webkit-backdrop-filter:blur(18px) saturate(160%);
+    border-bottom:1px solid var(--line-2);
+  }
+  .nav-inner{display:flex;align-items:center;gap:18px;height:64px;max-width:1240px;margin:0 auto;padding:0 28px}
+  .nav-logo{display:flex;align-items:center;gap:12px}
+  .nav-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg, var(--accent), var(--accent-2));display:grid;place-items:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10)}
+  .nav-mark svg{width:16px;height:16px;color:#fff}
+  .nav-logo-text{display:flex;flex-direction:column;line-height:1.05;gap:1px}
+  .nav-logo-text .name{font-weight:600;font-size:14.5px;letter-spacing:-0.005em}
+  .nav-logo-text .sub{font-size:10.5px;color:var(--ink-3);font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
+  .nav-links{display:flex;gap:4px;list-style:none;margin-left:18px}
+  .nav-links a{display:inline-block;color:var(--ink-2);font-size:13.5px;font-weight:500;padding:7px 13px;border-radius:7px;transition:all 160ms ease;letter-spacing:-0.005em}
+  .nav-links a:hover{color:var(--ink);background:var(--paper-2)}
+  .nav-links a.active{color:var(--accent);background:color-mix(in oklab, var(--accent) 10%, transparent)}
+  .nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .icon-btn{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;display:grid;place-items:center;transition:all 160ms ease;color:var(--ink-2)}
+  .icon-btn:hover{border-color:var(--ink);color:var(--ink);transform:translateY(-1px)}
+  .icon-btn svg{width:15px;height:15px}
+  .sun-icon{display:none}
+  [data-theme="dark"] .sun-icon{display:block}
+  [data-theme="dark"] .moon-icon{display:none}
+
+  /* ─── Buttons (glassy + twinkle shared) ─── */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:10px 16px;border-radius:9px;font-size:13px;font-weight:600;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    cursor:pointer;transition:all 160ms ease;letter-spacing:-0.005em;white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px);border-color:var(--ink)}
+  .btn svg{width:14px;height:14px}
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:7px}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+  .btn-ghost:hover{color:var(--ink);background:transparent}
+
+  /* Glassy black "Back to home" (idle glassy, fade-to-deep-black hover) */
+  .btn-back{
+    position:relative;overflow:hidden;isolation:isolate;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 50%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #1A1A24 0%, #050508 100%);
+    color:#F5F5FA;
+    border:1px solid rgba(255,255,255,0.12);
+    padding:9px 16px;font-size:13px;font-weight:600;border-radius:9px;gap:7px;
+    display:inline-flex;align-items:center;cursor:pointer;white-space:nowrap;
+    transition: transform 260ms ease, background 320ms ease, border-color 260ms ease, box-shadow 260ms ease, color 260ms ease;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.40), 0 6px 14px -6px rgba(0,0,0,0.55);
+  }
+  .btn-back::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.22) 50%, transparent 62%, transparent 100%);
+    transform: translateX(-110%);
+    animation: glassSweep 3.6s ease-in-out infinite;
+    pointer-events:none;z-index:1;
+  }
+  .btn-back::after{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:
+      radial-gradient(circle 1px at 18% 38%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 72% 28%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1.5px at 42% 70%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 88% 62%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 28% 78%, rgba(255,255,255,0.95) 0%, transparent 80%);
+    animation: twinkle 2.4s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-back > svg, .btn-back > * { position:relative;z-index:3 }
+  .btn-back svg{width:13px;height:13px}
+  .btn-back:hover{
+    background:linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0) 60%), linear-gradient(180deg, #050508 0%, #000000 100%);
+    color:#E8E8F0;border-color: rgba(255,255,255,0.06);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.55), 0 10px 22px -8px rgba(0,0,0,0.75);
+    transform: translateY(-1px);
+  }
+  .btn-back:hover::before, .btn-back:hover::after{ animation-play-state:paused; opacity:0.55 }
+
+  /* Glassy green Save button (rectangular, matches Import CSV / field-input height) */
+  .btn-save{
+    position:relative;overflow:hidden;isolation:isolate;
+    color:#063026;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #2BC18E 0%, #1FA378 55%, #14855E 100%);
+    border:1px solid rgba(255,255,255,0.18);
+    padding:11px 22px;border-radius:8px;font-size:13.5px;font-weight:700;letter-spacing:-0.005em;
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;cursor:pointer;white-space:nowrap;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.28),
+      0 6px 14px -6px rgba(0,0,0,0.55);
+    min-height:46px; /* matches .field-input vertical size */
+  }
+  .btn-save::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.45) 50%, transparent 62%, transparent 100%);
+    transform: translateX(-110%);
+    animation: glassSweep 3.6s ease-in-out infinite;
+    pointer-events:none;z-index:1;
+  }
+  .btn-save::after{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:
+      radial-gradient(circle 1.5px at 14% 30%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 68% 22%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 38% 78%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 86% 68%, rgba(255,255,255,0.95) 0%, transparent 70%);
+    animation: twinkle 2.6s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-save > * { position:relative;z-index:3 }
+  .btn-save svg{width:14px;height:14px}
+  .btn-save:hover{
+    transform: translateY(-2px);
+    border-color: rgba(150,255,210,0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 12px 24px -8px rgba(0,0,0,0.65);
+  }
+  .btn-save:active{ transform: translateY(0) }
+
+  @keyframes glassSweep { 0% {transform:translateX(-110%)} 55% {transform:translateX(110%)} 100% {transform:translateX(110%)} }
+  @keyframes twinkle { 0%,100% {opacity:0.25} 25% {opacity:0.95} 50% {opacity:0.45} 75% {opacity:0.85} }
+
+  /* ─── Page head ─── */
+  .page-head{padding:32px 0 22px}
+  .breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);margin-bottom:14px;font-family:var(--mono);letter-spacing:-0.005em}
+  .breadcrumb a{color:var(--accent);transition:color 160ms}
+  .breadcrumb a:hover{color:var(--ink)}
+  .breadcrumb .sep{opacity:0.5}
+  .page-title{
+    font-family:var(--serif);font-size:clamp(48px, 7vw, 86px);line-height:0.98;letter-spacing:-0.025em;font-weight:400;
+    color:var(--accent);
+  }
+  .page-title em{font-style:italic;color:var(--accent);opacity:0.85}
+
+  /* ─── Glassy text effect ─── */
+  .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 35%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 80%, #ffffff) 28%,
+        var(--accent) 52%,
+        color-mix(in oklab, var(--accent) 85%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.55))
+      drop-shadow(0 2px 8px rgba(11,26,18,0.10));
+    position:relative;isolation:isolate;
+  }
+  .glassy em{
+    background:inherit;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:brightness(0.85) saturate(1.15);
+  }
+  [data-theme="dark"] .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 30%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 60%, #ffffff) 32%,
+        var(--accent) 60%,
+        color-mix(in oklab, var(--accent) 70%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.25))
+      drop-shadow(0 2px 10px rgba(0,0,0,0.45));
+  }
+  .page-subtitle{font-size:14.5px;color:var(--ink-2);margin-top:10px;max-width:62ch;line-height:1.55}
+  .page-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:8px;margin-bottom:8px}
+  .page-eyebrow::before{content:'';width:18px;height:1px;background:var(--accent)}
+  .page-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .page-title-row > div:first-child{min-width:0;flex:1}
+  .page-title-row .summary{margin-top:0;margin-bottom:6px}
+
+  /* ─── Summary chips (matches 0002) ─── */
+  .summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .summary-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 14px;background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;
+    font-size:12.5px;font-weight:500;color:var(--ink-2);
+  }
+  .summary-chip .v{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .summary-chip .lbl{color:var(--ink-3);font-size:11px;font-family:var(--mono);letter-spacing:0.04em;text-transform:uppercase}
+  .summary-chip.gl{border-color:color-mix(in oklab, var(--gl-code) 50%, var(--line))}
+  .summary-chip.gl .v{color:var(--gl-code)}
+  .summary-chip.group{border-color:color-mix(in oklab, var(--gl-group) 50%, var(--line))}
+  .summary-chip.group .v{color:var(--gl-group)}
+  .summary-chip.gold{border-color:color-mix(in oklab, var(--c-gold) 55%, var(--line));background:color-mix(in oklab, var(--c-gold) 10%, var(--surface))}
+  .summary-chip.gold .v{color:#7B5C1F}
+  [data-theme="dark"] .summary-chip.gold .v{color:#E8C75E}
+
+  /* ─── Panels ─── */
+  .panel{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 0 rgba(11,26,18,0.02), 0 12px 24px -16px rgba(11,26,18,0.10);
+    margin-bottom:22px;
+  }
+  /* Form panel needs overflow visible so dropdown isn't clipped */
+  .panel.panel-form{overflow:visible}
+  .panel.panel-form .panel-head{border-radius:14px 14px 0 0}
+  .panel-head{
+    padding:18px 22px;border-bottom:1px solid var(--line-2);
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    background:var(--paper-2);
+  }
+  .panel-title{font-family:var(--serif);font-size:22px;line-height:1.1;letter-spacing:-0.015em;font-weight:400;display:flex;align-items:center;gap:10px}
+  .panel-title em{font-style:italic;color:var(--accent)}
+  .panel-title .badge{font-family:var(--mono);font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;background:var(--surface);border:1px solid var(--line);border-radius:5px;color:var(--ink-3);font-weight:600}
+  .panel-body{padding:22px}
+
+  /* ─── Form ─── */
+  .form-grid{
+    display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:end;
+  }
+  .field{display:flex;flex-direction:column;gap:6px;position:relative;min-width:0}
+  .field-label{
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);
+    letter-spacing:0.05em;text-transform:uppercase;font-weight:600;
+  }
+  .field-input{
+    padding:11px 14px;background:var(--paper);border:1px solid var(--line);
+    border-radius:8px;font-size:14px;outline:none;transition:all 160ms;
+    width:100%;
+  }
+  .field-input:focus{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .field-helper{font-size:11.5px;color:var(--ink-3);font-family:var(--mono);letter-spacing:0.02em}
+
+  /* Dropdown */
+  .dropdown{position:relative}
+  .dropdown-list{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 16px 36px -12px rgba(11,26,18,0.20);
+    max-height:320px;overflow-y:auto;display:none;z-index:30;padding:4px;
+  }
+  .dropdown-list::-webkit-scrollbar{width:8px}
+  .dropdown-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .dropdown-list::-webkit-scrollbar-thumb:hover{background:var(--ink-3)}
+  .dropdown.open .dropdown-list{display:block}
+  .dropdown-item{
+    padding:9px 12px;border-radius:6px;font-size:13px;cursor:pointer;
+    transition:all 120ms;display:flex;align-items:center;gap:10px;
+  }
+  .dropdown-item:hover, .dropdown-item.active{background:color-mix(in oklab, var(--accent) 10%, transparent);color:var(--accent)}
+  .dropdown-item .code{font-family:var(--mono);font-weight:600;font-size:12px;color:var(--ink)}
+  .dropdown-item:hover .code, .dropdown-item.active .code{color:var(--accent)}
+  .dropdown-item .name{color:var(--ink-3);font-size:12px;flex:1;text-align:right}
+  .dropdown-item.create-new{
+    background:color-mix(in oklab, #C9963D 12%, transparent);
+    color:#7B5C1F;font-weight:600;border:1px dashed color-mix(in oklab, #C9963D 50%, transparent);margin-top:4px;
+  }
+  [data-theme="dark"] .dropdown-item.create-new{color:#E8C75E}
+  .dropdown-item.create-new::before{
+    content:'+';display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;
+    background:#C9963D;color:#fff;font-weight:700;font-size:13px;
+  }
+  .dropdown-empty{padding:16px;text-align:center;color:var(--ink-3);font-size:13px}
+
+  /* ─── CHIP TAG LAYOUT (collapsed cards with embedded mini-chips) ─── */
+  .chip-toolbar{
+    display:flex;align-items:center;gap:14px;padding:14px 22px;
+    background:var(--paper-2);border-bottom:1px solid var(--line-2);flex-wrap:wrap;
+  }
+  .view-switch{
+    display:inline-flex;background:var(--surface);border:1px solid var(--line);
+    border-radius:8px;padding:3px;gap:2px;
+  }
+  .view-switch button{
+    border:none;background:transparent;font-family:var(--mono);
+    font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
+    padding:7px 14px;border-radius:6px;cursor:pointer;
+    color:var(--ink-3);transition:all 160ms ease;display:inline-flex;align-items:center;gap:6px;
+  }
+  .view-switch button .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);transition:background 160ms}
+  .view-switch button.active{background:var(--ink);color:var(--paper)}
+  .view-switch button.active .dot{background:var(--paper)}
+  .view-switch button[data-mode="cc"].active{background:var(--gl-code);color:#fff}
+  .view-switch button[data-mode="cc"].active .dot{background:#fff}
+  .view-switch button[data-mode="org"].active{background:var(--gl-group);color:#fff}
+  .view-switch button[data-mode="org"].active .dot{background:#fff}
+  .view-switch button[data-mode="cc"] .dot{background:var(--gl-code)}
+  .view-switch button[data-mode="org"] .dot{background:var(--gl-group)}
+
+  .chip-meta{
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);
+    letter-spacing:0.02em;margin-left:auto;
+  }
+  .chip-meta b{color:var(--ink);font-weight:700;font-size:12px}
+
+  .chip-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap:14px;padding:22px;background:var(--surface);
+  }
+  .chip-card{
+    background:var(--paper);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;display:flex;flex-direction:column;gap:12px;
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease, background 200ms ease;
+    position:relative;
+    isolation:isolate;
+    overflow:hidden;
+  }
+  /* Diamond glassy sweep + twinkling sparkles — only visible on hover */
+  .chip-card::before{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.50) 50%, transparent 62%, transparent 100%);
+    transform: translateX(-110%);
+    opacity:0; transition:opacity 240ms ease;
+  }
+  .chip-card::after{
+    content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+    mix-blend-mode:screen;
+    background:
+      radial-gradient(circle 1.5px at 14% 22%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 78% 30%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 38% 70%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 88% 78%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 22% 88%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 58% 48%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 8%  62%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 68% 12%, rgba(255,255,255,0.95) 0%, transparent 70%);
+    opacity:0; transition:opacity 240ms ease;
+  }
+  /* All real children sit above the decorative layers */
+  .chip-card > *{position:relative;z-index:1}
+  .chip-card:hover{
+    border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent),
+      0 14px 32px -10px color-mix(in oklab, var(--accent) 30%, transparent),
+      0 0 28px -4px color-mix(in oklab, hsl(195 80% 65%) 28%, transparent),
+      0 0 40px -8px color-mix(in oklab, hsl(330 75% 65%) 22%, transparent),
+      0 0 50px -10px color-mix(in oklab, hsl(50 90% 65%) 22%, transparent);
+  }
+  .chip-card:hover::before{
+    opacity:1;
+    animation: glassSweep 2.6s ease-in-out infinite;
+  }
+  .chip-card:hover::after{
+    opacity:1;
+    animation: twinkle 1.8s ease-in-out infinite;
+  }
+  .chip-card.is-hot{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent), 0 10px 22px -10px color-mix(in oklab, var(--accent) 50%, transparent);
+    background: color-mix(in oklab, var(--accent) 3%, var(--paper));
+  }
+  .chip-card.has-multi{
+    border-color: color-mix(in oklab, var(--accent) 30%, var(--line));
+  }
+
+  .chip-card-head{
+    display:flex;align-items:center;gap:10px;
+  }
+  .chip-card-head .primary{
+    display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;
+  }
+  .chip-card-head .primary .pill-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .chip-card-head .primary .name{
+    font-size:13px;color:var(--ink-2);letter-spacing:-0.005em;line-height:1.3;
+  }
+  .chip-card .deg{
+    font-family:var(--mono);font-size:11px;font-weight:700;
+    padding:4px 9px;border-radius:5px;letter-spacing:0.04em;
+    background:var(--paper-2);color:var(--ink-3);
+    flex-shrink:0;
+  }
+  .chip-card.has-multi .deg{
+    background:color-mix(in oklab, var(--accent) 18%, transparent);
+    color:var(--accent);
+  }
+  .chip-card .card-actions{display:flex;gap:4px;flex-shrink:0}
+  .chip-card .card-actions .action-btn{width:28px;height:28px;border-radius:6px}
+  .chip-card .card-actions .action-btn svg{width:12px;height:12px}
+
+  .chip-card-sep{
+    height:1px;background:linear-gradient(90deg, transparent, var(--line) 15%, var(--line) 85%, transparent);
+    margin:0 -4px;
+  }
+  .chip-card-arrow{
+    font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.06em;
+    text-transform:uppercase;display:flex;align-items:center;gap:7px;font-weight:600;
+  }
+  .chip-card-arrow::after{content:'';flex:1;height:1px;background:var(--line-2)}
+
+  .chip-card-body{
+    display:flex;flex-wrap:wrap;gap:6px;
+  }
+  .chip-tag{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:5px 11px;border-radius:999px;
+    font-family:var(--mono);font-size:11.5px;font-weight:600;
+    border:1px solid transparent;cursor:pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    letter-spacing:0.01em;line-height:1;
+  }
+  .chip-tag:hover{transform:translateY(-1px);box-shadow:0 4px 10px -5px rgba(11,26,18,0.20)}
+  .chip-tag.cc{
+    background: color-mix(in oklab, var(--gl-code) 14%, var(--paper));
+    color: color-mix(in oklab, var(--gl-code) 80%, var(--ink));
+    border-color: color-mix(in oklab, var(--gl-code) 30%, var(--line));
+  }
+  .chip-tag.cc:hover{border-color: var(--gl-code)}
+  .chip-tag.org{
+    background: color-mix(in oklab, var(--gl-group) 14%, var(--paper));
+    color: color-mix(in oklab, var(--gl-group) 80%, var(--ink));
+    border-color: color-mix(in oklab, var(--gl-group) 30%, var(--line));
+  }
+  .chip-tag.org:hover{border-color: var(--gl-group)}
+  [data-theme="dark"] .chip-tag.cc{color: color-mix(in oklab, var(--gl-code) 35%, #fff)}
+  [data-theme="dark"] .chip-tag.org{color: color-mix(in oklab, var(--gl-group) 35%, #fff)}
+  .chip-tag .x-icon{
+    opacity:0;width:12px;height:12px;color:#C25A3F;transition:opacity 160ms;
+  }
+  .chip-tag:hover .x-icon{opacity:1}
+  .chip-tag .org-name{
+    font-family:var(--sans);font-weight:400;font-size:11px;color:var(--ink-3);
+    margin-left:2px;
+  }
+
+  /* New-row highlight on a chip card */
+  .chip-card.row-new{
+    animation: cardNewHighlight 2400ms ease;
+  }
+  @keyframes cardNewHighlight {
+    0%   { background-color: color-mix(in oklab, var(--gl-code) 25%, var(--paper)); border-color: var(--gl-code) }
+    100% { background-color: var(--paper) }
+  }
+
+  .chip-empty{
+    grid-column: 1/-1;
+    padding:60px 16px;text-align:center;color:var(--ink-3);
+  }
+  .chip-empty .empty-title{font-family:var(--serif);font-size:24px;color:var(--ink-2);margin-bottom:8px;font-style:italic}
+  .chip-empty .empty-sub{font-size:13px;color:var(--ink-3)}
+
+  /* ─── LINK GRAPH (clean two-column layout with connecting lines) ─── */
+  .link-grid{
+    position:relative;
+    display:grid;
+    grid-template-columns: 1fr 200px 1fr;
+    gap:0;
+    padding:24px 22px 30px;
+    background:var(--surface);
+  }
+  .link-col{display:flex;flex-direction:column;gap:8px;min-width:0;z-index:2}
+  .link-col-head{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:600;padding:0 8px 6px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .link-col-head .col-count{
+    font-family:var(--mono);font-size:10px;color:var(--ink);
+    background:var(--paper-2);padding:2px 7px;border-radius:4px;font-weight:700;
+  }
+  .link-col.right .link-col-head{flex-direction:row-reverse}
+  .link-row{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 12px;background:var(--surface);
+    border:1px solid var(--line);border-radius:9px;
+    transition:border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+    cursor:default;
+  }
+  .link-col.right .link-row{flex-direction:row-reverse}
+  .link-row .link-idx{
+    font-family:var(--mono);font-size:10.5px;font-weight:600;
+    color:var(--ink-3);min-width:24px;text-align:center;
+    background:var(--paper);border-radius:5px;padding:3px 6px;letter-spacing:0.04em;
+  }
+  .link-row .link-pill{flex-shrink:0}
+  .link-row .link-name{
+    font-size:13px;color:var(--ink-2);letter-spacing:-0.005em;flex:1;
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    text-align:left;
+  }
+  .link-col.right .link-row .link-name{text-align:right}
+  .link-row .link-degree{
+    font-family:var(--mono);font-size:10px;font-weight:700;
+    background:var(--paper-2);color:var(--ink-3);
+    padding:3px 7px;border-radius:5px;letter-spacing:0.04em;
+    transition:background 180ms ease, color 180ms ease;
+  }
+  .link-row.has-multi .link-degree{
+    background:color-mix(in oklab, var(--accent) 18%, transparent);
+    color:var(--accent);
+  }
+  .link-row .link-actions{display:flex;gap:4px;margin-left:6px}
+  .link-col.right .link-row .link-actions{margin-left:0;margin-right:6px}
+  .link-row .link-actions .action-btn{width:26px;height:26px;border-radius:6px}
+  .link-row .link-actions .action-btn svg{width:11px;height:11px}
+
+  /* Hover + connected states */
+  .link-row:hover, .link-row.is-hot{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent), 0 6px 14px -8px color-mix(in oklab, var(--accent) 50%, transparent);
+    background: color-mix(in oklab, var(--accent) 4%, var(--surface));
+  }
+  .link-row.is-connected{
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+    background: color-mix(in oklab, var(--accent) 3%, var(--surface));
+  }
+  .link-grid.has-focus .link-row:not(.is-hot):not(.is-connected){opacity:0.45}
+
+  /* SVG overlay drawing the connecting lines */
+  .link-svg{
+    position:absolute;inset:0;width:100%;height:100%;
+    pointer-events:none;z-index:1;
+    overflow:visible;
+  }
+  .link-path{
+    fill:none;
+    stroke: color-mix(in oklab, var(--ink-3) 50%, transparent);
+    stroke-width:1.4;
+    transition: stroke 200ms ease, stroke-width 200ms ease, opacity 200ms ease;
+  }
+  .link-path.is-hot{
+    stroke: var(--accent);
+    stroke-width: 2.2;
+  }
+  .link-grid.has-focus .link-path:not(.is-hot){opacity:0.10}
+  .link-endpoint{
+    fill: color-mix(in oklab, var(--ink-3) 60%, transparent);
+    transition: fill 200ms ease, r 200ms ease;
+  }
+  .link-endpoint.is-hot{fill: var(--accent);r:3.6}
+
+  /* Counts header above the grid */
+  .link-legend{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:14px 22px;border-bottom:1px solid var(--line-2);
+    background:var(--paper-2);
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.02em;
+  }
+  .link-legend .grp{display:inline-flex;align-items:center;gap:6px}
+  .link-legend .grp b{color:var(--ink);font-weight:700;font-size:12.5px}
+  .link-legend .dot{width:8px;height:8px;border-radius:50%}
+
+  /* ─── Table ─── */
+  .toolbar{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line-2);background:var(--surface);flex-wrap:wrap}
+  .search-box{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--paper);border:1px solid var(--line);border-radius:8px;min-width:240px;flex:1;max-width:360px}
+  .search-box:focus-within{border-color:var(--accent);background:var(--surface)}
+  .search-box svg{width:14px;height:14px;color:var(--ink-3);flex-shrink:0}
+  .search-box input{flex:1;border:none;background:transparent;outline:none;font-size:13.5px}
+  .search-box input::placeholder{color:var(--ink-3)}
+  .count-pill{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em}
+  .count-pill b{color:var(--ink);font-weight:600;font-size:12.5px}
+
+  .data-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px}
+  .data-table thead th{
+    background:var(--paper-2);font-weight:600;color:var(--ink-2);
+    font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;
+    padding:13px 22px;text-align:left;white-space:nowrap;
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
+  }
+  .data-table thead th.sortable{cursor:pointer;user-select:none;transition:background 160ms ease, color 160ms ease}
+  .data-table thead th.sortable:hover{background:color-mix(in oklab, var(--accent) 12%, var(--paper-2));color:var(--accent)}
+  .data-table thead th .sort-ind{
+    display:inline-flex;flex-direction:column;align-items:center;gap:1px;
+    margin-left:6px;vertical-align:middle;opacity:0.45;transition:opacity 160ms;
+  }
+  .data-table thead th.sortable:hover .sort-ind{opacity:1}
+  .data-table thead th .sort-ind svg{width:8px;height:5px;display:block;color:var(--ink-3)}
+  .data-table thead th[data-sort="asc"] .sort-ind svg:first-child{color:var(--accent)}
+  .data-table thead th[data-sort="desc"] .sort-ind svg:last-child{color:var(--accent)}
+  .data-table thead th[data-sort="asc"] .sort-ind, .data-table thead th[data-sort="desc"] .sort-ind{opacity:1}
+  .data-table thead th[data-sort="asc"], .data-table thead th[data-sort="desc"]{color:var(--accent)}
+  .data-table thead th.action-col{text-align:right;width:120px}
+  .data-table tbody tr{transition:background 200ms ease}
+  .data-table tbody tr:nth-child(even) td{background:color-mix(in oklab, var(--paper-2) 50%, var(--surface))}
+  .data-table tbody tr:hover td{background:color-mix(in oklab, var(--accent) 7%, var(--surface))}
+  .data-table td{padding:16px 22px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  .data-table tr.empty td{padding:60px 16px;text-align:center}
+  .data-table tr.empty .empty-title{font-family:var(--serif);font-size:24px;color:var(--ink-2);margin-bottom:8px;font-style:italic}
+  .data-table tr.empty .empty-sub{font-size:13px;color:var(--ink-3)}
+  .data-table tr.row-new td{animation: highlightNew 2400ms ease}
+  @keyframes highlightNew {
+    0%   { background-color: color-mix(in oklab, var(--gl-code) 28%, transparent) !important }
+    100% { background-color: transparent }
+  }
+
+  /* ROW LAYOUT — left side: index + code + name. Right side: arrow + group + count */
+  .gl-code-cell{display:flex;align-items:center;gap:14px}
+  .row-idx{
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);
+    background:var(--surface);border:1px solid var(--line);
+    padding:6px 9px;border-radius:7px;font-weight:600;letter-spacing:0.04em;
+    min-width:34px;text-align:center;flex-shrink:0;
+  }
+  .code-block{display:flex;flex-direction:row;align-items:center;gap:12px;min-width:0;flex-wrap:wrap}
+  .gl-code-pill{
+    font-family:var(--mono);font-weight:700;font-size:12.5px;
+    color:#fff;background:var(--gl-code);
+    padding:5px 11px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;
+    letter-spacing:0.02em;align-self:flex-start;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 6px -2px color-mix(in oklab, var(--gl-code) 60%, transparent);
+  }
+  .gl-code-pill::before{display:none}
+  .sap-name{
+    font-family:var(--sans);font-style:normal;font-weight:400;
+    font-size:14px;color:var(--ink-2);
+    line-height:1.4;letter-spacing:-0.005em;
+  }
+
+  /* GL Group side */
+  .map-block{display:flex;align-items:center;gap:14px}
+  .map-arrow{
+    color:var(--ink-3);opacity:0.55;
+    transition: color 200ms ease, opacity 200ms ease, transform 200ms ease;
+    flex-shrink:0;
+  }
+  .map-arrow svg{width:22px;height:14px;display:block}
+  tr:hover .map-arrow{color:var(--accent);opacity:1;transform:translateX(3px)}
+  .group-block{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .gl-group-pill{
+    font-family:var(--sans);font-weight:600;font-size:12.5px;
+    color:#fff;background:var(--gl-group);
+    padding:5px 13px;border-radius:6px;display:inline-flex;align-items:center;gap:7px;
+    letter-spacing:-0.005em;align-self:flex-start;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 6px -2px color-mix(in oklab, var(--gl-group) 60%, transparent);
+  }
+  .gl-group-pill::before{display:none}
+  /* Liquid-merged pill (rectangular, like normal pill, with melting liquid drops underneath) */
+  .group-merged-cell{vertical-align:middle !important;padding:14px 22px 30px !important}
+  .merged-wrap{
+    position:relative;display:inline-flex;
+    filter: url(#liquidGoo);
+  }
+  .gl-group-pill.merged{
+    padding:8px 14px;border-radius:7px;font-size:12.5px;
+    align-self:center;display:inline-flex;flex-direction:row;align-items:center;gap:10px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--gl-group) 88%, white) 0%,
+        var(--gl-group) 50%,
+        color-mix(in oklab, var(--gl-group) 88%, black) 100%);
+    background-size: 100% 220%;
+    animation: liquidFlow 5s ease-in-out infinite;
+    position:relative; isolation:isolate;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.35),
+      inset 0 -1px 0 rgba(0,0,0,0.22);
+    overflow:visible;
+  }
+  .gl-group-pill.merged::before{display:none}
+  .gl-group-pill.merged .count-tag{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.05em;
+    padding:2px 7px;border-radius:4px;
+    background:rgba(255,255,255,0.25);color:#fff;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.30);
+  }
+  .gl-group-pill.merged .group-name{
+    font-size:13px;font-weight:700;letter-spacing:-0.005em;line-height:1;
+  }
+  /* Melting drops — three independent blobs that ooze down */
+  .drop{
+    position:absolute;
+    background: var(--gl-group);
+    border-radius: 50% 50% 45% 45% / 30% 30% 70% 70%;
+    pointer-events:none;
+    will-change: transform;
+  }
+  .drop-1{
+    width:18px;height:14px;left:18%;top:80%;
+    animation: melt1 3.4s ease-in-out infinite;
+  }
+  .drop-2{
+    width:14px;height:12px;left:46%;top:84%;
+    animation: melt2 4.2s ease-in-out infinite;
+    animation-delay: -1.2s;
+  }
+  .drop-3{
+    width:16px;height:13px;left:72%;top:80%;
+    animation: melt3 3.8s ease-in-out infinite;
+    animation-delay: -0.6s;
+  }
+  /* Shadow under the merged pill — positioned to the pill itself */
+  .merged-shadow{
+    position:absolute;left:8%;right:8%;bottom:-10px;height:6px;
+    background: radial-gradient(ellipse 50% 100% at 50% 0%, color-mix(in oklab, var(--gl-group) 40%, transparent) 0%, transparent 70%);
+    filter: blur(3px);
+    pointer-events:none;
+    z-index:-1;
+  }
+  @keyframes liquidFlow{
+    0%,100% { background-position: 0% 0% }
+    50%     { background-position: 0% 100% }
+  }
+  @keyframes melt1{
+    0%, 100% { transform: translateY(-2px) scaleY(0.85); opacity: 0.95 }
+    35%      { transform: translateY(14px) scaleY(1.55); opacity: 1 }
+    70%      { transform: translateY(22px) scaleY(0.9);  opacity: 0.4 }
+    71%      { transform: translateY(-2px) scaleY(0.85); opacity: 0 }
+    72%      { transform: translateY(-2px) scaleY(0.85); opacity: 0.95 }
+  }
+  @keyframes melt2{
+    0%, 100% { transform: translateY(-3px) scaleY(0.8); opacity: 0.95 }
+    40%      { transform: translateY(12px) scaleY(1.7); opacity: 1 }
+    78%      { transform: translateY(22px) scaleY(1.0); opacity: 0.3 }
+    79%      { transform: translateY(-3px) scaleY(0.8); opacity: 0 }
+    80%      { transform: translateY(-3px) scaleY(0.8); opacity: 0.95 }
+  }
+  @keyframes melt3{
+    0%, 100% { transform: translateY(-2px) scaleY(0.85); opacity: 0.90 }
+    30%      { transform: translateY(10px) scaleY(1.45); opacity: 1 }
+    65%      { transform: translateY(20px) scaleY(0.95); opacity: 0.45 }
+    66%      { transform: translateY(-2px) scaleY(0.85); opacity: 0 }
+    67%      { transform: translateY(-2px) scaleY(0.85); opacity: 0.90 }
+  }
+  .group-count{
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);
+    letter-spacing:0.04em;text-transform:uppercase;
+  }
+  .group-count b{color:var(--gl-group);font-weight:700}
+
+  /* ─── LEFT side (Cost Center) merge — mirrors gl-group merge but uses --gl-code ─── */
+  .code-merged-cell{vertical-align:middle !important;padding:14px 22px 30px !important}
+  .gl-code-pill.merged{
+    padding:8px 14px;border-radius:7px;font-size:12.5px;
+    align-self:center;display:inline-flex;flex-direction:row;align-items:center;gap:10px;
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--gl-code) 88%, white) 0%,
+        var(--gl-code) 50%,
+        color-mix(in oklab, var(--gl-code) 88%, black) 100%);
+    background-size: 100% 220%;
+    animation: liquidFlow 5s ease-in-out infinite;
+    position:relative; isolation:isolate;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.35),
+      inset 0 -1px 0 rgba(0,0,0,0.22);
+    overflow:visible;
+    font-family:var(--mono);
+  }
+  .gl-code-pill.merged .count-tag{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.05em;
+    padding:2px 7px;border-radius:4px;
+    background:rgba(255,255,255,0.25);color:#fff;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.30);
+  }
+  .gl-code-pill.merged .group-name{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;line-height:1;
+  }
+  /* Re-color drops + shadow when inside a code-merged-cell (left side) */
+  .code-merged-cell .drop{background: var(--gl-code)}
+  .code-merged-cell .merged-shadow{
+    background: radial-gradient(ellipse 50% 100% at 50% 0%, color-mix(in oklab, var(--gl-code) 40%, transparent) 0%, transparent 70%);
+  }
+  /* Hide the arrow when left side is the merged one — arrow points right, looks odd from a merged blob */
+  .code-merged-cell .map-arrow{opacity:0.25}
+  .action-row{display:flex;justify-content:flex-end;gap:6px}
+  .action-btn{
+    width:30px;height:30px;border-radius:7px;border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:grid;place-items:center;
+    color:var(--ink-3);transition:all 160ms;
+  }
+  .action-btn:hover{border-color:var(--ink);color:var(--ink);transform:translateY(-1px)}
+  .action-btn.edit:hover{color:var(--gl-group);border-color:var(--gl-group)}
+  .action-btn.delete:hover{color:#C25A3F;border-color:#C25A3F}
+  .action-btn svg{width:13px;height:13px}
+
+  /* ─── Modal ─── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(11,26,18,0.55);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    z-index:500;display:none;align-items:center;justify-content:center;
+    padding:24px;
+  }
+  .modal-backdrop.open{display:flex}
+  .modal{
+    background:var(--paper);color:var(--ink);
+    border-radius:14px;border:1px solid var(--line);
+    max-width:440px;width:100%;
+    box-shadow:0 32px 80px -20px rgba(11,26,18,0.30);
+    overflow:hidden;animation:modalIn 240ms ease;
+  }
+  @keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .modal-head{padding:24px 28px 8px;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+  .modal-head .modal-title{font-family:var(--serif);font-size:24px;line-height:1.1;letter-spacing:-0.015em;font-weight:400}
+  .modal-head .modal-title em{font-style:italic;color:var(--accent)}
+  .modal-close{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;display:grid;place-items:center;color:var(--ink-2)}
+  .modal-close:hover{border-color:var(--ink);color:var(--ink)}
+  .modal-body{padding:8px 28px 18px;font-size:13.5px;color:var(--ink-2);line-height:1.6}
+  .modal-body .summary{
+    margin-top:12px;padding:14px;background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;
+  }
+  .modal-body .summary .row{display:flex;justify-content:space-between;gap:14px;align-items:center}
+  .modal-body .summary .row .lbl{color:var(--ink-3);font-family:var(--mono);font-size:11px;letter-spacing:0.04em;text-transform:uppercase}
+  .modal-foot{padding:18px 28px;border-top:1px solid var(--line);background:var(--surface);display:flex;justify-content:flex-end;gap:10px}
+
+  /* ─── Responsive ─── */
+  @media (max-width:780px){
+    .nav-links{display:none}
+    .form-grid{grid-template-columns:1fr}
+    .page-title{font-size:36px}
+  }
+</style>
+</head>
+<body>
+
+<!-- SVG goo filter for liquid melting drops -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="liquidGoo">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0
+        0 0 1 0 0
+        0 0 0 22 -10" result="goo"/>
+      <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+    </filter>
+  </defs>
+</svg>
+
+<!-- ─── NAV ─── -->
+<nav class="nav" data-screen-label="Nav">
+  <div class="nav-inner">
+    <a href="0001index.html" class="nav-logo">
+      <span class="nav-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V8l8-5 8 5v11"/><path d="M9 19v-7h6v7"/></svg>
+      </span>
+      <span class="nav-logo-text">
+        <span class="name">Chememan</span>
+        <span class="sub">Budget Management</span>
+      </span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="0001index.html">Home</a></li>
+      <li><a href="0002budget-export.html">Export Template</a></li>
+      <li><a href="0003budget-gl-master.html">Edit GL Group</a></li>
+      <li><a href="#" class="active">Edit Org &amp; Cost center</a></li>
+      <li><a href="#">Hide Document Number</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a href="0001index.html" class="btn-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        <span>Back to home</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── BODY ─── -->
+<main class="wrap">
+  <header class="page-head" data-screen-label="Page header">
+    <div class="breadcrumb">
+      <a href="0001index.html">Home</a>
+      <span class="sep">/</span>
+      <span>Budget Master</span>
+      <span class="sep">/</span>
+      <span style="color:var(--ink-2)">Orgcode &amp; Cost Center Mapping</span>
+    </div>
+    <div class="page-title-row">
+      <div>
+        <div class="page-eyebrow">Module 07 · Master Data</div>
+        <h1 class="page-title glassy">Cost center &amp; <em>Orgcode.</em></h1>
+        <p class="page-subtitle">จัดการ Mapping ระหว่าง <b>Orgcode</b> (จาก SAP) กับ <b>Cost Center</b> สำหรับใช้ในการจัดหมวดผู้รับผิดชอบและรายงานงบประมาณ</p>
+      </div>
+      <div class="summary" id="summaryStrip" data-screen-label="Summary chips">
+      <span class="summary-chip gl" title="จำนวน Cost Center ที่ Map แล้ว"><span class="lbl">Cost Centers</span><span class="v" id="stat-gl">—</span></span>
+      <span class="summary-chip group" title="จำนวน Orgcode ที่มี Mapping"><span class="lbl">Orgcodes</span><span class="v" id="stat-group">—</span></span>
+      <span class="summary-chip gold" title="Orgcode จาก SAP ที่ยังไม่ได้ Map"><span class="lbl">Unmapped</span><span class="v" id="stat-unmapped">—</span></span>
+      <span class="summary-chip" title="Orgcode ทั้งหมดจาก SAP"><span class="lbl">SAP total</span><span class="v" id="stat-sap">—</span></span>
+    </div>
+    </div>
+  </header>
+
+  <!-- Edit form -->
+  <section class="panel panel-form" data-screen-label="Edit form">
+    <div class="panel-head">
+      <div class="panel-title">
+        <em>Mapping</em> editor
+        <span class="badge" id="modeBadge">เพิ่มใหม่</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em">
+        เลือก Orgcode → กรอก Cost Center → กดบันทึก
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <!-- Cost Center (left) -->
+        <div class="field">
+          <label class="field-label">Cost Center · กรอกเอง</label>
+          <input type="text" class="field-input" id="glCodeInput" placeholder="เช่น 10CS000000, 10CA012000…" autocomplete="off" maxlength="20" oninput="validateCostCenter(this)">
+          <span class="field-helper">รับเฉพาะตัวเลข (0-9) หรือพิมพ์ใหญ่ (A-Z)</span>
+        </div>
+
+        <!-- Orgcode (right) -->
+        <div class="field">
+          <label class="field-label">Orgcode · จาก SAP</label>
+          <div class="dropdown" id="glGroupDropdown">
+            <input type="text" class="field-input" id="glGroupInput" placeholder="พิมพ์ค้นหา 1120000 หรือชื่อหน่วยงาน…" autocomplete="off">
+            <div class="dropdown-list" id="glGroupList"></div>
+          </div>
+          <span class="field-helper">เลือกจากรายการ SAP เท่านั้น (1 Orgcode รับได้หลาย Cost Center)</span>
+        </div>
+
+        <!-- Save -->
+        <div class="field">
+          <label class="field-label" style="visibility:hidden">บันทึก</label>
+          <button class="btn-save" onclick="saveRecord()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span id="saveBtnLabel">บันทึก</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section class="panel" data-screen-label="Table">
+    <div class="panel-head" style="padding-bottom:0;background:var(--surface);border-bottom:none">
+      <div class="panel-title">
+        Mapping <em>records</em>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="tableSearch" placeholder="ค้นหา Cost Center หรือ Orgcode…" oninput="renderTable()">
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.02em">
+        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-code)"></span>Cost Center</span>
+        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-group)"></span>Orgcode</span>
+      </div>
+      <div class="count-pill" id="countPill">— records</div>
+    </div>
+    <div class="chip-toolbar">
+      <div class="view-switch" role="tablist">
+        <button type="button" data-mode="cc"  class="active" onclick="setViewMode('cc')"><span class="dot"></span>By Cost Center</button>
+        <button type="button" data-mode="org" onclick="setViewMode('org')"><span class="dot"></span>By Orgcode</button>
+      </div>
+      <div class="chip-meta">
+        <b id="legend-cc">—</b> Cost Centers · <b id="legend-edges">—</b> mappings · <b id="legend-org">—</b> Orgcodes
+      </div>
+    </div>
+    <div class="chip-grid" id="chipGrid"></div>
+  </section>
+</main>
+
+<!-- ─── Notice modal ─── -->
+<div class="modal-backdrop" id="noticeModal" onclick="if(event.target.id==='noticeModal') closeNotice()">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 class="modal-title">บันทึก<em>สำเร็จ</em></h2>
+      <button class="modal-close" onclick="closeNotice()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="noticeMsg">บันทึก Mapping เรียบร้อยแล้ว</p>
+      <div class="summary" id="noticeSummary"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-back" onclick="closeNotice()" style="padding:9px 18px"><span>ตกลง</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Confirm delete modal ─── -->
+<div class="modal-backdrop" id="confirmModal" onclick="if(event.target.id==='confirmModal') closeConfirm()">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 class="modal-title">ยืนยัน<em>ลบ</em></h2>
+      <button class="modal-close" onclick="closeConfirm()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>คุณต้องการลบรายการนี้หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้</p>
+      <div class="summary" id="confirmSummary"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeConfirm()">ยกเลิก</button>
+      <button class="btn" id="confirmBtn" style="background:#C25A3F;color:#fff;border-color:#C25A3F">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        ลบรายการ
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ════════════════════════════════════════════
+     THEME — synced via localStorage with 0001/0002
+     ════════════════════════════════════════════ */
+  const PRESETS = {
+    chememan: { forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
+    ocean:    { forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
+    sunset:   { forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
+    midnight: { forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
+    nature:   { forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
+    royal:    { forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+  };
+  function toggleTheme(){
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('cm.theme', next); } catch(e){}
+  }
+  function applyThemeFromStorage(){
+    let theme = 'light', preset = 'ocean', intensity = 60;
+    try {
+      theme = localStorage.getItem('cm.theme') || 'light';
+      preset = localStorage.getItem('cm.preset') || 'ocean';
+      intensity = +(localStorage.getItem('cm.intensity') || 60);
+    } catch(e){}
+    document.documentElement.setAttribute('data-theme', theme);
+    const p = PRESETS[preset] || PRESETS.ocean;
+    const adjust = (hex, factor) => {
+      const h = hex.replace('#','');
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
+      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+    };
+    const f = intensity/100;
+    document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
+    document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
+    document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
+  }
+
+  /* ════════════════════════════════════════════
+     DATA
+     ════════════════════════════════════════════ */
+  // sapGlCodes now holds Orgcodes from SAP (variable name kept for compatibility)
+  const sapGlCodes = [
+    { code:'1110000', name:'ฝ่ายบัญชี' },
+    { code:'1120000', name:'ฝ่ายการเงิน' },
+    { code:'1130000', name:'ฝ่ายทรัพยากรบุคคล' },
+    { code:'1210000', name:'ฝ่ายผลิต' },
+    { code:'1220000', name:'ฝ่ายควบคุมคุณภาพ' },
+    { code:'1310000', name:'ฝ่ายขายและการตลาด' },
+    { code:'1320000', name:'ฝ่ายจัดซื้อ' },
+    { code:'1410000', name:'ฝ่ายวิศวกรรม' },
+    { code:'1420000', name:'ฝ่ายไอที' },
+    { code:'1510000', name:'ฝ่ายโลจิสติกส์' },
+    { code:'1610000', name:'ฝ่ายวิจัยและพัฒนา' },
+    { code:'1710000', name:'ฝ่ายบริหารทั่วไป' }
+  ];
+  let glGroups = []; // unused — Orgcode dropdown only picks from sapGlCodes
+  // masterData: { glCode = Cost Center (user), glGroup = Orgcode (SAP) }
+  let masterData = [
+    // Right-merge: one Orgcode (1120000) → 3 Cost Centers
+    { glCode:'10CS000000', glGroup:'1120000' },
+    { glCode:'10CA012000', glGroup:'1120000' },
+    { glCode:'10SP012000', glGroup:'1120000' },
+    // Bridge row — 10SP012000 also belongs to 1110000 (many-to-many)
+    { glCode:'10SP012000', glGroup:'1110000' },
+    // Left-merge: one Cost Center (10SP010000) → 3 Orgcodes
+    { glCode:'10SP010000', glGroup:'1110000' },
+    { glCode:'10SP010000', glGroup:'1130000' },
+    { glCode:'10SP010000', glGroup:'1410000' },
+    // Plain mappings
+    { glCode:'ACC001',     glGroup:'1110000' },
+    { glCode:'HR001',      glGroup:'1130000' },
+    { glCode:'IT001',      glGroup:'1420000' }
+  ];
+  let newRowKey = null;       // glCode of most recently saved
+  let pendingDelete = null;
+  let sortCol = null;         // 'glCode' | 'glGroup' | null
+  let sortDir = 'asc';        // 'asc' | 'desc'
+
+  function toggleSort(col){
+    if (sortCol !== col){ sortCol = col; sortDir = 'asc'; }
+    else if (sortDir === 'asc') sortDir = 'desc';
+    else { sortCol = null; sortDir = 'asc'; }
+    // Update header attributes
+    document.querySelectorAll('.data-table thead th[data-col]').forEach(th => {
+      th.removeAttribute('data-sort');
+      if (th.dataset.col === sortCol) th.setAttribute('data-sort', sortDir);
+    });
+    renderTable();
+  }
+
+  /* ════════════════════════════════════════════
+     DROPDOWN: ORGCODE (right side · uses glGroup field)
+     ════════════════════════════════════════════ */
+  function renderGlCodeList(filter){
+    const list = document.getElementById('glGroupList');
+    const q = (filter || '').toLowerCase();
+    const filtered = sapGlCodes.filter(it => it.code.toLowerCase().includes(q) || it.name.toLowerCase().includes(q));
+    if (!filtered.length) { list.innerHTML = '<div class="dropdown-empty">ไม่พบ Orgcode · No matches</div>'; return; }
+    list.innerHTML = filtered.map(it => `
+      <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlCode('${it.code}','${it.name.replace(/'/g,"\\'")}')">
+        <span class="code">${it.code}</span>
+        <span class="name">${it.name}</span>
+      </div>
+    `).join('');
+  }
+  function selectGlCode(code, name){
+    document.getElementById('glGroupInput').value = code;
+    document.getElementById('glGroupDropdown').classList.remove('open');
+    // Many Cost Centers can share one Orgcode — do not auto-fill the Cost Center side.
+    // If user has typed a Cost Center already, check if this exact mapping exists for edit-mode badge.
+    const cc = document.getElementById('glCodeInput').value.trim();
+    if (cc){
+      const existing = masterData.find(d => d.glCode === cc && d.glGroup === code);
+      setEditMode(existing ? masterData.indexOf(existing) : -1);
+    } else {
+      setEditMode(-1);
+    }
+  }
+
+  /* ════════════════════════════════════════════
+     DROPDOWN: GL GROUP
+     ════════════════════════════════════════════ */
+  function renderGlGroupList(filter){
+    const list = document.getElementById('glGroupList');
+    const q = (filter || '').toLowerCase();
+    const filtered = glGroups.filter(g => g.toLowerCase().includes(q));
+    let html = '';
+    if (filtered.length){
+      html += filtered.map(g => `
+        <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlGroup('${g.replace(/'/g,"\\'")}')">
+          <span class="code" style="font-family:var(--sans);font-weight:600;color:var(--ink)">${g}</span>
+        </div>
+      `).join('');
+    } else if (!filter){
+      html = '<div class="dropdown-empty">ไม่มี GL Group · พิมพ์เพื่อสร้างใหม่</div>';
+    }
+    // Create-new option
+    const trimmed = (filter || '').trim();
+    if (trimmed && !glGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())){
+      html += `<div class="dropdown-item create-new" onmousedown="event.preventDefault()" onclick="createNewGroup('${trimmed.replace(/'/g,"\\'")}')">
+        <span>สร้างกลุ่มใหม่: <b>${trimmed}</b></span>
+      </div>`;
+    }
+    list.innerHTML = html || '<div class="dropdown-empty">No options</div>';
+  }
+  function selectGlGroup(name){
+    document.getElementById('glGroupInput').value = name;
+    document.getElementById('glGroupDropdown').classList.remove('open');
+  }
+  function createNewGroup(name){
+    if (!glGroups.includes(name)) glGroups.push(name);
+    selectGlGroup(name);
+  }
+
+  /* ════════════════════════════════════════════
+     MODE (add / edit indicator)
+     ════════════════════════════════════════════ */
+  function setEditMode(masterIdx){
+    const badge = document.getElementById('modeBadge');
+    const label = document.getElementById('saveBtnLabel');
+    if (masterIdx >= 0){
+      badge.textContent = 'แก้ไข · UPDATE';
+      badge.style.color = 'var(--gl-group)';
+      badge.style.borderColor = 'var(--gl-group)';
+      label.textContent = 'อัปเดต';
+    } else {
+      badge.textContent = 'เพิ่มใหม่ · NEW';
+      badge.style.color = '';
+      badge.style.borderColor = '';
+      label.textContent = 'บันทึก';
+    }
+  }
+
+  /* ════════════════════════════════════════════
+     SAVE / EDIT / DELETE
+     ════════════════════════════════════════════ */
+  function saveRecord(){
+    const glCode = document.getElementById('glCodeInput').value.trim();   // Cost Center
+    const glGroup = document.getElementById('glGroupInput').value.trim(); // Orgcode
+    if (!glCode || !glGroup){
+      showNotice('โปรดกรอกข้อมูล', 'กรุณากรอก Cost Center และเลือก Orgcode ก่อนบันทึก', null);
+      return;
+    }
+    if (!/^[0-9A-Z]+$/.test(glCode)){
+      showNotice('Cost Center ไม่ถูกต้อง', 'Cost Center รับเฉพาะตัวเลข (0-9) หรือตัวอักษรพิมพ์ใหญ่ (A-Z) เท่านั้น', null);
+      return;
+    }
+    const sapItem = sapGlCodes.find(s => s.code === glGroup);
+    if (!sapItem){
+      showNotice('Orgcode ไม่ถูกต้อง', 'กรุณาเลือก Orgcode จากรายการของ SAP เท่านั้น', null);
+      return;
+    }
+
+    const existingIdx = masterData.findIndex(d => d.glCode === glCode && d.glGroup === glGroup);
+    let action = 'CREATE';
+    if (existingIdx >= 0){
+      action = 'UPDATE';
+      masterData.splice(existingIdx, 1);
+    }
+    masterData.unshift({ glCode, glGroup });
+    newRowKey = glCode;
+    document.getElementById('glCodeInput').value = '';
+    document.getElementById('glGroupInput').value = '';
+    setEditMode(-1);
+    renderTable();
+
+    showNotice(
+      action === 'UPDATE' ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ',
+      action === 'UPDATE' ? 'อัปเดต Mapping เรียบร้อย และย้ายขึ้นบนสุดของตาราง' : 'เพิ่ม Mapping ใหม่ที่บนสุดของตาราง',
+      { glCode, glGroup, action, sapName: sapItem.name }
+    );
+  }
+  function editRecord(idx){
+    const rec = masterData[idx];
+    document.getElementById('glCodeInput').value = rec.glCode;
+    document.getElementById('glGroupInput').value = rec.glGroup;
+    setEditMode(idx);
+    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function askDelete(idx){
+    pendingDelete = idx;
+    const rec = masterData[idx];
+    const sap = sapGlCodes.find(s => s.code === rec.glGroup);
+    document.getElementById('confirmSummary').innerHTML = `
+      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${rec.glCode}</span></div>
+      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${rec.glGroup}</span></div>
+      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
+    `;
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  function closeConfirm(){
+    document.getElementById('confirmModal').classList.remove('open');
+    pendingDelete = null;
+  }
+  document.getElementById('confirmBtn').onclick = () => {
+    if (!pendingDelete) return;
+    if (typeof pendingDelete === 'object' && pendingDelete.kind){
+      if (pendingDelete.kind === 'cc'){
+        masterData = masterData.filter(d => d.glCode !== pendingDelete.key);
+      } else if (pendingDelete.kind === 'org'){
+        masterData = masterData.filter(d => d.glGroup !== pendingDelete.key);
+      } else if (pendingDelete.kind === 'pair'){
+        masterData = masterData.filter(d => !(d.glCode === pendingDelete.cc && d.glGroup === pendingDelete.org));
+      }
+    } else {
+      masterData.splice(pendingDelete, 1);
+    }
+    closeConfirm();
+    renderTable();
+  };
+
+  /* ════════════════════════════════════════════
+     RENDER TABLE
+     ════════════════════════════════════════════ */
+  function renderSummary(){
+    const totalGl = masterData.length; // Cost Centers
+    const uniqueGroups = new Set(masterData.map(d => d.glGroup)).size; // Orgcodes used
+    const mappedOrgs = new Set(masterData.map(d => d.glGroup));
+    const unmapped = sapGlCodes.filter(s => !mappedOrgs.has(s.code)).length;
+    const sapTotal = sapGlCodes.length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('stat-gl', totalGl);
+    set('stat-group', uniqueGroups);
+    set('stat-unmapped', unmapped);
+    set('stat-sap', sapTotal);
+  }
+
+  let viewMode = 'cc'; // 'cc' = primary is Cost Center, 'org' = primary is Orgcode
+  function setViewMode(m){
+    viewMode = m;
+    document.querySelectorAll('.view-switch button').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === m);
+    });
+    renderTable();
+  }
+  window.setViewMode = setViewMode;
+
+  function renderTable(){
+    renderSummary();
+    const q = document.getElementById('tableSearch').value.toLowerCase();
+    const filtered = masterData.filter(d =>
+      d.glCode.toLowerCase().includes(q) || d.glGroup.toLowerCase().includes(q)
+    );
+    document.getElementById('countPill').innerHTML = `<b>${filtered.length}</b> / ${masterData.length} mappings`;
+
+    // Aggregate edges by primary key
+    const ccMap = new Map();  // cc → [orgs]
+    const orgMap = new Map(); // org → [ccs]
+    filtered.forEach(d => {
+      if (!ccMap.has(d.glCode)) ccMap.set(d.glCode, []);
+      ccMap.get(d.glCode).push(d.glGroup);
+      if (!orgMap.has(d.glGroup)) orgMap.set(d.glGroup, []);
+      orgMap.get(d.glGroup).push(d.glCode);
+    });
+    document.getElementById('legend-cc').textContent = ccMap.size;
+    document.getElementById('legend-org').textContent = orgMap.size;
+    document.getElementById('legend-edges').textContent = filtered.length;
+
+    const grid = document.getElementById('chipGrid');
+    if (!filtered.length){
+      grid.innerHTML = `<div class="chip-empty">
+        <div class="empty-title">No matches.</div>
+        <div class="empty-sub">Try clearing the search or add a new mapping above.</div>
+      </div>`;
+      return;
+    }
+
+    const esc = s => s.replace(/'/g, "\\'");
+
+    let html = '';
+    if (viewMode === 'cc'){
+      // Each card = one Cost Center → list of Orgcode chips
+      const keys = [...ccMap.keys()].sort();
+      html = keys.map(cc => {
+        const orgs = [...new Set(ccMap.get(cc))].sort();
+        const multi = orgs.length > 1;
+        const isNew = cc === newRowKey;
+        return `<div class="chip-card ${multi ? 'has-multi' : ''} ${isNew ? 'row-new' : ''}" data-key="${cc}" data-kind="cc">
+          <div class="chip-card-head">
+            <div class="primary">
+              <div class="pill-line">
+                <span class="gl-code-pill">${cc}</span>
+                <span class="deg">×${orgs.length}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn edit" onclick="editCC('${esc(cc)}')" title="เพิ่ม mapping ใหม่สำหรับ CC นี้">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="action-btn delete" onclick="deleteCC('${esc(cc)}')" title="ลบทุก mapping ของ CC นี้">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="chip-card-arrow">maps to ${orgs.length} orgcode${orgs.length > 1 ? 's' : ''}</div>
+          <div class="chip-card-body">
+            ${orgs.map(o => {
+              const sap = sapGlCodes.find(s => s.code === o);
+              return `<span class="chip-tag org" onclick="removeEdge('${esc(cc)}','${esc(o)}')" title="คลิกเพื่อลบ mapping นี้">
+                <span>${o}</span>
+                <span class="org-name">${sap ? sap.name : ''}</span>
+                <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+              </span>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      // Each card = one Orgcode → list of Cost Center chips
+      const keys = [...orgMap.keys()].sort();
+      html = keys.map(org => {
+        const ccs = [...new Set(orgMap.get(org))].sort();
+        const multi = ccs.length > 1;
+        const sap = sapGlCodes.find(s => s.code === org);
+        return `<div class="chip-card ${multi ? 'has-multi' : ''}" data-key="${org}" data-kind="org">
+          <div class="chip-card-head">
+            <div class="primary">
+              <div class="pill-line">
+                <span class="gl-group-pill">${org}</span>
+                <span class="deg">×${ccs.length}</span>
+              </div>
+              <span class="name">${sap ? sap.name : '—'}</span>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn edit" onclick="editOrg('${esc(org)}')" title="เพิ่ม mapping ใหม่สำหรับ Orgcode นี้">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="action-btn delete" onclick="deleteOrg('${esc(org)}')" title="ลบทุก mapping ของ Orgcode นี้">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="chip-card-arrow">contains ${ccs.length} cost center${ccs.length > 1 ? 's' : ''}</div>
+          <div class="chip-card-body">
+            ${ccs.map(c => `<span class="chip-tag cc" onclick="removeEdge('${esc(c)}','${esc(org)}')" title="คลิกเพื่อลบ mapping นี้">
+              <span>${c}</span>
+              <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+            </span>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+    grid.innerHTML = html;
+    setTimeout(() => { newRowKey = null; }, 2500);
+  }
+
+  // Remove a single (cc, org) edge — confirms inline
+  function removeEdge(cc, org){
+    const idx = masterData.findIndex(d => d.glCode === cc && d.glGroup === org);
+    if (idx < 0) return;
+    pendingDelete = { kind:'pair', cc, org };
+    const sap = sapGlCodes.find(s => s.code === org);
+    document.getElementById('confirmSummary').innerHTML = `
+      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${cc}</span></div>
+      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${org}</span></div>
+      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
+    `;
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  window.removeEdge = removeEdge;
+
+  // New action handlers (replace editRecord/askDelete)
+  function editCC(cc){
+    document.getElementById('glCodeInput').value = cc;
+    document.getElementById('glGroupInput').value = '';
+    setEditMode(-1);
+    document.getElementById('glGroupInput').focus();
+    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function editOrg(org){
+    document.getElementById('glGroupInput').value = org;
+    document.getElementById('glCodeInput').value = '';
+    setEditMode(-1);
+    document.getElementById('glCodeInput').focus();
+    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function deleteCC(cc){
+    const rows = masterData.filter(d => d.glCode === cc);
+    pendingDelete = { kind:'cc', key:cc, count:rows.length };
+    document.getElementById('confirmSummary').innerHTML = `
+      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${cc}</span></div>
+      <div class="row"><span class="lbl">Mappings ที่จะถูกลบ</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
+    `;
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  function deleteOrg(org){
+    const rows = masterData.filter(d => d.glGroup === org);
+    pendingDelete = { kind:'org', key:org, count:rows.length };
+    const sap = sapGlCodes.find(s => s.code === org);
+    document.getElementById('confirmSummary').innerHTML = `
+      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${org}</span></div>
+      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
+      <div class="row"><span class="lbl">Mappings ที่จะถูกลบ</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
+    `;
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  window.editCC = editCC; window.editOrg = editOrg;
+  window.deleteCC = deleteCC; window.deleteOrg = deleteOrg;
+
+  /* ════════════════════════════════════════════
+     NOTICE MODAL
+     ════════════════════════════════════════════ */
+  function showNotice(title, body, summary){
+    document.querySelector('#noticeModal .modal-title').innerHTML = title.includes('สำเร็จ')
+      ? title.replace('สำเร็จ', '<em>สำเร็จ</em>')
+      : title;
+    document.getElementById('noticeMsg').textContent = body;
+    const sumEl = document.getElementById('noticeSummary');
+    if (summary){
+      sumEl.style.display = 'flex';
+      sumEl.innerHTML = `
+        <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${summary.action}</span></div>
+        <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${summary.glCode}</span></div>
+        <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${summary.glGroup}</span></div>
+        <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${summary.sapName}</span></div>
+      `;
+    } else {
+      sumEl.style.display = 'none';
+    }
+    document.getElementById('noticeModal').classList.add('open');
+  }
+  function closeNotice(){
+    document.getElementById('noticeModal').classList.remove('open');
+  }
+
+  /* ════════════════════════════════════════════
+     INIT — wire up dropdowns + theme
+     ════════════════════════════════════════════ */
+  (function init(){
+    applyThemeFromStorage();
+
+    // Orgcode dropdown (right side)
+    const glCodeWrap = document.getElementById('glGroupDropdown');
+    const glCodeInput = document.getElementById('glGroupInput');
+    glCodeInput.addEventListener('focus', () => { glCodeWrap.classList.add('open'); renderGlCodeList(''); });
+    glCodeInput.addEventListener('input', () => { glCodeWrap.classList.add('open'); renderGlCodeList(glCodeInput.value); });
+    glCodeInput.addEventListener('blur', () => setTimeout(() => glCodeWrap.classList.remove('open'), 150));
+
+    // Cost Center input (free text + validation)
+    // No dropdown logic needed - input handles its own validation via oninput
+    function validateCostCenter(input){
+      const cleaned = input.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+      if (cleaned !== input.value) {
+        input.value = cleaned;
+        input.style.borderColor = '#C25A3F';
+        input.style.boxShadow = '0 0 0 3px color-mix(in oklab, #C25A3F 18%, transparent)';
+        clearTimeout(input._errTimer);
+        input._errTimer = setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 600);
+      }
+    }
+    window.validateCostCenter = validateCostCenter;
+
+    // Close dropdowns on outside click
+    document.addEventListener('click', (e) => {
+      if (!glCodeWrap.contains(e.target)) glCodeWrap.classList.remove('open');
+    });
+
+    renderTable();
+  })();
+</script>
+</body>
+</html>

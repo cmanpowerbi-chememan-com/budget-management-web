@@ -1,0 +1,29 @@
+**AI Generation Specification Prompt**
+
+**[1. PAGE TITLE]**
+GL Group Master — Chememan
+
+**[2. PURPOSE]**
+Serve as an administrative master mapping workstation to structure mappings between raw SAP General Ledger (GL) Codes and corporate-defined GL Groups. This console enables financial admins to consolidate fragmented accounting entries into cleaner visual groups for high-level management reporting.
+
+**[3. DESIGN SYSTEM]**
+- **Theming & Color Identifiers:**
+  * SAP GL Code elements use specific mint labels: `--gl-code: #1FA378`.
+  * Corporate GL Groups use distinctive blue labels: `--gl-group: #3C60A5`.
+  * Shared design standard variables (`--c-forest`, `--c-gold`, `--paper`, `--surface`) align with the master Chememan identity system.
+- **Typography Integration:** Clean use of `'IBM Plex Sans Thai'` mixed with monospace variables for structural clarity in transaction lookup lists.
+
+**[4. LAYOUT STRUCTURE]**
+- **Branded Application Header:** Responsive top navigation layout with dark mode toggles and identity details.
+- **Two-Column Work Split:**
+  * **Left Entry Card Panel (Form Grid):** Interactive form card providing input containers for GL Code selection and GL Group selection/creation, with a primary "Save" button block.
+  * **Right Records Workspace Panel:** Holds the global mapping search box, active data count pills, and the core relational mapping datatable.
+- **Relational Data Mapping Table:** Columns display GL Code (Badge style), Description, Assigned GL Group (Tag style), and management buttons to Edit or Delete rules.
+- **Feedback Overlay Elements:** Auto-dismissing success notice popups ("บันทึกสำเร็จ") and safety deletion check modals ("ยืนยันลบ").
+
+**[5. INTERACTIVE COMPONENTS & BEHAVIORS]**
+- **Fuzzy Search Combo-Dropdown Fields:** Implements custom input dropdown wrappers (`#glCodeDropdown`, `#glGroupDropdown`). Typing into inputs fires live lookup filters across predefined arrays, dynamically showing matching lists, adjusting highlights on focus, and dismissing gracefully via blur delays and background clicks.
+- **Inline Tag Creation Framework:** The GL Group dropdown selector includes a functional mechanism to type an unlisted group name and instantly register it as a brand-new entity via an inline option selection handler.
+- **Full Client-side CRUD Engine:** JavaScript array system maintaining records state. Saving an item shifts between creating new lines or updating an existing target object if in "Edit Mode". Forms reset states dynamically upon success.
+- **Bi-directional Column Sorting:** Header click handlers that toggle state variables (`sortCol`, `sortDir`), reorganizing columns in alphabetical or reverse-alphabetical order and updating inline caret icons.
+- **Safety Deletion Guards:** Intercepts delete buttons, opens a modal asking for absolute confirmation, and executes array splicing only upon user confirmation.

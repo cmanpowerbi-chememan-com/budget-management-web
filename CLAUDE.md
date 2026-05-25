@@ -1,7 +1,110 @@
-# CLAUDE.md — Budget Management Web Project Context
+# CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 This file is auto-read by Claude at the start of every conversation in this folder.
 Do NOT delete this file.
+
+---
+
+## RTK — Token Saver (Use Selectively)
+
+`rtk` is a CLI proxy that compresses command output before sending to Claude (saves 60–90% tokens).
+Installed: `brew install rtk` + `rtk init --claude-code`
+
+### Always use rtk (output summary is enough)
+
+| Command | Use |
+|---------|-----|
+| `rtk pytest` | Need failures only — full log is noise |
+| `rtk tsc` / `rtk lint` | Need errors only |
+| `rtk git status` | Short summary is fine |
+| `rtk git log` | Commit list — full output not needed |
+| `rtk grep <symbol>` | File matches — compress fine |
+| `rtk find "*.ipynb"` | File list — compress fine |
+| `rtk err python notebook.py` | Spark errors only |
+
+### Use rtk only when full content is NOT needed
+
+| Command | When to skip rtk |
+|---------|-----------------|
+| `git diff` | Fixing bugs / reviewing changes — Claude needs full code context; use plain `git diff` |
+| `cat` / `read` file | Understanding full content (schema.sql, pipeline.json) — use Read tool instead |
+| Debugging deep errors | When the "noise" in output may contain the actual clue — use plain command |
+
+---
+
+## Developer Commands
+
+```bash
+# Run the Streamlit app locally (http://localhost:8501)
+streamlit run app.py
+
+# Test Azure SQL connection
+python db/connection.py
+
+# Employee sync — dry run (shows diff, no DB writes)
+python setup/sync_employees.py --dry-run
+
+# Employee sync — live write to Azure SQL
+python setup/sync_employees.py
+
+# Weekly update — download SharePoint → merge → re-upload
+python setup/create_weekly_update.py
+
+# Run all tests
+pytest
+
+# Run a single test file verbosely
+pytest tests/test_budget.py -v
+```
+
+---
+
+## Actual Code Structure (Current State)
+
+The planned `backend/` + `frontend/` split has NOT happened yet. Current layout is Streamlit-based:
+
+```
+app.py                        ← Streamlit entry: checks auth, renders login or home
+utils/
+  auth.py                     ← MSAL OAuth flow; persists user dict in session_state["user"]
+  styles.py                   ← Global CSS injected via st.markdown
+  email.py                    ← Email helper (Fabric/Graph API)
+db/
+  connection.py               ← pyodbc connection factory (ODBC Driver 17); tested standalone
+  schema.sql                  ← Canonical table definitions for Azure SQL
+pages/                        ← Streamlit multi-page (each file = one auto-registered page)
+  01_submit_budget.py         ← User: fill & submit budget (stub)
+  02_approve_vp.py            ← VP/AVP approval (stub)
+  03_approve_staff.py         ← Budget Staff approval (stub)
+  04_approve_manager.py       ← Budget Manager approval (stub)
+  05_dashboard.py             ← Budget vs Actuals dashboard (stub)
+  06_admin.py                 ← Admin: users, deadlines, actuals upload (stub)
+fabric/        ← PySpark scripts — copy-paste into Fabric Notebook UI only
+  nb_landing_to_bronze.py     ← Files/00landing → Bronze Delta tables (uses spark session)
+  nb_bronze_to_silver.py      ← Bronze → Silver with column mapping + sign-flip transforms
+  ingest_to_landing.py        ← OneLake upload helper
+setup/                        ← Operational scripts (run locally or via GitHub Actions)
+  sync_employees.py           ← Incremental sync: C-POP HR API → mas_employee_data table
+  create_weekly_update.py     ← Merge local rows + SharePoint file → re-upload to SP
+  run_migration.py            ← DB schema migration runner
+  check_emp_table.py          ← Verify mas_employee_data row counts + duplicates
+.github/workflows/
+  sync_employees.yml          ← GitHub Actions: daily 06:00 BKK — runs sync_employees.py
+```
+
+### Auth Flow (cross-file)
+
+1. `app.py` calls `handle_auth_callback()` on every load
+2. If `?code=` query param present → `utils/auth.py` exchanges it for an access token via MSAL
+3. Token used to call Microsoft Graph `/me` → get email + display name
+4. Email looked up in `user_division_map` (Azure SQL via `db/connection.py`) → returns division + role
+5. Result stored in `st.session_state["user"]`
+6. Pages call `require_login()` / `require_role("vp", ...)` to guard access
+
+### Fabric Notebook scripts
+
+`fabric/` scripts use `spark` (Fabric built-in) and `abfss://` paths — they **do not run locally**. Copy into a Fabric Notebook cell and attach the `lakehouse` Lakehouse.
 
 ---
 
@@ -101,22 +204,7 @@ User fills form → FastAPI → Azure SQL (budget_submissions, approval_status)
 | Azure CLI | - | NOT installed (use Cloud Shell) |
 | Docker Desktop | - | NOT installed (use Cloud Shell) |
 
-### Python Packages Installed
-```
-streamlit==1.54.0
-pyodbc==5.3.0
-sqlalchemy==2.0.49
-pandas==2.3.3
-msal==1.36.0
-openpyxl==3.1.5
-python-dotenv
-requests==2.32.4
-plotly==6.7.0
-Pillow==12.1.1
-numpy==2.4.2
-pytest==9.0.2
-faker
-```
+See `requirements.txt` for full package list.
 
 ---
 
@@ -154,8 +242,7 @@ faker
 | Workspace ID | `8fbc17b7-c67d-4c55-94cd-7364e33d1de9` |
 | Lakehouse | `lakehouse` |
 | Lakehouse ID | `5cf438dc-6268-4ec1-b088-c6b5c311339d` |
-| Notebook: nb_upload_actuals ID | `e8b33e92-1d36-48ed-8eb1-627536b3c450` |
-| Notebook: nb_send_email ID | `8ab79259-b004-45c2-a011-d70d7e7b0c98` |
+| Notebook (nb_upload_actuals, nb_send_email) | Deleted 2026-05-07 — IDs removed from `.env` |
 
 ## Azure Container Apps
 
@@ -187,15 +274,43 @@ DRAFT → PENDING_VP → PENDING_BUDGET_STAFF → PENDING_MANAGER → APPROVED
 
 ## Approval Workflow
 
-4-level chain (no skipping):
+**Confirmed workflow — verified from HR data 2026-05-23:**
+```
+L4 Submit → managerempcode (direct manager, any tier) → Nipapornt (Budget Staff) → Warapornt (Budget Manager)
+```
+
+**Key decisions confirmed:**
+- **Submitter = L4 only** (Supervisor 1/2, Senior Supervisor 1/2) — L3 confirms, does NOT submit
+- **Confirmer = managerempcode** (whoever direct manager is — L3, L4 Sr.Sup, or L2) — no walk-up logic needed
+- **192/192 L4 have valid managerempcode** with email → no gaps, no special cases
+- L5 (Operator/Driver/Maid) ไม่ใช้ระบบนี้เลย — ไม่กรอก, ไม่ approve, ไม่รับ email
+- L3 role = Confirm เท่านั้น (ไม่ submit) → ไม่มี role conflict
+
+**Why NOT L3+L4 submit:** ถ้า L3 submit ด้วย → role conflict 149/240 คน (L3 ต้อง submit เอง + confirm L4 ด้วย)
+
+4-level chain (original design — superseded):
 ```
 User → VP/AVP (of user's division) → Nipapornt (Budget Staff) → Warapornt (Budget Manager)
 ```
 
 | Person | Role | Email variable |
 |--------|------|----------------|
-| Nipapornt | Budget Staff (3rd level) | `NIPAPORNT_EMAIL` in .env |
-| Warapornt | Budget Manager (final) | `WARAPORNT_EMAIL` in .env |
+| Nipaporn Tongking | Budget Staff (3rd level) | `NIPAPORNT_EMAIL` in .env |
+| Waraporn Tirasit | Budget Manager (final) | `WARAPORNT_EMAIL` in .env |
+
+> **หมายเหตุ:** "Warapornt" ในโค้ด/env = Waraporn **T**irasit (email: warapornt@chememan.com) — ไม่ใช่ typo
+
+### Special Case — Nipaporn กรอก budget ของตัวเอง
+
+Nipaporn (empcode=101032) มี 2 roles: **L4 submitter** (orgcode 1142402) และ **Budget Staff approver**
+
+```
+ถ้า submitter = Nipaporn:
+  L4 Submit → Waraporn Tirasit Confirm (skip Nipaporn step — self-approval)
+
+ถ้า submitter = คนอื่น:
+  L4 Submit → managerempcode Confirm → Nipaporn → Waraporn Tirasit
+```
 
 ### Workflow applies to which templates
 
@@ -342,7 +457,7 @@ User → VP/AVP (of user's division) → Nipapornt (Budget Staff) → Warapornt 
 
 ## Data Platform Layer — Bronze → Silver Mapping
 
-**Spec file:** `docs/CMAN-DataPlatform_Mapping_Specification _V0.0.4.xlsx`
+**Spec file:** `docs/05CMAN-DataPlatform_Mapping_Specification _V0.0.4.xlsx`
 
 ### Table Names
 
@@ -396,8 +511,24 @@ User → VP/AVP (of user's division) → Nipapornt (Budget Staff) → Warapornt 
 |---|---|---|---|
 | G/L Account: Long Text | — | Not in ACDOCA | Create `dim_gl_account` in Azure SQL |
 | Cost Center: Long Text | — | Not in ACDOCA | Create `dim_cost_center` in Azure SQL (also needed for division mapping) |
-| Entry Date | `CPUDT` | Not extracted into bronze | Request data platform team to add, or load from raw flat file in `nb_upload_actuals` |
-| Order / Order: Short Text | — | Not in ACDOCA | Accept NULL on dashboard |
+| Entry Date | `CPUDT` | Not extracted into bronze | **Ticket raised to SAP team** — adding to `sap_t_gl_trans` (2026-05-06) |
+| Order / Order: Short Text | — | Not in ACDOCA | **Ticket raised to SAP team** — adding to `sap_t_gl_trans`; also separate `SAP_M_INTERNAL_ORDER` file (2026-05-06) |
+
+### SAP Data Gap Resolution — 2026-05-06 Update
+
+Ticket raised to SAP team to add **4 missing columns** to existing landing file `sap_t_gl_trans`:
+- `entry_date` (CPUDT)
+- `order` 
+- `object_class`
+- `order_short_text`
+
+**Test approach (Ratima):**
+- Ratima created test file `Ratima_test1` to validate the 4 new columns before switching to production
+- Once data verified OK → switch back to original Inteltion file `sap_t_gl_trans`
+
+**Separate Order master file (Ratima):**
+- New file: `SAP_M_INTERNAL_ORDER` — collects Order + Short Text as a standalone reference table
+- Useful for joining order descriptions without relying on transaction-level data
 
 ### Dashboard Query Pattern
 ```sql
@@ -556,44 +687,18 @@ Sheet แบ่งเป็น **1 ตารางหลัก + 4 ตารา�
 
 ---
 
-## Project Structure
+## Deployment Flow (current — Streamlit)
 
 ```
-c:\04.budget_management_web\
-├── backend/                  ← FastAPI (Python)
-│   ├── main.py
-│   ├── routers/              ← auth, budget, approval, dashboard, admin
-│   ├── db/                   ← connection.py (Azure SQL)
-│   ├── utils/                ← auth.py (MSAL), email.py
-│   ├── requirements.txt
-│   └── .env
-├── frontend/                 ← React + Vite
-│   ├── src/
-│   │   ├── main.jsx
-│   │   ├── App.jsx
-│   │   ├── components/
-│   │   ├── pages/
-│   │   └── services/         ← api.js (calls FastAPI)
-│   ├── package.json
-│   └── vite.config.js
-├── Dockerfile
-├── .github/workflows/deploy.yml
-├── .gitignore
-└── CLAUDE.md
+1. Write code → VS Code (local) → test: streamlit run app.py
+2. Push → git push → GitHub
+3. Deploy → Azure Cloud Shell:
+   git pull → docker build → docker push cmanbudgetacr.azurecr.io/...
+   → az containerapp update --name cman-budget-mngt-web
+4. Users access via Azure Container Apps URL
 ```
 
-## Deployment Flow
-
-```
-1. Write code → VS Code (local)
-2. Test locally:
-   - backend:  cd backend && uvicorn main:app --reload  (localhost:8000)
-   - frontend: cd frontend && npm run dev               (localhost:5173)
-3. Push code → git push → GitHub
-4. Deploy → Azure Cloud Shell (portal.azure.com)
-   git pull → docker build → docker push → az containerapp update
-5. Users access → Azure Container Apps URL (browser)
-```
+> **Planned:** once `backend/` + `frontend/` exist, replace step 1 with `uvicorn main:app --reload` + `npm run dev`.
 
 ---
 
@@ -612,11 +717,34 @@ c:\04.budget_management_web\
 - [x] Azure Container Registry created (`cmanbudgetacr.azurecr.io`)
 - [x] Azure Container Apps created (`cman-budget-mngt-web`)
 - [x] Fabric Workspace + Lakehouse ready (`budget_management_web`)
-- [x] Fabric Notebooks created (`nb_upload_actuals`, `nb_send_email`)
+- [x] Fabric Notebooks deleted (`nb_upload_actuals`, `nb_send_email`) — IDs removed from `.env` (2026-05-07)
 - [x] `.env` file created with all credentials
 - [x] `db/connection.py` — Azure SQL connection working (tested SUCCESS)
 - [x] `mas_employee_data` — synced from C-POP HR API, 621 Active employees, incremental sync script ready (`setup/sync_employees.py`)
 - [x] GitHub Actions daily sync — `.github/workflows/sync_employees.yml` running every 06:00 Bangkok, verified ✅
+- [x] `dim_cost_center` — source file analyzed (`docs/Cost center (Update 18 Mar 26) 1.xlsx`), 210 cost centers, schema defined, link to `mas_employee_data` via `orgcode` identified (pending verification)
+- [x] SAP gap columns — ticket raised to add Entry Date, Order, Object Class, Order Short Text to `sap_t_gl_trans`; Ratima created `Ratima_test1` for validation; `SAP_M_INTERNAL_ORDER` created for Order master
+- [x] `sap_m_cost_center` — cost center reference table already exists (confirmed 2026-05-06)
+- [x] Weekly update Excel created — `weekly_update/budget management web.xlsx`, script: `setup/create_weekly_update.py`
+- [x] SharePoint upload working ✅ — `Sites.ReadWrite.All` admin consent granted, upload verified (2026-05-06)
+- [x] `ENTRA_CLIENT_SECRET` rotated — new secret `budget_managemnt_web_excel_to_sp` in `.env` (2026-05-06)
+- [x] Weekly update script upgraded — now downloads SP file first, merges (upsert by Action name), preserves colleague rows, then uploads (2026-05-06)
+- [x] `skill/` folder created — `skill/skill_weekly_update.md` defines weekly update skill trigger + algorithm
+- [ ] Chatdanai: verify cost center → line officer link by `empcode` (in testing)
+- [x] SharePoint auto-upload: admin consent granted ✅ — verified working (2026-05-06)
+- [x] SAP test files created by Ratima — `SAP_T_GL_TRANS_1000_RATIMA_TEST1` + `SAP_M_INTERNAL_ORDER` ready for data verification (2026-05-06)
+- [x] OneLake connection working ✅ — `azure-storage-file-datalake` installed, `setup/connect_onelake.py` created, `cman-fabric-write` added to workspace (2026-05-07)
+- [x] `cman-dw-dev-conn-gateway` created — On-premises Data Gateway on E-SMARTISO server (2026-05-07)
+- [x] Fabric Data Pipeline configured — File System connector from `D:\SAPDW\PRD` via gateway → `Files/00landing` (2026-05-07)
+- [x] 3 files landed in `Files/00landing`: `SAP_T_GL_TRANS_1000_RATIMA_TEST1.TXT` (116MB, 233,372 rows), `SAP_M_COST_CENTER.TXT` (341 rows), `SAP_M_INTERNAL_ORDER.TXT` (2,543 rows) (2026-05-07)
+- [x] `01nb_landing_to_bronze` — Bronze Delta tables loaded: `bronze_ACDOCA` (233,372), `bronze_sap_m_cost_center` (341), `bronze_sap_m_internal_order` (2,543) (2026-05-07)
+- [x] `02nb_bronze_to_silver` — Silver tables: `silver_sap_gl_trans` (233,372), `silver_cost_center_master`, `silver_internal_order_master` (2026-05-07)
+- [x] Bronze→Silver mapping: 88 cols (85 spec + POPER + BKPF_CPUDT/entry_date + AUFNR/order_number + SCOPE/object_class + object_class_desc lookup), sign-flip on 6 amount/FX cols (2026-05-07)
+- [x] `entry_date` (BKPF_CPUDT) fixed ✅ — SAP date format = `yyyyMMdd` (no dash), `.cast("date")` ใช้ไม่ได้, แก้ `sc()` helper ให้ใช้ `to_date(c, "yyyyMMdd")` เมื่อ cast_type == "date" — fix ครอบคลุมทุก date col อัตโนมัติ (2026-05-07)
+- [ ] **[NEXT]** Data consistency check bronze→silver — verify ไม่มี data loss: null counts per col, row counts match, date cols parse ถูก, amount sign-flip ถูก (planned 2026-05-08)
+- [ ] Ratima: verify data in `SAP_T_GL_TRANS_1000_RATIMA_TEST1` + `SAP_M_INTERNAL_ORDER` — if OK → Jakkarit แจ้ง SAP Team ตั้ง Scheduled Job Run in Production
+- [x] 1st Recap Project with Laddawan — scheduled Thu 14/05/2026 8:30–9:00 AM, MS Teams invite sent (2026-05-06)
+- [ ] Meeting with user — template filling data (Cut-off TBC)
 - [ ] Restructure project folders → `backend/` + `frontend/`
 - [ ] `backend/main.py` — FastAPI app
 - [ ] `backend/utils/auth.py` — MSAL login with Entra ID
@@ -659,7 +787,6 @@ c:\04.budget_management_web\
 - UPDATE: records in both but any field changed (MD5 hash comparison)
 - DELETE: records in DB no longer Active in API
 - `--dry-run` flag: shows what would change without writing to DB
-- Run: `python setup/sync_employees.py`
 
 ### Scheduling (1x/day) — GitHub Actions ✅
 - Workflow: `.github/workflows/sync_employees.yml`
@@ -681,18 +808,263 @@ c:\04.budget_management_web\
 - `setup/reorder_emp_table.py` — one-time script to rebuild table in empcode order (run if table gets out of order)
 - Daily sync preserves order for new inserts (API records sorted by empcode before insert)
 
+### Employee Hierarchy — Verified 2026-05-23 (from docs/08mas_employee_data.csv)
+
+5-tier structure (Primary rows only, 585 people):
+
+| Tier | joblevelnameen | คน | Company Email | หมายเหตุ |
+|------|---------------|-----|:---:|---------|
+| L1 | C-Level, CEO | 5 | 5/5 ✅ | ผู้บริหารสูงสุด |
+| L2 | Vice President (MGR), Assistant Vice President (MGR) | 24 | 23/24 ✅ | หัวหน้า Division — ผู้ approve งบ |
+| L3 | Department Head, Assistant Department Head (all variants) | 70 | 68/70 ✅ | หัวหน้าหน่วยงาน — Dept + Section รวมเป็น 1 layer |
+| L4 | Supervisor 1/2, Senior Supervisor 1/2 (all variants) | 192 | 168/192 ✅ | หัวหน้างาน — **ผู้กรอก Budget Form** |
+| L5 | Operator 1/2/3, Driver, Maid | 279 | 10/279 ⚠️ | ปฏิบัติการ — **ไม่กรอก Budget / ไม่ต้องรับ email** |
+
+**L5 ไม่ใช้งานระบบนี้เลย** — confirmed 2026-05-23: Operator/Driver/Maid ไม่กรอก budget, ไม่ approve, ไม่รับ notification
+**Budget actors:** L2–L4 เท่านั้น — L5 ไม่มีบทบาทใน budget workflow ทุกขั้นตอน
+
+### Email Domain Rules — Verified 2026-05-23
+- `@chememan.com` ✅ — company email หลัก
+- `@cman...` ✅ — company email variant
+- `@gritsman.com` ✅ — **acceptable** บริษัทในเครือ (subsidiary) — ส่ง email ได้, เข้าระบบได้
+- personal email (gmail, hotmail ฯลฯ) ❌ — ไม่ใช่ Entra ID → login ไม่ได้
+- L3 ที่ใช้ @gritsman.com: Wanidtha (empcode 400003), Siratuch (empcode 400028) — อยู่ใน approval workflow ได้ปกติ
+
+### posstatus = Primary vs Acting
+- Employee 1 คนมีได้หลาย rows (Primary + Acting) — ตัวอย่าง: Apichai มี 3 rows (CTO Primary + MD Acting + VP-DT Acting)
+- **ใช้ `posstatus = 'Primary'` เสมอ** สำหรับ RLS และ CC visibility
+- Acting ใช้ได้เฉพาะ approval workflow (รักษาการ approve แทน VP ได้) — ไม่ขยาย data scope
+
+### Approval Email Loop (Budget System)
+```
+User (L4) กรอกและ Submit
+  → EMAIL: VP/AVP ของ Division (L2) — trace managerempcode ขึ้นไปจนถึง VP
+VP Approve → EMAIL: Nipapornt (Budget Staff)
+VP Reject  → EMAIL: User
+Nipapornt Approve → EMAIL: Warapornt (Budget Manager)
+Nipapornt Reject  → EMAIL: User + VP/AVP
+Warapornt Approve → EMAIL: User (Approved ✅)
+Warapornt Reject  → EMAIL: User + VP/AVP + Nipapornt
+```
+
+**Special cases:**
+- C-Level ไม่มี VP เหนือ → VP ของพวกเขา = ตัวเอง → ต้องทำ special case
+- MD (orgcode `1410000`) ไม่อยู่ใน CC map → ต้องทำ rule พิเศษ: เห็นและ approve ได้ทุก division
+
+---
+
+## dim_cost_center (Reference Table)
+
+**Source file:** `docs/Cost center (Update 18 Mar 26) 1.xlsx` — 210 cost centers, updated 18 Mar 2026
+
+### Columns (6)
+| Column | Description | Example |
+|--------|-------------|---------|
+| `Cost Ctr` | SAP cost center code | `10CM010000` |
+| `Description` | English name | `Commercial Market 1 Division` |
+| `C Level` | C-Level executive | `Chief Commercial Officer` |
+| `สายงาน` | Division (Thai) | `Commercial Market 1` |
+| `ฝ่าย` | Department (Thai) | `Commercial Market 1` |
+| `ส่วน` | Section (Thai) | `Commercial Market 1` |
+
+### Purpose
+- Fills the **"Cost Center: Long Text" gap** — not available in `silver_src.sap_gl_trans` (ACDOCA)
+- Provides **Cost Center → Division mapping** needed for dashboard RLS and reporting
+- **Actual table name: `sap_m_cost_center`** ✅ — already exists in system (confirmed 2026-05-06)
+
+### Link to mas_employee_data — VERIFIED 2026-05-15
+- `mas_employee_data.orgcode` = C-POP numeric format (e.g. `1165403`) — does NOT match SAP cost center format
+- Direct join `orgcode → cost_center` is **impossible without bridge table**
+- Text match (orgnameen = CC desc) unreliable — only 33% coverage even after normalization, + ambiguous
+- **Correct bridge:** `dim_orgcode_costcenter_map` (orgcode → cost_center) — data from Chatdanai API
+
+### dim_orgcode_costcenter_map — VERIFIED MANY-TO-MANY (2026-05-23)
+
+**Relationship: many-to-many** — verified from `docs/09orgcode & costcenter.xlsx` (729 rows, 183 orgcodes, 205 CCs)
+- 88 orgcodes map to multiple CCs (e.g. orgcode `1120000` → 9 CCs)
+- 190 CCs map to multiple orgcodes (e.g. CC `10SP010000` → 3 orgcodes)
+- **Must use junction table with composite PK — NOT single-column FK**
+
+```sql
+CREATE TABLE dim_orgcode_costcenter_map (
+    orgcode     NVARCHAR(20) NOT NULL,
+    cost_center NVARCHAR(20) NOT NULL,
+    PRIMARY KEY (orgcode, cost_center)
+);
+-- 729 rows from docs/09orgcode & costcenter.xlsx
+```
+
+**Coverage gaps (from data analysis):**
+- 15 Silver CCs not in map (e.g. `CMKK01`, `10IT013000`, `10GE000000`) — no owner
+- 13 employee orgcodes not in map → 75 out of 585 employees cannot trace to any actuals
+- Source: `docs/09orgcode & costcenter.xlsx` — already available locally (NOT waiting for Chatdanai API)
+
+**RLS implication:** joining `mas_employee_data.orgcode → dim_orgcode_costcenter_map` returns multiple CCs per employee — use `posstatus = 'Primary'` only
+
+### RLS Chain — Verified 2026-05-23
+```
+login (email)
+  → mas_employee_data (empcode, orgcode, posstatus='Primary')
+  → dim_orgcode_costcenter_map (orgcode → 1 or more CCs)
+  → silver_sap_gl_trans (filter WHERE cost_center IN user's CCs)
+```
+
+**CC access by tier (from data analysis):**
+- L1 C-Level: 2–23 CCs (broad — entire division scope)
+- L2 VP/AVP: 0–69 CCs (division/sub-division)
+- L3 Dept Head: 0–20 CCs (mostly 1 CC)
+- L4 Supervisor: 0–69 CCs (mostly 1–3 CCs)
+- Higher tier sees MORE CCs — orgcode map naturally encodes hierarchy
+
+**CC submitter gap — 10AC020000:**
+- Maps only to Piyada (L2 / orgcode 1142101) — no L4 mapped
+- ❌ No L4 can submit budget for this CC
+- Decision pending: allow L2 to submit, or add L4 orgcode to map
+
+**Email domain rules — confirmed 2026-05-23:**
+- `@chememan.com` ✅ company email
+- `@gritsman.com` ✅ acceptable — subsidiary company
+- personal email (gmail etc.) ❌ — Entra ID login ไม่ได้
+- L2 (23/24) + L3 (70/70 incl. gritsman) + L4 (187/192) have acceptable email
+
+### dim_costcenter_division_map (ready to create — from Excel master)
+```sql
+CREATE TABLE dim_costcenter_division_map (
+    cost_center NVARCHAR(20)  NOT NULL PRIMARY KEY,
+    description NVARCHAR(100) NULL,
+    c_level     NVARCHAR(100) NULL,
+    division    NVARCHAR(100) NOT NULL,
+    department  NVARCHAR(100) NULL
+);
+-- Source: 02docs/02cost center & department (master).xlsx — 210 rows
+```
+
+### Complete Link Chain
+```
+login (email)
+  → mas_employee_data (empcode, orgcode)
+  → dim_orgcode_costcenter_map (orgcode → cost_center)   ← รอ Chatdanai API
+  → dim_costcenter_division_map (cost_center → division + department)
+  → silver_sap_gl_trans (cost_center → gl_account actuals history)
+  → GL master (gl_account → group_exp + thai_name)
+```
+
+---
+
+## Budget Form Design — Decisions Made (2026-05-15)
+
+### CC Hierarchy (verified from 02docs/02cost center & department (master).xlsx)
+- **210 CCs → 109 departments → 38 divisions** (many-to-one)
+- 1 dept can have >= 1 CC (e.g. Production KK = 33 CCs)
+- Machine-level CCs (KKKK01, KKTRUCK) follow the same budget rules as other CCs
+
+### User Form Rules (confirmed)
+- **1 user = 1 dept** — no user covers multiple departments
+- **1 dept = multiple users** — users in same dept can collaborate (fill different CCs)
+- **1 user fills ALL CCs in their dept** (same rule regardless of dept type)
+- Multi-user editing in same dept: pending decision on concurrent edit / submit authority
+
+### Budget Form UX — What User Does (only 3 things)
+1. **Select Cost Center** — dropdown (CCs in their dept, active, desc ≠ "Hold")
+2. **Select GL Code** — dropdown (filtered by actuals history of selected CC)
+3. **Enter budget Jan–Dec** — 12 number fields
+- All other fields auto-fill: division, dept, GL Thai name, GL group, yearly total
+
+### GL Code Dropdown Design (verified from 01requirement_detail.xlsx — 2,437 rows)
+- GL prefix 52xxxxx vs 62xxxxx does NOT cleanly split Factory vs HQ
+- Many CCs use BOTH prefixes (e.g. People Experience at plant sites uses 52 AND 62)
+- **Correct approach: filter GL dropdown by actuals history of each CC**
+  - Show GLs that CC actually used in previous periods (sort first)
+  - Still allow user to add any GL not in history
+- Cannot filter by division/dept — not granular enough
+
+### Reference Tables Needed in Azure SQL
+| Table | Status | Source |
+|-------|--------|--------|
+| `dim_costcenter_division_map` | ⬜ Not created | 02docs/02cost center & department (master).xlsx (210 rows) |
+| `dim_orgcode_costcenter_map` | ⬜ Waiting | Chatdanai API (orgcode → cost_center) |
+| `dim_gl_master` | ⬜ Not created | 02docs/04gl code & gl group & gl thai name (master).xlsx (137 rows) |
+| `capps_m_employee` | ⬜ Not created | 02docs/10CAPPS_M_EMPLOYEE.txt (305 rows) — emp_no → cost_center mapping |
+
+### CC Visibility Logic — get_visible_ccs (2026-05-16)
+
+Determines which cost centers each employee can see in the budget form.
+
+**CC Code Format (10 chars):**
+```
+10  IT  0  1  11  00
+│   │   │  │   │   └─ section
+│   │   │  │   └───── sub-dept
+│   │   │  └───────── dept number
+│   │   └──────────── separator (always 0)
+│   └──────────────── division code (IT, AC, CM, SC, SP, CS...)
+└──────────────────── company prefix
+```
+
+**Rule:**
+```python
+def get_visible_ccs(
+    emp_no: str,
+    cost_center: str,       # from capps_m_employee
+    joblevel: str,          # joblevelnameen from mas_employee_data (posstatus='Primary')
+    posnameen: str,         # posnameen from mas_employee_data (posstatus='Primary')
+    all_ccs: list[str],     # all CCs from dim_cost_center (incl. Hold)
+    cc_clevel_map: dict,    # {cost_center: "C Level"} from dim_cost_center
+) -> list[str]:
+    if 'C-Level' in joblevel:
+        return [cc for cc in all_ccs if cc_clevel_map.get(cc) == posnameen]
+    elif 'Vice President' in joblevel:
+        prefix = cost_center[:5]
+    else:
+        prefix = cost_center[:8]
+    return [cc for cc in all_ccs if cc.startswith(prefix)]
+```
+
+**Prefix rules:**
+| Level | prefix ตัดที่ | ครอบ |
+|-------|------------|------|
+| C-Level | — | join `dim_cost_center."C Level"` = posnameen |
+| VP / AVP (`Vice President` in joblevelnameen) | 5 | ทั้ง division |
+| ต่ำกว่า AVP | 8 | เฉพาะ sub-dept ตัวเอง |
+
+**Data sources:**
+- `cost_center` → `capps_m_employee` (emp_no → CC, end_date='9999-12-31')
+- `joblevel`, `posnameen` → `mas_employee_data` (posstatus='Primary')
+- `all_ccs`, `cc_clevel_map` → `dim_cost_center` (ทุกตัว รวม Hold)
+
+**Verified with:**
+- Digital Technology: Apichai (C-Level/CTO→23 CCs), Arthid (AVP→7 DT CCs), staff (prefix 8→1 CC each)
+- Accounting: Sarinthip (VP→5 AC CCs), Piyada (AVP→5 AC CCs), staff (prefix 8→1 CC each)
+- Corporate Strategy: Lerssak (C-Level/CSO→7 CS CCs), AVPs (prefix 5 by CC prefix 10CS0 or 10SP0), staff (prefix 8→1 CC)
+
+**Gap:** Data & Analytics (10IT0130000, 10IT011300) ไม่มีใน CAPPS — แก้ไขทีหลัง (manual insert)
+
 ---
 
 ## Next Steps (pick up from here)
 
-1. ~~Answer pending question: employee data source~~ ✅ C-POP HR API
-2. ~~Build employee data load/sync into `mas_employee_data`~~ ✅ `setup/sync_employees.py`
-3. (Optional) Schedule daily sync — Windows Task Scheduler or Azure Container Apps Job
-4. Check Node.js installed (`node -v`) — required for React
-5. Restructure folders: create `backend/` and `frontend/`
-6. Build `backend/main.py` — FastAPI entry point
-7. Build `backend/utils/auth.py` — MSAL login with Entra ID
+1. **Chatdanai API** — get orgcode → cost_center mapping (API endpoint, auth, response format)
+2. **Create `dim_costcenter_division_map`** — load from `02docs/02cost center & department (master).xlsx` (210 rows)
+3. **Create `dim_gl_master`** — load from `02docs/04gl code & gl group & gl thai name (master).xlsx` (137 rows)
+4. **Meeting with user** — template filling data (Cut-off TBC), confirm concurrent edit / submit authority rules
+5. Check Node.js installed (`node -v`) — required for React
+6. Restructure folders: create `backend/` and `frontend/`
+7. Build `backend/main.py` — FastAPI entry point + `backend/utils/auth.py` — MSAL login with Entra ID
 8. Scaffold React frontend with Vite
+
+---
+
+## Weekly Update Tracker
+
+- **Folder:** `weekly_update/`
+- **File:** `budget management web.xlsx` — sheet `action`
+- **Script:** `setup/create_weekly_update.py` — downloads SP → merges → uploads
+- **Run:** `python setup/create_weekly_update.py`
+- **Skill:** `skill/skill_weekly_update.md` — invoke when user says "update weekly update"
+- **SharePoint target:** `General/05 Data Analytics/03 Project/6.Budgeting and Management`
+- **Status:** Fully working ✅ — upload verified (2026-05-06)
+- **Secret used:** `budget_managemnt_web_excel_to_sp` in `cman-fabric-write` app registration
+- **Merge rule:** upsert by Action name — local ROWS wins on match, colleague-only rows preserved
 
 ---
 
@@ -731,3 +1103,142 @@ c:\04.budget_management_web\
 - All monetary values in THB
 - Fiscal year: January – December
 - This is an internal company tool — security and RLS by division are non-negotiable
+
+<!-- rtk-instructions v2 -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+## Golden Rule
+
+**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+
+**Important**: Even in command chains with `&&`, use `rtk`:
+```bash
+# ❌ Wrong
+git add . && git commit -m "msg" && git push
+
+# ✅ Correct
+rtk git add . && rtk git commit -m "msg" && rtk git push
+```
+
+## RTK Commands by Workflow
+
+### Build & Compile (80-90% savings)
+```bash
+rtk cargo build         # Cargo build output
+rtk cargo check         # Cargo check output
+rtk cargo clippy        # Clippy warnings grouped by file (80%)
+rtk tsc                 # TypeScript errors grouped by file/code (83%)
+rtk lint                # ESLint/Biome violations grouped (84%)
+rtk prettier --check    # Files needing format only (70%)
+rtk next build          # Next.js build with route metrics (87%)
+```
+
+### Test (60-99% savings)
+```bash
+rtk cargo test          # Cargo test failures only (90%)
+rtk go test             # Go test failures only (90%)
+rtk jest                # Jest failures only (99.5%)
+rtk vitest              # Vitest failures only (99.5%)
+rtk playwright test     # Playwright failures only (94%)
+rtk pytest              # Python test failures only (90%)
+rtk rake test           # Ruby test failures only (90%)
+rtk rspec               # RSpec test failures only (60%)
+rtk test <cmd>          # Generic test wrapper - failures only
+```
+
+### Git (59-80% savings)
+```bash
+rtk git status          # Compact status
+rtk git log             # Compact log (works with all git flags)
+rtk git diff            # Compact diff (80%)
+rtk git show            # Compact show (80%)
+rtk git add             # Ultra-compact confirmations (59%)
+rtk git commit          # Ultra-compact confirmations (59%)
+rtk git push            # Ultra-compact confirmations
+rtk git pull            # Ultra-compact confirmations
+rtk git branch          # Compact branch list
+rtk git fetch           # Compact fetch
+rtk git stash           # Compact stash
+rtk git worktree        # Compact worktree
+```
+
+Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+
+### GitHub (26-87% savings)
+```bash
+rtk gh pr view <num>    # Compact PR view (87%)
+rtk gh pr checks        # Compact PR checks (79%)
+rtk gh run list         # Compact workflow runs (82%)
+rtk gh issue list       # Compact issue list (80%)
+rtk gh api              # Compact API responses (26%)
+```
+
+### JavaScript/TypeScript Tooling (70-90% savings)
+```bash
+rtk pnpm list           # Compact dependency tree (70%)
+rtk pnpm outdated       # Compact outdated packages (80%)
+rtk pnpm install        # Compact install output (90%)
+rtk npm run <script>    # Compact npm script output
+rtk npx <cmd>           # Compact npx command output
+rtk prisma              # Prisma without ASCII art (88%)
+```
+
+### Files & Search (60-75% savings)
+```bash
+rtk ls <path>           # Tree format, compact (65%)
+rtk read <file>         # Code reading with filtering (60%)
+rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
+rtk find <pattern>      # Find grouped by directory (70%)
+```
+
+### Analysis & Debug (70-90% savings)
+```bash
+rtk err <cmd>           # Filter errors only from any command
+rtk log <file>          # Deduplicated logs with counts
+rtk json <file>         # JSON structure without values
+rtk deps                # Dependency overview
+rtk env                 # Environment variables compact
+rtk summary <cmd>       # Smart summary of command output
+rtk diff                # Ultra-compact diffs
+```
+
+### Infrastructure (85% savings)
+```bash
+rtk docker ps           # Compact container list
+rtk docker images       # Compact image list
+rtk docker logs <c>     # Deduplicated logs
+rtk kubectl get         # Compact resource list
+rtk kubectl logs        # Deduplicated pod logs
+```
+
+### Network (65-70% savings)
+```bash
+rtk curl <url>          # Compact HTTP responses (70%)
+rtk wget <url>          # Compact download output (65%)
+```
+
+### Meta Commands
+```bash
+rtk gain                # View token savings statistics
+rtk gain --history      # View command history with savings
+rtk discover            # Analyze Claude Code sessions for missed RTK usage
+rtk proxy <cmd>         # Run command without filtering (for debugging)
+rtk init                # Add RTK instructions to CLAUDE.md
+rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
+```
+
+## Token Savings Overview
+
+| Category | Commands | Typical Savings |
+|----------|----------|-----------------|
+| Tests | vitest, playwright, cargo test | 90-99% |
+| Build | next, tsc, lint, prettier | 70-87% |
+| Git | status, log, diff, add, commit | 59-80% |
+| GitHub | gh pr, gh run, gh issue | 26-87% |
+| Package Managers | pnpm, npm, npx | 70-90% |
+| Files | ls, read, grep, find | 60-75% |
+| Infrastructure | docker, kubectl | 85% |
+| Network | curl, wget | 65-70% |
+
+Overall average: **60-90% token reduction** on common development operations.
+<!-- /rtk-instructions -->

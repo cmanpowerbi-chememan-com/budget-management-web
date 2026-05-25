@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GL Group & Thai Name Master — Chememan</title>
+  <style>
+    /* ========== CHEMEMAN BRAND TOKENS ========== */
+    :root {
+      --bg: #FFFFFF;
+      --surface: #F7F8F7;
+      --fg: #0B1A12;
+      --muted: #5C6B62;
+      --border: rgba(11,26,18,0.08);
+      --accent: #00522C;
+      --forest: #00522C;
+      --blue: #3C60A5;
+      --amber: #745021;
+      --mint: #20BB8D;
+      --sky: #5ECDF6;
+      --navy: #223562;
+      --forest-900: #001008;
+      --amber-light: #D4A556;
+      --gold: #D4A556;
+      --red: #EF4444;
+      --grad-hero-mesh:
+        radial-gradient(at 20% 10%, #00522C 0%, transparent 45%),
+        radial-gradient(at 80% 0%, #3C60A5 0%, transparent 50%),
+        radial-gradient(at 50% 90%, #745021 0%, transparent 50%),
+        radial-gradient(at 90% 80%, #20BB8D 0%, transparent 40%),
+        #050E1A;
+      --grad-headline: linear-gradient(135deg, #FFFFFF 0%, #5ECDF6 60%, #20BB8D 100%);
+      --glass-bg: rgba(255,255,255,0.12);
+      --glass-border: rgba(255,255,255,0.25);
+      --font-primary: 'FC Minimal', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+      --r-card: 24px;
+      --r-btn: 16px;
+      --r-nav: 32px;
+      --r-pill: 9999px;
+    }
+    [data-theme="dark"] {
+      --bg: #0B1A12;
+      --surface: #0F2218;
+      --fg: #FFFFFF;
+      --muted: #9FB3A8;
+      --border: rgba(255,255,255,0.10);
+      --accent: #20BB8D;
+    }
+    [data-theme="light"] {
+      --bg: #FFFFFF;
+      --surface: #F7F8F7;
+      --fg: #0B1A12;
+      --muted: #5C6B62;
+      --border: rgba(11,26,18,0.08);
+      --accent: #00522C;
+      --glass-bg: rgba(0,82,44,0.08);
+      --glass-border: rgba(0,82,44,0.15);
+    }
+
+    /* ========== RESET & BASE ========== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-primary);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ========== NAVIGATION ========== */
+    .nav {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 1400px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-radius: var(--r-nav);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-logo svg { width: 32px; height: 32px; flex-shrink: 0; }
+    .nav-logo-text .company-name { font-weight: 600; font-size: 16px; color: var(--fg); }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--fg); }
+    .nav-links a.active { color: var(--mint); }
+    .nav-actions { display: flex; align-items: center; gap: 16px; }
+    .theme-toggle { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--glass-border); background: var(--glass-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .theme-toggle:hover { transform: scale(1.05); }
+    .theme-toggle svg { width: 20px; height: 20px; fill: var(--fg); }
+    .sun-icon { display: none; }
+    .moon-icon { display: block; }
+    [data-theme="light"] .sun-icon { display: block; }
+    [data-theme="light"] .moon-icon { display: none; }
+    [data-theme="light"] .nav-logo-text .company-name { color: #3C60A5; }
+    [data-theme="light"] .nav-links a { color: #CD9D3F; }
+    [data-theme="light"] .nav-links a:hover { color: #B8892F; }
+    [data-theme="light"] .nav-links a.active { color: var(--forest); }
+    [data-theme="light"] .nav {
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(0,82,44,0.12);
+      box-shadow: 0 4px 24px rgba(0,82,44,0.08);
+    }
+    [data-theme="light"] .theme-toggle {
+      background: rgba(0,82,44,0.08);
+      border: 1px solid rgba(0,82,44,0.15);
+    }
+
+    /* ========== MAIN LAYOUT ========== */
+    .main {
+      padding: 100px 24px 40px;
+      min-height: 100vh;
+      background: var(--grad-hero-mesh);
+    }
+    [data-theme="light"] .main {
+      background: linear-gradient(135deg, #F0F7F4 0%, #E8F4EC 50%, #F5F9F7 100%);
+    }
+    .main-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ========== PAGE HEADER ========== */
+    .page-header {
+      margin-bottom: 32px;
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .breadcrumb a:hover { color: var(--fg); }
+    .breadcrumb svg { width: 14px; height: 14px; fill: var(--muted); }
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      background: var(--grad-headline);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 8px;
+    }
+    [data-theme="light"] .page-title {
+      background: linear-gradient(135deg, #00522C 0%, #3C60A5 60%, #20BB8D 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+    .page-subtitle { font-size: 15px; color: rgba(255,255,255,0.6); }
+    [data-theme="light"] .page-subtitle { color: var(--muted); }
+    [data-theme="light"] .breadcrumb { color: var(--muted); }
+    [data-theme="light"] .breadcrumb a { color: var(--forest); }
+
+    /* ========== PANEL STYLES ========== */
+    .panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .panel-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .panel-title svg { width: 20px; height: 20px; fill: var(--mint); }
+    .panel-body {
+      padding: 24px;
+    }
+    [data-theme="light"] .panel {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(0,82,44,0.12);
+      box-shadow: 0 4px 24px rgba(0,82,44,0.08);
+    }
+    [data-theme="light"] .panel-title svg { fill: var(--forest); }
+
+    /* ========== EDIT FORM ========== */
+    .edit-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 16px;
+      align-items: end;
+    }
+    @media (max-width: 900px) {
+      .edit-form { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 600px) {
+      .edit-form { grid-template-columns: 1fr; }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .form-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .form-input,
+    .form-select {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      color: var(--fg);
+      font-family: var(--font-mono);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    [data-theme="light"] .form-input,
+    [data-theme="light"] .form-select {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+    }
+    .form-input:focus,
+    .form-select:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    [data-theme="light"] .form-input:focus,
+    [data-theme="light"] .form-select:focus {
+      border-color: var(--forest);
+      box-shadow: 0 0 0 3px rgba(0,82,44,0.1);
+    }
+    .form-input::placeholder { color: var(--muted); }
+
+    /* ========== SEARCHABLE DROPDOWN ========== */
+    .dropdown-wrapper {
+      position: relative;
+    }
+    .dropdown-input {
+      width: 100%;
+      padding: 12px 40px 12px 16px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      color: var(--fg);
+      font-family: var(--font-mono);
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    [data-theme="light"] .dropdown-input {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+    }
+    .dropdown-input:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    [data-theme="light"] .dropdown-input:focus {
+      border-color: var(--forest);
+      box-shadow: 0 0 0 3px rgba(0,82,44,0.1);
+    }
+    .dropdown-arrow {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      fill: var(--muted);
+      pointer-events: none;
+      transition: transform 0.2s;
+    }
+    .dropdown-wrapper.open .dropdown-arrow {
+      transform: translateY(-50%) rotate(180deg);
+    }
+    .dropdown-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    [data-theme="light"] .dropdown-list {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.15);
+      box-shadow: 0 8px 24px rgba(0,82,44,0.1);
+    }
+    .dropdown-wrapper.open .dropdown-list {
+      display: block;
+    }
+    .dropdown-item {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--fg);
+      cursor: pointer;
+      transition: background 0.15s;
+      font-family: var(--font-mono);
+    }
+    .dropdown-item:hover {
+      background: var(--glass-bg);
+    }
+    [data-theme="light"] .dropdown-item:hover {
+      background: rgba(0,82,44,0.06);
+    }
+    .dropdown-item.highlighted {
+      background: rgba(32,187,141,0.15);
+    }
+    .dropdown-item.create-new {
+      border-top: 1px solid var(--border);
+      color: var(--mint);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dropdown-item.create-new svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--mint);
+    }
+    .dropdown-empty {
+      padding: 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--r-btn);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-save {
+      background: var(--mint);
+      color: #001008;
+    }
+    .btn-save:hover {
+      background: #18a57d;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(32,187,141,0.3);
+    }
+    .btn-save svg { fill: #001008; }
+    .btn-save:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ========== DATA TABLE ========== */
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .table-info {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .table-info strong { color: var(--fg); }
+
+    .table-filters {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 280px;
+      transition: all 0.2s;
+    }
+    .search-box:focus-within {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    .search-box svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--muted);
+      flex-shrink: 0;
+    }
+    .search-box input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      font-size: 13px;
+      color: var(--fg);
+      font-family: inherit;
+    }
+    .search-box input::placeholder { color: var(--muted); }
+    [data-theme="light"] .search-box {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+    }
+    [data-theme="light"] .search-box:focus-within {
+      border-color: var(--forest);
+      box-shadow: 0 0 0 3px rgba(0,82,44,0.1);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    [data-theme="light"] .table-wrapper {
+      border: 1px solid rgba(0,82,44,0.15);
+      background: #FFFFFF;
+    }
+    .table-scroll-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 800px;
+    }
+    .data-table th,
+    .data-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table th {
+      background: rgba(255,255,255,0.06);
+      font-weight: 600;
+      color: var(--fg);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    [data-theme="light"] .data-table th {
+      background: #F5F9F7;
+      border-bottom: 1px solid rgba(0,82,44,0.15);
+    }
+    [data-theme="light"] .data-table td {
+      border-bottom: 1px solid rgba(0,82,44,0.08);
+    }
+    .data-table tbody tr:hover {
+      background: rgba(255,255,255,0.04);
+    }
+    [data-theme="light"] .data-table tbody tr:hover {
+      background: rgba(0,82,44,0.04);
+    }
+    .data-table td {
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .data-table td.text { font-family: var(--font-primary); }
+    .data-table .gl-code { color: var(--mint); }
+    .data-table .gl-group { color: var(--sky); }
+    .data-table .gl-name { color: var(--fg); font-family: var(--font-primary); }
+
+    .new-row-highlight {
+      animation: highlightRow 2s ease-out;
+    }
+    @keyframes highlightRow {
+      0% { background: rgba(32,187,141,0.3); }
+      100% { background: transparent; }
+    }
+
+    /* ========== EDIT/DELETE ACTIONS ========== */
+    .action-btns {
+      display: flex;
+      gap: 8px;
+    }
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .action-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--muted);
+    }
+    .action-btn.edit:hover {
+      background: rgba(32,187,141,0.15);
+      border-color: var(--mint);
+    }
+    .action-btn.edit:hover svg { fill: var(--mint); }
+    .action-btn.delete:hover {
+      background: rgba(239,68,68,0.15);
+      border-color: var(--red);
+    }
+    .action-btn.delete:hover svg { fill: var(--red); }
+
+    /* ========== ALERT MODAL ========== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--r-card);
+      padding: 32px;
+      max-width: 420px;
+      width: 90%;
+      transform: scale(0.9);
+      transition: transform 0.3s;
+    }
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+    .modal-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .modal-icon.success { background: rgba(32,187,141,0.15); }
+    .modal-icon.success svg { fill: var(--mint); }
+    .modal-icon svg { width: 28px; height: 28px; }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--fg);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .modal-message {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .modal-message .highlight {
+      color: var(--fg);
+      font-weight: 500;
+    }
+    .modal-btn {
+      display: block;
+      width: 100%;
+      padding: 14px 24px;
+      background: var(--mint);
+      color: #001008;
+      border: none;
+      border-radius: var(--r-btn);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modal-btn:hover {
+      background: #18a57d;
+    }
+    [data-theme="light"] .modal-overlay {
+      background: rgba(0,82,44,0.4);
+    }
+    [data-theme="light"] .modal {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.15);
+      box-shadow: 0 8px 32px rgba(0,82,44,0.15);
+    }
+    [data-theme="light"] .modal-btn {
+      background: var(--forest);
+      color: #FFFFFF;
+    }
+    [data-theme="light"] .modal-btn:hover {
+      background: #003D21;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .page-title { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="index.html" class="nav-logo">
+      <svg viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="8" fill="var(--forest)"/>
+        <path d="M8 16L14 22L24 10" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="nav-logo-text">
+        <span class="company-name">Chememan Public Company Limited</span>
+      </div>
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="02budget-export.html">Export Template</a></li>
+      <li><a href="budget-planning.html" class="active">Edit GL Group & Thai Name</a></li>
+      <li><a href="#">Reports</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <svg class="sun-icon" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg class="moon-icon" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="main-inner">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="breadcrumb">
+          <a href="index.html">Home</a>
+          <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+          <span>Edit GL Group & Thai Name</span>
+        </div>
+        <h1 class="page-title">GL Group & Thai Name Master</h1>
+        <p class="page-subtitle">จัดการ GL Code, GL Group และชื่อ GL ภาษาไทย (ข้อมูล GL Code ดึงจาก SAP)</p>
+      </div>
+
+      <!-- Edit Form Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            เพิ่ม / แก้ไขข้อมูล
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="edit-form">
+            <!-- GL Code Dropdown -->
+            <div class="form-group">
+              <label class="form-label">GL Code (จาก SAP)</label>
+              <div class="dropdown-wrapper" id="glCodeDropdown">
+                <input type="text" class="dropdown-input" id="glCodeInput" placeholder="ค้นหา GL Code..." autocomplete="off">
+                <svg class="dropdown-arrow" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+                <div class="dropdown-list" id="glCodeList"></div>
+              </div>
+            </div>
+
+            <!-- GL Group Dropdown -->
+            <div class="form-group">
+              <label class="form-label">GL Group (สร้างใหม่หรือเลือก)</label>
+              <div class="dropdown-wrapper" id="glGroupDropdown">
+                <input type="text" class="dropdown-input" id="glGroupInput" placeholder="ค้นหาหรือสร้าง Group..." autocomplete="off">
+                <svg class="dropdown-arrow" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+                <div class="dropdown-list" id="glGroupList"></div>
+              </div>
+            </div>
+
+            <!-- GL Thai Name -->
+            <div class="form-group">
+              <label class="form-label">ชื่อ GL (ภาษาไทย)</label>
+              <input type="text" class="form-input" id="glThaiNameInput" placeholder="เช่น ค่าวัสดุสำนักงาน">
+            </div>
+
+            <!-- Save Button -->
+            <button class="btn btn-save" id="saveBtn" onclick="saveRecord()">
+              <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+              บันทึก
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Table Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24"><path d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            รายการ GL Master
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="table-header">
+            <div class="table-info">
+              แสดง <strong id="rowCount">0</strong> รายการ
+            </div>
+            <div class="table-filters">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <input type="text" id="tableSearch" placeholder="ค้นหาทุกคอลัมน์..." oninput="filterTable()">
+              </div>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <div class="table-scroll-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>GL Code</th>
+                    <th>GL Group</th>
+                    <th>ชื่อ GL (ไทย)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <!-- Data populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Success Modal -->
+  <div class="modal-overlay" id="alertModal">
+    <div class="modal">
+      <div class="modal-icon success">
+        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h3 class="modal-title" id="modalTitle">บันทึกสำเร็จ</h3>
+      <p class="modal-message" id="modalMessage"></p>
+      <button class="modal-btn" onclick="closeModal()">ตกลง</button>
+    </div>
+  </div>
+
+  <script>
+    // ========== THEME TOGGLE ==========
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+      localStorage.setItem('theme', html.getAttribute('data-theme'));
+    }
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
+    // ========== MOCK DATA (from SAP) ==========
+    const sapGlCodes = [
+      { code: '5200016353', name: 'Office Supplies Expense' },
+      { code: '5200016354', name: 'Domestic Travel Expense' },
+      { code: '5200016355', name: 'Machinery Maintenance' },
+      { code: '5200016356', name: 'Utilities Expense' },
+      { code: '5200016357', name: 'Consulting Fee' },
+      { code: '5200016358', name: 'Advertising Expense' },
+      { code: '5200016359', name: 'Training Expense' },
+      { code: '5200016360', name: 'Building Repair' },
+      { code: '5200016361', name: 'Insurance Expense' },
+      { code: '5200016362', name: 'Miscellaneous Expense' },
+      { code: '5200016363', name: 'IT Services' },
+      { code: '5200016364', name: 'Legal Fee' },
+      { code: '5200016365', name: 'Transportation' },
+      { code: '5200016366', name: 'Communication' },
+      { code: '5200016367', name: 'Research & Development' }
+    ];
+
+    // GL Groups (editable)
+    let glGroups = [
+      'ค่าใช้จ่ายสำนักงาน',
+      'ค่าเดินทาง',
+      'ค่าบำรุงรักษา',
+      'ค่าสาธารณูปโภค',
+      'ค่าจ้าง/ที่ปรึกษา',
+      'ค่าการตลาด',
+      'ค่าพัฒนาบุคลากร',
+      'ค่าประกัน',
+      'อื่นๆ'
+    ];
+
+    // Master data (stored records)
+    let masterData = [
+      { glCode: '5200016353', glGroup: 'ค่าใช้จ่ายสำนักงาน', thaiName: 'ค่าวัสดุสำนักงาน' },
+      { glCode: '5200016354', glGroup: 'ค่าเดินทาง', thaiName: 'ค่าเดินทางในประเทศ' },
+      { glCode: '5200016355', glGroup: 'ค่าบำรุงรักษา', thaiName: 'ค่าบำรุงรักษาเครื่องจักร' },
+      { glCode: '5200016356', glGroup: 'ค่าสาธารณูปโภค', thaiName: 'ค่าสาธารณูปโภค' },
+      { glCode: '5200016357', glGroup: 'ค่าจ้าง/ที่ปรึกษา', thaiName: 'ค่าจ้างที่ปรึกษา' },
+      { glCode: '5200016358', glGroup: 'ค่าการตลาด', thaiName: 'ค่าโฆษณาและประชาสัมพันธ์' },
+      { glCode: '5200016359', glGroup: 'ค่าพัฒนาบุคลากร', thaiName: 'ค่าฝึกอบรมพนักงาน' },
+      { glCode: '5200016360', glGroup: 'ค่าบำรุงรักษา', thaiName: 'ค่าซ่อมแซมอาคาร' },
+      { glCode: '5200016361', glGroup: 'ค่าประกัน', thaiName: 'ค่าประกันภัย' },
+      { glCode: '5200016362', glGroup: 'อื่นๆ', thaiName: 'ค่าใช้จ่ายเบ็ดเตล็ด' }
+    ];
+
+    let editingIndex = -1;
+    let selectedGlCode = '';
+    let selectedGlGroup = '';
+
+    // ========== DROPDOWN HANDLERS ==========
+    function initDropdowns() {
+      // GL Code Dropdown
+      const glCodeWrapper = document.getElementById('glCodeDropdown');
+      const glCodeInput = document.getElementById('glCodeInput');
+      const glCodeList = document.getElementById('glCodeList');
+
+      glCodeInput.addEventListener('focus', () => {
+        glCodeWrapper.classList.add('open');
+        renderGlCodeList('');
+      });
+
+      glCodeInput.addEventListener('input', (e) => {
+        renderGlCodeList(e.target.value);
+      });
+
+      // GL Group Dropdown
+      const glGroupWrapper = document.getElementById('glGroupDropdown');
+      const glGroupInput = document.getElementById('glGroupInput');
+      const glGroupList = document.getElementById('glGroupList');
+
+      glGroupInput.addEventListener('focus', () => {
+        glGroupWrapper.classList.add('open');
+        renderGlGroupList('');
+      });
+
+      glGroupInput.addEventListener('input', (e) => {
+        renderGlGroupList(e.target.value);
+      });
+
+      // Close dropdowns on outside click
+      document.addEventListener('click', (e) => {
+        if (!glCodeWrapper.contains(e.target)) {
+          glCodeWrapper.classList.remove('open');
+        }
+        if (!glGroupWrapper.contains(e.target)) {
+          glGroupWrapper.classList.remove('open');
+        }
+      });
+    }
+
+    function renderGlCodeList(filter) {
+      const list = document.getElementById('glCodeList');
+      const filtered = sapGlCodes.filter(item =>
+        item.code.toLowerCase().includes(filter.toLowerCase()) ||
+        item.name.toLowerCase().includes(filter.toLowerCase())
+      );
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="dropdown-empty">ไม่พบข้อมูล</div>';
+        return;
+      }
+
+      list.innerHTML = filtered.map(item => `
+        <div class="dropdown-item" onclick="selectGlCode('${item.code}', '${item.name}')">
+          <strong>${item.code}</strong> - ${item.name}
+        </div>
+      `).join('');
+    }
+
+    function selectGlCode(code, name) {
+      const input = document.getElementById('glCodeInput');
+      input.value = code;
+      selectedGlCode = code;
+      document.getElementById('glCodeDropdown').classList.remove('open');
+
+      // Auto-fill Thai name if exists
+      const existing = masterData.find(d => d.glCode === code);
+      if (existing) {
+        document.getElementById('glThaiNameInput').value = existing.thaiName;
+        document.getElementById('glGroupInput').value = existing.glGroup;
+        selectedGlGroup = existing.glGroup;
+      }
+    }
+
+    function renderGlGroupList(filter) {
+      const list = document.getElementById('glGroupList');
+      const filtered = glGroups.filter(g =>
+        g.toLowerCase().includes(filter.toLowerCase())
+      );
+
+      let html = filtered.map(g => `
+        <div class="dropdown-item" onclick="selectGlGroup('${g}')">${g}</div>
+      `).join('');
+
+      // Show create new option if filter doesn't match exactly
+      if (filter && !glGroups.includes(filter)) {
+        html += `
+          <div class="dropdown-item create-new" onclick="createNewGroup('${filter}')">
+            <svg viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+            สร้างกลุ่มใหม่: "${filter}"
+          </div>
+        `;
+      }
+
+      if (!html) {
+        html = '<div class="dropdown-empty">พิมพ์เพื่อสร้าง Group ใหม่</div>';
+      }
+
+      list.innerHTML = html;
+    }
+
+    function selectGlGroup(group) {
+      const input = document.getElementById('glGroupInput');
+      input.value = group;
+      selectedGlGroup = group;
+      document.getElementById('glGroupDropdown').classList.remove('open');
+    }
+
+    function createNewGroup(groupName) {
+      if (!glGroups.includes(groupName)) {
+        glGroups.push(groupName);
+      }
+      selectGlGroup(groupName);
+    }
+
+    // ========== SAVE RECORD ==========
+    function saveRecord() {
+      const glCode = document.getElementById('glCodeInput').value.trim();
+      const glGroup = document.getElementById('glGroupInput').value.trim();
+      const thaiName = document.getElementById('glThaiNameInput').value.trim();
+
+      if (!glCode || !glGroup || !thaiName) {
+        alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+        return;
+      }
+
+      // Check if GL Code exists in SAP list
+      const sapItem = sapGlCodes.find(s => s.code === glCode);
+      if (!sapItem) {
+        alert('GL Code ไม่ถูกต้อง กรุณาเลือกจากรายการ');
+        return;
+      }
+
+      // Check if editing or adding
+      const existingIndex = masterData.findIndex(d => d.glCode === glCode);
+
+      if (existingIndex >= 0) {
+        // Update existing
+        masterData[existingIndex] = { glCode, glGroup, thaiName };
+        // Move to top
+        const item = masterData.splice(existingIndex, 1)[0];
+        masterData.unshift(item);
+      } else {
+        // Add new at top
+        masterData.unshift({ glCode, glGroup, thaiName });
+      }
+
+      // Add to groups if new
+      if (!glGroups.includes(glGroup)) {
+        glGroups.push(glGroup);
+      }
+
+      // Clear form
+      document.getElementById('glCodeInput').value = '';
+      document.getElementById('glGroupInput').value = '';
+      document.getElementById('glThaiNameInput').value = '';
+      selectedGlCode = '';
+      selectedGlGroup = '';
+
+      // Refresh table
+      renderTable();
+
+      // Highlight new row
+      setTimeout(() => {
+        const firstRow = document.querySelector('#tableBody tr');
+        if (firstRow) {
+          firstRow.classList.add('new-row-highlight');
+        }
+      }, 50);
+
+      // Show success modal
+      showModal('บันทึกสำเร็จ', `GL Code <span class="highlight">${glCode}</span> ถูกบันทึกเรียบร้อยแล้ว`);
+    }
+
+    // ========== EDIT/DELETE ==========
+    function editRecord(index) {
+      const record = masterData[index];
+      document.getElementById('glCodeInput').value = record.glCode;
+      document.getElementById('glGroupInput').value = record.glGroup;
+      document.getElementById('glThaiNameInput').value = record.thaiName;
+      selectedGlCode = record.glCode;
+      selectedGlGroup = record.glGroup;
+
+      // Scroll to form
+      document.querySelector('.panel').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function deleteRecord(index) {
+      if (confirm('คุณต้องการลบรายการนี้หรือไม่?')) {
+        masterData.splice(index, 1);
+        renderTable();
+      }
+    }
+
+    // ========== TABLE RENDER ==========
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const searchTerm = document.getElementById('tableSearch').value.toLowerCase();
+
+      const filtered = masterData.filter(d =>
+        d.glCode.toLowerCase().includes(searchTerm) ||
+        d.glGroup.toLowerCase().includes(searchTerm) ||
+        d.thaiName.toLowerCase().includes(searchTerm)
+      );
+
+      tbody.innerHTML = filtered.map((d, i) => `
+        <tr>
+          <td class="gl-code">${d.glCode}</td>
+          <td class="gl-group">${d.glGroup}</td>
+          <td class="gl-name">${d.thaiName}</td>
+          <td>
+            <div class="action-btns">
+              <button class="action-btn edit" onclick="editRecord(${masterData.indexOf(d)})" title="แก้ไข">
+                <svg viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button class="action-btn delete" onclick="deleteRecord(${masterData.indexOf(d)})" title="ลบ">
+                <svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      document.getElementById('rowCount').textContent = filtered.length;
+    }
+
+    function filterTable() {
+      renderTable();
+    }
+
+    // ========== MODAL ==========
+    function showModal(title, message) {
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalMessage').innerHTML = message;
+      document.getElementById('alertModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('alertModal').classList.remove('active');
+    }
+
+    document.getElementById('alertModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // ========== INIT ==========
+    document.addEventListener('DOMContentLoaded', function() {
+      initDropdowns();
+      renderTable();
+    });
+  </script>
+</body>
+</html>

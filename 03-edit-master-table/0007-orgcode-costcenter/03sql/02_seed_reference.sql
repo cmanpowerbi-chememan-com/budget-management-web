@@ -1,0 +1,9 @@
+-- ═══════════════════════════════════════════════════════════
+-- 02_seed_reference.sql — INTENTIONALLY EMPTY
+-- ═══════════════════════════════════════════════════════════
+-- No initial seed data for this entity.
+-- All mappings are created by admin user input.
+--
+-- sap_orgcode_ref is populated by the SAP sync pipeline,
+-- not by this skill.
+-- ═══════════════════════════════════════════════════════════

@@ -1,0 +1,33 @@
+# Spec for 0008 Hide Document Number Master
+# Composite PK 3 cols — doc_num × fiscal period
+
+page_id: "0008-hide-document"
+
+entity:
+  name: hide_document_number
+  display_th: "Hide Document Number"
+  display_en: "Hide Document Number"
+  pk: [doc_num, fiscal_year, fiscal_month]   # ⚠️ Composite PK 3 columns
+
+# No dimension_tables — pure exclusion rule table
+
+reference_data:
+  - source_table: cfg_master.sap_document_number_ref
+    columns: [code, name]
+    used_in: doc_num
+
+validation:
+  - column: fiscal_year
+    type: range
+    rule: "2020-2099"
+  - column: fiscal_month
+    type: range
+    rule: "1-12"
+
+api:
+  base_path: /api/master/hide-document
+  endpoints: [list, save, delete]
+
+routing:
+  page_url: /master/hide-document
+  required_role: master-table-admins

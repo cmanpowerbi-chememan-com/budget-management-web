@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export Template — Chememan</title>
+  <style>
+    /* ========== CHEMEMAN BRAND TOKENS ========== */
+    :root {
+      --bg: #FFFFFF;
+      --surface: #F7F8F7;
+      --fg: #0B1A12;
+      --muted: #5C6B62;
+      --border: rgba(11,26,18,0.08);
+      --accent: #00522C;
+      --forest: #00522C;
+      --blue: #3C60A5;
+      --amber: #745021;
+      --mint: #20BB8D;
+      --sky: #5ECDF6;
+      --navy: #223562;
+      --forest-900: #001008;
+      --amber-light: #D4A556;
+      --gold: #D4A556;
+      --red: #EF4444;
+      --grad-hero-mesh:
+        radial-gradient(at 20% 10%, #00522C 0%, transparent 45%),
+        radial-gradient(at 80% 0%, #3C60A5 0%, transparent 50%),
+        radial-gradient(at 50% 90%, #745021 0%, transparent 50%),
+        radial-gradient(at 90% 80%, #20BB8D 0%, transparent 40%),
+        #050E1A;
+      --grad-headline: linear-gradient(135deg, #FFFFFF 0%, #5ECDF6 60%, #20BB8D 100%);
+      --glass-bg: rgba(255,255,255,0.12);
+      --glass-border: rgba(255,255,255,0.25);
+      --font-primary: 'FC Minimal', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+      --r-card: 24px;
+      --r-btn: 16px;
+      --r-nav: 32px;
+      --r-pill: 9999px;
+    }
+    [data-theme="dark"] {
+      --bg: #0B1A12;
+      --surface: #0F2218;
+      --fg: #FFFFFF;
+      --muted: #9FB3A8;
+      --border: rgba(255,255,255,0.10);
+      --accent: #20BB8D;
+    }
+    [data-theme="light"] {
+      --bg: #FFFFFF;
+      --surface: #F7F8F7;
+      --fg: #0B1A12;
+      --muted: #5C6B62;
+      --border: rgba(11,26,18,0.08);
+      --accent: #00522C;
+      --glass-bg: rgba(0,82,44,0.08);
+      --glass-border: rgba(0,82,44,0.15);
+    }
+
+    /* ========== RESET & BASE ========== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-primary);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ========== NAVIGATION ========== */
+    .nav {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 1400px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-radius: var(--r-nav);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-logo svg { width: 32px; height: 32px; flex-shrink: 0; }
+    .nav-logo-text .company-name { font-weight: 600; font-size: 16px; color: var(--fg); }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--fg); }
+    .nav-links a.active { color: var(--mint); }
+    .nav-actions { display: flex; align-items: center; gap: 16px; }
+    .theme-toggle { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--glass-border); background: var(--glass-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .theme-toggle:hover { transform: scale(1.05); }
+    .theme-toggle svg { width: 20px; height: 20px; fill: var(--fg); }
+    .sun-icon { display: none; }
+    .moon-icon { display: block; }
+    [data-theme="light"] .sun-icon { display: block; }
+    [data-theme="light"] .moon-icon { display: none; }
+    [data-theme="light"] .nav-logo-text .company-name { color: #3C60A5; }
+    [data-theme="light"] .nav-links a { color: #CD9D3F; }
+    [data-theme="light"] .nav-links a:hover { color: #B8892F; }
+    [data-theme="light"] .nav-links a.active { color: var(--forest); }
+    [data-theme="light"] .nav {
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(0,82,44,0.12);
+      box-shadow: 0 4px 24px rgba(0,82,44,0.08);
+    }
+    [data-theme="light"] .theme-toggle {
+      background: rgba(0,82,44,0.08);
+      border: 1px solid rgba(0,82,44,0.15);
+    }
+
+    /* ========== MAIN LAYOUT ========== */
+    .main {
+      padding: 100px 24px 40px;
+      min-height: 100vh;
+      background: var(--grad-hero-mesh);
+    }
+    [data-theme="light"] .main {
+      background: linear-gradient(135deg, #F0F7F4 0%, #E8F4EC 50%, #F5F9F7 100%);
+    }
+    .main-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ========== PAGE HEADER ========== */
+    .page-header {
+      margin-bottom: 32px;
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .breadcrumb a:hover { color: var(--fg); }
+    .breadcrumb svg { width: 14px; height: 14px; fill: var(--muted); }
+    .page-title {
+      font-size: 32px;
+      font-weight: 700;
+      background: var(--grad-headline);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 8px;
+    }
+    [data-theme="light"] .page-title {
+      background: linear-gradient(135deg, #00522C 0%, #3C60A5 60%, #20BB8D 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+    .page-subtitle { font-size: 15px; color: rgba(255,255,255,0.6); }
+    [data-theme="light"] .page-subtitle { color: var(--muted); }
+    [data-theme="light"] .breadcrumb { color: var(--muted); }
+    [data-theme="light"] .breadcrumb a { color: var(--forest); }
+
+    /* ========== PANEL STYLES ========== */
+    .panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .panel-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .panel-title svg { width: 20px; height: 20px; fill: var(--mint); }
+    .panel-body {
+      padding: 24px;
+    }
+    [data-theme="light"] .panel {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(0,82,44,0.12);
+      box-shadow: 0 4px 24px rgba(0,82,44,0.08);
+    }
+    [data-theme="light"] .panel-title svg { fill: var(--forest); }
+
+    /* ========== EXPORT/IMPORT SECTION ========== */
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      .action-grid { grid-template-columns: 1fr; }
+    }
+
+    .action-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    [data-theme="light"] .action-card {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(0,82,44,0.1);
+    }
+    .action-card-content {
+      flex: 1;
+    }
+    .action-card-footer {
+      margin-top: auto;
+      padding-top: 16px;
+    }
+    .action-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .action-card-title svg { width: 18px; height: 18px; }
+    .action-card-title.export svg { fill: var(--mint); }
+    .action-card-title.import svg { fill: var(--gold); }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      color: var(--fg);
+      font-family: var(--font-mono);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    [data-theme="light"] .form-input {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+      color: var(--fg);
+    }
+    .form-input:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    .form-input::placeholder { color: var(--muted); }
+    .form-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border-radius: var(--r-btn);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      width: 100%;
+    }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-export {
+      background: var(--mint);
+      color: #001008;
+    }
+    .btn-export:hover {
+      background: #18a57d;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(32,187,141,0.3);
+    }
+    .btn-export svg { fill: #001008; }
+
+    .btn-import {
+      background: var(--gold);
+      color: #001008;
+    }
+    .btn-import:hover {
+      background: #C9963D;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(212,165,86,0.3);
+    }
+    .btn-import svg { fill: #001008; }
+
+    .file-input-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .file-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .file-input-display {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+    [data-theme="light"] .file-input-display {
+      background: rgba(255,255,255,0.8);
+      border: 2px dashed rgba(0,82,44,0.25);
+    }
+    [data-theme="light"] .file-input-wrapper:hover .file-input-display {
+      background: rgba(212,165,86,0.1);
+    }
+    .file-input-wrapper:hover .file-input-display {
+      border-color: var(--gold);
+      background: rgba(212,165,86,0.08);
+    }
+    .file-input-display svg { width: 24px; height: 24px; fill: var(--muted); }
+    .file-input-text {
+      flex: 1;
+    }
+    .file-input-text .primary { font-size: 13px; color: var(--fg); font-weight: 500; }
+    .file-input-text .secondary { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .file-name {
+      font-size: 13px;
+      color: var(--mint);
+      margin-top: 8px;
+      font-family: var(--font-mono);
+    }
+    [data-theme="light"] .file-name {
+      color: var(--forest);
+    }
+
+    /* ========== DATA TABLE ========== */
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .table-info {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .table-info strong { color: var(--fg); }
+
+    .table-filters {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 280px;
+      transition: all 0.2s;
+    }
+    .search-box:focus-within {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    .search-box svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--muted);
+      flex-shrink: 0;
+    }
+    .search-box input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      font-size: 13px;
+      color: var(--fg);
+      font-family: inherit;
+    }
+    .search-box input::placeholder { color: var(--muted); }
+    [data-theme="light"] .search-box {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+    }
+    [data-theme="light"] .search-box:focus-within {
+      border-color: var(--forest);
+      box-shadow: 0 0 0 3px rgba(0,82,44,0.1);
+    }
+    .filter-input {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--fg);
+      font-family: inherit;
+      outline: none;
+      width: 150px;
+    }
+    .filter-input:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(32,187,141,0.15);
+    }
+    .filter-input::placeholder { color: var(--muted); }
+    [data-theme="light"] .filter-input {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.2);
+    }
+    [data-theme="light"] .filter-input:focus {
+      border-color: var(--forest);
+      box-shadow: 0 0 0 3px rgba(0,82,44,0.1);
+    }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .clear-filters {
+      padding: 8px 14px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--red);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .clear-filters:hover {
+      background: rgba(239,68,68,0.25);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    [data-theme="light"] .table-wrapper {
+      border: 1px solid rgba(0,82,44,0.15);
+      background: #FFFFFF;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 1400px;
+    }
+    .data-table th,
+    .data-table td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table th {
+      background: rgba(255,255,255,0.06);
+      font-weight: 600;
+      color: var(--fg);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    [data-theme="light"] .data-table th {
+      background: #F5F9F7;
+      border-bottom: 1px solid rgba(0,82,44,0.15);
+    }
+    [data-theme="light"] .data-table td {
+      border-bottom: 1px solid rgba(0,82,44,0.08);
+    }
+    [data-theme="light"] .data-table tbody tr:hover {
+      background: rgba(0,82,44,0.04);
+    }
+    .data-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .data-table th.sortable:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .data-table th .sort-icon {
+      width: 12px;
+      height: 12px;
+      fill: var(--muted);
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .data-table tbody tr:hover {
+      background: rgba(255,255,255,0.04);
+    }
+    .data-table td {
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .data-table td.text { font-family: var(--font-primary); }
+    .data-table td.number {
+      text-align: right;
+      color: var(--fg);
+    }
+    .data-table .gl-code { color: var(--mint); }
+    .data-table .gl-name-th { color: var(--fg); font-size: 13px; white-space: nowrap; }
+    .data-table .cost-center { color: var(--sky); }
+    .data-table .year-col { color: var(--gold); font-weight: 600; }
+
+    .table-scroll-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    /* ========== ALERT MODAL ========== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--r-card);
+      padding: 32px;
+      max-width: 480px;
+      width: 90%;
+      transform: scale(0.9);
+      transition: transform 0.3s;
+    }
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+    .modal-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .modal-icon.success { background: rgba(32,187,141,0.15); }
+    .modal-icon.success svg { fill: var(--mint); }
+    .modal-icon.error { background: rgba(239,68,68,0.15); }
+    .modal-icon.error svg { fill: var(--red); }
+    .modal-icon svg { width: 28px; height: 28px; }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--fg);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .modal-message {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .modal-message .highlight {
+      color: var(--fg);
+      font-weight: 500;
+    }
+    .modal-message .error-detail {
+      display: block;
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(239,68,68,0.1);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--red);
+      text-align: left;
+      white-space: pre-wrap;
+    }
+    .modal-btn {
+      display: block;
+      width: 100%;
+      padding: 14px 24px;
+      background: var(--mint);
+      color: #001008;
+      border: none;
+      border-radius: var(--r-btn);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modal-btn:hover {
+      background: #18a57d;
+    }
+    [data-theme="light"] .modal-overlay {
+      background: rgba(0,82,44,0.4);
+    }
+    [data-theme="light"] .modal {
+      background: #FFFFFF;
+      border: 1px solid rgba(0,82,44,0.15);
+      box-shadow: 0 8px 32px rgba(0,82,44,0.15);
+    }
+    [data-theme="light"] .modal-btn {
+      background: var(--forest);
+      color: #FFFFFF;
+    }
+    [data-theme="light"] .modal-btn:hover {
+      background: #003D21;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1200px) {
+      .table-filters {
+        justify-content: flex-start;
+      }
+      .search-box {
+        width: 100%;
+        order: -1;
+      }
+    }
+    @media (max-width: 768px) {
+      .filter-group {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .filter-input {
+        width: 100%;
+      }
+      .table-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .page-title { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="000001index.html" class="nav-logo">
+      <svg viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="8" fill="var(--forest)"/>
+        <path d="M8 16L14 22L24 10" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="nav-logo-text">
+        <span class="company-name">Chememan Public Company Limited</span>
+      </div>
+    </a>
+    <ul class="nav-links">
+      <li><a href="000001index.html">Home</a></li>
+      <li><a href="#" class="active">Export Template</a></li>
+      <li><a href="0004user-planning-choice.html" class="">Edit GL Group & Thai Name</a></li>
+      <li><a href="0007cost-center-division.html">Edit Cost Center & Division</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <svg class="sun-icon" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg class="moon-icon" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="main-inner">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="breadcrumb">
+          <a href="000001index.html">Home</a>
+          <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+          <span>Export Template</span>
+        </div>
+        <h1 class="page-title">Export Budget Template</h1>
+        <p class="page-subtitle">ส่งออกและนำเข้าข้อมูลงบประมาณอนุมัติ (Approved Budget) สำหรับ Budget Department</p>
+      </div>
+
+      <!-- Export/Import Actions -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            จัดการ Template
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="action-grid">
+            <!-- Export Section -->
+            <div class="action-card">
+              <div class="action-card-content">
+                <div class="action-card-title export">
+                  <svg viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  Export Template
+                </div>
+                <div class="form-group">
+                  <label class="form-label">จะนำเข้าข้อมูลปีไหนครับ ระบุเป็น คศ เช่น 2024</label>
+                  <input type="text" class="form-input" id="exportYear" placeholder="2024" maxlength="4" pattern="[0-9]{4}">
+                  <p class="form-hint">ไฟล์จะถูกตั้งชื่อว่า approved_budget_{yyyy}.csv</p>
+                </div>
+              </div>
+              <div class="action-card-footer">
+                <button class="btn btn-export" onclick="exportTemplate()">
+                  <svg viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  Export Template CSV
+                </button>
+              </div>
+            </div>
+
+            <!-- Import Section -->
+            <div class="action-card">
+              <div class="action-card-content">
+                <div class="action-card-title import">
+                  <svg viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  Import Approved Budget
+                </div>
+                <div class="file-input-wrapper">
+                  <input type="file" class="file-input" id="importFile" accept=".csv" onchange="handleFileSelect(this)">
+                  <div class="file-input-display">
+                    <svg viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    <div class="file-input-text">
+                      <div class="primary">เลือกไฟล์ CSV หรือลากมาวาง</div>
+                      <div class="secondary">รองรับไฟล์ approved_budget_YYYY.csv</div>
+                    </div>
+                  </div>
+                  <div class="file-name" id="selectedFileName"></div>
+                </div>
+              </div>
+              <div class="action-card-footer">
+                <button class="btn btn-import" onclick="importBudget()" id="importBtn" disabled>
+                  <svg viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  Import Approved Budget
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24"><path d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            Approved Budget Data
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="table-header">
+            <div class="table-info">
+              แสดง <strong id="rowCount">0</strong> รายการ จากทั้งหมด <strong id="totalCount">0</strong> รายการ
+            </div>
+            <div class="table-filters">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <input type="text" id="globalSearch" placeholder="ค้นหาทุกคอลัมน์..." oninput="filterTable()">
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">GL Code:</span>
+                <input type="text" class="filter-input" id="filterGlCode" placeholder="5200016353" oninput="filterTable()">
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">ชื่อ GL (ไทย):</span>
+                <input type="text" class="filter-input" id="filterGlNameTh" placeholder="ค่าวัสดุ..." oninput="filterTable()">
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">Cost Center:</span>
+                <input type="text" class="filter-input" id="filterCostCenter" placeholder="10PB010000" oninput="filterTable()">
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">Remark:</span>
+                <input type="text" class="filter-input" id="filterRemark" placeholder="งบค่า..." oninput="filterTable()">
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">Year:</span>
+                <input type="text" class="filter-input" id="filterYear" placeholder="2024" oninput="filterTable()" style="width:80px;">
+              </div>
+              <button class="clear-filters" onclick="clearFilters()">ล้างตัวกรอง</button>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <div class="table-scroll-container">
+              <table class="data-table" id="dataTable">
+                <thead>
+                  <tr>
+                    <th class="sortable" onclick="sortTable(0)">GL Code</th>
+                    <th class="sortable" onclick="sortTable(1)">ชื่อ GL (ไทย)</th>
+                    <th class="sortable" onclick="sortTable(2)">Cost Center</th>
+                    <th>Remark</th>
+                    <th class="sortable" onclick="sortTable(4)">Jan</th>
+                    <th class="sortable" onclick="sortTable(5)">Feb</th>
+                    <th class="sortable" onclick="sortTable(6)">Mar</th>
+                    <th class="sortable" onclick="sortTable(7)">Apr</th>
+                    <th class="sortable" onclick="sortTable(8)">May</th>
+                    <th class="sortable" onclick="sortTable(9)">Jun</th>
+                    <th class="sortable" onclick="sortTable(10)">Jul</th>
+                    <th class="sortable" onclick="sortTable(11)">Aug</th>
+                    <th class="sortable" onclick="sortTable(12)">Sep</th>
+                    <th class="sortable" onclick="sortTable(13)">Oct</th>
+                    <th class="sortable" onclick="sortTable(14)">Nov</th>
+                    <th class="sortable" onclick="sortTable(15)">Dec</th>
+                    <th class="sortable" onclick="sortTable(16)">Year</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <!-- Data will be populated by JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Alert Modal -->
+  <div class="modal-overlay" id="alertModal">
+    <div class="modal">
+      <div class="modal-icon" id="modalIcon">
+        <svg viewBox="0 0 24 24" id="modalIconSvg"></svg>
+      </div>
+      <h3 class="modal-title" id="modalTitle"></h3>
+      <p class="modal-message" id="modalMessage"></p>
+      <button class="modal-btn" onclick="closeModal()">ตกลง</button>
+    </div>
+  </div>
+
+  <script>
+    // ========== THEME TOGGLE ==========
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+      localStorage.setItem('theme', html.getAttribute('data-theme'));
+    }
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
+    // ========== GL CODE TO THAI NAME MAPPING (simulating database lookup) ==========
+    const glCodeThaiNames = {
+      '5200016353': 'ค่าวัสดุสำนักงาน',
+      '5200016354': 'ค่าเดินทางในประเทศ',
+      '5200016355': 'ค่าบำรุงรักษาเครื่องจักร',
+      '5200016356': 'ค่าสาธารณูปโภค',
+      '5200016357': 'ค่าจ้างที่ปรึกษา',
+      '5200016358': 'ค่าโฆษณาและประชาสัมพันธ์',
+      '5200016359': 'ค่าฝึกอบรมพนักงาน',
+      '5200016360': 'ค่าซ่อมแซมอาคาร',
+      '5200016361': 'ค่าประกันภัย',
+      '5200016362': 'ค่าใช้จ่ายเบ็ดเตล็ด'
+    };
+
+    function getGlThaiName(glCode) {
+      return glCodeThaiNames[glCode] || 'ไม่พบข้อมูล';
+    }
+
+    // ========== MOCK DATA (simulating Fabric SQL DB) ==========
+    const mockData = generateMockData();
+    let filteredData = [...mockData];
+
+    function generateMockData() {
+      const data = [];
+      const glCodes = ['5200016353', '5200016354', '5200016355', '5200016356', '5200016357', '5200016358', '5200016359', '5200016360', '5200016361', '5200016362'];
+      const costCenters = ['10PB010000', 'KKAW02', '10PB020000', 'KKAW03', '10PB030000', 'KKAW04', '10PB040000', 'KKAW05'];
+      const remarks = ['งบค่าวัสดุสำนักงาน', 'งบค่าเดินทาง', 'งบค่าบำรุงรักษา', 'งบค่าสาธารณูปโภค', 'งบค่าจ้างที่ปรึกษา', 'งบโครงการพิเศษ'];
+      const years = [2024, 2024, 2024, 2023, 2023];
+
+      for (let i = 0; i < 120; i++) {
+        const glCode = glCodes[i % glCodes.length];
+        const row = {
+          gl_code: glCode,
+          gl_name_th: getGlThaiName(glCode),
+          cost_center: costCenters[i % costCenters.length],
+          remark: remarks[i % remarks.length] + ' #' + (i + 1),
+          jan: Math.floor(Math.random() * 500000) + 50000,
+          feb: Math.floor(Math.random() * 500000) + 50000,
+          mar: Math.floor(Math.random() * 500000) + 50000,
+          apr: Math.floor(Math.random() * 500000) + 50000,
+          may: Math.floor(Math.random() * 500000) + 50000,
+          jun: Math.floor(Math.random() * 500000) + 50000,
+          jul: Math.floor(Math.random() * 500000) + 50000,
+          aug: Math.floor(Math.random() * 500000) + 50000,
+          sep: Math.floor(Math.random() * 500000) + 50000,
+          oct: Math.floor(Math.random() * 500000) + 50000,
+          nov: Math.floor(Math.random() * 500000) + 50000,
+          dec: Math.floor(Math.random() * 500000) + 50000,
+          year: years[i % years.length]
+        };
+        data.push(row);
+      }
+      return data;
+    }
+
+    function formatNumber(num) {
+      return num.toLocaleString('th-TH');
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('tableBody');
+      const displayData = data.slice(0, 100); // Default 100 rows
+
+      tbody.innerHTML = displayData.map(row => `
+        <tr>
+          <td class="gl-code">${row.gl_code}</td>
+          <td class="gl-name-th">${row.gl_name_th}</td>
+          <td class="cost-center">${row.cost_center}</td>
+          <td class="text">${row.remark}</td>
+          <td class="number">${formatNumber(row.jan)}</td>
+          <td class="number">${formatNumber(row.feb)}</td>
+          <td class="number">${formatNumber(row.mar)}</td>
+          <td class="number">${formatNumber(row.apr)}</td>
+          <td class="number">${formatNumber(row.may)}</td>
+          <td class="number">${formatNumber(row.jun)}</td>
+          <td class="number">${formatNumber(row.jul)}</td>
+          <td class="number">${formatNumber(row.aug)}</td>
+          <td class="number">${formatNumber(row.sep)}</td>
+          <td class="number">${formatNumber(row.oct)}</td>
+          <td class="number">${formatNumber(row.nov)}</td>
+          <td class="number">${formatNumber(row.dec)}</td>
+          <td class="year-col">${row.year}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('rowCount').textContent = displayData.length;
+      document.getElementById('totalCount').textContent = data.length;
+    }
+
+    function filterTable() {
+      const globalSearch = document.getElementById('globalSearch').value.toLowerCase().trim();
+      const glFilter = document.getElementById('filterGlCode').value.toLowerCase().trim();
+      const glNameThFilter = document.getElementById('filterGlNameTh').value.toLowerCase().trim();
+      const costCenterFilter = document.getElementById('filterCostCenter').value.toLowerCase().trim();
+      const remarkFilter = document.getElementById('filterRemark').value.toLowerCase().trim();
+      const yearFilter = document.getElementById('filterYear').value.trim();
+
+      filteredData = mockData.filter(row => {
+        // Global search - search across all columns
+        if (globalSearch) {
+          const searchableText = [
+            row.gl_code,
+            row.gl_name_th,
+            row.cost_center,
+            row.remark,
+            row.year.toString(),
+            row.jan.toString(),
+            row.feb.toString(),
+            row.mar.toString(),
+            row.apr.toString(),
+            row.may.toString(),
+            row.jun.toString(),
+            row.jul.toString(),
+            row.aug.toString(),
+            row.sep.toString(),
+            row.oct.toString(),
+            row.nov.toString(),
+            row.dec.toString()
+          ].join(' ').toLowerCase();
+
+          if (!searchableText.includes(globalSearch)) {
+            return false;
+          }
+        }
+
+        // Individual column filters
+        const matchGl = !glFilter || row.gl_code.toLowerCase().includes(glFilter);
+        const matchGlNameTh = !glNameThFilter || row.gl_name_th.toLowerCase().includes(glNameThFilter);
+        const matchCostCenter = !costCenterFilter || row.cost_center.toLowerCase().includes(costCenterFilter);
+        const matchRemark = !remarkFilter || row.remark.toLowerCase().includes(remarkFilter);
+        const matchYear = !yearFilter || row.year.toString().includes(yearFilter);
+
+        return matchGl && matchGlNameTh && matchCostCenter && matchRemark && matchYear;
+      });
+
+      renderTable(filteredData);
+    }
+
+    function clearFilters() {
+      document.getElementById('globalSearch').value = '';
+      document.getElementById('filterGlCode').value = '';
+      document.getElementById('filterGlNameTh').value = '';
+      document.getElementById('filterCostCenter').value = '';
+      document.getElementById('filterRemark').value = '';
+      document.getElementById('filterYear').value = '';
+      filteredData = [...mockData];
+      renderTable(filteredData);
+    }
+
+    let sortDirection = {};
+    function sortTable(colIndex) {
+      const keys = ['gl_code', 'gl_name_th', 'cost_center', 'remark', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'year'];
+      const key = keys[colIndex];
+
+      sortDirection[colIndex] = !sortDirection[colIndex];
+      const dir = sortDirection[colIndex] ? 1 : -1;
+
+      filteredData.sort((a, b) => {
+        if (typeof a[key] === 'number') {
+          return (a[key] - b[key]) * dir;
+        }
+        return a[key].localeCompare(b[key]) * dir;
+      });
+
+      renderTable(filteredData);
+    }
+
+    // ========== EXPORT TEMPLATE ==========
+    function exportTemplate() {
+      const yearInput = document.getElementById('exportYear').value.trim();
+
+      if (!yearInput || !/^\d{4}$/.test(yearInput)) {
+        showModal('error', 'กรุณาระบุปี', 'กรุณาระบุปี คศ ให้ถูกต้อง (เช่น 2024)');
+        return;
+      }
+
+      // Generate CSV content with 15 columns
+      const headers = ['gl_code', 'cost_center', 'remark', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const csvContent = headers.join(',') + '\n' +
+        '5200016353,10PB010000,ตัวอย่าง - กรุณาลบและใส่ข้อมูลจริง,0,0,0,0,0,0,0,0,0,0,0,0\n' +
+        '5200016354,KKAW02,ตัวอย่าง - กรุณาลบและใส่ข้อมูลจริง,0,0,0,0,0,0,0,0,0,0,0,0';
+
+      // Create and download file
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `approved_budget_${yearInput}.csv`;
+      link.click();
+
+      showModal('success', 'ส่งออกสำเร็จ', `ไฟล์ <span class="highlight">approved_budget_${yearInput}.csv</span> ถูกดาวน์โหลดแล้ว กรุณากรอกข้อมูลและนำเข้ากลับเข้าระบบ`);
+    }
+
+    // ========== IMPORT BUDGET ==========
+    let selectedFile = null;
+
+    function handleFileSelect(input) {
+      const file = input.files[0];
+      if (file) {
+        selectedFile = file;
+        document.getElementById('selectedFileName').textContent = file.name;
+        document.getElementById('importBtn').disabled = false;
+      } else {
+        selectedFile = null;
+        document.getElementById('selectedFileName').textContent = '';
+        document.getElementById('importBtn').disabled = true;
+      }
+    }
+
+    function importBudget() {
+      if (!selectedFile) {
+        showModal('error', 'กรุณาเลือกไฟล์', 'กรุณาเลือกไฟล์ CSV ก่อนนำเข้า');
+        return;
+      }
+
+      const fileName = selectedFile.name;
+
+      // Validate filename format: approved_budget_YYYY.csv
+      const fileNameMatch = fileName.match(/^approved_budget_(\d{4})\.csv$/);
+      if (!fileNameMatch) {
+        showModal('error', 'ชื่อไฟล์ไม่ถูกต้อง', 'ชื่อไฟล์ต้องเป็นรูปแบบ <span class="highlight">approved_budget_YYYY.csv</span> เช่น approved_budget_2024.csv');
+        return;
+      }
+
+      const year = fileNameMatch[1];
+
+      // Read and validate file content
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result;
+        const validation = validateCSV(content);
+
+        if (!validation.valid) {
+          showModal('error', 'รูปแบบข้อมูลไม่ถูกต้อง',
+            `พบข้อผิดพลาดในข้อมูล:<span class="error-detail">${validation.errors.join('\n')}</span>`);
+          return;
+        }
+
+        // Success - simulate import to Fabric SQL DB
+        showModal('success', 'นำเข้าสำเร็จ',
+          `นำเข้าข้อมูลงบอนุมัติแล้วปี <span class="highlight">${year}</span> สำเร็จ<br><br>จำนวน ${validation.rowCount} รายการ ถูกบันทึกเข้าระบบ<br>(Mode: Overwrite by Year Key)`);
+
+        // Add imported data to mock data (simulating Fabric SQL)
+        const importedRows = parseCSVToData(content, year);
+        // Remove old data for this year (overwrite mode by year key)
+        const filtered = mockData.filter(row => row.year !== parseInt(year));
+        mockData.length = 0;
+        mockData.push(...filtered, ...importedRows);
+        filteredData = [...mockData];
+        renderTable(filteredData);
+
+        // Reset file input
+        document.getElementById('importFile').value = '';
+        document.getElementById('selectedFileName').textContent = '';
+        document.getElementById('importBtn').disabled = true;
+        selectedFile = null;
+      };
+      reader.readAsText(selectedFile);
+    }
+
+    function validateCSV(content) {
+      const lines = content.trim().split('\n');
+      const errors = [];
+      let rowCount = 0;
+
+      if (lines.length < 2) {
+        return { valid: false, errors: ['ไฟล์ไม่มีข้อมูล'] };
+      }
+
+      // Validate header - must have exactly 15 columns
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const expectedHeaders = ['gl_code', 'cost_center', 'remark', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+      if (headers.length !== 15) {
+        return { valid: false, errors: [`จำนวนคอลัมน์ไม่ถูกต้อง (พบ ${headers.length} คอลัมน์ ต้องการ 15 คอลัมน์)`] };
+      }
+
+      // Validate each data row
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') continue;
+
+        const cols = lines[i].split(',');
+        if (cols.length !== 15) {
+          errors.push(`แถวที่ ${i + 1}: จำนวนคอลัมน์ไม่ถูกต้อง (${cols.length}/15)`);
+          continue;
+        }
+
+        const glCode = cols[0].trim();
+        const costCenter = cols[1].trim();
+
+        // Validate GL Code (should be numeric, 10 digits)
+        if (!/^\d{10}$/.test(glCode)) {
+          errors.push(`GL Code "${glCode}" ที่แถว ${i + 1}: รูปแบบไม่ถูกต้อง (ต้องเป็นตัวเลข 10 หลัก)`);
+        }
+
+        // Validate Cost Center - must not be empty
+        if (costCenter.length === 0) {
+          errors.push(`Cost Center ที่แถว ${i + 1}: ไม่มีข้อมูล`);
+        }
+
+        // Validate monthly values (jan-dec, columns 3-14) - must be numeric
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        for (let j = 3; j < 15; j++) {
+          const value = cols[j].trim();
+          if (value !== '' && isNaN(parseFloat(value))) {
+            errors.push(`GL Code "${glCode}" คอลัมน์ ${monthNames[j - 3]}: ค่า "${value}" ไม่ใช่ตัวเลข`);
+          }
+        }
+
+        // Limit error messages
+        if (errors.length >= 10) {
+          errors.push('... และข้อผิดพลาดอื่นๆ อีก');
+          break;
+        }
+
+        rowCount++;
+      }
+
+      return {
+        valid: errors.length === 0,
+        errors: errors,
+        rowCount: rowCount
+      };
+    }
+
+    function parseCSVToData(content, year) {
+      const lines = content.trim().split('\n');
+      const data = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') continue;
+        const cols = lines[i].split(',');
+
+        data.push({
+          gl_code: cols[0].trim(),
+          cost_center: cols[1].trim(),
+          remark: cols[2].trim(),
+          jan: parseFloat(cols[3]) || 0,
+          feb: parseFloat(cols[4]) || 0,
+          mar: parseFloat(cols[5]) || 0,
+          apr: parseFloat(cols[6]) || 0,
+          may: parseFloat(cols[7]) || 0,
+          jun: parseFloat(cols[8]) || 0,
+          jul: parseFloat(cols[9]) || 0,
+          aug: parseFloat(cols[10]) || 0,
+          sep: parseFloat(cols[11]) || 0,
+          oct: parseFloat(cols[12]) || 0,
+          nov: parseFloat(cols[13]) || 0,
+          dec: parseFloat(cols[14]) || 0,
+          year: parseInt(year)
+        });
+      }
+
+      return data;
+    }
+
+    // ========== MODAL ==========
+    function showModal(type, title, message) {
+      const modal = document.getElementById('alertModal');
+      const icon = document.getElementById('modalIcon');
+      const iconSvg = document.getElementById('modalIconSvg');
+
+      icon.className = 'modal-icon ' + type;
+
+      if (type === 'success') {
+        iconSvg.innerHTML = '<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+      } else {
+        iconSvg.innerHTML = '<path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" stroke-width="2" fill="none"/>';
+      }
+
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalMessage').innerHTML = message;
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('alertModal').classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.getElementById('alertModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // ========== INIT ==========
+    document.addEventListener('DOMContentLoaded', function() {
+      renderTable(mockData);
+    });
+  </script>
+</body>
+</html>

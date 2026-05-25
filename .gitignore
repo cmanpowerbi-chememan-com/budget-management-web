@@ -1,5 +1,11 @@
 # Secrets — never commit
 .env
+local.settings.json
+
+# Large media files
+*.mp4
+*.mov
+*.avi
 
 # Python
 __pycache__/
@@ -21,3 +27,9 @@ Thumbs.db
 
 # Excel temp files
 ~$*.xlsx
+
+# Claude Code local settings
+.claude/
+
+# Unrelated projects nested here
+cman-prd-ingest-backend/
