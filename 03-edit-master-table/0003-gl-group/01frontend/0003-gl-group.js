@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     glGroups   = groups;       // [{group_id, group_name}, ...]
     masterData = mappings;     // [{gl_code, group_id, group_name}, ...]
     renderTable();
+    initDropdowns();
   } catch (err) {
     showErrorModal(err);
   }
@@ -281,4 +282,81 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) {
   return String(s).replace(/['"\\]/g, c => '\\' + c);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DROPDOWNS — filter + render lists for GL Code and GL Group
+   ═══════════════════════════════════════════════════════════ */
+
+function renderGlCodeList(query) {
+  const list = document.getElementById('glCodeList');
+  const drop = document.getElementById('glCodeDropdown');
+  const q = query.toLowerCase();
+  const hits = q ? sapGlCodes.filter(c => c.code.toLowerCase().includes(q)) : sapGlCodes;
+
+  list.innerHTML = hits.length === 0
+    ? `<div class="dropdown-empty">ไม่พบ GL Code ที่ตรงกัน</div>`
+    : hits.map(c =>
+        `<div class="dropdown-item" onclick="selectGlCode('${escapeAttr(c.code)}')">
+           <span class="code">${escapeHtml(c.code)}</span>
+         </div>`
+      ).join('');
+  drop.classList.add('open');
+}
+
+function selectGlCode(code) {
+  document.getElementById('glCodeInput').value = code;
+  selectedGlCode = code;
+  document.getElementById('glCodeDropdown').classList.remove('open');
+}
+
+function renderGlGroupList(query) {
+  const list = document.getElementById('glGroupList');
+  const drop = document.getElementById('glGroupDropdown');
+  const q = query.toLowerCase();
+  const hits = q ? glGroups.filter(g => g.group_name.toLowerCase().includes(q)) : glGroups;
+
+  const exactMatch = glGroups.some(g => g.group_name.toLowerCase() === q);
+  const createNew = query && !exactMatch
+    ? `<div class="dropdown-item create-new" onclick="selectGlGroupNew('${escapeAttr(query)}')">
+         สร้างกลุ่มใหม่: "${escapeHtml(query)}"
+       </div>`
+    : '';
+
+  list.innerHTML = hits.map(g =>
+    `<div class="dropdown-item" onclick="selectGlGroup('${escapeAttr(g.group_id)}','${escapeAttr(g.group_name)}')">
+       <span class="code">${escapeHtml(g.group_name)}</span>
+     </div>`
+  ).join('') + createNew || `<div class="dropdown-empty">ไม่มีกลุ่ม</div>`;
+  drop.classList.add('open');
+}
+
+function selectGlGroup(groupId, groupName) {
+  document.getElementById('glGroupInput').value = groupName;
+  selectedGroupId = groupId;
+  document.getElementById('glGroupDropdown').classList.remove('open');
+}
+
+function selectGlGroupNew(name) {
+  document.getElementById('glGroupInput').value = name;
+  selectedGroupId = null;
+  document.getElementById('glGroupDropdown').classList.remove('open');
+}
+
+function initDropdowns() {
+  const codeInput  = document.getElementById('glCodeInput');
+  const groupInput = document.getElementById('glGroupInput');
+
+  codeInput.addEventListener('input', () => renderGlCodeList(codeInput.value));
+  codeInput.addEventListener('focus', () => renderGlCodeList(codeInput.value));
+
+  groupInput.addEventListener('input', () => renderGlGroupList(groupInput.value));
+  groupInput.addEventListener('focus', () => renderGlGroupList(groupInput.value));
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#glCodeDropdown'))
+      document.getElementById('glCodeDropdown').classList.remove('open');
+    if (!e.target.closest('#glGroupDropdown'))
+      document.getElementById('glGroupDropdown').classList.remove('open');
+  });
 }
