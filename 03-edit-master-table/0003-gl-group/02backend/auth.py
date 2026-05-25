@@ -1,13 +1,11 @@
-"""SWA principal header auth.
+"""SWA principal header auth with email allowlist.
 
-In Azure Static Web Apps, the platform injects x-ms-client-principal
-into every Function request after the user is authenticated.
-We trust this header (SWA signs it) and check userRoles.
+Reads ADMIN_EMAILS env var (comma-separated) to check access.
+Persistent across redeployments — no SWA invitation roles needed.
 """
 import base64
 import json
-
-REQUIRED_ROLE = "master_table_admins"
+import os
 
 
 class AuthError(Exception):
@@ -16,8 +14,13 @@ class AuthError(Exception):
         self.message = message
 
 
+def _allowed_emails() -> set:
+    raw = os.environ.get("ADMIN_EMAILS", "")
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
 def authenticate(req) -> dict:
-    """Read SWA-injected principal header, check role. Raise AuthError on failure."""
+    """Read SWA-injected principal, check email allowlist. Raise AuthError on failure."""
     header = req.headers.get("x-ms-client-principal", "")
     if not header:
         raise AuthError(401, "Not authenticated")
@@ -27,12 +30,15 @@ def authenticate(req) -> dict:
     except Exception:
         raise AuthError(401, "Invalid principal header")
 
-    user_roles = principal.get("userRoles", [])
-    if REQUIRED_ROLE not in user_roles:
-        raise AuthError(403, "Forbidden — admin role required")
+    email = principal.get("userDetails", "").lower()
+    if not email:
+        raise AuthError(401, "No user identity found")
+
+    allowed = _allowed_emails()
+    if allowed and email not in allowed:
+        raise AuthError(403, "Forbidden — not in admin list")
 
     return {
-        "sub":    principal.get("userId", ""),
-        "email":  principal.get("userDetails", ""),
-        "groups": user_roles,
+        "sub":   principal.get("userId", ""),
+        "email": email,
     }

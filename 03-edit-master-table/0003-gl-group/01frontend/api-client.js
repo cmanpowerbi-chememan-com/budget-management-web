@@ -58,11 +58,8 @@ async function checkAdminAccess() {
     return false;
   }
 
-  const isAdmin = (clientPrincipal.userRoles || []).includes('master_table_admins');
-  if (!isAdmin) {
-    window.location.href = '/access-denied.html';
-    return false;
-  }
+  // Route-level auth handled by SWA (authenticated only).
+  // Backend enforces email allowlist on every API call.
   return true;
 }
 
