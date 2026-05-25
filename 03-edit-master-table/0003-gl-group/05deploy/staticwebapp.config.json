@@ -1,15 +1,4 @@
 {
-  "auth": {
-    "identityProviders": {
-      "azureActiveDirectory": {
-        "registration": {
-          "openIdIssuer": "https://login.microsoftonline.com/13c85daf-a73b-4705-8244-f89c655ab851/v2.0",
-          "clientIdSettingName": "AAD_CLIENT_ID",
-          "clientSecretSettingName": "AAD_CLIENT_SECRET"
-        }
-      }
-    }
-  },
   "routes": [
     {
       "route": "/0003budget-gl-master.html",
