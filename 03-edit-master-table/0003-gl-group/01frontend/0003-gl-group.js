@@ -308,6 +308,10 @@ function showErrorModal(err) {
   modal.classList.add('show');
 }
 
+function closeNotice() {
+  document.getElementById('noticeModal').classList.remove('show');
+}
+
 function closeErrorModal() {
   document.getElementById('errorModal').classList.remove('show');
 }
