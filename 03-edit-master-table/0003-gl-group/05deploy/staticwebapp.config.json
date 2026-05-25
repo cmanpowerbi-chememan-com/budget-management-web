@@ -13,15 +13,15 @@
   "routes": [
     {
       "route": "/0003budget-gl-master.html",
-      "allowedRoles": ["master-table-admins"]
+      "allowedRoles": ["master_table_admins"]
     },
     {
       "route": "/master/*",
-      "allowedRoles": ["master-table-admins"]
+      "allowedRoles": ["master_table_admins"]
     },
     {
       "route": "/api/master/*",
-      "allowedRoles": ["master-table-admins"]
+      "allowedRoles": ["master_table_admins"]
     },
     {
       "route": "/access-denied.html",
