@@ -1,0 +1,43 @@
+**AI Generation Specification Prompt**
+
+**[1. PAGE TITLE]**
+Chememan Public Company Limited — Smart Financial Control
+
+**[2. PURPOSE]**
+Act as a premium executive landing page and financial control portal for the smart budget planning and corporate administration team of Chememan. The page functions as an entry point for corporate analytics, visualizing high-level financial KPIs, actual-vs-budget monthly variances, future 5-quarter projections, spend patterns, and includes a direct administrative portal link and theme customization controls.
+
+**[3. DESIGN SYSTEM]**
+- **Color Palette & Tokens:**
+  * `--c-forest: #00522C` (Primary Brand color)
+  * `--c-mint: #1FA378` (Accent 2 / Positive indicator)
+  * `--c-gold: #C9963D` (Accent 3 / Highlights)
+  * `--c-blue: #3C60A5` (Secondary info branding)
+  * `--c-amber: #B8893A` & `--c-sky: #5ECDF6`
+  * Text Colors: `--ink: #0B1A12` (Main), `--ink-2: #3F4D45` (Secondary), `--ink-3: #7A867E` (Muted)
+  * Backgrounds: `--paper: #F7F5EF` (Light background), `--paper-2: #EFEBE1` (Subtle tint), `--surface: #FFFFFF` (Card container fill)
+  * Lines: `rgba(11,26,18,0.10)`
+- **Typography Engine:**
+  * Serif Font: `'Instrument Serif', Georgia, serif` for elegant headings and stylized giant numeric values.
+  * Sans Font: `'IBM Plex Sans', 'IBM Plex Sans Thai', sans-serif` for readable text components.
+  * Monospace Font: `'IBM Plex Mono', monospace` for numerical financial values and data parameters.
+- **Theme Capabilities:** Complete Dark and Light mode switching with customizable theme color presets and a slider variable controlling the overall color depth and intensity (60% preset default).
+
+**[4. LAYOUT STRUCTURE]**
+- **Navigation Navbar:** Standard sticky header bar containing the corporate brand typography logo, descriptive tagline, system actions (Theme Toggle button), and user credentials banner.
+- **Hero Intro Panel:** Typographically elegant hero container featuring split layouts, animated greeting subtitle text, call-to-action buttons for "View Reports" and "Manage Master Data", and a floating canvas area with dynamic moving background particles.
+- **Executive Metrics Matrix (#stats):** Responsive grid panel presenting three major analytical cards:
+  * Total Budget Monitored (with large Serif typography text).
+  * Real-time Synchronization status pill indicators.
+  * Processed Transaction Volume count.
+- **Monthly Variance Module:** Analytical section utilizing horizontal stacked visual bars illustrating actual spend versus corporate budgeted thresholds.
+- **Strategic Horizon Projections:** Timeline grid layout outlining corporate financial paths and spending forecast targets across five continuous future quarters.
+- **Spend Breakdown Charts:** Clean tabular and proportional block structures mapping department outlays.
+- **One-Touch Review Bar:** Simplified sign-off panel acting as a call-to-action block for final budget review and operational closing optimization.
+- **Theme Tweaks Sidebar Panel:** Floating toggle drawer layout aligned on the right side margins allowing runtime manipulation of color presets and design depths.
+
+**[5. INTERACTIVE COMPONENTS & BEHAVIORS]**
+- **Text Scramble System:** JavaScript function that initiates an automatic alphanumeric scramble effect on text elements when headings render.
+- **Live Theme Engine:** Light/Dark toggling with full color variables substitution (`[data-theme="dark"]`). Seamlessly integrates a color preset manager ("ocean", "forest", etc.) and an interactive slider element that shifts visual values instantly via CSS custom overrides. Theme states persist inside `localStorage`.
+- **Dynamic Counters via IntersectionObserver:** Numeric counters in the metrics card scan viewport positioning and trigger smooth incrementing animations from 0 to target metrics as soon as the element scrolls into layout view.
+- **Cursor Focus Hover Glow:** Active event handling on navigation actions tracking user coordinates `mousemove` and appending dynamic radial glow layers inside buttons following mouse placement.
+- **User Profile Drawer:** Real-time visibility helper functions (`setUserInfo` / `hideUserInfo`) that update custom user status details dynamically.

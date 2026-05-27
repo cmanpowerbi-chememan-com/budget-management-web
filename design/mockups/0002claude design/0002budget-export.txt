@@ -1,0 +1,34 @@
+**AI Generation Specification Prompt**
+
+**[1. PAGE TITLE]**
+OPEX Data Management — Chememan
+
+**[2. PURPOSE]**
+Provide a highly polished corporate data workspace for managing Operational Expenditure (OPEX) records. This interface allows accountants and operations managers to review monthly expense breakdowns, search through records, dynamically modify cost items, observe approval workflows, and synchronize records back to SAP.
+
+**[3. DESIGN SYSTEM]**
+- **Core Color Hierarchy:** Extends Chememan's standard `--c-forest`, `--c-mint`, `--c-gold`, and `--c-blue` tokens.
+- **Semantic Status Markers:**
+  * SAP Synchronized: `--status-sap: #1FA378` (Mint Green badge)
+  * Approved Manager Level: `--status-approved: #3C60A5` (Blue badge)
+  * Pending Operations Check: Default text color `--ink`.
+  * Special Row Highlights: Cream/Gold background `#FFF6D4` with border `--special-edge: #E8C75E`.
+- **Typography Language:** Uses `'Instrument Serif'` for layout titles, `'IBM Plex Sans/Thai'` for all text controls, and `'IBM Plex Mono'` for financial numeric grids.
+
+**[4. LAYOUT STRUCTURE]**
+- **Header Navigation Block:** Branding logo bar containing deep-link actions, system state badges, and dark-theme toggle controls.
+- **Breadcrumb Tracker:** Small navigation index trailing from Overview down to "OPEX Data Management / รายละเอียดงบทำการ".
+- **Real-time KPI Overview Row:** A summary bar containing three clean metrics boxes:
+  * Total OPEX Allocation (Summation of items).
+  * Synced Rows Count.
+  * Pending Sync Balance Amount.
+- **Workspace Actions Bar:** Features a search box element alongside clear filter criteria selectors.
+- **Interactive Data Matrix Table:** Main data presentation spreadsheet framework layout with columns representing Record ID, Expense Category, Department Code, target Period (Month/Year), Allocation Cost, Sync Status, and Edit Action elements.
+- **Detail Review Modal Backdrop:** Centered overlay card component hidden by default that pops over to display comprehensive item fields when edit actions are triggered.
+- **Sticky Batch Sync Footer:** Clear bottom control bar providing confirmation counts and a premium gold action button to submit lines to SAP.
+
+**[5. INTERACTIVE COMPONENTS & BEHAVIORS]**
+- **Draggable Column Resize Module:** Advanced layout manipulation script attaching pointer listeners (`mousedown`, `mousemove`, `mouseup`, `touchstart`) onto column headers, allowing users to physically drag boundaries to change cell widths. Column width states are automatically saved as JSON maps inside `localStorage` and reset on double-click events.
+- **Live Local Search Filtering:** Instant input matching listener attached to the search field that parses rows and updates table display via script without initiating standard page updates.
+- **Reactive Financial Accumulators:** Internal JavaScript calculations (`renderSummary`) that aggregate data values dynamically, compute totals, and update summary chips when items are removed or updated.
+- **Focus Modal Controller:** Clean dialog toggle logic adding `.open` classes onto modal elements, blocking underlying viewport interaction using backdrop masks, and handling escape keyboard close sequences.

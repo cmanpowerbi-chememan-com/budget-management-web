@@ -33,3 +33,6 @@ Thumbs.db
 
 # Unrelated projects nested here
 cman-prd-ingest-backend/
+
+# Large SAP export files (>100MB — exceeds GitHub limit)
+docs/*RATIMA*.xlsx

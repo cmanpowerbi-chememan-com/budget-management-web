@@ -30,4 +30,35 @@ GL Code (General Ledger): Represents the "What" (Natural Account / Expense Type)
 13.4 Press confirm button, email is send to manager to approved request.
 13.5 manager press approve button on email outlook. data will ingest to fabric sql db, ingest mode is upsert, update existing data by key, key is gl code, cost center, year (select on top part web). if key not matched, insert new row.
 so user can't select dropdown identical key, meaning user can't select gl code and cost center and same year เป็นครั้งที่สอง to fill data again เพราะ key จะ duplicate
-14 export special template page, To be confirmed, just create blank page ทิ้งไว้
+14 special template page,
+
+
+after press Edit GL Group & Thai, 
+1go to page GL Group & Thai Name Master
+2purpose is budget department can edit gl master themself
+3table composed of gl code, gl group, gl thai name
+4gl code dropdown&able to serach (data pulled from SAP)
+5gl group dropdown&able to serach & can create new group or edit existing group name
+6gl thai name, free text
+7after edit done, press save button, revise data showed on table as top row
+
+after press Edit Cost Center & Division,
+1go to page Cost Center & Division
+2purpose is user can edit Description & C level & Division & Department & Section themself
+3table composed of Cost Center & Description & C level & Division & Department & Section
+4Cost Center dropdown&able to serach (data pulled from SAP)
+5Description & C level & Division & Department & Section showed lasted version, user can edit each
+6after edit done, press save button, revise data showed on table as top row
+
+replace Cost Center & Division Master with Edit Orgcode & Cost center Master,
+1go to page Orgcode & Cost center
+2purpose is user can map Orgcode & Cost center themself
+3table composed of Orgcode(from sap) & orgnameth (pop up after select orgcode) & Cost center(free to fill, number or ENG พิมใหญ่ เท่านั้น)
+4Orgcode dropdown&able to serach (data pulled from SAP)
+5after edit done, press save button, revise data showed on table as top row
+6format page same as Edit GL Group & Thai Name Master
+
+
+
+
+

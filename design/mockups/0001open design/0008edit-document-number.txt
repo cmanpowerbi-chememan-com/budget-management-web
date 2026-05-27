@@ -1,0 +1,38 @@
+Prompt Description: 0008edit-document-number.html
+Page Title: Hide Document Number — Chememan
+
+Purpose: Admin CRUD interface for managing hidden SAP document numbers by fiscal period. Budget department officers use this page to hide specific document numbers from appearing in reports for designated fiscal years and months.
+
+Design System
+Brand: Chememan Design System v1.0
+Color Tokens: Forest (#00522C), Blue (#3C60A5), Mint (#20BB8D), Sky (#5ECDF6), Gold/Amber (#D4A556), Navy (#223562)
+Typography: FC Minimal / Inter primary, JetBrains Mono for data values
+Style: Glass-morphism (blur 24px, saturate 180%) with light/dark theme toggle
+Radii: Cards 24px, Buttons 16px, Nav 32px pill, Pills 9999px
+Layout Structure
+Fixed Navigation Bar — floating glass-pill navbar with logo, 5 nav links (Home, Export Template, Edit GL Group, Edit Orgcode & Cost center, Hide Document Number active), theme toggle
+Page Header — breadcrumb trail, gradient headline title, Thai subtitle explaining function
+Edit Form Panel — 4-column grid: searchable Document Number dropdown (from SAP), Fiscal Year input (2020-2099), Month input (1-12), pill-style Save button
+Data Table Panel — search filter, responsive table with columns: Document Number (mint), Fiscal Year (sky), Month (gold), Actions (edit/delete icon buttons)
+Success Modal — centered dialog with checkmark icon, title, message with highlighted span, confirmation button
+Interactive Components
+Searchable Dropdown: Custom implementation with keyboard-accessible filter, highlights, click-to-select. Mock SAP data with 14 document numbers (5400005042-5400005055)
+CRUD Operations: Add/update records to in-memory masterData array. Edit populates form, delete with confirmation prompt
+Table Filter: Real-time search across all columns
+Row Animation: New/updated rows receive 2-second highlight fade effect
+Data Schema
+masterData = [
+  { docnum: '5400005042', fiscalYear: 2026, month: 1 },
+  ...
+]
+Composite key: docnum + fiscalYear + month
+
+Thai Localization
+Form labels, buttons, and messages in Thai
+Subtitle: "ซ่อน Document Number ตาม Fiscal Year และ Month ที่กำหนด"
+Validation alerts, empty states, and modal messages in Thai
+Technical Notes
+Self-contained: inline CSS (~660 lines) + inline JS (~250 lines)
+Theme persists via localStorage
+Responsive breakpoints: 900px (2-col grid), 600px (1-col grid, nav-links hidden)
+Dark theme: hero-mesh gradient background; Light theme: soft green gradient

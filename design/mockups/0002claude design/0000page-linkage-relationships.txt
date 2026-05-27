@@ -1,0 +1,308 @@
+Prompt: Page Linkage & Relationships (0001, 0002, 0003, 0007, 0008)
+
+Site Map Overview
+0001index.html (Landing Page)
+    │
+    └── Admin / Master Data Pages
+            │
+            ├── 0002budget-export.html (OPEX Data Management — Main Table)
+            │
+            ├── 0003budget-gl-master.html (GL Group Master)
+            │
+            ├── 0007orgcode-costcenter.html (Orgcode & Cost Center Master)
+            │
+            └── 0008edit-document-number.html (Hide Document Number)
+
+Page Relationships & Data Flow
+| จาก       | ไป                              | ความสัมพันธ์                                                  |
+|-----------|--------------------------------|--------------------------------------------------------------|
+| 0001      | 0002                           | CTA "Start Planning" → เข้าหน้า OPEX Data Management         |
+| 0001      | 0002 / 0003 / 0007 / 0008      | Logo / Footer / Quick links → เข้าหน้า Admin หน้าใดก็ได้     |
+| 0002 ↔ 0003 ↔ 0007 ↔ 0008 | — | Top nav เดียวกัน เชื่อมถึงกันทั้งหมด (Group B)               |
+| 0002      | 0001                           | "Back to home" button → กลับ Landing                          |
+
+Master Data Dependencies
+┌─────────────────────────────────────────────────────────────────┐
+│                     0002budget-export.html                       │
+│                   (OPEX Data Management)                         │
+│                                                                  │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐   │
+│  │ Cost Center  │    │   GL Code    │    │  Document Number │   │
+│  │  Dropdown    │    │   Dropdown   │    │    (hidden)      │   │
+│  └──────┬───────┘    └──────┬───────┘    └────────┬─────────┘   │
+│         │                   │                     │              │
+└─────────│───────────────────│─────────────────────│──────────────┘
+          │                   │                     │
+          ▼                   ▼                     ▼
+    ┌─────────────┐    ┌─────────────┐    ┌───────────────────┐
+    │    0007     │    │    0003     │    │       0008        │
+    │  Orgcode &  │    │  GL Group   │    │  Hide Document    │
+    │ Cost Center │    │   Master    │    │     Number        │
+    │   Master    │    │             │    │                   │
+    └─────────────┘    └─────────────┘    └───────────────────┘
+
+Data Flow Details
+
+1. GL Code → GL Group (0003 → 0002)
+   0003 บันทึก Mapping: GL Code ↔ GL Group
+                       ↓
+   0002 เลือก GL Code → Auto-fill GL Group, GL Name
+   เมื่อผู้ใช้เลือก GL Code ใน 0002 ระบบจะดึง GL Group จาก Master ที่สร้างไว้ใน 0003
+
+2. Orgcode → Cost Center (0007 → 0002)
+   0007 บันทึก Mapping: Orgcode ↔ Cost Center
+                       ↓
+   0002 Cost Center dropdown ใช้ข้อมูลจาก SAP + Mapping
+   Cost Center ใน 0002 ใช้ข้อมูลที่ map ไว้ใน 0007
+
+3. Document Number Filter (0008 → 0002)
+   0008 บันทึก: Document Number + Fiscal Year + Month ที่ต้องซ่อน
+                       ↓
+   0002 ไม่แสดง Document ตามที่กำหนดไว้ (filter out)
+   Document Number ที่ถูก flag ใน 0008 จะไม่แสดงใน 0002 ตาม fiscal period
+
+Navigation Groups
+Group A: Public / Landing
+   0001
+   ผู้เยี่ยมชม / ผู้ใช้ทุกคน เริ่มต้นที่หน้านี้
+   Nav links: Home, Features, Reports, Dashboard
+   Outbound: ปุ่ม "Start Planning" → 0002
+
+Group B: Admin / Master Data
+   0002 ↔ 0003 ↔ 0007 ↔ 0008
+   แอดมินจัดการ Master Data และ OPEX Table
+   Nav links: Home, Export Template, Edit GL Group, Edit Orgcode & Cost center, Hide Document Number
+
+Shared Components
+| Component             | ใช้ใน Pages                  | หมายเหตุ                                          |
+|-----------------------|------------------------------|---------------------------------------------------|
+| Theme Toggle          | ทุกหน้า                       | Dark/Light mode, localStorage persist             |
+| Glass Nav             | ทุกหน้า                       | Sticky / floating navbar, blur backdrop           |
+| Tweaks Panel          | 0001, 0002                   | Color presets (Chememan / Ocean / Sunset…) + intensity |
+| Searchable Dropdown   | 0002, 0003, 0007, 0008       | Same pattern / styling                            |
+| Data Table            | 0002, 0003, 0007, 0008       | Search, CRUD actions, column resize               |
+| Success Modal         | 0002, 0003, 0007, 0008       | บันทึกสำเร็จ                                       |
+| Edit / Delete Buttons | 0002, 0003, 0007, 0008       | Icon buttons same style                            |
+| New Row Highlight     | 0003, 0007, 0008             | Animation on save                                 |
+| Glassy Title          | ทุกหน้า                       | Serif italic + gradient text-clip                 |
+| Back-to-home Button   | 0002, 0003, 0007, 0008       | Dark glassy pill, sweep + twinkle                 |
+
+User Roles & Access Pattern
+| Role         | Pages                          | Actions                                              |
+|--------------|--------------------------------|------------------------------------------------------|
+| Visitor      | 0001                           | View landing, อ่าน Features / Reports / Stats        |
+| Admin/Budget | 0002, 0003, 0007, 0008         | จัดการ Master Data, Import/Export, ซ่อน Document     |
+
+Status Color System (Shared)
+| Status              | Color                  | ใช้ใน        |
+|---------------------|------------------------|--------------|
+| ใช้จริง (SAP)        | 🟢 Green (#1FA378)     | 0002         |
+| งบ (Approved)       | 🔵 Blue (#3C60A5)      | 0002         |
+| งบ (Pending)        | ⚫ Black (#0B1A12)     | 0002         |
+| Special GL Group    | 🟡 Yellow (#FFF6D4 bg, #E8C75E edge) | 0002 |
+| Mapped / Linked     | 🟢 Mint accent         | 0003, 0007   |
+| Hidden / Filtered   | 🔴 Red (#C25A3F)       | 0008         |
+
+Color Theme Tokens (Shared :root — all 5 pages)
+| Token       | Light value          | Dark value           | Notes                                  |
+|-------------|----------------------|----------------------|----------------------------------------|
+| --c-forest  | #00522C              | (same)               | Primary accent (Chememan Forest)        |
+| --c-mint    | #1FA378              | (same)               | Secondary accent                        |
+| --c-gold    | #C9963D              | (same)               | Tertiary / special / highlight          |
+| --c-blue    | #3C60A5              | (same)               | Approved status                         |
+| --accent    | var(--c-forest)      | var(--c-mint) on 0001 | Active brand accent (driven by Tweaks) |
+| --ink       | #0B1A12              | #FFFFFF              | Primary text                            |
+| --ink-2     | #3F4D45              | #C2CEC7              | Secondary text                          |
+| --ink-3     | #7A867E              | #7A8780              | Tertiary text / labels                  |
+| --paper     | #F7F5EF              | #0B1A12              | Page background                          |
+| --paper-2   | #EFEBE1              | #0F2218              | Subdued background / table header        |
+| --surface   | #FFFFFF              | #142A1F              | Card / panel surface                     |
+| --line      | rgba(11,26,18,0.10)  | rgba(255,255,255,0.10)| Hairlines, borders                      |
+| --special-bg| #FFF6D4              | #2D2008              | Special GL Group highlight bg            |
+| --special-edge | #E8C75E           | #5C4915              | Special GL Group edge                    |
+
+Color Presets (Tweaks panel — 0001, 0002)
+| Preset      | Forest    | Mint      | Gold       |
+|-------------|-----------|-----------|------------|
+| Chememan    | #00522C   | #1FA378   | #C9963D    |
+| Ocean       | #0E4D6E   | #37B5C7   | #F2C661    |
+| Sunset      | #7B2D26   | #E07B4C   | #F2B752    |
+| Midnight    | #1B244B   | #5B73D9   | #A88AE6    |
+| Nature      | #2D5016   | #7BA428   | #B8A04A    |
+| Royal       | #3D1F6E   | #9B6DD9   | #D6B16A    |
+
+Plus an "Intensity" slider (50–150%) that scales the accent towards white (<100%) or black (>100%).
+Selection persists via localStorage keys: `cm.theme`, `cm.preset`, `cm.intensity` (shared across all pages).
+
+Typography (Shared)
+| Token   | Family                              | Weights         | Used for                                |
+|---------|-------------------------------------|------------------|------------------------------------------|
+| --serif | Instrument Serif (+ italic)         | 400 reg / 400 italic | Page titles, modal titles, hero headline, "glassy" gradient text |
+| --sans  | IBM Plex Sans + IBM Plex Sans Thai  | 400 / 500 / 600 / 700 | Body text, buttons, table cells, paragraphs |
+| --mono  | IBM Plex Mono                       | 400 / 500 / 600  | Page eyebrows, breadcrumbs, GL codes, table labels, badges, helper text |
+
+Typography rules:
+- Page titles use `clamp(44px–86px)`, serif, italic <em> for the emphasis word — colored with the `.glassy` text-clip gradient.
+- Eyebrows are mono uppercase 11px with a 18px accent rule before them ("Module 02 · Data Entry").
+- Codes (GL, Cost Center, document numbers) are ALWAYS mono with `font-variant-numeric: tabular-nums`.
+
+Animations (Shared library — used across all pages)
+| Name              | Where it's used                                              | Behaviour                                   |
+|-------------------|--------------------------------------------------------------|---------------------------------------------|
+| float             | 0001 hero mascot (350×350 video disk)                        | translateY ±12px, 5s ease-in-out infinite   |
+| particle-float    | 0001 hero (6 particles around mascot)                        | opacity fade + Y translate, 4.5s staggered  |
+| glassSweep        | All glassy buttons (export / import / add / save / submit / back / detail) | Diagonal highlight sweep, 3.6s loop |
+| twinkle           | All glassy buttons (sparkle dots overlay)                    | Opacity pulse, 2.4–2.6s loop                |
+| rainbowShift +    | 0002 "Detail" hover / Special GL Group chips                 | Rainbow gradient pan + glowing box-shadow   |
+|   rainbowGlow     |                                                              | 6s linear + 4s ease-in-out                  |
+| modalIn           | All modals (notice, confirm, detail)                         | translateY 20→0 + fade, 240ms ease          |
+| highlightNew      | 0003, 0007, 0008 — newly saved rows                          | Accent-tinted row fade-out, 2.2–2.4s        |
+| liquidFlow + melt1/2/3 | 0003 GL Group merged pill ("liquid goo")                | Gradient pan + 3 dripping blobs, 3.4–4.2s   |
+| spin              | 0002 submit button (loading state)                           | 360° rotate, 700ms linear infinite          |
+| addGlow (no-op)   | Legacy hook kept for compatibility                           | —                                           |
+
+Interaction patterns:
+- All buttons translate `Y(-1px)` to `Y(-2px)` on hover with shadow lift.
+- Theme transition: `background 240ms ease, color 240ms ease` on `body` so dark/light toggle fades smoothly.
+- Nav links use 160ms ease for hover background + color.
+- Dropdown lists open with `display:block` (no transition) — fast, intentional.
+- Particles + float on 0001 are decorative-only (aria-hidden); the rest of animations respect user interaction (paused on hover for `.btn-back`).
+
+Per-Page Anatomy
+
+0001index.html — Landing Page (Module: Public)
+   ├── Nav (sticky pill — Home, Features, Reports, Dashboard) + Open dashboard CTA (btn-dark)
+   ├── Hero
+   │     ├── Mascot disk (350×350 video — assets/landingpage_mascot.mp4) + 6 particles
+   │     ├── User pill ("JD · John Doe · Budget Department")
+   │     ├── Glassy headline: "Smart Budget Planning & Financial Control"
+   │     ├── Hero CTAs: "View Reports" (btn-primary mint) + "Start Planning" (btn-secondary gold → 0002)
+   │     └── Meta: version + cycle note
+   ├── Trust strip — 5 departments (Manufacturing, Sales & Distribution, Finance, HR & Admin, R&D)
+   ├── Features (4 cards)
+   │     ├── 01 Tracking — variance bars (over/under)
+   │     ├── 02 Forecasting — sparkline (5 quarters ahead)
+   │     ├── 03 Heatmap — 12-month × N-GL intensity grid
+   │     └── 04 Approvals — 3-step pipeline (Manager → Director → CFO)
+   ├── Stats — 4 KPIs (Total budget 2.4B฿, 42 cost centres, 32% reduction, 98% accuracy)
+   ├── CTA — "Ready to optimise your budget?" + Get Started / Read the docs
+   └── Footer — 4 columns (Brand, Product, Resources, Support) + social icons
+
+0002budget-export.html — OPEX Data Management (Module 02 · Data Entry)
+   ├── Nav: Home / [Export Template active] / Edit GL Group / Edit Org & Cost / Hide Document Number
+   ├── Page head: eyebrow + glassy title "OPEX data management." + Summary chips (SAP/Approved/Pending/Special)
+   ├── Toolbar: Search · FY select · Legend · Reset columns · Export Approved Budget · Import CSV · เพิ่ม Transaction
+   ├── Data table (3-row group per transaction — SAP / Approved / Pending)
+   │     ├── Shared columns: Cost Center, GL Code, GL Name, GL Group, Remark, C Level, Division, Department, Actions
+   │     ├── 12 month columns (current month highlighted with accent underline)
+   │     ├── Status indicator column (sap/approved/pending row tint)
+   │     ├── Searchable dropdowns: Cost Center, GL Code
+   │     ├── Column resize handles (col-resize) — saved widths
+   │     └── "ใส่รายละเอียดงบทำการ" Detail button (rainbow on hover) for Special GL Groups
+   ├── Detail modal (Special OPEX) — opens per transaction:
+   │     ├── Detail rows with per-group fields (see Special GL Groups table below)
+   │     ├── 12 monthly inputs + auto-total per row + grand total
+   │     └── Add row / Save / Cancel actions
+   ├── Submit row: "Submit to Database" (gold glassy)
+   ├── Notice modal — success / validation
+   └── Tweaks panel — 6 color presets + intensity slider
+
+0003budget-gl-master.html — GL Group Master (Module 03 · Master Data)
+   ├── Nav: Home / Export Template / [Edit GL Group active] / Edit Org & Cost / Hide Document Number
+   ├── Page head: eyebrow + glassy title "GL Group Master." + Summary chips (GL Codes / GL Groups / Unmapped / SAP total)
+   ├── Edit form panel
+   │     ├── GL Code dropdown (from SAP, searchable)
+   │     ├── GL Group dropdown (existing + "สร้างกลุ่มใหม่" inline create)
+   │     └── Save button (green glassy)
+   ├── Records table
+   │     ├── Sortable columns (GL Code asc/desc, GL Group asc/desc)
+   │     ├── GL Code pill (mono, accent), GL Group pill — same-group rows merge into "liquid goo" pill
+   │     ├── Mapping arrow with hover lift
+   │     └── Edit / Delete row actions
+   ├── Notice modal — "บันทึกสำเร็จ"
+   └── Confirm-delete modal — destructive red
+
+0007orgcode-costcenter.html — Orgcode & Cost Center Master (Module 07 · Master Data)
+   ├── Nav: Home / Export Template / Edit GL Group / [Edit Org & Cost active] / Hide Document Number
+   ├── Page head: eyebrow + glassy title "Cost center & Orgcode." + Summary chips (Cost Centers / Orgcodes / Unmapped / SAP total)
+   ├── Edit form panel
+   │     ├── Cost Center input (with new-CC create), Orgcode picker (from SAP)
+   │     └── Save button (green glassy)
+   ├── Records view — chip-card layout (not a row table!)
+   │     ├── View switch: "By Cost Center" ↔ "By Orgcode" (segmented toggle)
+   │     ├── Each card shows one CC (or one Orgcode) and the chip-tags it maps to
+   │     ├── Click chip-tag X → removeEdge (instant unlink)
+   │     ├── Edit (re-open form) / Delete-all (confirm modal) per card
+   │     └── Hover wires connected pairs (connected highlight state)
+   ├── Notice modal — "บันทึกสำเร็จ"
+   └── Confirm-delete modal
+
+0008edit-document-number.html — Hide Document Number (Module 08 · Document Hiding)
+   ├── Nav: Home / Export Template / Edit GL Group / Edit Org & Cost / [Hide Document Number active]
+   ├── Page head: eyebrow + glassy title "Hide Document Number." + Summary chips (Hidden Docs / Periods / etc.)
+   ├── Edit form panel
+   │     ├── Document Number picker (searchable, from SAP)
+   │     ├── Fiscal Year input (2020 – 2099, validated)
+   │     ├── Month input (1 – 12)
+   │     └── Save button (green glassy)
+   ├── Records view — chip-card layout (same pattern as 0007)
+   │     ├── View switch: "By Document" ↔ "By Period"
+   │     ├── Period chips formatted as YYYY-MM (e.g. "2026-05")
+   │     ├── Each card shows one Document (or Period) and the periods (or docs) attached
+   │     └── Edit / Delete-all per card + chip-tag X to unlink
+   ├── Notice modal — "บันทึกสำเร็จ" with validation messages
+   └── Confirm-delete modal
+
+Special GL Groups (referenced by 0002 Detail modal)
+| Group              | Detail fields                                                  |
+|--------------------|----------------------------------------------------------------|
+| Entertainment      | วัตถุประสงค์, ประเภทการรับรอง                                    |
+| Lease & Rental     | ประเภทรถ, ทะเบียนรถ, สถานที่ใช้งาน, กิจกรรม                       |
+| Professional Fee   | (vendor, contract no, scope — same pattern)                    |
+| Training           | (course, venue, attendees — same pattern)                      |
+These groups render a yellow-tinted ("special") row in 0002 and require the
+Detail modal to be filled before submit. Standard GL Groups (Communication,
+Electricity & Water, Office, Other Admin) don't need this.
+
+Button Inventory (cross-page)
+| Class            | Look                       | Used in                                  |
+|------------------|----------------------------|------------------------------------------|
+| btn-primary      | Mint/forest glassy, white  | 0001 (View Reports, Get Started)          |
+| btn-secondary    | Gold glassy                | 0001 (Start Planning → 0002)              |
+| btn-dark         | Black glassy → fade-deeper | 0001 (Open dashboard), 0002–0008 (Notice OK) |
+| btn-back         | Black glassy pill          | 0002–0008 nav (Back to home)              |
+| btn-export       | Green glassy               | 0002 (Export Approved Budget)             |
+| btn-import       | Green glassy               | 0002 (Import CSV)                          |
+| btn-add          | Gold glassy                | 0002 (เพิ่ม Transaction, modal Add row)   |
+| btn-save         | Green glassy               | 0003, 0007, 0008 (Save record)            |
+| btn-submit       | Gold glassy (XL)           | 0002 (Submit to Database)                  |
+| btn-detail       | Dark → rainbow on hover    | 0002 (ใส่รายละเอียดงบทำการ for special GL) |
+| btn-ghost        | Transparent                | 0002 (Reset columns), 0001 (Read the docs) |
+| action-btn       | 26–30px icon button        | All admin tables (edit / delete)          |
+
+Localization
+- All admin pages mix Thai labels (data + actions in Thai: "เพิ่ม", "บันทึก", "ยกเลิก", "ลบ")
+  with English/mono codes (GL Code, Cost Center, Fiscal Year — uppercase mono labels).
+- Module eyebrows are English ("Module 02 · Data Entry").
+- Page titles are mixed — Thai noun + English subtitle ("OPEX data management." / "Hide Document Number.").
+- 0001 (landing) is mostly English with a few Thai labels in details/microcopy.
+
+Modules numbering
+- The visible "Module NN" eyebrows in admin pages: 02, 03, 07, 08.
+- Numbers 01, 04, 05, 06 are not used anywhere — there is intentionally no
+  end-user planning flow in this build (everything happens in 0002).
+
+Persistence
+- Theme + preset + intensity persist in `localStorage` (keys: cm.theme, cm.preset, cm.intensity)
+  and apply across all 5 pages on next load.
+- Table data in 0002/0003/0007/0008 lives in in-memory JS state — values reset on reload
+  (CSV Import in 0002 is the only persistent ingestion path).
+
+Routing Rules (Plain English)
+1. From 0001, the primary CTA "Start Planning" leads to the admin OPEX table (0002).
+   Logo + footer links can also jump to any admin page directly.
+2. Inside the admin group (0002 / 0003 / 0007 / 0008) the top nav lists all four
+   pages so the user can move freely between them. Every page also exposes a
+   "Back to home" button that returns to 0001.
+3. There is no end-user planning flow in this build (0004 / 0005 / 0006 are not
+   used). All data entry happens inside the admin OPEX table (0002).

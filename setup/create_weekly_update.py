@@ -96,18 +96,18 @@ ROWS = [
      "Created skill/skill_weekly_update.md + upgraded create_weekly_update.py to merge SP tasks before upload",
      "Jakkarit", "6-May-26", "Done"),
     ("Development", "Project Folder Restructure",
-     "Create backend/ + frontend/ folder structure per architecture plan",
-     "Jakkarit", "13-May-26", "In Progress"),
+     "Master table editors use SWA + Functions + Vanilla JS. Main budget app (submit/approve/dashboard) will use FastAPI + React — more complex state and workflow",
+     "Jakkarit", "TBC", "In Progress"),
     ("Development", "FastAPI Backend",
-     "main.py + routers: /api/auth, /api/budget, /api/approval, /api/dashboard, /api/admin",
-     "Jakkarit", "13-May-26", "In Progress"),
+     "For main budget app: /api/auth, /api/budget, /api/approval, /api/dashboard, /api/admin",
+     "Jakkarit", "TBC", "In Progress"),
     ("Development", "React + Vite Frontend Scaffold",
-     "Pages: Login, Submit Budget (Template 1.1), Approve (VP/Staff/Manager), Dashboard, Admin",
-     "Jakkarit", "13-May-26", "In Progress"),
+     "For main budget app: Login, Submit Budget (Template 1.1), Approve (VP/Staff/Manager), Dashboard, Admin",
+     "Jakkarit", "TBC", "In Progress"),
 
     ("Data Pipeline", "SAP Gap Columns — Ticket to SAP Team",
-     "Add 4 cols to sap_t_gl_trans: Entry Date, Order, Object Class, Order Short Text. Ratima สร้าง SAP_T_GL_TRANS_1000_RATIMA_TEST1 เสร็จแล้ว — กำลังตรวจสอบข้อมูลในไฟล์",
-     "Ratima", "13-May-26", "In Progress"),
+     "4 cols added to sap_t_gl_trans: Entry Date, Order, Object Class, Order Short Text. Ratima verified data in SAP_T_GL_TRANS_1000_RATIMA_TEST1 ✅",
+     "Ratima", "26-May-26", "Done"),
     ("Data Pipeline", "SAP_M_INTERNAL_ORDER",
      "Cancelled — user not use",
      "Ratima", "13-May-26", "Done"),
@@ -128,8 +128,8 @@ ROWS = [
      "Jakkarit", "TBC", "In Progress"),
 
     ("Data Pipeline", "Cost Center -> Line Officer Link (Chatdanai API)",
-     "Need API: orgcode → cost_center mapping. API structure to request: empcode, primary_orgcode, primary_costcenter, all_positions[]",
-     "Chatdanai", "TBC", "In Progress"),
+     "orgcode → cost_center mapping received. Source: docs/09orgcode & costcenter.xlsx (729 rows, 183 orgcodes, 205 CCs) — many-to-many confirmed",
+     "Chatdanai", "26-May-26", "Done"),
 
     ("Data Pipeline", "OneLake Connection",
      "cman-fabric-write added to workspace, setup/connect_onelake.py created, connection verified",
@@ -156,8 +156,8 @@ ROWS = [
      "Jakkarit", "07-May-26", "Done"),
 
     ("Data Pipeline", "Bronze->Silver Data Consistency Check",
-     "Verify no data loss after transform: null counts per col, row counts match, date cols parse correctly, amount sign-flip correct",
-     "Jakkarit", "08-May-26", "In Progress"),
+     "Verified: sap_m_gl_account row count match, non-null counts match, distinct counts match, date cols parse correctly ✅",
+     "Jakkarit", "26-May-26", "Done"),
 
     ("Data Pipeline", "Cost Type Master — cost_type & cost_sub_type",
      "Added cost_type + cost_sub_type cols to docs/cost type master.xlsx: GL5→Indirect, GL6+10SC012000→Logistic/Admin, GL6+10CM*/10SC*(≠10SC012000)→SGA/Selling, GL6 others→SGA/Admin",
@@ -186,6 +186,18 @@ ROWS = [
     ("Development", "Module 1 — Import/Export Approved Budget",
      "Design step: budget dept export approved_budget_{yyyy}.csv (15 cols), import with validation, overwrite-by-year, near-realtime table — not yet built",
      "Jakkarit", "TBC", "In Progress"),
+
+    ("Development", "0003-gl-group Master Table Editor",
+     "GL Group CRUD on Azure SWA — GL codes from Fabric Lakehouse gold_sap_m_gl_account_group_name (430 SAP codes), sort/filter/export CSV, event delegation CSP compliance, thread-local DB connections. Deployed + tested ✅",
+     "Jakkarit", "26-May-26", "Done"),
+
+    ("Data Pipeline", "silver_sap_m_gl_account (GL Account Master)",
+     "bronze_sap_m_gl_account → silver via sc() helper, ERDAT cast with to_date(c,'yyyyMMdd'), consistency check done",
+     "Jakkarit", "26-May-26", "Done"),
+
+    ("Data Pipeline", "gold_sap_m_gl_account_group_name",
+     "gold_sap_m_gl_account (filter chart_of_accounts=1000, starts 5/6, distinct) → left join gl_group_mapping + gl_group_dim → 430 rows (137 matched, 293 unmatched SAP codes)",
+     "Jakkarit", "26-May-26", "Done"),
 ]
 
 

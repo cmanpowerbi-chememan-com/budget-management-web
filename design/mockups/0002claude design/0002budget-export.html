@@ -1,0 +1,1627 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPEX Data Management — Chememan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── Theme tokens (Ocean 60% by default; same system as 0001index) ─── */
+  :root{
+    --c-forest:#00522C;
+    --c-mint:#1FA378;
+    --c-gold:#C9963D;
+    --c-blue:#3C60A5;
+    --accent: var(--c-forest);
+    --accent-2: var(--c-mint);
+    --accent-3: var(--c-gold);
+
+    --ink:#0B1A12;
+    --ink-2:#3F4D45;
+    --ink-3:#7A867E;
+    --paper:#F7F5EF;
+    --paper-2:#EFEBE1;
+    --surface:#FFFFFF;
+    --line:rgba(11,26,18,0.10);
+    --line-2:rgba(11,26,18,0.06);
+
+    --status-sap: #1FA378;
+    --status-approved: #3C60A5;
+    --status-pending: var(--ink);
+    --special-bg: #FFF6D4;
+    --special-edge: #E8C75E;
+
+    --serif:'Instrument Serif', Georgia, serif;
+    --sans:'IBM Plex Sans','IBM Plex Sans Thai',-apple-system,system-ui,sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  [data-theme="dark"]{
+    --ink:#FFFFFF;
+    --ink-2:#C2CEC7;
+    --ink-3:#7A8780;
+    --paper:#0B1A12;
+    --paper-2:#0F2218;
+    --surface:#142A1F;
+    --line:rgba(255,255,255,0.10);
+    --line-2:rgba(255,255,255,0.06);
+    --special-bg:#2D2008;
+    --special-edge:#5C4915;
+    --status-sap:#37D6A2;
+    --status-approved:#7AA0E0;
+    --status-pending:#FFFFFF;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);background:var(--paper);color:var(--ink);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    transition:background 240ms ease, color 240ms ease;
+  }
+  a{color:inherit;text-decoration:none}
+  button,input,select,textarea{font-family:inherit;color:inherit}
+  .wrap{max-width:1640px;margin:0 auto;padding:0 28px}
+
+  /* ─── Nav (matches 0001) ─── */
+  .nav{
+    position:sticky;top:0;z-index:100;
+    background:color-mix(in oklab, var(--paper) 80%, transparent);
+    backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    border-bottom:1px solid var(--line-2);
+  }
+  .nav-inner{display:flex;align-items:center;gap:18px;height:64px;max-width:1640px;margin:0 auto;padding:0 28px}
+  .nav-logo{display:flex;align-items:center;gap:12px}
+  .nav-mark{
+    width:32px;height:32px;border-radius:8px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:grid;place-items:center;flex-shrink:0;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10);
+  }
+  .nav-mark svg{width:16px;height:16px;color:#fff}
+  .nav-logo-text{display:flex;flex-direction:column;line-height:1.05;gap:1px}
+  .nav-logo-text .name{font-weight:600;font-size:14.5px;letter-spacing:-0.005em}
+  .nav-logo-text .sub{font-size:10.5px;color:var(--ink-3);font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
+  .nav-links{display:flex;gap:4px;list-style:none;margin-left:18px}
+  .nav-links a{
+    display:inline-block;color:var(--ink-2);font-size:13.5px;font-weight:500;
+    padding:7px 13px;border-radius:7px;transition:all 160ms ease;letter-spacing:-0.005em;
+  }
+  .nav-links a:hover{color:var(--ink);background:var(--paper-2)}
+  .nav-links a.active{color:var(--accent);background:color-mix(in oklab, var(--accent) 10%, transparent)}
+  .nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .icon-btn{
+    width:36px;height:36px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:grid;place-items:center;
+    transition:all 160ms ease;color:var(--ink-2);
+  }
+  .icon-btn:hover{border-color:var(--ink);color:var(--ink);transform:translateY(-1px)}
+  .icon-btn svg{width:15px;height:15px}
+  .sun-icon{display:none}
+  [data-theme="dark"] .sun-icon{display:block}
+  [data-theme="dark"] .moon-icon{display:none}
+
+  /* ─── Buttons ─── */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:10px 16px;border-radius:9px;font-size:13px;font-weight:600;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    cursor:pointer;transition:all 160ms ease;letter-spacing:-0.005em;white-space:nowrap;
+  }
+  .btn:hover{transform:translateY(-1px);border-color:var(--ink)}
+  .btn svg{width:14px;height:14px}
+  .btn-dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .btn-dark:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* ─── Glassy + twinkling toolbar buttons (export / import / add) ─── */
+  .btn-export, .btn-import, .btn-add{
+    position:relative;overflow:hidden;isolation:isolate;
+    border:1px solid rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.28),
+      0 6px 14px -6px rgba(0,0,0,0.55);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  /* Glassy reflection sweep */
+  .btn-export::before, .btn-import::before, .btn-add::before{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(115deg,
+      transparent 0%, transparent 38%,
+      rgba(255,255,255,0.55) 50%,
+      transparent 62%, transparent 100%);
+    transform: translateX(-110%);
+    animation: glassSweep 3.6s ease-in-out infinite;
+    pointer-events:none; z-index:1;
+  }
+  /* Sparkles */
+  .btn-export::after, .btn-import::after, .btn-add::after{
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:
+      radial-gradient(circle 1.5px at 12% 30%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 68% 22%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 38% 78%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 86% 68%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 22% 60%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 92% 40%, rgba(255,255,255,0.95) 0%, transparent 70%);
+    animation: twinkle 2.6s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-export > *, .btn-import > *, .btn-add > * { position:relative; z-index:3 }
+  /* Stagger the sweep so they're not in sync */
+  .btn-import::before{ animation-delay: -1.2s }
+  .btn-add::before{ animation-delay: -2.4s }
+  .btn-import::after{ animation-delay: -0.8s }
+  .btn-add::after{ animation-delay: -1.6s }
+
+  .btn-export, .btn-import{
+    color:#063026;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #2BC18E 0%, #1FA378 55%, #14855E 100%);
+  }
+  .btn-export:hover, .btn-import:hover{
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 10px 20px -8px rgba(0,0,0,0.65);
+    border-color: rgba(255,255,255,0.30);
+  }
+
+  .btn-add{
+    color:#3D2A05;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.05) 45%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #FFE49A 0%, #E5B14B 45%, #B57F1C 100%);
+    border-color: rgba(255,220,120,0.55);
+  }
+  .btn-add:hover{
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.50),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 10px 20px -8px rgba(0,0,0,0.55);
+    border-color: rgba(255,235,160,0.65);
+  }
+  /* Remove the pulsing addGlow ring — glassy sweep replaces it */
+  @keyframes addGlow { /* no-op kept for back-compat */
+    0%, 100% { box-shadow: none }
+  }
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:7px}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+  .btn-ghost:hover{color:var(--ink);background:transparent}
+  .btn-detail, .btn-back{
+    position:relative;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 50%, rgba(0,0,0,0.0) 100%),
+      linear-gradient(180deg, #1A1A24 0%, #050508 100%);
+    color:#F5F5FA;
+    border:1px solid rgba(255,255,255,0.12);
+    padding:6px 11px;font-size:11.5px;font-weight:600;border-radius:6px;
+    display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;
+    transition: transform 200ms ease, border-color 200ms ease, color 200ms ease;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.40),
+      0 6px 14px -6px rgba(0,0,0,0.55);
+    overflow:hidden; isolation:isolate;
+    background-size: 220% 100%;
+    text-decoration:none;
+  }
+  /* Nav-sized variant */
+  .btn-back{padding:9px 16px;font-size:13px;border-radius:9px;gap:7px}
+  .btn-back svg{width:13px;height:13px}
+  /* Sweeping highlight (glassy reflection) */
+  .btn-detail::before, .btn-back::before{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(115deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(255,255,255,0.22) 50%,
+      transparent 62%,
+      transparent 100%);
+    transform: translateX(-110%);
+    animation: glassSweep 3.6s ease-in-out infinite;
+    pointer-events:none; z-index:1;
+  }
+  /* Twinkling sparkles (radial dots that pulse) */
+  .btn-detail::after, .btn-back::after{
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:
+      radial-gradient(circle 1px at 18% 38%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 72% 28%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1.5px at 42% 70%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 88% 62%, rgba(255,255,255,0.95) 0%, transparent 80%),
+      radial-gradient(circle 1px at 28% 78%, rgba(255,255,255,0.95) 0%, transparent 80%);
+    animation: twinkle 2.4s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-detail > svg, .btn-detail > *,
+  .btn-back > svg, .btn-back > * { position:relative; z-index:3 }
+  /* Stagger Back-button so they're not in sync */
+  .btn-back::before{ animation-delay: -1.8s }
+  .btn-back::after{ animation-delay: -1.2s }
+
+  .btn-detail:hover{
+    background:linear-gradient(
+      90deg,
+      #FF6B6B 0%,
+      #FFA94D 16%,
+      #FFD93D 33%,
+      #51CF66 50%,
+      #4DABF7 66%,
+      #845EF7 83%,
+      #F783AC 100%
+    );
+    background-size: 220% 100%;
+    color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.35);
+    border-color: rgba(255,255,255,0.25);
+    animation: rainbowShift 6s linear infinite, rainbowGlow 4s ease-in-out infinite;
+    transform: translateY(-1px);
+  }
+  .btn-detail:hover::before, .btn-detail:hover::after{ display:none }
+
+  /* Back-to-home: fade to deeper black on hover (no rainbow) */
+  .btn-back{
+    transition: transform 260ms ease, background 320ms ease, border-color 260ms ease, box-shadow 260ms ease, color 260ms ease;
+  }
+  .btn-back:hover{
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0) 60%),
+      linear-gradient(180deg, #050508 0%, #000000 100%);
+    color:#E8E8F0;
+    border-color: rgba(255,255,255,0.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -1px 0 rgba(0,0,0,0.55),
+      0 10px 22px -8px rgba(0,0,0,0.75);
+    transform: translateY(-1px);
+  }
+  .btn-back:hover::before, .btn-back:hover::after{ animation-play-state: paused; opacity: 0.55 }
+  .btn-detail svg{width:11px;height:11px}
+  @keyframes glassSweep {
+    0%   { transform: translateX(-110%) }
+    55%  { transform: translateX(110%) }
+    100% { transform: translateX(110%) }
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity:0.20 }
+    25%      { opacity:0.95 }
+    50%      { opacity:0.35 }
+    75%      { opacity:0.85 }
+  }
+  .btn-detail:hover{
+    background:linear-gradient(
+      90deg,
+      #FF6B6B 0%,
+      #FFA94D 16%,
+      #FFD93D 33%,
+      #51CF66 50%,
+      #4DABF7 66%,
+      #845EF7 83%,
+      #F783AC 100%
+    );
+    background-size: 220% 100%;
+    color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.35);
+    border-color: rgba(255,255,255,0.25);
+    animation: rainbowShift 6s linear infinite, rainbowGlow 4s ease-in-out infinite;
+    transform: translateY(-1px);
+  }
+  .btn-detail:hover::before, .btn-detail:hover::after{ display:none }
+  .btn-detail svg{width:11px;height:11px}
+
+  /* ─── Page header ─── */
+  .page-head{padding:32px 0 22px}
+  .breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);margin-bottom:14px;font-family:var(--mono);letter-spacing:-0.005em}
+  .breadcrumb a{color:var(--accent);transition:color 160ms}
+  .breadcrumb a:hover{color:var(--ink)}
+  .breadcrumb .sep{opacity:0.5}
+  .page-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .page-title{
+    font-family:var(--serif);font-size:clamp(48px, 7vw, 86px);line-height:0.98;letter-spacing:-0.025em;font-weight:400;
+    color:var(--accent);
+  }
+  .page-title em{font-style:italic;color:var(--accent);opacity:0.85}
+
+  /* ─── Glassy text effect ─── */
+  .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 35%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 80%, #ffffff) 28%,
+        var(--accent) 52%,
+        color-mix(in oklab, var(--accent) 85%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.55))
+      drop-shadow(0 2px 8px rgba(11,26,18,0.10));
+    position:relative;isolation:isolate;
+  }
+  .glassy em{
+    background:inherit;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:brightness(0.85) saturate(1.15);
+  }
+  [data-theme="dark"] .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 30%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 60%, #ffffff) 32%,
+        var(--accent) 60%,
+        color-mix(in oklab, var(--accent) 70%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.25))
+      drop-shadow(0 2px 10px rgba(0,0,0,0.45));
+  }
+  .page-subtitle{font-size:14.5px;color:var(--ink-2);margin-top:10px;max-width:62ch;line-height:1.55}
+  .page-eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:8px;margin-bottom:8px;
+  }
+  .page-eyebrow::before{content:'';width:18px;height:1px;background:var(--accent)}
+
+  /* Summary chips */
+  .summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .summary-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 14px;background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;
+    font-size:12.5px;font-weight:500;color:var(--ink-2);
+  }
+  .summary-chip .v{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .summary-chip .lbl{color:var(--ink-3);font-size:11px;font-family:var(--mono);letter-spacing:0.04em;text-transform:uppercase}
+  .summary-chip.sap{border-color:color-mix(in oklab, var(--status-sap) 50%, var(--line))}
+  .summary-chip.approved{border-color:color-mix(in oklab, var(--status-approved) 50%, var(--line))}
+  .summary-chip.pending{border-color:color-mix(in oklab, var(--ink) 30%, var(--line))}
+  .summary-chip.special{border-color:var(--special-edge);background:color-mix(in oklab, var(--special-bg) 60%, var(--surface))}
+
+  /* ─── Toolbar ─── */
+  .toolbar{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:14px 16px;background:var(--surface);
+    border:1px solid var(--line);border-radius:12px;
+    margin-bottom:18px;
+  }
+  .search-box{
+    display:flex;align-items:center;gap:8px;padding:8px 12px;
+    background:var(--paper);border:1px solid var(--line);border-radius:8px;
+    min-width:280px;flex:1;max-width:380px;
+  }
+  .search-box:focus-within{border-color:var(--accent);background:var(--surface)}
+  .search-box svg{width:14px;height:14px;color:var(--ink-3);flex-shrink:0}
+  .search-box input{flex:1;border:none;background:transparent;outline:none;font-size:13.5px}
+  .search-box input::placeholder{color:var(--ink-3)}
+  .year-select{
+    padding:9px 30px 9px 12px;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    font-size:13px;font-weight:500;cursor:pointer;
+    appearance:none;-webkit-appearance:none;min-width:120px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  .year-select:hover{border-color:var(--ink)}
+
+  /* Status legend */
+  .legend{display:flex;align-items:center;gap:14px;padding:0 4px;font-size:11.5px;color:var(--ink-3);font-family:var(--mono);letter-spacing:0.02em}
+  .legend-item{display:inline-flex;align-items:center;gap:6px}
+  .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .legend-dot.sap{background:var(--status-sap)}
+  .legend-dot.approved{background:var(--status-approved)}
+  .legend-dot.pending{background:var(--status-pending)}
+  .toolbar-spacer{flex:1}
+  .toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  /* ─── Table ─── */
+  .table-panel{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;
+    box-shadow:0 1px 0 rgba(11,26,18,0.02), 0 12px 24px -16px rgba(11,26,18,0.10);
+  }
+  .table-wrap{overflow:auto;max-height:calc(100vh - 380px);min-height:480px}
+  .data-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:1900px}
+  .data-table thead th{
+    background:var(--paper-2);font-weight:600;color:var(--ink-2);
+    font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;
+    padding:11px 10px;text-align:left;white-space:nowrap;
+    position:sticky;top:0;z-index:10;
+    border-bottom:1px solid var(--line);
+  }
+  /* Column resize handle */
+  .col-resize{
+    position:absolute; top:0; bottom:0; right:-3px; width:7px;
+    cursor:col-resize; z-index:20; user-select:none;
+    background:transparent;
+    transition: background 140ms ease;
+  }
+  .col-resize::after{
+    content:''; position:absolute; right:3px; top:25%; bottom:25%;
+    width:1px; background:var(--line); transition: background 140ms ease, width 140ms ease;
+  }
+  .col-resize:hover::after{ background:var(--accent); width:2px; right:2.5px }
+  .col-resize.is-dragging::after{ background:var(--accent); width:2px; right:2.5px }
+  body.col-dragging{ cursor:col-resize !important; user-select:none !important }
+  body.col-dragging *{ cursor:col-resize !important }
+  .data-table thead th.month-col,
+  .data-table thead th.action-col{text-align:right}
+  .data-table thead th.month-col.now{color:var(--accent);position:relative}
+  .data-table thead th.month-col.now::after{content:'';position:absolute;left:50%;bottom:-1px;transform:translateX(-50%);width:20px;height:2px;background:var(--accent);border-radius:2px}
+  .data-table thead th.idx-col{width:48px;text-align:center}
+  /* GL Group column matches other columns now — the chip inside does the talking */
+
+  .data-table td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle;font-variant-numeric:tabular-nums}
+  .data-table tr.txn-row.first td{border-top:2px solid var(--line)}
+  .data-table tr.txn-row.last td{border-bottom:2px solid var(--line)}
+
+  /* Status indicator (first column) */
+  .status-cell{
+    display:flex;align-items:center;gap:8px;font-family:var(--mono);
+    font-size:10.5px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
+    color:var(--ink-3);
+  }
+  .status-cell.sap{color:var(--status-sap)}
+  .status-cell.approved{color:var(--status-approved)}
+  .status-cell.pending{color:var(--status-pending)}
+  .status-bar{width:3px;height:18px;border-radius:2px;flex-shrink:0;background:currentColor}
+
+  .idx-cell{
+    font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-3);
+    text-align:center;
+  }
+  .auto-cell{
+    color:var(--ink-2);font-size:12.5px;padding:4px 0;
+  }
+  .auto-cell.special-gl-group{
+    background: linear-gradient(
+      90deg,
+      #FF6B6B 0%,
+      #FFA94D 16%,
+      #FFD93D 33%,
+      #51CF66 50%,
+      #4DABF7 66%,
+      #845EF7 83%,
+      #F783AC 100%
+    );
+    background-size: 220% 100%;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    padding: 5px 11px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.25);
+    font-weight: 700; font-size: 11.5px;
+    display: inline-block; letter-spacing:-0.005em;
+    animation: rainbowShift 6s linear infinite, rainbowGlow 4s ease-in-out infinite;
+    position: relative;
+  }
+  @keyframes rainbowShift {
+    0%   { background-position: 0% 50% }
+    100% { background-position: 220% 50% }
+  }
+  @keyframes rainbowGlow {
+    0%, 100% { box-shadow: 0 0 14px rgba(255,107,107,0.55), 0 0 28px rgba(255,107,107,0.25), 0 1px 0 rgba(255,255,255,0.20) inset; }
+    20%      { box-shadow: 0 0 14px rgba(255,217,61,0.55), 0 0 28px rgba(255,217,61,0.25), 0 1px 0 rgba(255,255,255,0.20) inset; }
+    40%      { box-shadow: 0 0 14px rgba(81,207,102,0.55), 0 0 28px rgba(81,207,102,0.25), 0 1px 0 rgba(255,255,255,0.20) inset; }
+    60%      { box-shadow: 0 0 14px rgba(77,171,247,0.55), 0 0 28px rgba(77,171,247,0.25), 0 1px 0 rgba(255,255,255,0.20) inset; }
+    80%      { box-shadow: 0 0 14px rgba(132,94,247,0.55), 0 0 28px rgba(132,94,247,0.25), 0 1px 0 rgba(255,255,255,0.20) inset; }
+  }
+
+  /* Month value cells */
+  .month-cell{text-align:right;padding:6px 10px}
+  .month-value{
+    font-family:var(--mono);font-size:11.5px;font-weight:500;
+    padding:4px 8px;border-radius:5px;display:inline-block;min-width:60px;text-align:right;
+  }
+  .month-value.sap{color:var(--status-sap);background:color-mix(in oklab, var(--status-sap) 10%, transparent)}
+  .month-value.approved-input{
+    border:1px solid color-mix(in oklab, var(--status-approved) 35%, var(--line));
+    background:color-mix(in oklab, var(--status-approved) 6%, var(--surface));
+    color:var(--status-approved);
+    outline:none;width:80px;text-align:right;
+  }
+  .month-value.approved-input:focus{border-color:var(--status-approved);background:var(--surface)}
+  .month-value.pending-input{
+    border:1px solid var(--line);
+    background:var(--paper);
+    color:var(--ink);font-weight:600;
+    outline:none;width:80px;text-align:right;
+  }
+  .month-value.pending-input:focus{border-color:var(--ink);background:var(--surface)}
+  .month-value.pending-readonly{
+    color:var(--ink);background:var(--paper-2);font-weight:600;
+  }
+  .month-value.zero{color:var(--ink-3);background:transparent;font-weight:400;opacity:0.6}
+
+  /* Dropdown cell */
+  .dropdown-cell{position:relative;min-width:120px}
+  .dropdown-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);
+    background:var(--surface);border-radius:6px;font-size:12px;
+    font-family:var(--mono);outline:none;transition:all 160ms;
+  }
+  .dropdown-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .dropdown-list{
+    position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:260px;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 16px 32px -10px rgba(11,26,18,0.18);
+    max-height:240px;overflow-y:auto;display:none;z-index:50;padding:4px;
+  }
+  .dropdown-cell.open .dropdown-list{display:block}
+  .dropdown-option{
+    padding:7px 10px;border-radius:5px;font-size:12px;cursor:pointer;
+    transition:all 120ms;color:var(--ink);
+  }
+  .dropdown-option:hover{background:color-mix(in oklab, var(--accent) 10%, transparent);color:var(--accent)}
+  .dropdown-option .code{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--ink)}
+  .dropdown-option:hover .code{color:var(--accent)}
+  .dropdown-option .name{color:var(--ink-3);font-size:11px;margin-top:1px}
+
+  .text-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);
+    background:var(--surface);border-radius:6px;font-size:12px;
+    outline:none;transition:all 160ms;
+  }
+  .text-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+
+  /* Row tinting */
+  .data-table tr[data-status="sap"] td:not(.shared){background:color-mix(in oklab, var(--status-sap) 3%, var(--surface))}
+  .data-table tr[data-status="approved"] td:not(.shared){background:color-mix(in oklab, var(--status-approved) 3%, var(--surface))}
+  .data-table tr[data-status="pending"] td:not(.shared){background:color-mix(in oklab, var(--ink) 2%, var(--surface))}
+
+  /* Actions column */
+  .action-cell{text-align:right;padding-right:14px}
+  .action-btn{
+    width:26px;height:26px;border-radius:6px;border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:inline-grid;place-items:center;
+    color:var(--ink-3);transition:all 160ms;
+  }
+  .action-btn:hover{color:#C25A3F;border-color:#C25A3F}
+  .action-btn svg{width:12px;height:12px}
+
+  /* ─── Modal ─── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(11,26,18,0.55);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    z-index:500;display:none;align-items:flex-start;justify-content:center;
+    padding:40px 20px;overflow-y:auto;
+  }
+  .modal-backdrop.open{display:flex}
+  .modal{
+    background:var(--paper);color:var(--ink);
+    border-radius:14px;border:1px solid var(--line);
+    min-width:1400px;max-width:95vw;width:100%;
+    box-shadow:0 32px 80px -20px rgba(11,26,18,0.30);
+    overflow:hidden;animation:modalIn 240ms ease;
+  }
+  @keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .modal-head{
+    padding:22px 28px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:18px;
+    background:var(--surface);
+  }
+  .modal-head .modal-title{font-family:var(--serif);font-size:30px;line-height:1.1;letter-spacing:-0.015em;font-weight:400}
+  .modal-head .modal-title em{font-style:italic;color:var(--accent)}
+  .modal-head .modal-subtitle{margin-top:6px;font-size:13px;color:var(--ink-3);font-family:var(--mono)}
+  .modal-close{
+    width:36px;height:36px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:grid;place-items:center;color:var(--ink-2);
+  }
+  .modal-close:hover{border-color:var(--ink);color:var(--ink)}
+  .modal-body{padding:22px 28px;max-height:65vh;overflow:auto;background:var(--paper)}
+  .modal-foot{
+    padding:18px 28px;border-top:1px solid var(--line);background:var(--surface);
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .modal-foot-info{font-size:12.5px;color:var(--ink-3);font-family:var(--mono);letter-spacing:0.02em}
+  .modal-foot-info b{color:var(--ink);font-weight:600}
+  .modal-actions{display:flex;gap:10px}
+
+  .detail-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .detail-table th{
+    background:var(--paper-2);font-weight:600;color:var(--ink-2);font-size:10.5px;
+    letter-spacing:0.05em;text-transform:uppercase;padding:10px 8px;text-align:left;
+    border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:5;
+  }
+  .detail-table th.month-col,.detail-table th.num-col{text-align:right}
+  .detail-table th.special-col{background:var(--special-bg);color:#7B5C1F}
+  .detail-table td{padding:6px 8px;border-bottom:1px solid var(--line-2);font-variant-numeric:tabular-nums}
+  .detail-table .detail-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);background:var(--surface);
+    border-radius:6px;font-size:12px;outline:none;transition:all 160ms;
+  }
+  .detail-table .detail-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .detail-table .month-input{width:78px;text-align:right;font-family:var(--mono);font-weight:500}
+  .detail-table .special-col-cell{background:color-mix(in oklab, var(--special-bg) 30%, var(--surface))}
+  .detail-table tr.total-row td{
+    background:var(--paper-2);font-weight:700;color:var(--ink);
+    border-top:2px solid var(--ink);font-size:12.5px;
+  }
+  .detail-table tr.total-row td.label{font-family:var(--sans);text-transform:uppercase;font-size:11px;letter-spacing:0.05em}
+  .detail-table tr.total-row td.grand{color:var(--accent);font-family:var(--mono);font-size:14px}
+
+  /* Notification modal */
+  .notice-modal{min-width:auto;width:auto;max-width:480px}
+  .notice-modal .modal-head{border-bottom:none;padding:24px 28px 8px}
+  .notice-modal .modal-body{padding:0 28px 16px}
+  .notice-modal .modal-foot{justify-content:flex-end}
+
+  /* ─── Responsive ─── */
+  @media (max-width:900px){
+    .nav-links{display:none}
+    .page-title{font-size:36px}
+    .toolbar{padding:12px}
+    .search-box{min-width:auto;width:100%;max-width:none}
+    .modal{min-width:auto}
+    .modal-head,.modal-body,.modal-foot{padding-left:18px;padding-right:18px}
+  }
+
+  /* ─── Submit row + glassy gold submit button ─── */
+  .submit-row{
+    display:flex;justify-content:flex-end;align-items:center;gap:14px;
+    margin-top:18px;padding:0 4px;flex-wrap:wrap;
+  }
+  .submit-row .hint{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em}
+  .btn-submit{
+    position:relative;
+    display:inline-flex;align-items:center;gap:10px;
+    padding:13px 26px;border-radius:11px;
+    font-size:14px;font-weight:700;letter-spacing:-0.005em;
+    color:#3D2A05;cursor:pointer;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.05) 45%, rgba(0,0,0,0) 100%),
+      linear-gradient(180deg, #FFE49A 0%, #E5B14B 45%, #B57F1C 100%);
+    border:1px solid rgba(255,220,120,0.65);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -1px 0 rgba(0,0,0,0.20),
+      0 8px 20px -6px rgba(212,165,86,0.55),
+      0 0 24px -2px rgba(255,220,120,0.45);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    overflow:hidden; isolation:isolate;
+  }
+  .btn-submit::before{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.55) 50%, transparent 62%, transparent 100%);
+    transform: translateX(-110%);
+    animation: glassSweep 3.4s ease-in-out infinite;
+    pointer-events:none; z-index:1;
+  }
+  .btn-submit::after{
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:
+      radial-gradient(circle 1.5px at 12% 30%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 68% 22%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1.5px at 36% 78%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 84% 68%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 22% 60%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(circle 1px   at 92% 38%, rgba(255,255,255,0.95) 0%, transparent 70%);
+    animation: twinkle 2.6s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  .btn-submit > * { position:relative; z-index:3 }
+  .btn-submit:hover{
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.65),
+      inset 0 -1px 0 rgba(0,0,0,0.25),
+      0 14px 30px -6px rgba(212,165,86,0.70),
+      0 0 40px -2px rgba(255,220,120,0.70);
+    border-color: rgba(255,235,160,0.80);
+  }
+  .btn-submit:active{ transform: translateY(0) }
+  .btn-submit svg{width:15px;height:15px;color:#3D2A05}
+  .btn-submit.is-loading{ pointer-events:none; opacity:0.85 }
+  .btn-submit.is-loading .spinner{
+    width:13px;height:13px;border-radius:50%;
+    border:2px solid rgba(61,42,5,0.30);
+    border-top-color:#3D2A05;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg) } }
+
+  /* Hidden file input */
+  .hidden-file{display:none}
+</style>
+</head>
+<body>
+
+<!-- ─── NAV ─── -->
+<nav class="nav" data-screen-label="Nav">
+  <div class="nav-inner">
+    <a href="0001index.html" class="nav-logo">
+      <span class="nav-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V8l8-5 8 5v11"/><path d="M9 19v-7h6v7"/></svg>
+      </span>
+      <span class="nav-logo-text">
+        <span class="name">Chememan</span>
+        <span class="sub">Budget Management</span>
+      </span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="0001index.html">Home</a></li>
+      <li><a href="#" class="active">Export Template</a></li>
+      <li><a href="0003budget-gl-master.html">Edit GL Group</a></li>
+      <li><a href="#">Edit Org &amp; Cost center</a></li>
+      <li><a href="#">Hide Document Number</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <button class="icon-btn" onclick="toggleTweaks()" title="Theme tweaks" aria-label="Theme tweaks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <a href="0001index.html" class="btn-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        <span>Back to home</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── PAGE BODY ─── -->
+<main class="wrap">
+  <header class="page-head" data-screen-label="Page header">
+    <div class="breadcrumb">
+      <a href="0001index.html">Home</a>
+      <span class="sep">/</span>
+      <span>Budget Planning</span>
+      <span class="sep">/</span>
+      <span style="color:var(--ink-2)">OPEX Data Management</span>
+    </div>
+    <div class="page-title-row">
+      <div>
+        <div class="page-eyebrow">Module 02 · Data Entry</div>
+        <h1 class="page-title glassy">OPEX <em>data management.</em></h1>
+        <p class="page-subtitle">จัดการข้อมูลงบประมาณทำการรายเดือน — ใช้จริง (SAP), งบที่อนุมัติแล้ว, และงบที่รอพิจารณา ต่อ Cost Centre / GL Code / ปีงบประมาณ</p>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="toolbar" data-screen-label="Toolbar">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="globalSearch" placeholder="ค้นหา cost center, GL code, GL name, remark…" oninput="renderTable()" />
+    </div>
+    <select class="year-select" id="yearFilter" onchange="renderTable()">
+      <option value="all">All years</option>
+      <option value="2024">FY 2024</option>
+      <option value="2025" selected>FY 2025</option>
+      <option value="2026">FY 2026</option>
+    </select>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot sap"></span>SAP · ใช้จริง</span>
+      <span class="legend-item"><span class="legend-dot approved"></span>Approved · งบอนุมัติ</span>
+      <span class="legend-item"><span class="legend-dot pending"></span>Pending · งบรออนุมัติ</span>
+    </div>
+
+    <button class="btn btn-sm btn-ghost" onclick="resetColWidths()" title="Reset all column widths" style="margin-left:4px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Reset columns
+    </button>
+
+    <div class="toolbar-spacer"></div>
+
+    <div class="toolbar-actions">
+      <button class="btn btn-export" onclick="exportApprovedCSV()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        Export Approved Budget
+      </button>
+      <button class="btn btn-import" onclick="document.getElementById('importInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+        Import Approved Budget
+      </button>
+      <input id="importInput" type="file" class="hidden-file" accept=".csv" onchange="importCSV(this)" />
+      <button class="btn btn-add" onclick="addNewTransaction()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        เพิ่ม Transaction
+      </button>
+    </div>
+  </div>
+
+  <!-- Table panel -->
+  <div class="table-panel" data-screen-label="Table">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="idx-col">#</th>
+            <th style="min-width:96px">Status</th>
+            <th style="min-width:140px">Cost Center</th>
+            <th style="min-width:140px">GL Code</th>
+            <th style="min-width:160px">GL Name</th>
+            <th style="min-width:160px">GL Group</th>
+            <th style="min-width:140px">Remark</th>
+            <th style="min-width:80px">C Level</th>
+            <th style="min-width:110px">Division</th>
+            <th style="min-width:120px">Department</th>
+            <th class="month-col">ม.ค.</th>
+            <th class="month-col">ก.พ.</th>
+            <th class="month-col">มี.ค.</th>
+            <th class="month-col">เม.ย.</th>
+            <th class="month-col now">พ.ค.</th>
+            <th class="month-col">มิ.ย.</th>
+            <th class="month-col">ก.ค.</th>
+            <th class="month-col">ส.ค.</th>
+            <th class="month-col">ก.ย.</th>
+            <th class="month-col">ต.ค.</th>
+            <th class="month-col">พ.ย.</th>
+            <th class="month-col">ธ.ค.</th>
+            <th class="action-col" style="min-width:60px"></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:18px;padding:0 4px;letter-spacing:0.02em">
+    Note: SAP rows are read-only baselines. Approved &amp; Pending rows are editable.
+    Special GL groups (highlighted yellow) require detail entries via the modal.
+  </p>
+
+  <!-- Submit row -->
+  <div class="submit-row">
+    <span class="hint" id="submitHint">All changes saved locally · ready to send to database</span>
+    <button class="btn-submit" id="submitBtn" onclick="submitToDB()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+      <span>Submit to Database</span>
+    </button>
+  </div>
+</main>
+
+<!-- ─── DETAIL MODAL ─── -->
+<div class="modal-backdrop" id="detailModal" onclick="if(event.target.id==='detailModal') closeDetailModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title" id="detailModalTitle">รายละเอียดงบทำการ</h2>
+        <p class="modal-subtitle" id="detailModalSubtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeDetailModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailModalBody"></div>
+    <div class="modal-foot">
+      <div class="modal-foot-info" id="detailModalFootInfo">—</div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeDetailModal()">ยกเลิก</button>
+        <button class="btn btn-add" onclick="addDetailRow()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          เพิ่มรายการ
+        </button>
+        <button class="btn btn-export" onclick="saveDetailData()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          บันทึก
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── NOTICE MODAL ─── -->
+<div class="modal-backdrop" id="noticeModal" onclick="if(event.target.id==='noticeModal') closeNotice()">
+  <div class="modal notice-modal">
+    <div class="modal-head" style="padding-bottom:14px">
+      <h2 class="modal-title" id="noticeTitle" style="font-size:24px">Notice</h2>
+      <button class="modal-close" onclick="closeNotice()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="noticeBody" style="font-size:14px;color:var(--ink-2);line-height:1.55"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-dark" onclick="closeNotice()">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TWEAKS PANEL (compact, same options as 0001) ─── -->
+<div class="modal-backdrop" id="tweaksBackdrop" onclick="if(event.target.id==='tweaksBackdrop') toggleTweaks()" style="align-items:center">
+  <div class="modal notice-modal" style="max-width:380px;min-width:0;width:auto">
+    <div class="modal-head" style="padding-bottom:14px">
+      <h2 class="modal-title" style="font-size:22px">Theme tweaks</h2>
+      <button class="modal-close" onclick="toggleTweaks()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding-top:0">
+      <label style="font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;font-weight:600;display:block;margin-bottom:8px">Color preset</label>
+      <div id="presetGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px"></div>
+
+      <label style="font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;font-weight:600;display:block;margin-bottom:8px">Intensity</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="intensitySlider" min="50" max="150" value="60" oninput="applyColorsWithIntensity()" style="flex:1" />
+        <span id="intensityVal" style="font-family:var(--mono);font-size:12px;font-weight:600;min-width:36px;text-align:right">60%</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="resetTheme()">Reset to Ocean 60%</button>
+      <button class="btn btn-dark" onclick="toggleTweaks()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ════════════════════════════════════════════
+     THEME · same system as 0001index.html
+     ════════════════════════════════════════════ */
+  const PRESETS = {
+    chememan: { name:'Chememan',  forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
+    ocean:    { name:'Ocean',     forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
+    sunset:   { name:'Sunset',    forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
+    midnight: { name:'Midnight',  forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
+    nature:   { name:'Nature',    forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
+    royal:    { name:'Royal',     forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+  };
+  let activePreset = 'ocean';
+  let activeTheme  = 'light';
+  let intensity    = 60;
+
+  function toggleTheme(){ setTheme(activeTheme === 'light' ? 'dark' : 'light'); }
+  function setTheme(t){
+    activeTheme = t;
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('cm.theme', t); } catch(e){}
+  }
+  function applyPreset(name){
+    activePreset = name;
+    document.querySelectorAll('.tw-preset').forEach(el => el.classList.toggle('on', el.dataset.preset === name));
+    applyColorsWithIntensity();
+    try { localStorage.setItem('cm.preset', name); } catch(e){}
+  }
+  function applyColorsWithIntensity(){
+    intensity = +document.getElementById('intensitySlider').value;
+    document.getElementById('intensityVal').textContent = intensity + '%';
+    try { localStorage.setItem('cm.intensity', String(intensity)); } catch(e){}
+    const p = PRESETS[activePreset];
+    const adjust = (hex, factor) => {
+      const h = hex.replace('#','');
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
+      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+    };
+    const f = intensity/100;
+    document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
+    document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
+    document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
+  }
+  function resetTheme(){
+    activePreset = 'ocean';
+    document.getElementById('intensitySlider').value = 60;
+    setTheme('light');
+    applyPreset('ocean');
+    try { localStorage.removeItem('cm.theme'); localStorage.removeItem('cm.preset'); localStorage.removeItem('cm.intensity'); } catch(e){}
+  }
+  function toggleTweaks(){ document.getElementById('tweaksBackdrop').classList.toggle('open'); }
+  (function buildPresets(){
+    const grid = document.getElementById('presetGrid');
+    Object.entries(PRESETS).forEach(([key, p]) => {
+      const btn = document.createElement('button');
+      btn.className = 'tw-preset' + (key === activePreset ? ' on' : '');
+      btn.dataset.preset = key;
+      btn.style.cssText = 'background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:6px;transition:all 160ms';
+      btn.onmouseenter = () => btn.style.borderColor = 'var(--ink)';
+      btn.onmouseleave = () => btn.style.borderColor = key === activePreset ? 'var(--accent)' : 'var(--line)';
+      btn.onclick = () => { applyPreset(key); document.querySelectorAll('#presetGrid button').forEach(b => b.style.borderColor = b.dataset.preset === key ? 'var(--accent)' : 'var(--line)'); };
+      btn.innerHTML = `<div style="display:flex;gap:3px">
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.forest}"></span>
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.mint}"></span>
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.gold}"></span>
+      </div><div style="font-size:11px;font-weight:600">${p.name}</div>`;
+      if (key === activePreset) btn.style.borderColor = 'var(--accent)';
+      grid.appendChild(btn);
+    });
+  })();
+
+  /* ════════════════════════════════════════════
+     DATA
+     ════════════════════════════════════════════ */
+  const specialGLGroups = {
+    'Entertainment':              ['วัตถุประสงค์', 'ประเภทการรับรอง'],
+    'Lease & Rental':             ['ประเภทรถ', 'ทะเบียนรถ', 'สถานที่ใช้งาน', 'กิจกรรม'],
+    'Professional & Legal Fee':   ['Project', 'รายละเอียด'],
+    'Public Relation & Donation': ['วัตถุประสงค์', 'รายละเอียด'],
+    'Training & Seminar':         ['วัตถุประสงค์']
+  };
+
+  const costCenters = [
+    { code:'10PB010000', clevel:'C-1', division:'Operations', department:'IT General' },
+    { code:'10PB020000', clevel:'C-2', division:'Operations', department:'IT Dev' },
+    { code:'10PB030000', clevel:'C-1', division:'Finance',    department:'Accounting' },
+    { code:'KKAW01',     clevel:'C-3', division:'Sales',      department:'North Region' },
+    { code:'KKAW02',     clevel:'C-2', division:'Sales',      department:'South Region' },
+    { code:'KKAW03',     clevel:'C-1', division:'HR',         department:'Training' },
+    { code:'MKT001',     clevel:'C-2', division:'Marketing',  department:'PR & Events' },
+    { code:'LEG001',     clevel:'C-1', division:'Legal',      department:'Compliance' }
+  ];
+
+  const glCodes = [
+    { code:'5200016353', group:'ค่าใช้จ่ายสำนักงาน',   name:'ค่าวัสดุสำนักงาน' },
+    { code:'5200016354', group:'ค่าเดินทาง',           name:'ค่าเดินทางในประเทศ' },
+    { code:'5200016355', group:'ค่าบำรุงรักษา',         name:'ค่าบำรุงรักษาเครื่องจักร' },
+    { code:'5200016360', group:'Entertainment',              name:'ค่ารับรองลูกค้า' },
+    { code:'5200016361', group:'Lease & Rental',             name:'ค่าเช่ารถยนต์' },
+    { code:'5200016362', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษากฎหมาย' },
+    { code:'5200016363', group:'Public Relation & Donation', name:'ค่าประชาสัมพันธ์และบริจาค' },
+    { code:'5200016364', group:'Training & Seminar',         name:'ค่าฝึกอบรมและสัมมนา' }
+  ];
+
+  let transactions = [
+    { id:1, costCenter:'10PB010000', glCode:'5200016353', remark:'Office Supplies Q1-Q2', year:2025,
+      sap:     [45000,42000,48000,43000,47000,0,0,0,0,0,0,0],
+      approved:[50000,50000,50000,50000,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,55000,55000,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:2, costCenter:'10PB020000', glCode:'5200016354', remark:'Travel Expense', year:2025,
+      sap:     [12000,15000,18000,14000,16000,18000,0,0,0,0,0,0],
+      approved:[15000,15000,20000,15000,18000,20000,22000,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,18000,18000,18000,0,0],
+      pendingDetails:[] },
+    { id:3, costCenter:'KKAW01', glCode:'5200016355', remark:'Machine Maintenance', year:2025,
+      sap:     [80000,75000,82000,0,0,0,0,0,0,0,0,0],
+      approved:[85000,85000,85000,85000,90000,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,90000,90000,90000,90000,0,0,0],
+      pendingDetails:[] },
+    { id:4, costCenter:'MKT001', glCode:'5200016360', remark:'Customer Entertainment', year:2025,
+      sap:     [25000,30000,28000,35000,40000,0,0,0,0,0,0,0],
+      approved:[30000,30000,30000,40000,45000,50000,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'วัตถุประสงค์':'รับรองลูกค้า VIP กลุ่ม A', 'ประเภทการรับรอง':'อาหาร/เครื่องดื่ม',  months:[0,0,0,0,0,0,25000,25000,0,0,0,0] },
+        { id:2, 'วัตถุประสงค์':'งานเลี้ยงต้อนรับ Partner', 'ประเภทการรับรอง':'กิจกรรมบันเทิง',      months:[0,0,0,0,0,0,0,30000,30000,0,0,0] }
+      ] },
+    { id:5, costCenter:'10PB030000', glCode:'5200016361', remark:'Car Lease Q1', year:2025,
+      sap:     [35000,35000,35000,35000,35000,35000,0,0,0,0,0,0],
+      approved:[35000,35000,35000,35000,35000,35000,35000,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'ประเภทรถ':'Toyota Camry','ทะเบียนรถ':'กข-1234','สถานที่ใช้งาน':'สำนักงานใหญ่','กิจกรรม':'ผู้บริหาร', months:[0,0,0,0,0,0,0,35000,35000,35000,0,0] }
+      ] },
+    { id:6, costCenter:'LEG001', glCode:'5200016362', remark:'Legal Consulting', year:2025,
+      sap:     [100000,0,50000,0,75000,0,0,0,0,0,0,0],
+      approved:[100000,100000,100000,100000,100000,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Project':'M&A Advisory Phase 2','รายละเอียด':'ที่ปรึกษากฎหมายควบรวมกิจการ', months:[0,0,0,0,0,120000,0,120000,0,0,0,0] }
+      ] },
+    { id:7, costCenter:'MKT001', glCode:'5200016363', remark:'CSR Activities', year:2025,
+      sap:     [50000,0,75000,0,60000,0,0,0,0,0,0,0],
+      approved:[50000,50000,100000,50000,75000,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'วัตถุประสงค์':'กิจกรรม CSR ประจำปี','รายละเอียด':'บริจาคโรงเรียน',     months:[0,0,0,0,0,50000,50000,0,0,0,0,0] },
+        { id:2, 'วัตถุประสงค์':'โครงการปลูกป่า','รายละเอียด':'ปลูกต้นไม้ 1000 ต้น',     months:[0,0,0,0,0,0,25000,25000,0,0,0,0] }
+      ] },
+    { id:8, costCenter:'KKAW03', glCode:'5200016364', remark:'Staff Training', year:2025,
+      sap:     [20000,25000,30000,0,45000,0,0,0,0,0,0,0],
+      approved:[25000,25000,35000,35000,50000,55000,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'วัตถุประสงค์':'อบรม Leadership Development', months:[0,0,0,0,0,0,55000,55000,0,0,0,0] }
+      ] }
+  ];
+  let transactionIdCounter = 9;
+  let detailIdCounter = 20;
+  let currentEditingTxnId = null;
+
+  /* ════════════════════════════════════════════
+     HELPERS
+     ════════════════════════════════════════════ */
+  const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const CURRENT_MONTH_INDEX = 4;
+
+  const isSpecialGL = (group) => specialGLGroups.hasOwnProperty(group);
+  const fmt = (n) => (n || n === 0) ? Number(n).toLocaleString() : '';
+  const fmtCell = (n) => (n === 0 || n == null) ? '<span class="zero">—</span>' : fmt(n);
+
+  function calculatePendingSum(txn){
+    if (!txn.pendingDetails || !txn.pendingDetails.length) return txn.pending;
+    const sum = new Array(12).fill(0);
+    txn.pendingDetails.forEach(d => d.months.forEach((v,i) => sum[i] += (v||0)));
+    return sum;
+  }
+
+  function sumArr(a){ return a.reduce((s,v) => s + (v||0), 0); }
+
+  /* ════════════════════════════════════════════
+     RENDER
+     ════════════════════════════════════════════ */
+  function renderSummary(){
+    const yr = document.getElementById('yearFilter').value;
+    const filtered = transactions.filter(t => yr === 'all' || String(t.year) === yr);
+    let approved = 0, pending = 0, specialCount = 0;
+    filtered.forEach(t => {
+      approved += sumArr(t.approved);
+      pending  += sumArr(calculatePendingSum(t));
+      const gl = glCodes.find(g => g.code === t.glCode);
+      if (gl && isSpecialGL(gl.group)) specialCount++;
+    });
+    const m = (n) => (n/1_000_000).toFixed(2);
+    document.getElementById('summary').innerHTML = `
+      <span class="summary-chip"><span class="lbl">Txns</span><span class="v">${filtered.length}</span></span>
+      <span class="summary-chip special"><span class="lbl">Special GL</span><span class="v">${specialCount}</span></span>
+      <span class="summary-chip approved"><span class="lbl">Approved</span><span class="v">฿${m(approved)}M</span></span>
+      <span class="summary-chip pending"><span class="lbl">Pending</span><span class="v">฿${m(pending)}M</span></span>
+    `;
+  }
+
+  function renderTable(){
+    const tbody = document.getElementById('tableBody');
+    const search = document.getElementById('globalSearch').value.toLowerCase();
+    const yr = document.getElementById('yearFilter').value;
+
+    const filtered = transactions.filter(txn => {
+      const cc = costCenters.find(c => c.code === txn.costCenter) || {};
+      const gl = glCodes.find(g => g.code === txn.glCode) || {};
+      const s = [txn.costCenter, gl.group, txn.glCode, gl.name, txn.remark, cc.clevel, cc.division, cc.department].join(' ').toLowerCase();
+      const matchYear = yr === 'all' || String(txn.year) === yr;
+      return (!search || s.includes(search)) && matchYear;
+    });
+
+    let html = '';
+    filtered.forEach((txn, idx) => {
+      const cc = costCenters.find(c => c.code === txn.costCenter) || {};
+      const gl = glCodes.find(g => g.code === txn.glCode) || {};
+      const isSpec = isSpecialGL(gl.group);
+      const pendingSum = isSpec ? calculatePendingSum(txn) : txn.pending;
+
+      // Shared cells (rowspan)
+      const sharedCells = `
+        <td class="shared" rowspan="3" style="text-align:center;background:var(--surface)"><div class="idx-cell">${idx + 1}</div></td>
+      `;
+
+      // ── Row 1 · SAP (read-only) ──
+      html += `<tr class="txn-row first" data-status="sap" data-txn-id="${txn.id}">`;
+      html += sharedCells;
+      html += `<td><div class="status-cell sap"><span class="status-bar"></span>SAP · ใช้จริง</div></td>`;
+      // Cost Center dropdown
+      html += `<td rowspan="3" class="shared">
+        <div class="dropdown-cell" id="cc_${txn.id}">
+          <input type="text" class="dropdown-input" value="${txn.costCenter}"
+                 onfocus="openDropdown('cc_${txn.id}')"
+                 oninput="filterDropdown('cc_${txn.id}', this.value)"
+                 onblur="setTimeout(() => closeDropdown('cc_${txn.id}'), 200)">
+          <div class="dropdown-list">
+            ${costCenters.map(c => `<div class="dropdown-option" onclick="selectCostCenter(${txn.id},'${c.code}')">
+              <div class="code">${c.code}</div><div class="name">${c.division} · ${c.department}</div></div>`).join('')}
+          </div>
+        </div>
+      </td>`;
+      // GL Code dropdown
+      html += `<td rowspan="3" class="shared">
+        <div class="dropdown-cell" id="gl_${txn.id}">
+          <input type="text" class="dropdown-input" value="${txn.glCode}"
+                 onfocus="openDropdown('gl_${txn.id}')"
+                 oninput="filterDropdown('gl_${txn.id}', this.value)"
+                 onblur="setTimeout(() => closeDropdown('gl_${txn.id}'), 200)">
+          <div class="dropdown-list">
+            ${glCodes.map(g => `<div class="dropdown-option" onclick="selectGLCode(${txn.id},'${g.code}')">
+              <div class="code">${g.code}</div><div class="name">${g.name}</div></div>`).join('')}
+          </div>
+        </div>
+      </td>`;
+      // GL Name (auto)
+      html += `<td rowspan="3" class="shared"><div class="auto-cell">${gl.name || '—'}</div></td>`;
+      // GL Group (only chip is rainbow; cell itself plain)
+      html += `<td rowspan="3" class="shared">
+        <div class="auto-cell ${isSpec ? 'special-gl-group' : ''}">${gl.group || '—'}</div>
+      </td>`;
+      // Remark (editable)
+      html += `<td rowspan="3" class="shared">
+        <input type="text" class="text-input" value="${txn.remark || ''}" onchange="updateRemark(${txn.id}, this.value)">
+      </td>`;
+      // C Level / Division / Department (auto)
+      html += `<td rowspan="3" class="shared"><div class="auto-cell">${cc.clevel || '—'}</div></td>`;
+      html += `<td rowspan="3" class="shared"><div class="auto-cell">${cc.division || '—'}</div></td>`;
+      // Department: for Special GL, the pending row needs a button — span only first 2 rows
+      html += `<td rowspan="${isSpec ? '2' : '3'}" class="shared"><div class="auto-cell">${cc.department || '—'}</div></td>`;
+      // Months: SAP read-only
+      txn.sap.forEach(v => {
+        html += `<td class="month-cell"><span class="month-value sap">${fmtCell(v)}</span></td>`;
+      });
+      html += `<td rowspan="3" class="shared action-cell">
+        <button class="action-btn" onclick="removeTransaction(${txn.id})" title="Remove transaction">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </td>`;
+      html += `</tr>`;
+
+      // ── Row 2 · Approved (editable) ──
+      html += `<tr class="txn-row" data-status="approved" data-txn-id="${txn.id}">`;
+      html += `<td><div class="status-cell approved"><span class="status-bar"></span>Approved · งบ</div></td>`;
+      txn.approved.forEach((v,i) => {
+        html += `<td class="month-cell">
+          <input type="text" class="month-value approved-input" value="${v || ''}" data-i="${i}"
+                 onchange="updateMonth(${txn.id},'approved',${i}, this.value)"
+                 oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+        </td>`;
+      });
+      html += `</tr>`;
+
+      // ── Row 3 · Pending ──
+      html += `<tr class="txn-row last ${isSpec ? 'special' : ''}" data-status="pending" data-txn-id="${txn.id}">`;
+      html += `<td><div class="status-cell pending"><span class="status-bar"></span>Pending · รออนุมัติ</div></td>`;
+      if (isSpec) {
+        // Department col is taken by the detail button
+        html += `<td class="shared" style="text-align:right">
+          <button class="btn-detail" onclick="openDetailModal(${txn.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            ใส่รายละเอียดงบทำการ
+          </button>
+        </td>`;
+        // Months read-only sum
+        pendingSum.forEach(v => {
+          html += `<td class="month-cell"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
+        });
+      } else {
+        // Normal GL · editable
+        txn.pending.forEach((v,i) => {
+          html += `<td class="month-cell">
+            <input type="text" class="month-value pending-input" value="${v || ''}" data-i="${i}"
+                   onchange="updateMonth(${txn.id},'pending',${i}, this.value)"
+                   oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+          </td>`;
+        });
+      }
+      html += `</tr>`;
+    });
+
+    if (!filtered.length) {
+      html = `<tr><td colspan="23" style="padding:60px;text-align:center;color:var(--ink-3);font-size:14px">
+        <div style="font-family:var(--serif);font-size:24px;color:var(--ink-2);margin-bottom:8px">No transactions match.</div>
+        <div>Try clearing the search or changing the year filter.</div>
+      </td></tr>`;
+    }
+    tbody.innerHTML = html;
+    renderSummary();
+  }
+
+  /* ════════════════════════════════════════════
+     DROPDOWNS
+     ════════════════════════════════════════════ */
+  function openDropdown(id){ document.getElementById(id).classList.add('open'); }
+  function closeDropdown(id){ document.getElementById(id).classList.remove('open'); }
+  function filterDropdown(id, query){
+    const cell = document.getElementById(id);
+    cell.classList.add('open');
+    const q = (query || '').toLowerCase();
+    cell.querySelectorAll('.dropdown-option').forEach(opt => {
+      opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+
+  function selectCostCenter(txnId, code){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) { t.costCenter = code; renderTable(); }
+  }
+  function selectGLCode(txnId, code){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) {
+      t.glCode = code;
+      const gl = glCodes.find(g => g.code === code);
+      if (gl && isSpecialGL(gl.group) && (!t.pendingDetails || !t.pendingDetails.length)){
+        t.pendingDetails = [];
+      }
+      renderTable();
+    }
+  }
+  function updateRemark(txnId, v){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) t.remark = v;
+  }
+  function updateMonth(txnId, kind, i, v){
+    const t = transactions.find(x => x.id === txnId);
+    if (!t) return;
+    const n = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
+    t[kind][i] = n;
+    renderSummary();
+  }
+
+  /* ════════════════════════════════════════════
+     TRANSACTIONS
+     ════════════════════════════════════════════ */
+  function addNewTransaction(){
+    transactions.unshift({
+      id: transactionIdCounter++,
+      costCenter: costCenters[0].code,
+      glCode: glCodes[0].code,
+      remark: '',
+      year: +document.getElementById('yearFilter').value === 'all' ? 2025 : (+document.getElementById('yearFilter').value || 2025),
+      sap: new Array(12).fill(0),
+      approved: new Array(12).fill(0),
+      pending: new Array(12).fill(0),
+      pendingDetails: []
+    });
+    renderTable();
+    document.querySelector('.table-wrap').scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function removeTransaction(txnId){
+    if (!confirm('Remove this transaction?')) return;
+    transactions = transactions.filter(t => t.id !== txnId);
+    renderTable();
+  }
+
+  /* ════════════════════════════════════════════
+     DETAIL MODAL
+     ════════════════════════════════════════════ */
+  function openDetailModal(txnId){
+    currentEditingTxnId = txnId;
+    const txn = transactions.find(t => t.id === txnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+    const cols = specialGLGroups[gl.group] || [];
+
+    document.getElementById('detailModalTitle').innerHTML = `รายละเอียด <em>${gl.group}</em>`;
+    document.getElementById('detailModalSubtitle').textContent = `${txn.costCenter} · ${gl.code} · ${gl.name}`;
+
+    if (!txn.pendingDetails) txn.pendingDetails = [];
+    renderDetailTable();
+    document.getElementById('detailModal').classList.add('open');
+  }
+  function closeDetailModal(){
+    document.getElementById('detailModal').classList.remove('open');
+    currentEditingTxnId = null;
+  }
+  function renderDetailTable(){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+    const cols = specialGLGroups[gl.group] || [];
+
+    let html = `<table class="detail-table">
+      <thead><tr>
+        <th class="num-col" style="width:50px">#</th>
+        ${cols.map(c => `<th class="special-col">${c}</th>`).join('')}
+        ${MONTHS_TH.map(m => `<th class="month-col">${m}</th>`).join('')}
+        <th class="month-col" style="background:color-mix(in oklab,var(--accent) 10%, var(--paper-2));color:var(--accent)">รวม</th>
+        <th style="width:50px"></th>
+      </tr></thead><tbody>`;
+
+    txn.pendingDetails.forEach((d, idx) => {
+      const total = sumArr(d.months);
+      html += `<tr>
+        <td class="num-col"><div class="idx-cell">${idx + 1}</div></td>
+        ${cols.map(c => `<td class="special-col-cell"><input class="detail-input" value="${d[c] || ''}" onchange="updateDetailField(${d.id},'${c.replace(/'/g,"\\'")}',this.value)"></td>`).join('')}
+        ${d.months.map((v,i) => `<td class="month-cell"><input class="detail-input month-input" value="${v || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateDetailMonth(${d.id},${i}, this.value)"></td>`).join('')}
+        <td class="month-cell"><span class="month-value pending-readonly" id="rowTotal_${d.id}">${fmtCell(total)}</span></td>
+        <td><button class="action-btn" onclick="removeDetailRow(${d.id})" title="Remove">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button></td>
+      </tr>`;
+    });
+
+    // Total row
+    const colSum = new Array(12).fill(0);
+    txn.pendingDetails.forEach(d => d.months.forEach((v,i) => colSum[i] += (v||0)));
+    const grand = sumArr(colSum);
+    html += `<tr class="total-row">
+      <td class="num-col label" colspan="${1 + cols.length}">Monthly total</td>
+      ${colSum.map(v => `<td class="month-cell"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`).join('')}
+      <td class="month-cell grand">${grand.toLocaleString()}</td>
+      <td></td>
+    </tr></tbody></table>`;
+
+    document.getElementById('detailModalBody').innerHTML = html;
+    document.getElementById('detailModalFootInfo').innerHTML = `Rows: <b>${txn.pendingDetails.length}</b> · Year total: <b>฿${grand.toLocaleString()}</b>`;
+  }
+  function updateDetailField(detailId, key, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn.pendingDetails.find(x => x.id === detailId);
+    if (d) d[key] = v;
+  }
+  function updateDetailMonth(detailId, i, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn.pendingDetails.find(x => x.id === detailId);
+    if (!d) return;
+    d.months[i] = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
+    renderDetailTable();
+  }
+  function addDetailRow(){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+    const cols = specialGLGroups[gl.group] || [];
+    const row = { id: detailIdCounter++, months: new Array(12).fill(0) };
+    cols.forEach(c => row[c] = '');
+    txn.pendingDetails.push(row);
+    renderDetailTable();
+  }
+  function removeDetailRow(detailId){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    txn.pendingDetails = txn.pendingDetails.filter(d => d.id !== detailId);
+    renderDetailTable();
+  }
+  function saveDetailData(){
+    closeDetailModal();
+    renderTable();
+    showNotice('บันทึกสำเร็จ', 'บันทึกรายละเอียดงบทำการเรียบร้อยแล้ว — ค่ารายเดือนของแถว Pending จะอัปเดตจากผลรวมในรายละเอียด');
+  }
+
+  /* ════════════════════════════════════════════
+     NOTICE MODAL
+     ════════════════════════════════════════════ */
+  function showNotice(title, body){
+    document.getElementById('noticeTitle').textContent = title;
+    document.getElementById('noticeBody').textContent = body;
+    document.getElementById('noticeModal').classList.add('open');
+  }
+  function closeNotice(){
+    document.getElementById('noticeModal').classList.remove('open');
+  }
+
+  /* ════════════════════════════════════════════
+     CSV IMPORT / EXPORT
+     ════════════════════════════════════════════ */
+  function exportApprovedCSV(){
+    const headers = ['cost_center','gl_code','gl_name','gl_group','remark','c_level','division','department','jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec','year'];
+    const rows = [headers.join(',')];
+    const yr = document.getElementById('yearFilter').value;
+    transactions.filter(t => yr === 'all' || String(t.year) === yr).forEach(t => {
+      const cc = costCenters.find(c => c.code === t.costCenter) || {};
+      const gl = glCodes.find(g => g.code === t.glCode) || {};
+      const esc = (v) => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+      };
+      const row = [
+        t.costCenter, t.glCode, gl.name, gl.group, t.remark,
+        cc.clevel, cc.division, cc.department,
+        ...t.approved, t.year
+      ].map(esc);
+      rows.push(row.join(','));
+    });
+    const blob = new Blob(['\uFEFF' + rows.join('\n')], { type:'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `approved_budget_${yr === 'all' ? 'all' : yr}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    showNotice('Export สำเร็จ', `ส่งออกไฟล์ approved_budget_${yr === 'all' ? 'all' : yr}.csv เรียบร้อยแล้ว — ${rows.length - 1} transactions`);
+  }
+  function importCSV(input){
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = String(e.target.result).replace(/^\uFEFF/, '');
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) { showNotice('Import ไม่สำเร็จ','ไฟล์ CSV ไม่มีข้อมูล'); return; }
+      const rows = lines.slice(1);
+      let imported = 0;
+      rows.forEach(line => {
+        const cells = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
+        if (!cells[0]) return;
+        const t = transactions.find(x => x.costCenter === cells[0] && x.glCode === cells[1]);
+        if (t) {
+          t.remark = cells[4] || t.remark;
+          for (let i = 0; i < 12; i++){
+            t.approved[i] = parseInt(cells[8 + i], 10) || 0;
+          }
+          imported++;
+        }
+      });
+      renderTable();
+      input.value = '';
+      showNotice('Import สำเร็จ', `อัปเดตข้อมูล Approved สำหรับ ${imported} transactions เรียบร้อยแล้ว`);
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  /* ════════════════════════════════════════════
+     SUBMIT TO DATABASE (mock)
+     ════════════════════════════════════════════ */
+  function submitToDB(){
+    const btn = document.getElementById('submitBtn');
+    const hint = document.getElementById('submitHint');
+    const label = btn.querySelector('span');
+    btn.classList.add('is-loading');
+    btn.querySelector('svg').outerHTML = '<span class="spinner"></span>';
+    label.textContent = 'Sending…';
+    hint.textContent = 'Submitting all transactions to budget.chememan.co.th/api/opex';
+
+    const yr = document.getElementById('yearFilter').value;
+    const filtered = transactions.filter(t => yr === 'all' || String(t.year) === yr);
+    setTimeout(() => {
+      btn.classList.remove('is-loading');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg><span>Submit to Database</span>';
+      hint.textContent = `Last submitted ${new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'})} · ${filtered.length} transactions`;
+      showNotice('Submit สำเร็จ', `ส่งข้อมูลทั้งหมด ${filtered.length} transactions ไปยังฐานข้อมูลเรียบร้อยแล้ว — ปี ${yr === 'all' ? 'ทั้งหมด' : yr}`);
+    }, 1100);
+  }
+
+  /* ════════════════════════════════════════════
+     COLUMN RESIZE
+     ════════════════════════════════════════════ */
+  const COL_KEY = 'cm.0002.colwidths';
+  function loadColWidths(){
+    try { return JSON.parse(localStorage.getItem(COL_KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function saveColWidth(idx, w){
+    const all = loadColWidths();
+    all[idx] = w;
+    try { localStorage.setItem(COL_KEY, JSON.stringify(all)); } catch(e){}
+  }
+  function resetColWidths(){
+    try { localStorage.removeItem(COL_KEY); } catch(e){}
+    document.querySelectorAll('.data-table thead th').forEach(th => {
+      th.style.width = '';
+      th.style.minWidth = th.dataset.originalMinWidth || '';
+    });
+  }
+  function initColumnResize(){
+    const ths = document.querySelectorAll('.data-table thead th');
+    const saved = loadColWidths();
+    ths.forEach((th, idx) => {
+      if (!th.dataset.originalMinWidth) th.dataset.originalMinWidth = th.style.minWidth || '';
+      if (idx === ths.length - 1) return;
+      if (saved[idx]) { th.style.width = saved[idx] + 'px'; th.style.minWidth = saved[idx] + 'px'; }
+      if (th.querySelector('.col-resize')) return;
+      const handle = document.createElement('div');
+      handle.className = 'col-resize';
+      handle.title = 'Drag to resize · double-click to reset';
+      th.appendChild(handle);
+      let startX = 0, startW = 0, dragging = false;
+      const onDown = (e) => {
+        dragging = true;
+        startX = e.touches ? e.touches[0].pageX : e.pageX;
+        startW = th.offsetWidth;
+        handle.classList.add('is-dragging');
+        document.body.classList.add('col-dragging');
+        e.preventDefault(); e.stopPropagation();
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        const x = e.touches ? e.touches[0].pageX : e.pageX;
+        const w = Math.max(60, Math.min(800, startW + (x - startX)));
+        th.style.width = w + 'px';
+        th.style.minWidth = w + 'px';
+      };
+      const onUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('is-dragging');
+        document.body.classList.remove('col-dragging');
+        saveColWidth(idx, th.offsetWidth);
+      };
+      handle.addEventListener('mousedown', onDown);
+      handle.addEventListener('touchstart', onDown, { passive: false });
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchend', onUp);
+      handle.addEventListener('dblclick', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        th.style.width = '';
+        th.style.minWidth = th.dataset.originalMinWidth || '';
+        const all = loadColWidths(); delete all[idx];
+        try { localStorage.setItem(COL_KEY, JSON.stringify(all)); } catch(e){}
+      });
+    });
+  }
+
+  (function init(){
+    let savedTheme = 'light', savedPreset = 'ocean', savedIntensity = 60;
+    try {
+      savedTheme = localStorage.getItem('cm.theme') || 'light';
+      savedPreset = localStorage.getItem('cm.preset') || 'ocean';
+      savedIntensity = +(localStorage.getItem('cm.intensity') || 60);
+    } catch(e){}
+    document.getElementById('intensitySlider').value = savedIntensity;
+    document.getElementById('intensityVal').textContent = savedIntensity + '%';
+    setTheme(savedTheme);
+    applyPreset(savedPreset);
+    renderTable();
+    initColumnResize();
+  })();
+</script>
+</body>
+</html>
