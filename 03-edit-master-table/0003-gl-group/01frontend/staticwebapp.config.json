@@ -5,6 +5,10 @@
       "allowedRoles": ["authenticated"]
     },
     {
+      "route": "/0007orgcode-costcenter.html",
+      "allowedRoles": ["authenticated"]
+    },
+    {
       "route": "/api/master/*",
       "allowedRoles": ["authenticated"]
     },
