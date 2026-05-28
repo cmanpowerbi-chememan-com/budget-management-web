@@ -930,11 +930,17 @@
     </div>
     <div class="panel-body">
       <div class="form-grid">
-        <!-- Cost Center (left) -->
+        <!-- Cost Center (left) — multi-select dropdown -->
         <div class="field">
-          <label class="field-label">Cost Center · กรอกเอง</label>
-          <input type="text" class="field-input" id="glCodeInput" placeholder="เช่น 10CS000000, 10CA012000…" autocomplete="off" maxlength="20" oninput="validateCostCenter(this)">
-          <span class="field-helper">รับเฉพาะตัวเลข (0-9) หรือพิมพ์ใหญ่ (A-Z)</span>
+          <label class="field-label">Cost Center · เลือกจากรายการ</label>
+          <!-- Selected CC chips appear here -->
+          <div id="ccChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;min-height:0"></div>
+          <div class="dropdown" id="ccDropdown">
+            <input type="text" class="field-input" id="ccSearchInput"
+                   placeholder="พิมพ์ค้นหา เช่น 10CS…" autocomplete="off">
+            <div class="dropdown-list" id="ccDropdownList"></div>
+          </div>
+          <span class="field-helper">เลือกได้หลาย Cost Center — แต่ละคู่จะถูกบันทึกแยก</span>
         </div>
 
         <!-- Orgcode (right) -->
@@ -1032,508 +1038,46 @@
   </div>
 </div>
 
+<script src="api-client-orgcode-cc.js"></script>
+<script src="0007-orgcode-costcenter.js"></script>
 <script>
   /* ════════════════════════════════════════════
-     THEME — synced via localStorage with 0001/0002
+     THEME PRESETS — synced via localStorage with 0001/0002
+     Colour preset + intensity logic.
+     toggleTheme() and applyThemeFromStorage() are in 0007-orgcode-costcenter.js;
+     this block overrides applyThemeFromStorage with the preset-aware version.
      ════════════════════════════════════════════ */
   const PRESETS = {
-    chememan: { forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
-    ocean:    { forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
-    sunset:   { forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
-    midnight: { forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
-    nature:   { forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
-    royal:    { forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+    chememan: { forest: '#00522C', mint: '#1FA378', gold: '#C9963D' },
+    ocean:    { forest: '#0E4D6E', mint: '#37B5C7', gold: '#F2C661' },
+    sunset:   { forest: '#7B2D26', mint: '#E07B4C', gold: '#F2B752' },
+    midnight: { forest: '#1B244B', mint: '#5B73D9', gold: '#A88AE6' },
+    nature:   { forest: '#2D5016', mint: '#7BA428', gold: '#B8A04A' },
+    royal:    { forest: '#3D1F6E', mint: '#9B6DD9', gold: '#D6B16A' },
   };
-  function toggleTheme(){
-    const cur = document.documentElement.getAttribute('data-theme');
-    const next = cur === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', next);
-    try { localStorage.setItem('cm.theme', next); } catch(e){}
-  }
-  function applyThemeFromStorage(){
+  function applyThemeFromStorage() {
     let theme = 'light', preset = 'ocean', intensity = 60;
     try {
-      theme = localStorage.getItem('cm.theme') || 'light';
-      preset = localStorage.getItem('cm.preset') || 'ocean';
+      theme     = localStorage.getItem('cm.theme')      || 'light';
+      preset    = localStorage.getItem('cm.preset')     || 'ocean';
       intensity = +(localStorage.getItem('cm.intensity') || 60);
-    } catch(e){}
+    } catch (_) {}
     document.documentElement.setAttribute('data-theme', theme);
     const p = PRESETS[preset] || PRESETS.ocean;
     const adjust = (hex, factor) => {
-      const h = hex.replace('#','');
-      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
-      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
-      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      const h = hex.replace('#', '');
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      const mix   = c => factor >= 1 ? Math.round(c * (2 - factor)) : Math.round(c + (255 - c) * (1 - factor));
+      const toHex = n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
       return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
     };
-    const f = intensity/100;
+    const f = intensity / 100;
     document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
     document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
     document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
   }
-
-  /* ════════════════════════════════════════════
-     DATA
-     ════════════════════════════════════════════ */
-  // sapGlCodes now holds Orgcodes from SAP (variable name kept for compatibility)
-  const sapGlCodes = [
-    { code:'1110000', name:'ฝ่ายบัญชี' },
-    { code:'1120000', name:'ฝ่ายการเงิน' },
-    { code:'1130000', name:'ฝ่ายทรัพยากรบุคคล' },
-    { code:'1210000', name:'ฝ่ายผลิต' },
-    { code:'1220000', name:'ฝ่ายควบคุมคุณภาพ' },
-    { code:'1310000', name:'ฝ่ายขายและการตลาด' },
-    { code:'1320000', name:'ฝ่ายจัดซื้อ' },
-    { code:'1410000', name:'ฝ่ายวิศวกรรม' },
-    { code:'1420000', name:'ฝ่ายไอที' },
-    { code:'1510000', name:'ฝ่ายโลจิสติกส์' },
-    { code:'1610000', name:'ฝ่ายวิจัยและพัฒนา' },
-    { code:'1710000', name:'ฝ่ายบริหารทั่วไป' }
-  ];
-  let glGroups = []; // unused — Orgcode dropdown only picks from sapGlCodes
-  // masterData: { glCode = Cost Center (user), glGroup = Orgcode (SAP) }
-  let masterData = [
-    // Right-merge: one Orgcode (1120000) → 3 Cost Centers
-    { glCode:'10CS000000', glGroup:'1120000' },
-    { glCode:'10CA012000', glGroup:'1120000' },
-    { glCode:'10SP012000', glGroup:'1120000' },
-    // Bridge row — 10SP012000 also belongs to 1110000 (many-to-many)
-    { glCode:'10SP012000', glGroup:'1110000' },
-    // Left-merge: one Cost Center (10SP010000) → 3 Orgcodes
-    { glCode:'10SP010000', glGroup:'1110000' },
-    { glCode:'10SP010000', glGroup:'1130000' },
-    { glCode:'10SP010000', glGroup:'1410000' },
-    // Plain mappings
-    { glCode:'ACC001',     glGroup:'1110000' },
-    { glCode:'HR001',      glGroup:'1130000' },
-    { glCode:'IT001',      glGroup:'1420000' }
-  ];
-  let newRowKey = null;       // glCode of most recently saved
-  let pendingDelete = null;
-  let sortCol = null;         // 'glCode' | 'glGroup' | null
-  let sortDir = 'asc';        // 'asc' | 'desc'
-
-  function toggleSort(col){
-    if (sortCol !== col){ sortCol = col; sortDir = 'asc'; }
-    else if (sortDir === 'asc') sortDir = 'desc';
-    else { sortCol = null; sortDir = 'asc'; }
-    // Update header attributes
-    document.querySelectorAll('.data-table thead th[data-col]').forEach(th => {
-      th.removeAttribute('data-sort');
-      if (th.dataset.col === sortCol) th.setAttribute('data-sort', sortDir);
-    });
-    renderTable();
-  }
-
-  /* ════════════════════════════════════════════
-     DROPDOWN: ORGCODE (right side · uses glGroup field)
-     ════════════════════════════════════════════ */
-  function renderGlCodeList(filter){
-    const list = document.getElementById('glGroupList');
-    const q = (filter || '').toLowerCase();
-    const filtered = sapGlCodes.filter(it => it.code.toLowerCase().includes(q) || it.name.toLowerCase().includes(q));
-    if (!filtered.length) { list.innerHTML = '<div class="dropdown-empty">ไม่พบ Orgcode · No matches</div>'; return; }
-    list.innerHTML = filtered.map(it => `
-      <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlCode('${it.code}','${it.name.replace(/'/g,"\\'")}')">
-        <span class="code">${it.code}</span>
-        <span class="name">${it.name}</span>
-      </div>
-    `).join('');
-  }
-  function selectGlCode(code, name){
-    document.getElementById('glGroupInput').value = code;
-    document.getElementById('glGroupDropdown').classList.remove('open');
-    // Many Cost Centers can share one Orgcode — do not auto-fill the Cost Center side.
-    // If user has typed a Cost Center already, check if this exact mapping exists for edit-mode badge.
-    const cc = document.getElementById('glCodeInput').value.trim();
-    if (cc){
-      const existing = masterData.find(d => d.glCode === cc && d.glGroup === code);
-      setEditMode(existing ? masterData.indexOf(existing) : -1);
-    } else {
-      setEditMode(-1);
-    }
-  }
-
-  /* ════════════════════════════════════════════
-     DROPDOWN: GL GROUP
-     ════════════════════════════════════════════ */
-  function renderGlGroupList(filter){
-    const list = document.getElementById('glGroupList');
-    const q = (filter || '').toLowerCase();
-    const filtered = glGroups.filter(g => g.toLowerCase().includes(q));
-    let html = '';
-    if (filtered.length){
-      html += filtered.map(g => `
-        <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlGroup('${g.replace(/'/g,"\\'")}')">
-          <span class="code" style="font-family:var(--sans);font-weight:600;color:var(--ink)">${g}</span>
-        </div>
-      `).join('');
-    } else if (!filter){
-      html = '<div class="dropdown-empty">ไม่มี GL Group · พิมพ์เพื่อสร้างใหม่</div>';
-    }
-    // Create-new option
-    const trimmed = (filter || '').trim();
-    if (trimmed && !glGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())){
-      html += `<div class="dropdown-item create-new" onmousedown="event.preventDefault()" onclick="createNewGroup('${trimmed.replace(/'/g,"\\'")}')">
-        <span>สร้างกลุ่มใหม่: <b>${trimmed}</b></span>
-      </div>`;
-    }
-    list.innerHTML = html || '<div class="dropdown-empty">No options</div>';
-  }
-  function selectGlGroup(name){
-    document.getElementById('glGroupInput').value = name;
-    document.getElementById('glGroupDropdown').classList.remove('open');
-  }
-  function createNewGroup(name){
-    if (!glGroups.includes(name)) glGroups.push(name);
-    selectGlGroup(name);
-  }
-
-  /* ════════════════════════════════════════════
-     MODE (add / edit indicator)
-     ════════════════════════════════════════════ */
-  function setEditMode(masterIdx){
-    const badge = document.getElementById('modeBadge');
-    const label = document.getElementById('saveBtnLabel');
-    if (masterIdx >= 0){
-      badge.textContent = 'แก้ไข · UPDATE';
-      badge.style.color = 'var(--gl-group)';
-      badge.style.borderColor = 'var(--gl-group)';
-      label.textContent = 'อัปเดต';
-    } else {
-      badge.textContent = 'เพิ่มใหม่ · NEW';
-      badge.style.color = '';
-      badge.style.borderColor = '';
-      label.textContent = 'บันทึก';
-    }
-  }
-
-  /* ════════════════════════════════════════════
-     SAVE / EDIT / DELETE
-     ════════════════════════════════════════════ */
-  function saveRecord(){
-    const glCode = document.getElementById('glCodeInput').value.trim();   // Cost Center
-    const glGroup = document.getElementById('glGroupInput').value.trim(); // Orgcode
-    if (!glCode || !glGroup){
-      showNotice('โปรดกรอกข้อมูล', 'กรุณากรอก Cost Center และเลือก Orgcode ก่อนบันทึก', null);
-      return;
-    }
-    if (!/^[0-9A-Z]+$/.test(glCode)){
-      showNotice('Cost Center ไม่ถูกต้อง', 'Cost Center รับเฉพาะตัวเลข (0-9) หรือตัวอักษรพิมพ์ใหญ่ (A-Z) เท่านั้น', null);
-      return;
-    }
-    const sapItem = sapGlCodes.find(s => s.code === glGroup);
-    if (!sapItem){
-      showNotice('Orgcode ไม่ถูกต้อง', 'กรุณาเลือก Orgcode จากรายการของ SAP เท่านั้น', null);
-      return;
-    }
-
-    const existingIdx = masterData.findIndex(d => d.glCode === glCode && d.glGroup === glGroup);
-    let action = 'CREATE';
-    if (existingIdx >= 0){
-      action = 'UPDATE';
-      masterData.splice(existingIdx, 1);
-    }
-    masterData.unshift({ glCode, glGroup });
-    newRowKey = glCode;
-    document.getElementById('glCodeInput').value = '';
-    document.getElementById('glGroupInput').value = '';
-    setEditMode(-1);
-    renderTable();
-
-    showNotice(
-      action === 'UPDATE' ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ',
-      action === 'UPDATE' ? 'อัปเดต Mapping เรียบร้อย และย้ายขึ้นบนสุดของตาราง' : 'เพิ่ม Mapping ใหม่ที่บนสุดของตาราง',
-      { glCode, glGroup, action, sapName: sapItem.name }
-    );
-  }
-  function editRecord(idx){
-    const rec = masterData[idx];
-    document.getElementById('glCodeInput').value = rec.glCode;
-    document.getElementById('glGroupInput').value = rec.glGroup;
-    setEditMode(idx);
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function askDelete(idx){
-    pendingDelete = idx;
-    const rec = masterData[idx];
-    const sap = sapGlCodes.find(s => s.code === rec.glGroup);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${rec.glCode}</span></div>
-      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${rec.glGroup}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  function closeConfirm(){
-    document.getElementById('confirmModal').classList.remove('open');
-    pendingDelete = null;
-  }
-  document.getElementById('confirmBtn').onclick = () => {
-    if (!pendingDelete) return;
-    if (typeof pendingDelete === 'object' && pendingDelete.kind){
-      if (pendingDelete.kind === 'cc'){
-        masterData = masterData.filter(d => d.glCode !== pendingDelete.key);
-      } else if (pendingDelete.kind === 'org'){
-        masterData = masterData.filter(d => d.glGroup !== pendingDelete.key);
-      } else if (pendingDelete.kind === 'pair'){
-        masterData = masterData.filter(d => !(d.glCode === pendingDelete.cc && d.glGroup === pendingDelete.org));
-      }
-    } else {
-      masterData.splice(pendingDelete, 1);
-    }
-    closeConfirm();
-    renderTable();
-  };
-
-  /* ════════════════════════════════════════════
-     RENDER TABLE
-     ════════════════════════════════════════════ */
-  function renderSummary(){
-    const totalGl = masterData.length; // Cost Centers
-    const uniqueGroups = new Set(masterData.map(d => d.glGroup)).size; // Orgcodes used
-    const mappedOrgs = new Set(masterData.map(d => d.glGroup));
-    const unmapped = sapGlCodes.filter(s => !mappedOrgs.has(s.code)).length;
-    const sapTotal = sapGlCodes.length;
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('stat-gl', totalGl);
-    set('stat-group', uniqueGroups);
-    set('stat-unmapped', unmapped);
-    set('stat-sap', sapTotal);
-  }
-
-  let viewMode = 'cc'; // 'cc' = primary is Cost Center, 'org' = primary is Orgcode
-  function setViewMode(m){
-    viewMode = m;
-    document.querySelectorAll('.view-switch button').forEach(b => {
-      b.classList.toggle('active', b.dataset.mode === m);
-    });
-    renderTable();
-  }
-  window.setViewMode = setViewMode;
-
-  function renderTable(){
-    renderSummary();
-    const q = document.getElementById('tableSearch').value.toLowerCase();
-    const filtered = masterData.filter(d =>
-      d.glCode.toLowerCase().includes(q) || d.glGroup.toLowerCase().includes(q)
-    );
-    document.getElementById('countPill').innerHTML = `<b>${filtered.length}</b> / ${masterData.length} mappings`;
-
-    // Aggregate edges by primary key
-    const ccMap = new Map();  // cc → [orgs]
-    const orgMap = new Map(); // org → [ccs]
-    filtered.forEach(d => {
-      if (!ccMap.has(d.glCode)) ccMap.set(d.glCode, []);
-      ccMap.get(d.glCode).push(d.glGroup);
-      if (!orgMap.has(d.glGroup)) orgMap.set(d.glGroup, []);
-      orgMap.get(d.glGroup).push(d.glCode);
-    });
-    document.getElementById('legend-cc').textContent = ccMap.size;
-    document.getElementById('legend-org').textContent = orgMap.size;
-    document.getElementById('legend-edges').textContent = filtered.length;
-
-    const grid = document.getElementById('chipGrid');
-    if (!filtered.length){
-      grid.innerHTML = `<div class="chip-empty">
-        <div class="empty-title">No matches.</div>
-        <div class="empty-sub">Try clearing the search or add a new mapping above.</div>
-      </div>`;
-      return;
-    }
-
-    const esc = s => s.replace(/'/g, "\\'");
-
-    let html = '';
-    if (viewMode === 'cc'){
-      // Each card = one Cost Center → list of Orgcode chips
-      const keys = [...ccMap.keys()].sort();
-      html = keys.map(cc => {
-        const orgs = [...new Set(ccMap.get(cc))].sort();
-        const multi = orgs.length > 1;
-        const isNew = cc === newRowKey;
-        return `<div class="chip-card ${multi ? 'has-multi' : ''} ${isNew ? 'row-new' : ''}" data-key="${cc}" data-kind="cc">
-          <div class="chip-card-head">
-            <div class="primary">
-              <div class="pill-line">
-                <span class="gl-code-pill">${cc}</span>
-                <span class="deg">×${orgs.length}</span>
-              </div>
-            </div>
-            <div class="card-actions">
-              <button class="action-btn edit" onclick="editCC('${esc(cc)}')" title="เพิ่ม mapping ใหม่สำหรับ CC นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-              <button class="action-btn delete" onclick="deleteCC('${esc(cc)}')" title="ลบทุก mapping ของ CC นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="chip-card-arrow">maps to ${orgs.length} orgcode${orgs.length > 1 ? 's' : ''}</div>
-          <div class="chip-card-body">
-            ${orgs.map(o => {
-              const sap = sapGlCodes.find(s => s.code === o);
-              return `<span class="chip-tag org" onclick="removeEdge('${esc(cc)}','${esc(o)}')" title="คลิกเพื่อลบ mapping นี้">
-                <span>${o}</span>
-                <span class="org-name">${sap ? sap.name : ''}</span>
-                <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-              </span>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }).join('');
-    } else {
-      // Each card = one Orgcode → list of Cost Center chips
-      const keys = [...orgMap.keys()].sort();
-      html = keys.map(org => {
-        const ccs = [...new Set(orgMap.get(org))].sort();
-        const multi = ccs.length > 1;
-        const sap = sapGlCodes.find(s => s.code === org);
-        return `<div class="chip-card ${multi ? 'has-multi' : ''}" data-key="${org}" data-kind="org">
-          <div class="chip-card-head">
-            <div class="primary">
-              <div class="pill-line">
-                <span class="gl-group-pill">${org}</span>
-                <span class="deg">×${ccs.length}</span>
-              </div>
-              <span class="name">${sap ? sap.name : '—'}</span>
-            </div>
-            <div class="card-actions">
-              <button class="action-btn edit" onclick="editOrg('${esc(org)}')" title="เพิ่ม mapping ใหม่สำหรับ Orgcode นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-              <button class="action-btn delete" onclick="deleteOrg('${esc(org)}')" title="ลบทุก mapping ของ Orgcode นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="chip-card-arrow">contains ${ccs.length} cost center${ccs.length > 1 ? 's' : ''}</div>
-          <div class="chip-card-body">
-            ${ccs.map(c => `<span class="chip-tag cc" onclick="removeEdge('${esc(c)}','${esc(org)}')" title="คลิกเพื่อลบ mapping นี้">
-              <span>${c}</span>
-              <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-            </span>`).join('')}
-          </div>
-        </div>`;
-      }).join('');
-    }
-    grid.innerHTML = html;
-    setTimeout(() => { newRowKey = null; }, 2500);
-  }
-
-  // Remove a single (cc, org) edge — confirms inline
-  function removeEdge(cc, org){
-    const idx = masterData.findIndex(d => d.glCode === cc && d.glGroup === org);
-    if (idx < 0) return;
-    pendingDelete = { kind:'pair', cc, org };
-    const sap = sapGlCodes.find(s => s.code === org);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${cc}</span></div>
-      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${org}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  window.removeEdge = removeEdge;
-
-  // New action handlers (replace editRecord/askDelete)
-  function editCC(cc){
-    document.getElementById('glCodeInput').value = cc;
-    document.getElementById('glGroupInput').value = '';
-    setEditMode(-1);
-    document.getElementById('glGroupInput').focus();
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function editOrg(org){
-    document.getElementById('glGroupInput').value = org;
-    document.getElementById('glCodeInput').value = '';
-    setEditMode(-1);
-    document.getElementById('glCodeInput').focus();
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function deleteCC(cc){
-    const rows = masterData.filter(d => d.glCode === cc);
-    pendingDelete = { kind:'cc', key:cc, count:rows.length };
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${cc}</span></div>
-      <div class="row"><span class="lbl">Mappings ที่จะถูกลบ</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  function deleteOrg(org){
-    const rows = masterData.filter(d => d.glGroup === org);
-    pendingDelete = { kind:'org', key:org, count:rows.length };
-    const sap = sapGlCodes.find(s => s.code === org);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${org}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-      <div class="row"><span class="lbl">Mappings ที่จะถูกลบ</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  window.editCC = editCC; window.editOrg = editOrg;
-  window.deleteCC = deleteCC; window.deleteOrg = deleteOrg;
-
-  /* ════════════════════════════════════════════
-     NOTICE MODAL
-     ════════════════════════════════════════════ */
-  function showNotice(title, body, summary){
-    document.querySelector('#noticeModal .modal-title').innerHTML = title.includes('สำเร็จ')
-      ? title.replace('สำเร็จ', '<em>สำเร็จ</em>')
-      : title;
-    document.getElementById('noticeMsg').textContent = body;
-    const sumEl = document.getElementById('noticeSummary');
-    if (summary){
-      sumEl.style.display = 'flex';
-      sumEl.innerHTML = `
-        <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${summary.action}</span></div>
-        <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${summary.glCode}</span></div>
-        <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${summary.glGroup}</span></div>
-        <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${summary.sapName}</span></div>
-      `;
-    } else {
-      sumEl.style.display = 'none';
-    }
-    document.getElementById('noticeModal').classList.add('open');
-  }
-  function closeNotice(){
-    document.getElementById('noticeModal').classList.remove('open');
-  }
-
-  /* ════════════════════════════════════════════
-     INIT — wire up dropdowns + theme
-     ════════════════════════════════════════════ */
-  (function init(){
-    applyThemeFromStorage();
-
-    // Orgcode dropdown (right side)
-    const glCodeWrap = document.getElementById('glGroupDropdown');
-    const glCodeInput = document.getElementById('glGroupInput');
-    glCodeInput.addEventListener('focus', () => { glCodeWrap.classList.add('open'); renderGlCodeList(''); });
-    glCodeInput.addEventListener('input', () => { glCodeWrap.classList.add('open'); renderGlCodeList(glCodeInput.value); });
-    glCodeInput.addEventListener('blur', () => setTimeout(() => glCodeWrap.classList.remove('open'), 150));
-
-    // Cost Center input (free text + validation)
-    // No dropdown logic needed - input handles its own validation via oninput
-    function validateCostCenter(input){
-      const cleaned = input.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-      if (cleaned !== input.value) {
-        input.value = cleaned;
-        input.style.borderColor = '#C25A3F';
-        input.style.boxShadow = '0 0 0 3px color-mix(in oklab, #C25A3F 18%, transparent)';
-        clearTimeout(input._errTimer);
-        input._errTimer = setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 600);
-      }
-    }
-    window.validateCostCenter = validateCostCenter;
-
-    // Close dropdowns on outside click
-    document.addEventListener('click', (e) => {
-      if (!glCodeWrap.contains(e.target)) glCodeWrap.classList.remove('open');
-    });
-
-    renderTable();
-  })();
 </script>
 </body>
 </html>
