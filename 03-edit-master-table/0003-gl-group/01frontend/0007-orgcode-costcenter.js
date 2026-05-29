@@ -110,8 +110,9 @@ function renderCCList(filter) {
   }
   list.innerHTML = filtered.map(it => `
     <div class="dropdown-item"
-         onmousedown="event.preventDefault()"
-         onclick="selectCC('${esc(it.code)}','${esc(it.name || '')}')">
+         data-action="select-cc"
+         data-code="${escapeHtml(it.code)}"
+         data-name="${escapeHtml(it.name || '')}">
       <span class="code">${escapeHtml(it.code)}</span>
       <span class="name">${escapeHtml(it.name || '')}</span>
     </div>
@@ -146,7 +147,7 @@ function renderCCChips() {
     <span class="chip-tag cc" style="cursor:default">
       <span>${escapeHtml(s.code)}</span>
       <svg class="x-icon" style="opacity:1;cursor:pointer"
-           onclick="removeCC('${esc(s.code)}')"
+           data-action="remove-cc" data-code="${escapeHtml(s.code)}"
            viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>
@@ -181,8 +182,9 @@ function renderOrgcodeList(filter) {
   }
   list.innerHTML = filtered.map(it => `
     <div class="dropdown-item"
-         onmousedown="event.preventDefault()"
-         onclick="selectOrgcode('${esc(it.code)}','${esc(it.name || '')}')">
+         data-action="select-org"
+         data-code="${escapeHtml(it.code)}"
+         data-name="${escapeHtml(it.name || '')}">
       <span class="code">${escapeHtml(it.code)}</span>
       <span class="name">${escapeHtml(it.name || '')}</span>
     </div>
@@ -238,8 +240,11 @@ async function saveRecord() {
   const failed  = results.filter(r => r.status === 'rejected');
 
   if (saved.length > 0) {
-    /* Highlight the last saved pair */
-    const lastCC = selectedCCs[saved.length - 1];
+    /* Find the last fulfilled result by scanning allSettled results in reverse.
+       Using saved.length-1 as a positional index into selectedCCs is wrong
+       when earlier requests fail and shift the fulfilled subset's position. */
+    const lastFulfilledIdx = results.findLastIndex(r => r.status === 'fulfilled');
+    const lastCC = selectedCCs[lastFulfilledIdx];
     if (lastCC) newRowKey = `${lastCC.code}::${selectedOrgcode.code}`;
     await refreshAll();
     resetForm();
@@ -423,10 +428,10 @@ function renderTable() {
             </div>
           </div>
           <div class="card-actions">
-            <button class="action-btn edit" onclick="editCC('${esc(cc)}')" title="เพิ่ม mapping ใหม่สำหรับ CC นี้">
+            <button class="action-btn edit" data-action="edit-cc" data-cc="${escapeHtml(cc)}" title="เพิ่ม mapping ใหม่สำหรับ CC นี้">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="action-btn delete" onclick="deleteCC('${esc(cc)}')" title="ลบทุก mapping ของ CC นี้">
+            <button class="action-btn delete" data-action="delete-cc" data-cc="${escapeHtml(cc)}" title="ลบทุก mapping ของ CC นี้">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -435,7 +440,7 @@ function renderTable() {
         <div class="chip-card-body">
           ${orgs.map(o => {
             const sap = sapOrgcodes.find(s => s.code === o);
-            return `<span class="chip-tag org" onclick="removeEdge('${esc(cc)}','${esc(o)}')" title="คลิกเพื่อลบ mapping นี้">
+            return `<span class="chip-tag org" data-action="remove-edge" data-cc="${escapeHtml(cc)}" data-org="${escapeHtml(o)}" title="คลิกเพื่อลบ mapping นี้" style="cursor:pointer">
               <span>${escapeHtml(o)}</span>
               <span class="org-name">${escapeHtml(sap?.name || '')}</span>
               <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
@@ -460,17 +465,17 @@ function renderTable() {
             <span class="name">${escapeHtml(sap?.name || '—')}</span>
           </div>
           <div class="card-actions">
-            <button class="action-btn edit" onclick="editOrg('${esc(org)}')" title="เพิ่ม mapping ใหม่สำหรับ Orgcode นี้">
+            <button class="action-btn edit" data-action="edit-org" data-org="${escapeHtml(org)}" title="เพิ่ม mapping ใหม่สำหรับ Orgcode นี้">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="action-btn delete" onclick="deleteOrg('${esc(org)}')" title="ลบทุก mapping ของ Orgcode นี้">
+            <button class="action-btn delete" data-action="delete-org" data-org="${escapeHtml(org)}" title="ลบทุก mapping ของ Orgcode นี้">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </div>
         <div class="chip-card-arrow">contains ${ccs.length} cost center${ccs.length > 1 ? 's' : ''}</div>
         <div class="chip-card-body">
-          ${ccs.map(c => `<span class="chip-tag cc" onclick="removeEdge('${esc(c)}','${esc(org)}')" title="คลิกเพื่อลบ mapping นี้">
+          ${ccs.map(c => `<span class="chip-tag cc" data-action="remove-edge" data-cc="${escapeHtml(c)}" data-org="${escapeHtml(org)}" title="คลิกเพื่อลบ mapping นี้" style="cursor:pointer">
             <span>${escapeHtml(c)}</span>
             <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
           </span>`).join('')}
@@ -560,6 +565,49 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
   );
 }
+/** @deprecated Use data-* attributes + event delegation instead of inline onclick */
 function esc(s) {
   return String(s).replace(/['\\]/g, c => '\\' + c);
 }
+
+/* ─── Event delegation — single listener handles all dynamic buttons ─── */
+document.addEventListener('DOMContentLoaded', () => {
+  /* CC dropdown list */
+  document.addEventListener('mousedown', e => {
+    const item = e.target.closest('#ccDropdownList .dropdown-item[data-action]');
+    if (!item) return;
+    if (item.dataset.action === 'select-cc') {
+      e.preventDefault();
+      selectCC(item.dataset.code, item.dataset.name);
+    }
+  });
+
+  /* Orgcode dropdown list */
+  document.addEventListener('mousedown', e => {
+    const item = e.target.closest('#glGroupList .dropdown-item[data-action]');
+    if (!item) return;
+    if (item.dataset.action === 'select-org') {
+      e.preventDefault();
+      selectOrgcode(item.dataset.code, item.dataset.name);
+    }
+  });
+
+  /* Selected CC chips (form area) — remove-cc action */
+  document.getElementById('ccChips')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action="remove-cc"]');
+    if (btn) removeCC(btn.dataset.code);
+  });
+
+  /* Chip grid — card actions + chip tags */
+  document.getElementById('chipGrid')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    switch (btn.dataset.action) {
+      case 'edit-cc':     editCC(btn.dataset.cc);                       break;
+      case 'delete-cc':   deleteCC(btn.dataset.cc);                     break;
+      case 'remove-edge': removeEdge(btn.dataset.cc, btn.dataset.org);  break;
+      case 'edit-org':    editOrg(btn.dataset.org);                     break;
+      case 'delete-org':  deleteOrg(btn.dataset.org);                   break;
+    }
+  });
+});

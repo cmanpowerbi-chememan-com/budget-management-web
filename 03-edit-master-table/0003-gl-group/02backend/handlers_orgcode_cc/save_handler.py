@@ -1,5 +1,6 @@
 """POST /api/master/orgcode-costcenter/save"""
 import json
+import pyodbc
 import azure.functions as func
 from auth import authenticate, AuthError
 from db import exists, execute
@@ -42,6 +43,17 @@ def handle(req: func.HttpRequest) -> func.HttpResponse:
         execute(
             f"INSERT INTO {TABLE} (orgcode, cost_center) VALUES (?, ?)",
             (payload.orgcode, payload.cost_center),
+        )
+    except pyodbc.IntegrityError:
+        # Race condition: another request inserted the same pair between exists() and execute()
+        return func.HttpResponse(
+            json.dumps({
+                "code": "DUPLICATE_KEY",
+                "message_th": "Cost Center และ Orgcode คู่นี้มีอยู่ในระบบแล้ว",
+                "message_en": "This (cost_center, orgcode) pair already exists.",
+            }),
+            status_code=409,
+            mimetype="application/json",
         )
     except Exception as e:
         return func.HttpResponse(

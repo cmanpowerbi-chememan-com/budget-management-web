@@ -13,7 +13,7 @@ class OrgcodeCostcenterBase(BaseModel):
 
 
 class SaveRequest(OrgcodeCostcenterBase):
-    is_edit_mode: bool = False
+    pass
 
 
 class DeleteRequest(OrgcodeCostcenterBase):
