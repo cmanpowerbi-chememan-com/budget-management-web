@@ -72,85 +72,6 @@
   .btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
   .btn-ghost:hover{color:var(--ink);background:transparent}
 
-  /* Glassy yellow Edit button */
-  .btn-edit{
-    position:relative;overflow:hidden;isolation:isolate;
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0) 100%),
-      linear-gradient(180deg, #F5BA2A 0%, #D49810 55%, #A87400 100%);
-    color:#2A1800;
-    border:1px solid rgba(255,255,255,0.22);
-    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;white-space:nowrap;
-    font-family:inherit;font-weight:700;letter-spacing:-0.005em;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -1px 0 rgba(0,0,0,0.20), 0 5px 12px -5px rgba(0,0,0,0.38);
-    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
-  }
-  .btn-edit::before{
-    content:'';position:absolute;inset:0;
-    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.45) 50%, transparent 62%, transparent 100%);
-    transform:translateX(-110%);
-    animation:glassSweep 3.6s ease-in-out infinite;
-    pointer-events:none;z-index:1;
-  }
-  .btn-edit::after{
-    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
-    background:
-      radial-gradient(circle 1px at 16% 36%, rgba(255,255,255,0.95) 0%, transparent 80%),
-      radial-gradient(circle 1px at 70% 26%, rgba(255,255,255,0.95) 0%, transparent 80%),
-      radial-gradient(circle 1px at 44% 72%, rgba(255,255,255,0.95) 0%, transparent 80%);
-    animation:twinkle 2.4s ease-in-out infinite;
-    mix-blend-mode:screen;
-  }
-  .btn-edit > *{position:relative;z-index:3}
-  .btn-edit:hover{
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0) 60%),
-      linear-gradient(180deg, #E8A820 0%, #C08800 100%);
-    color:#1A0E00;
-    border-color:rgba(255,220,80,0.45);
-    transform:translateY(-1px);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -1px 0 rgba(0,0,0,0.26), 0 8px 18px -6px rgba(0,0,0,0.45);
-  }
-
-  /* Glassy red Delete button */
-  .btn-danger{
-    position:relative;overflow:hidden;isolation:isolate;
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0) 100%),
-      linear-gradient(180deg, #F04040 0%, #C82020 55%, #9A1010 100%);
-    color:#FFF0F0;
-    border:1px solid rgba(255,255,255,0.18);
-    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;white-space:nowrap;
-    font-family:inherit;font-weight:700;letter-spacing:-0.005em;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.30), 0 5px 12px -5px rgba(0,0,0,0.42);
-    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
-  }
-  .btn-danger::before{
-    content:'';position:absolute;inset:0;
-    background:linear-gradient(115deg, transparent 0%, transparent 38%, rgba(255,255,255,0.35) 50%, transparent 62%, transparent 100%);
-    transform:translateX(-110%);
-    animation:glassSweep 3.6s ease-in-out infinite 0.8s;
-    pointer-events:none;z-index:1;
-  }
-  .btn-danger::after{
-    content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
-    background:
-      radial-gradient(circle 1px at 22% 34%, rgba(255,255,255,0.95) 0%, transparent 80%),
-      radial-gradient(circle 1px at 66% 28%, rgba(255,255,255,0.95) 0%, transparent 80%),
-      radial-gradient(circle 1px at 46% 74%, rgba(255,255,255,0.95) 0%, transparent 80%);
-    animation:twinkle 2.8s ease-in-out infinite 0.4s;
-    mix-blend-mode:screen;
-  }
-  .btn-danger > *{position:relative;z-index:3}
-  .btn-danger:hover{
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 60%),
-      linear-gradient(180deg, #D43030 0%, #880808 100%);
-    border-color:rgba(255,120,120,0.45);
-    transform:translateY(-1px);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.38), 0 8px 18px -6px rgba(0,0,0,0.52);
-  }
-
   /* Glassy black "Back to home" (idle glassy, fade-to-deep-black hover) */
   .btn-back{
     position:relative;overflow:hidden;isolation:isolate;
@@ -408,8 +329,7 @@
   .data-table thead th[data-sort="desc"] .sort-ind svg:last-child{color:var(--accent)}
   .data-table thead th[data-sort="asc"] .sort-ind, .data-table thead th[data-sort="desc"] .sort-ind{opacity:1}
   .data-table thead th[data-sort="asc"], .data-table thead th[data-sort="desc"]{color:var(--accent)}
-  .data-table thead th.action-col{text-align:right;width:148px}
-  .action-col .btn-edit, .action-col .btn-danger{min-width:60px;text-align:center}
+  .data-table thead th.action-col{text-align:right;width:120px}
   .data-table tbody tr{transition:background 200ms ease}
   .data-table tbody tr:nth-child(even) td{background:color-mix(in oklab, var(--paper-2) 50%, var(--surface))}
   .data-table tbody tr:hover td{background:color-mix(in oklab, var(--accent) 7%, var(--surface))}
@@ -603,37 +523,6 @@
     .form-grid{grid-template-columns:1fr}
     .page-title{font-size:36px}
   }
-
-  /* ─── show class (used by new JS for deleteModal / errorModal) ─── */
-  .modal-backdrop.show{display:flex}
-
-  /* ─── Input warning shake ─── */
-  .input-warning{
-    border-color:#C9351F !important;
-    box-shadow:0 0 0 3px rgba(201,53,31,0.15);
-    animation:shake 0.3s;
-  }
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-
-  /* ─── Success toast ─── */
-  #successToast{
-    position:fixed;bottom:28px;right:28px;z-index:600;
-    background:var(--accent);color:#fff;
-    padding:12px 20px;border-radius:10px;font-size:13.5px;font-weight:600;
-    box-shadow:0 8px 24px -8px rgba(0,0,0,0.40);
-    opacity:0;transform:translateY(8px);
-    transition:opacity 220ms ease,transform 220ms ease;
-    pointer-events:none;
-  }
-  #successToast.show{opacity:1;transform:translateY(0)}
-
-  /* ─── Error modal details block ─── */
-  .modal-details{
-    margin-top:10px;padding:10px 12px;
-    background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
-    font-family:var(--mono);font-size:11.5px;color:var(--ink-3);
-    white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;
-  }
 </style>
 </head>
 <body>
@@ -667,13 +556,13 @@
     </a>
     <ul class="nav-links">
       <li><a href="0001index.html">Home</a></li>
-      <li><a href="0002budget-export.html">Export Template</a></li>
       <li><a href="#" class="active">Edit GL Group</a></li>
       <li><a href="0007orgcode-costcenter.html">Edit Org &amp; Cost center</a></li>
-      <li><a href="#">Hide Document Number</a></li>
+      <li><a href="0008edit-document-number.html">Hide Document Number</a></li>
+      <li><a href="0009master-currency.html">Master Currency</a></li>
     </ul>
     <div class="nav-actions">
-      <button class="icon-btn" id="themeToggleBtn" title="Toggle theme" aria-label="Toggle theme">
+      <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
         <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
       </button>
@@ -702,8 +591,8 @@
         <p class="page-subtitle">จัดการ Mapping ระหว่าง <b>GL Code</b> (จาก SAP) กับ <b>GL Group</b> สำหรับใช้ในการจัดหมวดและรายงานงบประมาณ</p>
       </div>
       <div class="summary" id="summaryStrip" data-screen-label="Summary chips">
-      <span class="summary-chip gl" title="จำนวน GL Code ที่ Map แล้ว"><span class="lbl">GL Codes</span><span class="v" id="countActive">—</span></span>
-      <span class="summary-chip group" title="จำนวน GL Group ที่ใช้งานจริง"><span class="lbl">GL Groups</span><span class="v" id="countGroups">—</span></span>
+      <span class="summary-chip gl" title="จำนวน GL Code ที่ Map แล้ว"><span class="lbl">GL Codes</span><span class="v" id="stat-gl">—</span></span>
+      <span class="summary-chip group" title="จำนวน GL Group ที่ใช้งานจริง"><span class="lbl">GL Groups</span><span class="v" id="stat-group">—</span></span>
       <span class="summary-chip gold" title="GL Code จาก SAP ที่ยังไม่ได้ Map"><span class="lbl">Unmapped</span><span class="v" id="stat-unmapped">—</span></span>
       <span class="summary-chip" title="GL Code ทั้งหมดจาก SAP"><span class="lbl">SAP total</span><span class="v" id="stat-sap">—</span></span>
     </div>
@@ -725,7 +614,7 @@
       <div class="form-grid">
         <!-- GL Code -->
         <div class="field">
-          <label class="field-label">GL Code · จาก SAP <span id="glCodeCount" style="color:var(--ink-3);font-size:11px;font-weight:500">—</span></label>
+          <label class="field-label">GL Code · จาก SAP</label>
           <div class="dropdown" id="glCodeDropdown">
             <input type="text" class="field-input" id="glCodeInput" placeholder="พิมพ์ค้นหา 5200016xxx หรือชื่อ…" autocomplete="off">
             <div class="dropdown-list" id="glCodeList"></div>
@@ -746,7 +635,7 @@
         <!-- Save -->
         <div class="field">
           <label class="field-label" style="visibility:hidden">บันทึก</label>
-          <button class="btn-save" id="saveBtn">
+          <button class="btn-save" onclick="saveRecord()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             <span id="saveBtnLabel">บันทึก</span>
           </button>
@@ -765,23 +654,19 @@
     <div class="toolbar">
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <input type="text" id="tableSearch" placeholder="ค้นหา GL Code หรือ GL Group…">
+        <input type="text" id="tableSearch" placeholder="ค้นหา GL Code หรือ GL Group…" oninput="renderTable()">
       </div>
-      <span id="filteredCount" style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink-2);letter-spacing:0.01em;white-space:nowrap"></span>
       <div style="display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.02em">
         <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-code)"></span>GL Code</span>
         <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-group)"></span>GL Group</span>
       </div>
-      <button class="btn-save" id="exportCsvBtn" style="padding:9px 16px;min-height:auto;font-size:13px;margin-left:auto">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        <span>Export CSV</span>
-      </button>
+      <div class="count-pill" id="countPill">— records</div>
     </div>
-    <div style="overflow:auto;max-height:calc(100vh - 460px);min-height:260px">
-      <table class="data-table" id="dataTable">
+    <div style="overflow:auto">
+      <table class="data-table">
         <thead>
           <tr>
-            <th class="sortable" data-col="gl_code" style="width:46%">
+            <th class="sortable" data-col="glCode" onclick="toggleSort('glCode')" style="width:46%">
               GL Code
               <span style="font-family:var(--mono);font-size:10px;color:var(--ink-3);font-weight:500;text-transform:none;letter-spacing:0.02em;margin-left:8px">— from SAP</span>
               <span class="sort-ind">
@@ -789,7 +674,7 @@
                 <svg viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0h8z"/></svg>
               </span>
             </th>
-            <th class="sortable" data-col="group_name">
+            <th class="sortable" data-col="glGroup" onclick="toggleSort('glGroup')">
               GL Group
               <span style="font-family:var(--mono);font-size:10px;color:var(--ink-3);font-weight:500;text-transform:none;letter-spacing:0.02em;margin-left:8px">— mapping target</span>
               <span class="sort-ind">
@@ -807,11 +692,11 @@
 </main>
 
 <!-- ─── Notice modal ─── -->
-<div class="modal-backdrop" id="noticeModal">
+<div class="modal-backdrop" id="noticeModal" onclick="if(event.target.id==='noticeModal') closeNotice()">
   <div class="modal">
     <div class="modal-head">
       <h2 class="modal-title">บันทึก<em>สำเร็จ</em></h2>
-      <button class="modal-close" id="noticeCloseBtn" aria-label="Close">
+      <button class="modal-close" onclick="closeNotice()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
       </button>
     </div>
@@ -820,27 +705,27 @@
       <div class="summary" id="noticeSummary"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn-back" id="noticeOkBtn" style="padding:9px 18px"><span>ตกลง</span></button>
+      <button class="btn-back" onclick="closeNotice()" style="padding:9px 18px"><span>ตกลง</span></button>
     </div>
   </div>
 </div>
 
 <!-- ─── Confirm delete modal ─── -->
-<div class="modal-backdrop" id="deleteModal">
+<div class="modal-backdrop" id="confirmModal" onclick="if(event.target.id==='confirmModal') closeConfirm()">
   <div class="modal">
     <div class="modal-head">
       <h2 class="modal-title">ยืนยัน<em>ลบ</em></h2>
-      <button class="modal-close" id="deleteCloseBtn" aria-label="Close">
+      <button class="modal-close" onclick="closeConfirm()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
       </button>
     </div>
     <div class="modal-body">
       <p>คุณต้องการลบรายการนี้หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้</p>
-      <div class="summary" id="deleteSummary"></div>
+      <div class="summary" id="confirmSummary"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn" id="deleteCancelBtn">ยกเลิก</button>
-      <button class="btn" id="deleteConfirmBtn" style="background:#C25A3F;color:#fff;border-color:#C25A3F">
+      <button class="btn" onclick="closeConfirm()">ยกเลิก</button>
+      <button class="btn" id="confirmBtn" style="background:#C25A3F;color:#fff;border-color:#C25A3F">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         ลบรายการ
       </button>
@@ -848,27 +733,430 @@
   </div>
 </div>
 
-<!-- ─── Error modal ─── -->
-<div class="modal-backdrop" id="errorModal">
-  <div class="modal">
-    <div class="modal-head">
-      <h2 class="modal-title">เกิดข้อผิดพลาด</h2>
-      <button class="modal-close" id="errorCloseBtn" aria-label="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-      </button>
-    </div>
-    <div class="modal-body"></div>
-    <div class="modal-details"></div>
-    <div class="modal-foot">
-      <button class="btn-back" id="errorOkBtn" style="padding:9px 18px"><span>ตกลง</span></button>
-    </div>
-  </div>
-</div>
+<script>
+  /* ════════════════════════════════════════════
+     THEME — synced via localStorage with 0001/0002
+     ════════════════════════════════════════════ */
+  const PRESETS = {
+    chememan: { forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
+    ocean:    { forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
+    sunset:   { forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
+    midnight: { forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
+    nature:   { forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
+    royal:    { forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+  };
+  function toggleTheme(){
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('cm.theme', next); } catch(e){}
+  }
+  function applyThemeFromStorage(){
+    let theme = 'light', preset = 'ocean', intensity = 60;
+    try {
+      theme = localStorage.getItem('cm.theme') || 'light';
+      preset = localStorage.getItem('cm.preset') || 'ocean';
+      intensity = +(localStorage.getItem('cm.intensity') || 60);
+    } catch(e){}
+    document.documentElement.setAttribute('data-theme', theme);
+    const p = PRESETS[preset] || PRESETS.ocean;
+    const adjust = (hex, factor) => {
+      const h = hex.replace('#','');
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
+      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+    };
+    const f = intensity/100;
+    document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
+    document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
+    document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
+  }
 
-<!-- ─── Success toast ─── -->
-<div id="successToast"></div>
+  /* ════════════════════════════════════════════
+     DATA
+     ════════════════════════════════════════════ */
+  const sapGlCodes = [
+    { code:'5200016353', name:'Office Supplies Expense' },
+    { code:'5200016354', name:'Domestic Travel Expense' },
+    { code:'5200016355', name:'Machinery Maintenance' },
+    { code:'5200016356', name:'Utilities Expense' },
+    { code:'5200016357', name:'Consulting Fee' },
+    { code:'5200016358', name:'Advertising Expense' },
+    { code:'5200016359', name:'Training Expense' },
+    { code:'5200016360', name:'Building Repair' },
+    { code:'5200016361', name:'Insurance Expense' },
+    { code:'5200016362', name:'Miscellaneous Expense' },
+    { code:'5200016363', name:'IT Services' },
+    { code:'5200016364', name:'Legal Fee' },
+    { code:'5200016365', name:'Transportation' },
+    { code:'5200016366', name:'Communication' },
+    { code:'5200016367', name:'Research & Development' }
+  ];
+  let glGroups = [
+    'ค่าใช้จ่ายสำนักงาน','ค่าเดินทาง','ค่าบำรุงรักษา','ค่าสาธารณูปโภค',
+    'ค่าจ้าง/ที่ปรึกษา','ค่าการตลาด','ค่าพัฒนาบุคลากร','ค่าประกัน','อื่นๆ'
+  ];
+  let masterData = [
+    { glCode:'5200016353', glGroup:'ค่าใช้จ่ายสำนักงาน' },
+    { glCode:'5200016354', glGroup:'ค่าเดินทาง' },
+    { glCode:'5200016355', glGroup:'ค่าบำรุงรักษา' },
+    { glCode:'5200016356', glGroup:'ค่าสาธารณูปโภค' },
+    { glCode:'5200016357', glGroup:'ค่าจ้าง/ที่ปรึกษา' },
+    { glCode:'5200016358', glGroup:'ค่าการตลาด' },
+    { glCode:'5200016359', glGroup:'ค่าพัฒนาบุคลากร' },
+    { glCode:'5200016360', glGroup:'ค่าบำรุงรักษา' },
+    { glCode:'5200016361', glGroup:'ค่าบำรุงรักษา' },
+    { glCode:'5200016362', glGroup:'ค่าบำรุงรักษา' }
+  ];
+  let newRowKey = null;       // glCode of most recently saved
+  let pendingDelete = null;
+  let sortCol = null;         // 'glCode' | 'glGroup' | null
+  let sortDir = 'asc';        // 'asc' | 'desc'
 
-<script src="api-client.js"></script>
-<script src="0003-gl-group.js"></script>
+  function toggleSort(col){
+    if (sortCol !== col){ sortCol = col; sortDir = 'asc'; }
+    else if (sortDir === 'asc') sortDir = 'desc';
+    else { sortCol = null; sortDir = 'asc'; }
+    // Update header attributes
+    document.querySelectorAll('.data-table thead th[data-col]').forEach(th => {
+      th.removeAttribute('data-sort');
+      if (th.dataset.col === sortCol) th.setAttribute('data-sort', sortDir);
+    });
+    renderTable();
+  }
+
+  /* ════════════════════════════════════════════
+     DROPDOWN: GL CODE
+     ════════════════════════════════════════════ */
+  function renderGlCodeList(filter){
+    const list = document.getElementById('glCodeList');
+    const q = (filter || '').toLowerCase();
+    const filtered = sapGlCodes.filter(it => it.code.toLowerCase().includes(q) || it.name.toLowerCase().includes(q));
+    if (!filtered.length) { list.innerHTML = '<div class="dropdown-empty">ไม่พบ GL Code · No matches</div>'; return; }
+    list.innerHTML = filtered.map(it => `
+      <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlCode('${it.code}','${it.name.replace(/'/g,"\\'")}')">
+        <span class="code">${it.code}</span>
+        <span class="name">${it.name}</span>
+      </div>
+    `).join('');
+  }
+  function selectGlCode(code, name){
+    document.getElementById('glCodeInput').value = code;
+    document.getElementById('glCodeDropdown').classList.remove('open');
+    // Auto-fill GL Group if mapping exists
+    const existing = masterData.find(d => d.glCode === code);
+    if (existing){
+      document.getElementById('glGroupInput').value = existing.glGroup;
+      setEditMode(masterData.indexOf(existing));
+    } else {
+      setEditMode(-1);
+    }
+  }
+
+  /* ════════════════════════════════════════════
+     DROPDOWN: GL GROUP
+     ════════════════════════════════════════════ */
+  function renderGlGroupList(filter){
+    const list = document.getElementById('glGroupList');
+    const q = (filter || '').toLowerCase();
+    const filtered = glGroups.filter(g => g.toLowerCase().includes(q));
+    let html = '';
+    if (filtered.length){
+      html += filtered.map(g => `
+        <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlGroup('${g.replace(/'/g,"\\'")}')">
+          <span class="code" style="font-family:var(--sans);font-weight:600;color:var(--ink)">${g}</span>
+        </div>
+      `).join('');
+    } else if (!filter){
+      html = '<div class="dropdown-empty">ไม่มี GL Group · พิมพ์เพื่อสร้างใหม่</div>';
+    }
+    // Create-new option
+    const trimmed = (filter || '').trim();
+    if (trimmed && !glGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())){
+      html += `<div class="dropdown-item create-new" onmousedown="event.preventDefault()" onclick="createNewGroup('${trimmed.replace(/'/g,"\\'")}')">
+        <span>สร้างกลุ่มใหม่: <b>${trimmed}</b></span>
+      </div>`;
+    }
+    list.innerHTML = html || '<div class="dropdown-empty">No options</div>';
+  }
+  function selectGlGroup(name){
+    document.getElementById('glGroupInput').value = name;
+    document.getElementById('glGroupDropdown').classList.remove('open');
+  }
+  function createNewGroup(name){
+    if (!glGroups.includes(name)) glGroups.push(name);
+    selectGlGroup(name);
+  }
+
+  /* ════════════════════════════════════════════
+     MODE (add / edit indicator)
+     ════════════════════════════════════════════ */
+  function setEditMode(masterIdx){
+    const badge = document.getElementById('modeBadge');
+    const label = document.getElementById('saveBtnLabel');
+    if (masterIdx >= 0){
+      badge.textContent = 'แก้ไข · UPDATE';
+      badge.style.color = 'var(--gl-group)';
+      badge.style.borderColor = 'var(--gl-group)';
+      label.textContent = 'อัปเดต';
+    } else {
+      badge.textContent = 'เพิ่มใหม่ · NEW';
+      badge.style.color = '';
+      badge.style.borderColor = '';
+      label.textContent = 'บันทึก';
+    }
+  }
+
+  /* ════════════════════════════════════════════
+     SAVE / EDIT / DELETE
+     ════════════════════════════════════════════ */
+  function saveRecord(){
+    const glCode = document.getElementById('glCodeInput').value.trim();
+    const glGroup = document.getElementById('glGroupInput').value.trim();
+    if (!glCode || !glGroup){
+      showNotice('โปรดกรอกข้อมูล', 'กรุณาเลือกทั้ง GL Code และ GL Group ก่อนบันทึก', null);
+      return;
+    }
+    const sapItem = sapGlCodes.find(s => s.code === glCode);
+    if (!sapItem){
+      showNotice('GL Code ไม่ถูกต้อง', 'กรุณาเลือก GL Code จากรายการของ SAP เท่านั้น', null);
+      return;
+    }
+    if (!glGroups.includes(glGroup)) glGroups.push(glGroup);
+
+    const existingIdx = masterData.findIndex(d => d.glCode === glCode);
+    let action = 'CREATE';
+    if (existingIdx >= 0){
+      action = 'UPDATE';
+      masterData.splice(existingIdx, 1);
+    }
+    masterData.unshift({ glCode, glGroup });
+    newRowKey = glCode;
+    document.getElementById('glCodeInput').value = '';
+    document.getElementById('glGroupInput').value = '';
+    setEditMode(-1);
+    renderTable();
+
+    showNotice(
+      action === 'UPDATE' ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ',
+      action === 'UPDATE' ? 'อัปเดต Mapping เรียบร้อย และย้ายขึ้นบนสุดของตาราง' : 'เพิ่ม Mapping ใหม่ที่บนสุดของตาราง',
+      { glCode, glGroup, action, sapName: sapItem.name }
+    );
+  }
+  function editRecord(idx){
+    const rec = masterData[idx];
+    document.getElementById('glCodeInput').value = rec.glCode;
+    document.getElementById('glGroupInput').value = rec.glGroup;
+    setEditMode(idx);
+    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function askDelete(idx){
+    pendingDelete = idx;
+    const rec = masterData[idx];
+    const sap = sapGlCodes.find(s => s.code === rec.glCode);
+    document.getElementById('confirmSummary').innerHTML = `
+      <div class="row"><span class="lbl">GL Code</span><span class="gl-code-pill">${rec.glCode}</span></div>
+      <div class="row"><span class="lbl">SAP name</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
+      <div class="row"><span class="lbl">GL Group</span><span class="gl-group-pill">${rec.glGroup}</span></div>
+    `;
+    document.getElementById('confirmModal').classList.add('open');
+  }
+  function closeConfirm(){
+    document.getElementById('confirmModal').classList.remove('open');
+    pendingDelete = null;
+  }
+  document.getElementById('confirmBtn').onclick = () => {
+    if (pendingDelete == null) return;
+    masterData.splice(pendingDelete, 1);
+    closeConfirm();
+    renderTable();
+  };
+
+  /* ════════════════════════════════════════════
+     RENDER TABLE
+     ════════════════════════════════════════════ */
+  function renderSummary(){
+    const totalGl = masterData.length;
+    const uniqueGroups = new Set(masterData.map(d => d.glGroup)).size;
+    const mappedCodes = new Set(masterData.map(d => d.glCode));
+    const unmapped = sapGlCodes.filter(s => !mappedCodes.has(s.code)).length;
+    const sapTotal = sapGlCodes.length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('stat-gl', totalGl);
+    set('stat-group', uniqueGroups);
+    set('stat-unmapped', unmapped);
+    set('stat-sap', sapTotal);
+  }
+
+  function renderTable(){
+    renderSummary();
+    const tbody = document.getElementById('tableBody');
+    const q = document.getElementById('tableSearch').value.toLowerCase();
+    let filtered = masterData.filter(d =>
+      d.glCode.toLowerCase().includes(q) || d.glGroup.toLowerCase().includes(q)
+    );
+    if (sortCol){
+      const dir = sortDir === 'asc' ? 1 : -1;
+      filtered = [...filtered].sort((a, b) => {
+        const va = (a[sortCol] || '').toLowerCase();
+        const vb = (b[sortCol] || '').toLowerCase();
+        if (va < vb) return -1 * dir;
+        if (va > vb) return  1 * dir;
+        return 0;
+      });
+    }
+    document.getElementById('countPill').innerHTML = `<b>${filtered.length}</b> / ${masterData.length} records`;
+
+    if (!filtered.length){
+      tbody.innerHTML = `<tr class="empty"><td colspan="3">
+        <div class="empty-title">No matches.</div>
+        <div class="empty-sub">Try clearing the search or add a new mapping above.</div>
+      </td></tr>`;
+      return;
+    }
+
+    // Compute merge runs (consecutive identical glGroup)
+    const rowToRun = new Array(filtered.length);
+    let i = 0;
+    while (i < filtered.length){
+      const g = filtered[i].glGroup;
+      let len = 1;
+      while (i + len < filtered.length && filtered[i + len].glGroup === g) len++;
+      const run = { length: len, group: g };
+      for (let k = 0; k < len; k++) rowToRun[i + k] = { run, posInRun: k };
+      i += len;
+    }
+
+    tbody.innerHTML = filtered.map((d, rowIdx) => {
+      const idx = masterData.indexOf(d);
+      const sap = sapGlCodes.find(s => s.code === d.glCode);
+      const displayIdx = String(rowIdx + 1).padStart(2, '0');
+      const isNew = d.glCode === newRowKey;
+      const info = rowToRun[rowIdx];
+      const isFirstOfRun = info.posInRun === 0;
+      const isMerged = info.run.length > 1;
+
+      const codeCell = `<td>
+        <div class="gl-code-cell">
+          <span class="row-idx">${displayIdx}</span>
+          <div class="code-block">
+            <span class="gl-code-pill">${d.glCode}</span>
+            <span class="sap-name">${sap ? sap.name : '—'}</span>
+          </div>
+        </div>
+      </td>`;
+
+      let groupCell = '';
+      if (isFirstOfRun){
+        if (isMerged){
+          groupCell = `<td rowspan="${info.run.length}" class="group-merged-cell">
+            <div class="map-block" style="position:relative">
+              <span class="map-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 7h17" stroke-dasharray="2 3"/>
+                  <path d="M16 2l5 5-5 5"/>
+                </svg>
+              </span>
+              <span class="merged-wrap">
+                <span class="gl-group-pill merged">
+                  <span class="count-tag">${info.run.length}× MERGED</span>
+                  <span class="group-name">${d.glGroup}</span>
+                </span>
+                <span class="drop drop-1"></span>
+                <span class="drop drop-2"></span>
+                <span class="drop drop-3"></span>
+                <span class="merged-shadow"></span>
+              </span>
+            </div>
+          </td>`;
+        } else {
+          groupCell = `<td>
+            <div class="map-block">
+              <span class="map-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 7h17" stroke-dasharray="2 3"/>
+                  <path d="M16 2l5 5-5 5"/>
+                </svg>
+              </span>
+              <div class="group-block">
+                <span class="gl-group-pill">${d.glGroup}</span>
+              </div>
+            </div>
+          </td>`;
+        }
+      }
+
+      const actionsCell = `<td>
+        <div class="action-row">
+          <button class="action-btn edit" onclick="editRecord(${idx})" title="แก้ไข">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="action-btn delete" onclick="askDelete(${idx})" title="ลบ">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </td>`;
+
+      return `<tr class="${isNew ? 'row-new' : ''}">${codeCell}${groupCell}${actionsCell}</tr>`;
+    }).join('');
+    setTimeout(() => { newRowKey = null; }, 2500);
+  }
+
+  /* ════════════════════════════════════════════
+     NOTICE MODAL
+     ════════════════════════════════════════════ */
+  function showNotice(title, body, summary){
+    document.querySelector('#noticeModal .modal-title').innerHTML = title.includes('สำเร็จ')
+      ? title.replace('สำเร็จ', '<em>สำเร็จ</em>')
+      : title;
+    document.getElementById('noticeMsg').textContent = body;
+    const sumEl = document.getElementById('noticeSummary');
+    if (summary){
+      sumEl.style.display = 'flex';
+      sumEl.innerHTML = `
+        <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${summary.action}</span></div>
+        <div class="row"><span class="lbl">GL Code</span><span class="gl-code-pill">${summary.glCode}</span></div>
+        <div class="row"><span class="lbl">SAP name</span><span style="color:var(--ink-2);font-size:12.5px">${summary.sapName}</span></div>
+        <div class="row"><span class="lbl">GL Group</span><span class="gl-group-pill">${summary.glGroup}</span></div>
+      `;
+    } else {
+      sumEl.style.display = 'none';
+    }
+    document.getElementById('noticeModal').classList.add('open');
+  }
+  function closeNotice(){
+    document.getElementById('noticeModal').classList.remove('open');
+  }
+
+  /* ════════════════════════════════════════════
+     INIT — wire up dropdowns + theme
+     ════════════════════════════════════════════ */
+  (function init(){
+    applyThemeFromStorage();
+
+    // GL Code dropdown
+    const glCodeWrap = document.getElementById('glCodeDropdown');
+    const glCodeInput = document.getElementById('glCodeInput');
+    glCodeInput.addEventListener('focus', () => { glCodeWrap.classList.add('open'); renderGlCodeList(''); });
+    glCodeInput.addEventListener('input', () => { glCodeWrap.classList.add('open'); renderGlCodeList(glCodeInput.value); });
+    glCodeInput.addEventListener('blur', () => setTimeout(() => glCodeWrap.classList.remove('open'), 150));
+
+    // GL Group dropdown
+    const glGroupWrap = document.getElementById('glGroupDropdown');
+    const glGroupInput = document.getElementById('glGroupInput');
+    glGroupInput.addEventListener('focus', () => { glGroupWrap.classList.add('open'); renderGlGroupList(''); });
+    glGroupInput.addEventListener('input', () => { glGroupWrap.classList.add('open'); renderGlGroupList(glGroupInput.value); });
+    glGroupInput.addEventListener('blur', () => setTimeout(() => glGroupWrap.classList.remove('open'), 150));
+
+    // Close dropdowns on outside click
+    document.addEventListener('click', (e) => {
+      if (!glCodeWrap.contains(e.target)) glCodeWrap.classList.remove('open');
+      if (!glGroupWrap.contains(e.target)) glGroupWrap.classList.remove('open');
+    });
+
+    renderTable();
+  })();
+</script>
 </body>
 </html>
