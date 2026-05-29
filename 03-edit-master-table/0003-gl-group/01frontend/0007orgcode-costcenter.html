@@ -335,6 +335,9 @@
     display:grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap:14px;padding:22px;background:var(--surface);
+    max-height:calc(100vh - 520px);
+    min-height:240px;
+    overflow-y:auto;
   }
   .chip-card{
     background:var(--paper);border:1px solid var(--line);border-radius:12px;
