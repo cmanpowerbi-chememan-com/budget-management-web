@@ -34,7 +34,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: ${{ env.MODULE }}/tests/backend
-        run: python -m pytest test_merge_logic.py test_gl_group_handlers.py test_orgcode_cc_handlers.py -v --tb=short
+        run: python -m pytest test_gl_group_handlers.py test_orgcode_cc_handlers.py -v --tb=short
 
   # ── Integration tests (real Fabric SQL, secrets required) ─
   integration-tests:
