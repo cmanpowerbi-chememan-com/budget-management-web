@@ -1,6 +1,0 @@
-azure-functions>=1.18.0
-pyjwt[crypto]>=2.8.0
-requests>=2.31.0
-pydantic>=2.5.0
-pyspark>=3.5.0
-delta-spark>=3.0.0
