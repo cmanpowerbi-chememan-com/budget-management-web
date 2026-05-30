@@ -1,18 +1,18 @@
-name: 0003 GL Group — Test & Deploy
+name: Master Tables — Test & Deploy
 
 on:
   push:
     branches: [main]
     paths:
-      - '03-edit-master-table/0003-gl-group/**'
-      - '.github/workflows/0003-gl-group-deploy.yml'
+      - '03-edit-master-table/master-tables/**'
+      - '.github/workflows/master-tables-deploy.yml'
   pull_request:
     branches: [main]
     paths:
-      - '03-edit-master-table/0003-gl-group/**'
+      - '03-edit-master-table/master-tables/**'
 
 env:
-  MODULE: 03-edit-master-table/0003-gl-group
+  MODULE: 03-edit-master-table/master-tables
 
 jobs:
   # ── Unit tests (no DB required) ───────────────────────────
@@ -33,14 +33,13 @@ jobs:
         run: pip install -r requirements.txt pytest
 
       - name: Run unit tests
-        working-directory: ${{ env.MODULE }}/04tests
-        run: python -m pytest test_merge_logic.py test_handlers.py -v --tb=short
+        working-directory: ${{ env.MODULE }}/tests/backend
+        run: python -m pytest test_merge_logic.py test_gl_group_handlers.py test_orgcode_cc_handlers.py -v --tb=short
 
   # ── Integration tests (real Fabric SQL, secrets required) ─
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-22.04
-    # Only run when secrets are available (skipped on fork PRs)
     if: vars.RUN_INTEGRATION_TESTS == 'true'
     env:
       AAD_TENANT_ID:       ${{ secrets.FABRIC_AAD_TENANT_ID }}
@@ -70,8 +69,8 @@ jobs:
         run: pip install -r requirements.txt pytest
 
       - name: Run integration tests
-        working-directory: ${{ env.MODULE }}/04tests
-        run: python -m pytest test_integration.py -v -s
+        working-directory: ${{ env.MODULE }}/tests/backend
+        run: python -m pytest test_gl_group_integration.py -v -s
 
   # ── Deploy to Azure Static Web Apps ───────────────────────
   deploy:
