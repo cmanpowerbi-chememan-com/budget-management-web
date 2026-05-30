@@ -1,15 +1,15 @@
 {
   "routes": [
     {
-      "route": "/0003budget-gl-master.html",
+      "route": "/gl-group.html",
       "allowedRoles": ["authenticated"]
     },
     {
-      "route": "/0007orgcode-costcenter.html",
+      "route": "/orgcode-costcenter.html",
       "allowedRoles": ["authenticated"]
     },
     {
-      "route": "/0008edit-document-number.html",
+      "route": "/hide-document.html",
       "allowedRoles": ["authenticated"]
     },
     {

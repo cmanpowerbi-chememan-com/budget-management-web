@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hide Document Number — Chememan</title>
+<title>Orgcode &amp; Cost center Master — Chememan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,8 +11,8 @@
   :root{
     --c-forest:#00522C; --c-mint:#1FA378; --c-gold:#C9963D; --c-blue:#3C60A5; --c-sky:#5ECDF6;
     --accent: var(--c-forest); --accent-2: var(--c-mint); --accent-3: var(--c-gold);
-    --gl-code:#1FA378;   /* mint green for Document Number */
-    --gl-group:#C9963D;  /* gold for Period (Year+Month) */
+    --gl-code:#1FA378;   /* mint green for Orgcode badge */
+    --gl-group:#1B7BA8;  /* sky blue for Cost Center badge */
     --ink:#0B1A12; --ink-2:#3F4D45; --ink-3:#7A867E;
     --paper:#F7F5EF; --paper-2:#EFEBE1; --surface:#FFFFFF;
     --line:rgba(11,26,18,0.10); --line-2:rgba(11,26,18,0.06);
@@ -24,7 +24,7 @@
     --ink:#FFFFFF; --ink-2:#C2CEC7; --ink-3:#7A8780;
     --paper:#0B1A12; --paper-2:#0F2218; --surface:#142A1F;
     --line:rgba(255,255,255,0.10); --line-2:rgba(255,255,255,0.06);
-    --gl-code:#37D6A2; --gl-group:#E6BC65;
+    --gl-code:#37D6A2; --gl-group:#5ECDF6;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
@@ -256,12 +256,6 @@
   .form-grid{
     display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:end;
   }
-  .form-grid-4{
-    grid-template-columns: 2fr 1fr 1fr auto;
-  }
-  @media (max-width:980px){
-    .form-grid-4{grid-template-columns: 1fr 1fr auto}
-  }
   .field{display:flex;flex-direction:column;gap:6px;position:relative;min-width:0}
   .field-label{
     font-family:var(--mono);font-size:11px;color:var(--ink-3);
@@ -306,64 +300,6 @@
   }
   .dropdown-empty{padding:16px;text-align:center;color:var(--ink-3);font-size:13px}
 
-  /* ─── CHIP-INPUT (multi-select for Document Number) ─── */
-  .chip-input{
-    display:flex;flex-wrap:wrap;gap:6px;
-    padding:7px 10px;min-height:46px;
-    background:var(--paper);border:1px solid var(--line);border-radius:8px;
-    align-items:center;transition:all 160ms;cursor:text;
-  }
-  .chip-input:focus-within{
-    border-color:var(--accent);background:var(--surface);
-    box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
-  }
-  .chip-input input{
-    flex:1;min-width:140px;border:none;background:transparent;outline:none;
-    font-size:14px;padding:4px 2px;
-  }
-  .doc-chip{
-    display:inline-flex;align-items:center;gap:6px;
-    padding:3px 4px 3px 10px;
-    background:color-mix(in oklab, var(--gl-code) 14%, var(--surface));
-    color:color-mix(in oklab, var(--gl-code) 78%, var(--ink));
-    border:1px solid color-mix(in oklab, var(--gl-code) 30%, var(--line));
-    border-radius:999px;
-    font-family:var(--mono);font-size:11.5px;font-weight:600;
-    letter-spacing:0.01em;line-height:1;
-    animation: chipPop 180ms ease;
-  }
-  [data-theme="dark"] .doc-chip{color:color-mix(in oklab, var(--gl-code) 35%, #fff)}
-  @keyframes chipPop {
-    from{transform:scale(0.7);opacity:0}
-    to{transform:scale(1);opacity:1}
-  }
-  .doc-chip .x{
-    width:18px;height:18px;border-radius:50%;
-    display:grid;place-items:center;cursor:pointer;
-    color:var(--gl-code);opacity:0.7;transition:all 120ms;
-    flex-shrink:0;
-  }
-  .doc-chip .x:hover{background:#C25A3F;color:#fff;opacity:1}
-  .doc-chip .x svg{width:10px;height:10px}
-
-  .chip-count{
-    font-family:var(--mono);font-size:10.5px;font-weight:700;
-    color:var(--gl-code);
-    padding:2px 7px;border-radius:4px;
-    background:color-mix(in oklab, var(--gl-code) 14%, transparent);
-    margin-left:6px;letter-spacing:0.04em;
-    display:inline-block;vertical-align:middle;
-  }
-  .chip-count:empty{display:none}
-
-  .dropdown-item.is-selected{
-    background:color-mix(in oklab, var(--gl-code) 12%, transparent);
-    opacity:0.55;cursor:not-allowed;
-  }
-  .dropdown-item.is-selected::after{
-    content:'✓';margin-left:6px;color:var(--gl-code);font-weight:800;
-  }
-
   /* ─── CHIP TAG LAYOUT (collapsed cards with embedded mini-chips) ─── */
   .chip-toolbar{
     display:flex;align-items:center;gap:14px;padding:14px 22px;
@@ -399,6 +335,9 @@
     display:grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap:14px;padding:22px;background:var(--surface);
+    max-height:calc(100vh - 520px);
+    min-height:240px;
+    overflow-y:auto;
   }
   .chip-card{
     background:var(--paper);border:1px solid var(--line);border-radius:12px;
@@ -927,7 +866,7 @@
 <!-- ─── NAV ─── -->
 <nav class="nav" data-screen-label="Nav">
   <div class="nav-inner">
-    <a href="0001index.html" class="nav-logo">
+    <a href="index.html" class="nav-logo">
       <span class="nav-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V8l8-5 8 5v11"/><path d="M9 19v-7h6v7"/></svg>
       </span>
@@ -937,10 +876,10 @@
       </span>
     </a>
     <ul class="nav-links">
-      <li><a href="0001index.html">Home</a></li>
-      <li><a href="0003budget-gl-master.html">Edit GL Group</a></li>
-      <li><a href="0007orgcode-costcenter.html">Edit Org &amp; Cost center</a></li>
-      <li><a href="#" class="active">Hide Document Number</a></li>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="gl-group.html">Edit GL Group</a></li>
+      <li><a href="#" class="active">Edit Org &amp; Cost center</a></li>
+      <li><a href="hide-document.html">Hide Document Number</a></li>
       <li><a href="0009master-currency.html">Master Currency</a></li>
     </ul>
     <div class="nav-actions">
@@ -948,7 +887,7 @@
         <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
       </button>
-      <a href="0001index.html" class="btn-back">
+      <a href="index.html" class="btn-back">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
         <span>Back to home</span>
       </a>
@@ -960,23 +899,23 @@
 <main class="wrap">
   <header class="page-head" data-screen-label="Page header">
     <div class="breadcrumb">
-      <a href="0001index.html">Home</a>
+      <a href="index.html">Home</a>
       <span class="sep">/</span>
       <span>Budget Master</span>
       <span class="sep">/</span>
-      <span style="color:var(--ink-2)">Hide Document Number</span>
+      <span style="color:var(--ink-2)">Orgcode &amp; Cost Center Mapping</span>
     </div>
     <div class="page-title-row">
       <div>
-        <div class="page-eyebrow">Module 08 · Document Hiding</div>
-        <h1 class="page-title glassy" style="white-space:nowrap;font-size:clamp(40px, 5.8vw, 72px)">Hide <em>Document Number.</em></h1>
-        <p class="page-subtitle">ซ่อน <b>Document Number</b> (จาก SAP) ตาม <b>Fiscal Year</b> และ <b>Month</b> ที่กำหนด — เอกสารที่ซ่อนจะไม่ปรากฏในรายงานงบประมาณ</p>
+        <div class="page-eyebrow">Module 07 · Master Data</div>
+        <h1 class="page-title glassy">Cost center &amp; <em>Orgcode.</em></h1>
+        <p class="page-subtitle">จัดการ Mapping ระหว่าง <b>Orgcode</b> (จาก SAP) กับ <b>Cost Center</b> สำหรับใช้ในการจัดหมวดผู้รับผิดชอบและรายงานงบประมาณ</p>
       </div>
       <div class="summary" id="summaryStrip" data-screen-label="Summary chips">
-      <span class="summary-chip gl" title="จำนวน Document Number ที่ซ่อน"><span class="lbl">Hidden Docs</span><span class="v" id="stat-gl">—</span></span>
-      <span class="summary-chip group" title="จำนวน Period ที่มี Doc ถูกซ่อน"><span class="lbl">Periods</span><span class="v" id="stat-group">—</span></span>
-      <span class="summary-chip gold" title="Document จาก SAP ที่ยังไม่ได้ซ่อนเลย"><span class="lbl">Not hidden</span><span class="v" id="stat-unmapped">—</span></span>
-      <span class="summary-chip" title="Document Number ทั้งหมดจาก SAP"><span class="lbl">SAP total</span><span class="v" id="stat-sap">—</span></span>
+      <span class="summary-chip gl" title="จำนวน Cost Center ที่ Map แล้ว"><span class="lbl">Cost Centers</span><span class="v" id="stat-gl">—</span></span>
+      <span class="summary-chip group" title="จำนวน Orgcode ที่มี Mapping"><span class="lbl">Orgcodes</span><span class="v" id="stat-group">—</span></span>
+      <span class="summary-chip gold" title="Orgcode จาก SAP ที่ยังไม่ได้ Map"><span class="lbl">Unmapped</span><span class="v" id="stat-unmapped">—</span></span>
+      <span class="summary-chip" title="Orgcode ทั้งหมดจาก SAP"><span class="lbl">SAP total</span><span class="v" id="stat-sap">—</span></span>
     </div>
     </div>
   </header>
@@ -989,35 +928,32 @@
         <span class="badge" id="modeBadge">เพิ่มใหม่</span>
       </div>
       <div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em">
-        เลือก Documents (≥1) → ระบุปีงบ + เดือน → กดบันทึก
+        เลือก Orgcode → กรอก Cost Center → กดบันทึก
       </div>
     </div>
     <div class="panel-body">
-      <div class="form-grid form-grid-4">
-        <!-- Document Number (free-text multi-chip) -->
+      <div class="form-grid">
+        <!-- Cost Center (left) — multi-select dropdown -->
         <div class="field">
-          <label class="field-label">Document Number · จาก SAP<span class="chip-count" id="docChipCount"></span></label>
-          <div class="chip-input" id="docChipInput">
-            <input type="text" id="glCodeInput"
-                   placeholder="พิมพ์เลข 10 หลัก แล้วกด Enter…"
-                   autocomplete="off" inputmode="numeric"
-                   pattern="[0-9]{10}" maxlength="10">
+          <label class="field-label">Cost Center · เลือกจากรายการ</label>
+          <!-- Selected CC chips appear here -->
+          <div id="ccChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;min-height:0"></div>
+          <div class="dropdown" id="ccDropdown">
+            <input type="text" class="field-input" id="ccSearchInput"
+                   placeholder="พิมพ์ค้นหา เช่น 10CS…" autocomplete="off">
+            <div class="dropdown-list" id="ccDropdownList"></div>
           </div>
-          <span class="field-helper" id="docInputHelper">พิมพ์เลขเอกสาร 10 หลัก → Enter / Tab / "," เพื่อเพิ่ม · Backspace ลบตัวล่าสุด</span>
+          <span class="field-helper">เลือกได้หลาย Cost Center — แต่ละคู่จะถูกบันทึกแยก</span>
         </div>
 
-        <!-- Fiscal Year -->
+        <!-- Orgcode (right) -->
         <div class="field">
-          <label class="field-label">Fiscal Year</label>
-          <input type="number" class="field-input" id="fiscalYearInput" placeholder="2026" min="2020" max="2099" autocomplete="off">
-          <span class="field-helper">2020 – 2099</span>
-        </div>
-
-        <!-- Month -->
-        <div class="field">
-          <label class="field-label">Month</label>
-          <input type="number" class="field-input" id="monthInput" placeholder="1 – 12" min="1" max="12" autocomplete="off">
-          <span class="field-helper">เดือน 1–12 (ปฏิทินงบ)</span>
+          <label class="field-label">Orgcode · จาก SAP</label>
+          <div class="dropdown" id="glGroupDropdown">
+            <input type="text" class="field-input" id="glGroupInput" placeholder="พิมพ์ค้นหา 1120000 หรือชื่อหน่วยงาน…" autocomplete="off">
+            <div class="dropdown-list" id="glGroupList"></div>
+          </div>
+          <span class="field-helper">เลือกจากรายการ SAP เท่านั้น (1 Orgcode รับได้หลาย Cost Center)</span>
         </div>
 
         <!-- Save -->
@@ -1042,17 +978,21 @@
     <div class="toolbar">
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <input type="text" id="tableSearch" placeholder="ค้นหา Document, Year หรือ Month…" oninput="renderTable()">
+        <input type="text" id="tableSearch" placeholder="ค้นหา Cost Center หรือ Orgcode…" oninput="renderTable()">
       </div>
       <div style="display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.02em">
-        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-code)"></span>Document</span>
-        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-group)"></span>Period</span>
+        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-code)"></span>Cost Center</span>
+        <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gl-group)"></span>Orgcode</span>
       </div>
       <div class="count-pill" id="countPill">— records</div>
     </div>
     <div class="chip-toolbar">
+      <div class="view-switch" role="tablist">
+        <button type="button" data-mode="cc"  class="active" onclick="setViewMode('cc')"><span class="dot"></span>By Cost Center</button>
+        <button type="button" data-mode="org" onclick="setViewMode('org')"><span class="dot"></span>By Orgcode</button>
+      </div>
       <div class="chip-meta">
-        <b id="legend-cc">—</b> Documents · <b id="legend-edges">—</b> hidden entries · <b id="legend-org">—</b> Periods
+        <b id="legend-cc">—</b> Cost Centers · <b id="legend-edges">—</b> mappings · <b id="legend-org">—</b> Orgcodes
       </div>
     </div>
     <div class="chip-grid" id="chipGrid"></div>
@@ -1101,764 +1041,46 @@
   </div>
 </div>
 
+<script src="shared/api-client-orgcode-cc.js"></script>
+<script src="shared/orgcode-cc.js"></script>
 <script>
   /* ════════════════════════════════════════════
-     THEME — synced via localStorage with 0001/0002
+     THEME PRESETS — synced via localStorage with 0001/0002
+     Colour preset + intensity logic.
+     toggleTheme() and applyThemeFromStorage() are in 0007-orgcode-costcenter.js;
+     this block overrides applyThemeFromStorage with the preset-aware version.
      ════════════════════════════════════════════ */
   const PRESETS = {
-    chememan: { forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
-    ocean:    { forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
-    sunset:   { forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
-    midnight: { forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
-    nature:   { forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
-    royal:    { forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+    chememan: { forest: '#00522C', mint: '#1FA378', gold: '#C9963D' },
+    ocean:    { forest: '#0E4D6E', mint: '#37B5C7', gold: '#F2C661' },
+    sunset:   { forest: '#7B2D26', mint: '#E07B4C', gold: '#F2B752' },
+    midnight: { forest: '#1B244B', mint: '#5B73D9', gold: '#A88AE6' },
+    nature:   { forest: '#2D5016', mint: '#7BA428', gold: '#B8A04A' },
+    royal:    { forest: '#3D1F6E', mint: '#9B6DD9', gold: '#D6B16A' },
   };
-  function toggleTheme(){
-    const cur = document.documentElement.getAttribute('data-theme');
-    const next = cur === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', next);
-    try { localStorage.setItem('cm.theme', next); } catch(e){}
-  }
-  function applyThemeFromStorage(){
+  function applyThemeFromStorage() {
     let theme = 'light', preset = 'ocean', intensity = 60;
     try {
-      theme = localStorage.getItem('cm.theme') || 'light';
-      preset = localStorage.getItem('cm.preset') || 'ocean';
+      theme     = localStorage.getItem('cm.theme')      || 'light';
+      preset    = localStorage.getItem('cm.preset')     || 'ocean';
       intensity = +(localStorage.getItem('cm.intensity') || 60);
-    } catch(e){}
+    } catch (_) {}
     document.documentElement.setAttribute('data-theme', theme);
     const p = PRESETS[preset] || PRESETS.ocean;
     const adjust = (hex, factor) => {
-      const h = hex.replace('#','');
-      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
-      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
-      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      const h = hex.replace('#', '');
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      const mix   = c => factor >= 1 ? Math.round(c * (2 - factor)) : Math.round(c + (255 - c) * (1 - factor));
+      const toHex = n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
       return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
     };
-    const f = intensity/100;
+    const f = intensity / 100;
     document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
     document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
     document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
   }
-
-  /* ════════════════════════════════════════════
-     DATA
-     ════════════════════════════════════════════ */
-  // No hardcoded list — user types doc numbers directly.
-  // Server validates existence against gold_sap_gl_trans on Save.
-  const sapGlCodes = []; // kept for compatibility with renderTable() lookups
-  let glGroups = []; // unused
-  // masterData: { glCode = docnum, glGroup = "YYYY-MM" period key }
-  // Composite key is the pair.
-  const fmtPeriod = (y, m) => `${y}-${String(m).padStart(2,'0')}`;
-  const monthName = (m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1] || '—';
-  let masterData = []; // populated by loadList() on init
-
-  /* ────────────────────────────────────────────
-     API CLIENT — Hide Document Number backend
-     All endpoints under /api/master/hide-document/*
-     ──────────────────────────────────────────── */
-  const API_BASE = '/api/master/hide-document';
-
-  async function apiRequest(path, opts = {}) {
-    const res = await fetch(API_BASE + path, {
-      ...opts,
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const err = new Error(body.message_th || body.message_en || body.error || `${res.status} ${res.statusText}`);
-      err.status = res.status;
-      err.body = body;
-      throw err;
-    }
-    return res.json();
-  }
-
-  function apiList() {
-    return apiRequest('/list', { method: 'GET' });
-  }
-  function apiSave(doc_num, fiscal_year, fiscal_month) {
-    return apiRequest('/save', {
-      method: 'POST',
-      body: JSON.stringify({ doc_num, fiscal_year, fiscal_month }),
-    });
-  }
-  function apiDelete(doc_num, fiscal_year, fiscal_month) {
-    return apiRequest('/delete', {
-      method: 'DELETE',
-      body: JSON.stringify({ doc_num, fiscal_year, fiscal_month }),
-    });
-  }
-
-  // Refresh masterData from server. Backend returns
-  //   [{doc_num, fiscal_year, fiscal_month, period}]
-  // Frontend uses {glCode, glGroup} legacy shape — convert.
-  async function loadList() {
-    const rows = await apiList();
-    masterData = rows.map(r => ({ glCode: r.doc_num, glGroup: r.period }));
-    renderTable();
-  }
-  let newRowKey = null;       // glCode of most recently saved
-  let pendingDelete = null;
-  let sortCol = null;         // 'glCode' | 'glGroup' | null
-  let sortDir = 'asc';        // 'asc' | 'desc'
-
-  function toggleSort(col){
-    if (sortCol !== col){ sortCol = col; sortDir = 'asc'; }
-    else if (sortDir === 'asc') sortDir = 'desc';
-    else { sortCol = null; sortDir = 'asc'; }
-    // Update header attributes
-    document.querySelectorAll('.data-table thead th[data-col]').forEach(th => {
-      th.removeAttribute('data-sort');
-      if (th.dataset.col === sortCol) th.setAttribute('data-sort', sortDir);
-    });
-    renderTable();
-  }
-
-  /* ════════════════════════════════════════════
-     MULTI-CHIP INPUT: DOCUMENT NUMBER (free-text)
-     ════════════════════════════════════════════ */
-  let selectedDocs = []; // [{code, name}, ...]
-  const DOC_FORMAT = /^[0-9]{10}$/;
-
-  function flashInputError(msg){
-    const input  = document.getElementById('glCodeInput');
-    const helper = document.getElementById('docInputHelper');
-    const origHelper = helper.textContent;
-    input.style.borderColor = '#C25A3F';
-    helper.textContent = msg;
-    helper.style.color = '#C25A3F';
-    clearTimeout(input._errTimer);
-    input._errTimer = setTimeout(() => {
-      input.style.borderColor = '';
-      helper.textContent = origHelper;
-      helper.style.color = '';
-    }, 1800);
-  }
-
-  // Try to commit whatever's in the input as a chip. Validates format.
-  function tryAddDocFromInput(){
-    const input = document.getElementById('glCodeInput');
-    const raw   = input.value.trim();
-    if (!raw) return false;
-    if (!DOC_FORMAT.test(raw)){
-      flashInputError(`Format ผิด: ต้องเป็นเลข 10 หลัก (พิมพ์ "${raw}")`);
-      return false;
-    }
-    if (selectedDocs.some(d => d.code === raw)){
-      flashInputError(`เลข ${raw} มีอยู่ใน list แล้ว`);
-      input.value = '';
-      return false;
-    }
-    selectedDocs.push({ code: raw, name: '' });
-    input.value = '';
-    renderDocChips();
-    return true;
-  }
-
-  function addDoc(code, name){
-    if (selectedDocs.some(d => d.code === code)) return;
-    selectedDocs.push({ code, name: name || '' });
-    renderDocChips();
-  }
-  function removeDoc(code){
-    selectedDocs = selectedDocs.filter(d => d.code !== code);
-    renderDocChips();
-  }
-  function clearDocs(){
-    selectedDocs = [];
-    renderDocChips();
-  }
-
-  /* ────────────────────────────────────────────
-     SERVER-SIDE VALIDATION — calls Fabric Lakehouse via backend
-     POST /api/master/hide-document/validate-docs
-        body: { codes: ["5400005042", ...] }
-        resp: { valid: [...], invalid: [...] }
-     Backend queries dbo.gold_sap_gl_trans on the
-     Lakehouse SQL Analytics Endpoint.
-     ──────────────────────────────────────────── */
-  async function validateDocsExist(codes){
-    const res = await fetch('/api/master/hide-document/validate-docs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codes }),
-      credentials: 'include',
-    });
-    if (!res.ok){
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `validate failed (${res.status})`);
-    }
-    return await res.json(); // { valid: [...], invalid: [...] }
-  }
-  function renderDocChips(){
-    const wrap  = document.getElementById('docChipInput');
-    const input = document.getElementById('glCodeInput');
-    wrap.querySelectorAll('.doc-chip').forEach(c => c.remove());
-    selectedDocs.forEach(d => {
-      const chip = document.createElement('span');
-      chip.className = 'doc-chip';
-      chip.innerHTML = `
-        <span title="${d.name.replace(/"/g,'&quot;')}">${d.code}</span>
-        <span class="x" onclick="removeDoc('${d.code}')" title="ลบ">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-        </span>
-      `;
-      wrap.insertBefore(chip, input);
-    });
-    const count = document.getElementById('docChipCount');
-    if (count) count.textContent = selectedDocs.length ? `${selectedDocs.length} selected` : '';
-  }
-  window.addDoc = addDoc;
-  window.removeDoc = removeDoc;
-
-  /* ════════════════════════════════════════════
-     DROPDOWN: GL GROUP
-     ════════════════════════════════════════════ */
-  function renderGlGroupList(filter){
-    const list = document.getElementById('glGroupList');
-    const q = (filter || '').toLowerCase();
-    const filtered = glGroups.filter(g => g.toLowerCase().includes(q));
-    let html = '';
-    if (filtered.length){
-      html += filtered.map(g => `
-        <div class="dropdown-item" onmousedown="event.preventDefault()" onclick="selectGlGroup('${g.replace(/'/g,"\\'")}')">
-          <span class="code" style="font-family:var(--sans);font-weight:600;color:var(--ink)">${g}</span>
-        </div>
-      `).join('');
-    } else if (!filter){
-      html = '<div class="dropdown-empty">ไม่มี GL Group · พิมพ์เพื่อสร้างใหม่</div>';
-    }
-    // Create-new option
-    const trimmed = (filter || '').trim();
-    if (trimmed && !glGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())){
-      html += `<div class="dropdown-item create-new" onmousedown="event.preventDefault()" onclick="createNewGroup('${trimmed.replace(/'/g,"\\'")}')">
-        <span>สร้างกลุ่มใหม่: <b>${trimmed}</b></span>
-      </div>`;
-    }
-    list.innerHTML = html || '<div class="dropdown-empty">No options</div>';
-  }
-  function selectGlGroup(name){
-    document.getElementById('glGroupInput').value = name;
-    document.getElementById('glGroupDropdown').classList.remove('open');
-  }
-  function createNewGroup(name){
-    if (!glGroups.includes(name)) glGroups.push(name);
-    selectGlGroup(name);
-  }
-
-  /* ════════════════════════════════════════════
-     MODE (add / edit indicator)
-     ════════════════════════════════════════════ */
-  function setEditMode(masterIdx){
-    const badge = document.getElementById('modeBadge');
-    const label = document.getElementById('saveBtnLabel');
-    if (masterIdx >= 0){
-      badge.textContent = 'แก้ไข · UPDATE';
-      badge.style.color = 'var(--gl-group)';
-      badge.style.borderColor = 'var(--gl-group)';
-      label.textContent = 'อัปเดต';
-    } else {
-      badge.textContent = 'เพิ่มใหม่ · NEW';
-      badge.style.color = '';
-      badge.style.borderColor = '';
-      label.textContent = 'บันทึก';
-    }
-  }
-
-  /* ════════════════════════════════════════════
-     SAVE / EDIT / DELETE
-     ════════════════════════════════════════════ */
-  async function saveRecord(){
-    // Commit any text still sitting in the input (user might forget Enter)
-    const input = document.getElementById('glCodeInput');
-    if (input.value.trim()){
-      const ok = tryAddDocFromInput();
-      if (!ok) return; // bad format — flashInputError already shown
-    }
-    const yr = parseInt(document.getElementById('fiscalYearInput').value, 10);
-    const mo = parseInt(document.getElementById('monthInput').value, 10);
-    if (selectedDocs.length === 0){
-      showNotice('โปรดเลือก Document', 'เลือก Document Number อย่างน้อย 1 รายการก่อนบันทึก', null);
-      return;
-    }
-    if (!yr || !mo){
-      showNotice('โปรดกรอกข้อมูล', 'กรุณาระบุ Fiscal Year + Month ก่อนบันทึก', null);
-      return;
-    }
-    if (yr < 2020 || yr > 2099){
-      showNotice('Fiscal Year ไม่ถูกต้อง', 'Fiscal Year ต้องอยู่ระหว่าง 2020 ถึง 2099', null);
-      return;
-    }
-    if (mo < 1 || mo > 12){
-      showNotice('Month ไม่ถูกต้อง', 'Month ต้องอยู่ระหว่าง 1 ถึง 12', null);
-      return;
-    }
-    // Server-side validation: do these doc numbers exist in gold_sap_gl_trans?
-    const saveBtn = document.querySelector('.btn-save');
-    const origBtnLabel = document.getElementById('saveBtnLabel').textContent;
-    saveBtn.disabled = true;
-    document.getElementById('saveBtnLabel').textContent = 'กำลังตรวจสอบ…';
-    let validation;
-    try {
-      validation = await validateDocsExist(selectedDocs.map(d => d.code));
-    } catch (err) {
-      saveBtn.disabled = false;
-      document.getElementById('saveBtnLabel').textContent = origBtnLabel;
-      showNotice('ตรวจสอบไม่ได้', `ติดต่อ backend ไม่สำเร็จ: ${err.message || err}`, null);
-      return;
-    } finally {
-      saveBtn.disabled = false;
-      document.getElementById('saveBtnLabel').textContent = origBtnLabel;
-    }
-    if (validation.invalid && validation.invalid.length){
-      showNotice(
-        'พบ Document ไม่ถูกต้อง',
-        `เลขที่ไม่มีในระบบ SAP (gold_sap_gl_trans): ${validation.invalid.join(', ')} — กรุณาตรวจสอบ`,
-        null,
-      );
-      return;
-    }
-
-    const glGroup = fmtPeriod(yr, mo);
-    const docs = selectedDocs.slice(); // snapshot for summary
-
-    // POST each doc to backend. 409 = already exists (treat as "skipped").
-    let created = 0, skipped = 0, failed = [];
-    saveBtn.disabled = true;
-    document.getElementById('saveBtnLabel').textContent = 'กำลังบันทึก…';
-    for (const d of docs) {
-      try {
-        await apiSave(d.code, yr, mo);
-        created++;
-      } catch (err) {
-        if (err.status === 409) skipped++;
-        else failed.push({ code: d.code, msg: err.message });
-      }
-    }
-    saveBtn.disabled = false;
-    document.getElementById('saveBtnLabel').textContent = origBtnLabel;
-
-    if (failed.length) {
-      showNotice('บันทึกผิดพลาด',
-        `บันทึกไม่สำเร็จ ${failed.length} รายการ: ${failed.map(f => `${f.code} (${f.msg})`).join(', ')}`,
-        null);
-      return;
-    }
-
-    newRowKey = docs[0].code;
-
-    // Reset form
-    clearDocs();
-    document.getElementById('glCodeInput').value = '';
-    document.getElementById('fiscalYearInput').value = '';
-    document.getElementById('monthInput').value = '';
-    setEditMode(-1);
-
-    // Refresh from server — single source of truth
-    try {
-      await loadList();
-    } catch (err) {
-      showNotice('โหลด list ไม่สำเร็จ', `บันทึกแล้วแต่ refresh ล้มเหลว: ${err.message}`, null);
-      return;
-    }
-
-    const total = created + skipped;
-    const action = skipped === 0 ? 'CREATE' : (created === 0 ? 'SKIP' : 'CREATE+SKIP');
-    showNotice(
-      'บันทึกสำเร็จ',
-      `บันทึก ${total} รายการ · ${monthName(mo)} ${yr}  (สร้าง ${created} · ข้ามเพราะมีอยู่แล้ว ${skipped})`,
-      { docs: docs.map(d => d.code), glGroup, action, period: `${monthName(mo)} ${yr}`, created, skipped }
-    );
-  }
-  function editRecord(idx){
-    const rec = masterData[idx];
-    document.getElementById('glCodeInput').value = rec.glCode;
-    document.getElementById('glGroupInput').value = rec.glGroup;
-    setEditMode(idx);
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function askDelete(idx){
-    pendingDelete = idx;
-    const rec = masterData[idx];
-    const sap = sapGlCodes.find(s => s.code === rec.glGroup);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${rec.glCode}</span></div>
-      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${rec.glGroup}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  function closeConfirm(){
-    document.getElementById('confirmModal').classList.remove('open');
-    pendingDelete = null;
-  }
-  document.getElementById('confirmBtn').onclick = async () => {
-    if (!pendingDelete) return;
-    const btn = document.getElementById('confirmBtn');
-    const origText = btn.innerHTML;
-    btn.disabled = true;
-    btn.textContent = 'กำลังลบ…';
-
-    // Build list of (docnum, year, month) triples to delete
-    let triples = [];
-    if (typeof pendingDelete === 'object' && pendingDelete.kind){
-      if (pendingDelete.kind === 'cc') {
-        triples = masterData
-          .filter(d => d.glCode === pendingDelete.key)
-          .map(d => ({ docnum: d.glCode, period: d.glGroup }));
-      } else if (pendingDelete.kind === 'org') {
-        triples = masterData
-          .filter(d => d.glGroup === pendingDelete.key)
-          .map(d => ({ docnum: d.glCode, period: d.glGroup }));
-      } else if (pendingDelete.kind === 'pair') {
-        triples = [{ docnum: pendingDelete.cc, period: pendingDelete.org }];
-      }
-    } else if (typeof pendingDelete === 'number') {
-      const rec = masterData[pendingDelete];
-      if (rec) triples = [{ docnum: rec.glCode, period: rec.glGroup }];
-    }
-
-    let deleted = 0, ghosts = 0, failed = [];
-    for (const t of triples) {
-      const [y, m] = t.period.split('-').map(Number);
-      try {
-        const result = await apiDelete(t.docnum, y, m);
-        if (result.deleted > 0) deleted++;
-        else ghosts++;  // row was already gone (concurrent delete)
-      } catch (err) {
-        failed.push(`${t.docnum} ${t.period}: ${err.message}`);
-      }
-    }
-
-    btn.disabled = false;
-    btn.innerHTML = origText;
-    closeConfirm();
-
-    // Refresh from server — single source of truth
-    try { await loadList(); } catch (e) { /* ignore */ }
-
-    if (failed.length) {
-      showNotice('ลบผิดพลาด', `ลบไม่สำเร็จ ${failed.length} รายการ: ${failed.join('; ')}`, null);
-    } else if (ghosts > 0) {
-      showNotice('ลบบางส่วนสำเร็จ',
-        `ลบสำเร็จ ${deleted} รายการ · ${ghosts} รายการไม่พบใน DB (อาจถูกลบไปแล้ว)`,
-        null);
-    }
-  };
-
-  /* ════════════════════════════════════════════
-     RENDER TABLE
-     ════════════════════════════════════════════ */
-  function renderSummary(){
-    const uniqueDocs = new Set(masterData.map(d => d.glCode)).size;     // Hidden Docs
-    const uniquePeriods = new Set(masterData.map(d => d.glGroup)).size;  // Periods used
-    const mappedDocs = new Set(masterData.map(d => d.glCode));
-    const notHidden = sapGlCodes.filter(s => !mappedDocs.has(s.code)).length;
-    const sapTotal = sapGlCodes.length;
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('stat-gl', uniqueDocs);
-    set('stat-group', uniquePeriods);
-    set('stat-unmapped', notHidden);
-    set('stat-sap', sapTotal);
-  }
-
-  let viewMode = 'org'; // fixed — Period-centric view
-  function setViewMode(m){
-    viewMode = m;
-    document.querySelectorAll('.view-switch button').forEach(b => {
-      b.classList.toggle('active', b.dataset.mode === m);
-    });
-    renderTable();
-  }
-  window.setViewMode = setViewMode;
-
-  function renderTable(){
-    renderSummary();
-    const q = document.getElementById('tableSearch').value.toLowerCase();
-    const filtered = masterData.filter(d =>
-      d.glCode.toLowerCase().includes(q) || d.glGroup.toLowerCase().includes(q)
-    );
-    document.getElementById('countPill').innerHTML = `<b>${filtered.length}</b> / ${masterData.length} mappings`;
-
-    // Aggregate edges by primary key
-    const ccMap = new Map();  // cc → [orgs]
-    const orgMap = new Map(); // org → [ccs]
-    filtered.forEach(d => {
-      if (!ccMap.has(d.glCode)) ccMap.set(d.glCode, []);
-      ccMap.get(d.glCode).push(d.glGroup);
-      if (!orgMap.has(d.glGroup)) orgMap.set(d.glGroup, []);
-      orgMap.get(d.glGroup).push(d.glCode);
-    });
-    document.getElementById('legend-cc').textContent = ccMap.size;
-    document.getElementById('legend-org').textContent = orgMap.size;
-    document.getElementById('legend-edges').textContent = filtered.length;
-
-    const grid = document.getElementById('chipGrid');
-    if (!filtered.length){
-      grid.innerHTML = `<div class="chip-empty">
-        <div class="empty-title">No matches.</div>
-        <div class="empty-sub">Try clearing the search or add a new mapping above.</div>
-      </div>`;
-      return;
-    }
-
-    const esc = s => s.replace(/'/g, "\\'");
-
-    let html = '';
-    const fmtPer = (p) => { const [y,m] = p.split('-'); return `${monthName(+m)} ${y}`; };
-    if (viewMode === 'cc'){
-      // Each card = one Document Number → list of Period chips
-      const keys = [...ccMap.keys()].sort();
-      html = keys.map(cc => {
-        const periods = [...new Set(ccMap.get(cc))].sort();
-        const multi = periods.length > 1;
-        const isNew = cc === newRowKey;
-        const sap = sapGlCodes.find(s => s.code === cc);
-        return `<div class="chip-card ${multi ? 'has-multi' : ''} ${isNew ? 'row-new' : ''}" data-key="${cc}" data-kind="cc">
-          <div class="chip-card-head">
-            <div class="primary">
-              <div class="pill-line">
-                <span class="gl-code-pill">${cc}</span>
-                <span class="deg">×${periods.length}</span>
-              </div>
-              <span class="name">${sap ? sap.name : ''}</span>
-            </div>
-            <div class="card-actions">
-              <button class="action-btn edit" onclick="editCC('${esc(cc)}')" title="เพิ่มการซ่อน Period ใหม่สำหรับ Document นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-              <button class="action-btn delete" onclick="deleteCC('${esc(cc)}')" title="ลบการซ่อนทั้งหมดของ Document นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="chip-card-arrow">hidden in ${periods.length} period${periods.length > 1 ? 's' : ''}</div>
-          <div class="chip-card-body">
-            ${periods.map(p => `<span class="chip-tag org" onclick="removeEdge('${esc(cc)}','${esc(p)}')" title="คลิกเพื่อยกเลิกการซ่อนใน period นี้">
-              <span>${fmtPer(p)}</span>
-              <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-            </span>`).join('')}
-          </div>
-        </div>`;
-      }).join('');
-    } else {
-      // Each card = one Period → list of Document Number chips
-      const keys = [...orgMap.keys()].sort((a,b) => b.localeCompare(a)); // desc by YYYY-MM
-      html = keys.map(period => {
-        const docs = [...new Set(orgMap.get(period))].sort();
-        const multi = docs.length > 1;
-        return `<div class="chip-card ${multi ? 'has-multi' : ''}" data-key="${period}" data-kind="org">
-          <div class="chip-card-head">
-            <div class="primary">
-              <div class="pill-line">
-                <span class="gl-group-pill">${fmtPer(period)}</span>
-                <span class="deg">×${docs.length}</span>
-              </div>
-              <span class="name">${period}</span>
-            </div>
-            <div class="card-actions">
-              <button class="action-btn edit" onclick="editOrg('${esc(period)}')" title="เพิ่ม Document ใหม่ใน Period นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-              <button class="action-btn delete" onclick="deleteOrg('${esc(period)}')" title="ลบการซ่อนทั้งหมดใน Period นี้">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="chip-card-arrow">hides ${docs.length} document${docs.length > 1 ? 's' : ''}</div>
-          <div class="chip-card-body">
-            ${docs.map(d => {
-              const sap = sapGlCodes.find(s => s.code === d);
-              return `<span class="chip-tag cc" onclick="removeEdge('${esc(d)}','${esc(period)}')" title="คลิกเพื่อยกเลิกการซ่อน">
-                <span>${d}</span>
-                <span class="org-name">${sap ? sap.name : ''}</span>
-                <svg class="x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-              </span>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }).join('');
-    }
-    grid.innerHTML = html;
-    setTimeout(() => { newRowKey = null; }, 2500);
-  }
-
-  // Remove a single (docnum, period) edge
-  function removeEdge(docnum, period){
-    const idx = masterData.findIndex(d => d.glCode === docnum && d.glGroup === period);
-    if (idx < 0) return;
-    pendingDelete = { kind:'pair', cc:docnum, org:period };
-    const sap = sapGlCodes.find(s => s.code === docnum);
-    const [y,m] = period.split('-');
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Document</span><span class="gl-code-pill">${docnum}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-      <div class="row"><span class="lbl">Period</span><span class="gl-group-pill">${monthName(+m)} ${y}</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  window.removeEdge = removeEdge;
-
-  // Action handlers — fill form for adding a new mapping
-  function editCC(docnum){
-    const sap = sapGlCodes.find(s => s.code === docnum);
-    selectedDocs = sap ? [{code: docnum, name: sap.name}] : [];
-    renderDocChips();
-    document.getElementById('glCodeInput').value = '';
-    document.getElementById('fiscalYearInput').value = '';
-    document.getElementById('monthInput').value = '';
-    setEditMode(-1);
-    document.getElementById('fiscalYearInput').focus();
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function editOrg(period){
-    const [y,m] = period.split('-');
-    clearDocs();
-    document.getElementById('glCodeInput').value = '';
-    document.getElementById('fiscalYearInput').value = y;
-    document.getElementById('monthInput').value = String(+m);
-    setEditMode(-1);
-    document.getElementById('glCodeInput').focus();
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-  function deleteCC(docnum){
-    const rows = masterData.filter(d => d.glCode === docnum);
-    pendingDelete = { kind:'cc', key:docnum, count:rows.length };
-    const sap = sapGlCodes.find(s => s.code === docnum);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Document</span><span class="gl-code-pill">${docnum}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-      <div class="row"><span class="lbl">Periods ที่จะถูกเปิด</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  function deleteOrg(period){
-    const rows = masterData.filter(d => d.glGroup === period);
-    pendingDelete = { kind:'org', key:period, count:rows.length };
-    const [y,m] = period.split('-');
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Period</span><span class="gl-group-pill">${monthName(+m)} ${y}</span></div>
-      <div class="row"><span class="lbl">Documents ที่จะถูกเปิด</span><span style="font-family:var(--mono);font-weight:700;color:#C25A3F">${rows.length} รายการ</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
-  window.editCC = editCC; window.editOrg = editOrg;
-  window.deleteCC = deleteCC; window.deleteOrg = deleteOrg;
-
-  /* ════════════════════════════════════════════
-     NOTICE MODAL
-     ════════════════════════════════════════════ */
-  function showNotice(title, body, summary){
-    document.querySelector('#noticeModal .modal-title').innerHTML = title.includes('สำเร็จ')
-      ? title.replace('สำเร็จ', '<em>สำเร็จ</em>')
-      : title;
-    document.getElementById('noticeMsg').textContent = body;
-    const sumEl = document.getElementById('noticeSummary');
-    if (summary){
-      sumEl.style.display = 'flex';
-      if (Array.isArray(summary.docs)){
-        const docsHtml = summary.docs
-          .map(c => `<span class="gl-code-pill" style="margin:2px">${c}</span>`).join('');
-        sumEl.innerHTML = `
-          <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${summary.action}</span></div>
-          <div class="row" style="align-items:flex-start"><span class="lbl">Documents · ${summary.docs.length}</span><div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end;max-width:60%">${docsHtml}</div></div>
-          <div class="row"><span class="lbl">Period</span><span class="gl-group-pill">${summary.period || summary.glGroup}</span></div>
-        `;
-      } else {
-        sumEl.innerHTML = `
-          <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${summary.action}</span></div>
-          <div class="row"><span class="lbl">Document</span><span class="gl-code-pill">${summary.glCode || ''}</span></div>
-          <div class="row"><span class="lbl">Period</span><span class="gl-group-pill">${summary.glGroup || ''}</span></div>
-          <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${summary.sapName || ''}</span></div>
-        `;
-      }
-    } else {
-      sumEl.style.display = 'none';
-    }
-    document.getElementById('noticeModal').classList.add('open');
-  }
-  function closeNotice(){
-    document.getElementById('noticeModal').classList.remove('open');
-  }
-
-  /* ════════════════════════════════════════════
-     INIT — wire up dropdowns + theme
-     ════════════════════════════════════════════ */
-  (function init(){
-    applyThemeFromStorage();
-
-    // Document Number free-text chip input
-    const chipWrap    = document.getElementById('docChipInput');
-    const glCodeInput = document.getElementById('glCodeInput');
-
-    // Click anywhere in the chip box (gap between chips) focuses the input
-    chipWrap.addEventListener('click', (e) => {
-      if (e.target === chipWrap) glCodeInput.focus();
-    });
-
-    // Strip non-digits while typing (live filter)
-    glCodeInput.addEventListener('input', () => {
-      const cleaned = glCodeInput.value.replace(/[^0-9]/g, '');
-      if (cleaned !== glCodeInput.value) glCodeInput.value = cleaned;
-    });
-
-    // Commit on Enter / Tab / "," / "space"; Backspace removes last chip
-    glCodeInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',' || e.key === ' '){
-        if (glCodeInput.value.trim()){
-          e.preventDefault();
-          tryAddDocFromInput();
-        }
-      } else if (e.key === 'Backspace' && !glCodeInput.value && selectedDocs.length > 0){
-        e.preventDefault();
-        selectedDocs.pop();
-        renderDocChips();
-      }
-    });
-
-    // Paste: support multi-doc paste ("5400005042,5400005043" or one per line)
-    glCodeInput.addEventListener('paste', (e) => {
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      if (!text) return;
-      const parts = text.split(/[\s,;\n\r\t]+/).map(s => s.trim()).filter(Boolean);
-      if (parts.length <= 1) return; // single value — let default paste happen
-      e.preventDefault();
-      let added = 0, badFormat = 0;
-      parts.forEach(p => {
-        if (!DOC_FORMAT.test(p)) { badFormat++; return; }
-        if (selectedDocs.some(d => d.code === p)) return;
-        selectedDocs.push({ code: p, name: '' });
-        added++;
-      });
-      renderDocChips();
-      if (badFormat) flashInputError(`เพิ่ม ${added} รายการ · ข้าม ${badFormat} (format ผิด)`);
-    });
-
-    // Cost Center input (free text + validation)
-    // No dropdown logic needed - input handles its own validation via oninput
-    function validateCostCenter(input){
-      const cleaned = input.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-      if (cleaned !== input.value) {
-        input.value = cleaned;
-        input.style.borderColor = '#C25A3F';
-        input.style.boxShadow = '0 0 0 3px color-mix(in oklab, #C25A3F 18%, transparent)';
-        clearTimeout(input._errTimer);
-        input._errTimer = setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 600);
-      }
-    }
-    window.validateCostCenter = validateCostCenter;
-
-    renderTable(); // empty paint
-    // Pull real data from backend
-    loadList().catch(err => {
-      showNotice('โหลด list ไม่สำเร็จ',
-        `ไม่สามารถดึงข้อมูลจาก backend ได้: ${err.message}. กรุณา refresh หน้าหรือ login ใหม่`,
-        null);
-    });
-  })();
 </script>
 </body>
 </html>

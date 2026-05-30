@@ -17,7 +17,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 HTML_DIR = Path(__file__).resolve().parents[1] / "01frontend"
-HTML_FILE = "0008edit-document-number.html"
+HTML_FILE = "hide-document.html"
 OUT  = Path(__file__).resolve().parents[3] / "verify_0008"
 OUT.mkdir(exist_ok=True)
 
