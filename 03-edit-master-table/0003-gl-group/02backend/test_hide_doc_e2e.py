@@ -38,7 +38,7 @@ os.environ.setdefault("ADMIN_EMAILS", "test@example.com")
 
 sys.path.insert(0, str(HERE))
 
-from handlers_hide_doc import list_handler, save_handler, delete_handler  # noqa: E402
+from modules.hide_document import list_handler, save_handler, delete_handler  # noqa: E402
 
 
 class MockReq:

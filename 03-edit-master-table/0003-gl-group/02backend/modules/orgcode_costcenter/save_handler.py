@@ -4,7 +4,7 @@ import pyodbc
 import azure.functions as func
 from auth import authenticate, AuthError
 from db import exists, execute
-from models_orgcode_cc import SaveRequest
+from modules.orgcode_costcenter.models import SaveRequest
 
 TABLE = "cfg_master.orgcode_costcenter_map"
 

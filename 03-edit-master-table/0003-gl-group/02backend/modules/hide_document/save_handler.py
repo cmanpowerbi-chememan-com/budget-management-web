@@ -9,7 +9,7 @@ import pyodbc
 import azure.functions as func
 from auth import authenticate, AuthError
 from db import exists, execute
-from models_hide_doc import SaveRequest
+from modules.hide_document.models import SaveRequest
 
 TABLE = "cfg_master.hide_document_number"
 

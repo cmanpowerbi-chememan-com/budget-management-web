@@ -1,15 +1,14 @@
-"""DELETE /api/master/gl-group/delete
+"""DELETE /api/master/orgcode-costcenter/delete
 
-Hard delete by gl_code (single PK).
-Locked decision #22: hard delete + simple confirm modal in frontend.
+Hard delete by composite key (cost_center, orgcode) — both required.
 """
 import json
 import azure.functions as func
 from auth import authenticate, AuthError
 from db import execute
-from models import DeleteRequest
+from modules.orgcode_costcenter.models import DeleteRequest
 
-TABLE = "cfg_master.gl_group_mapping"
+TABLE = "cfg_master.orgcode_costcenter_map"
 
 
 def handle(req: func.HttpRequest) -> func.HttpResponse:
@@ -31,13 +30,24 @@ def handle(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    execute(
-        f"DELETE FROM {TABLE} WHERE gl_code = ?",
-        (payload.gl_code,),
-    )
+    try:
+        execute(
+            f"DELETE FROM {TABLE} WHERE cost_center = ? AND orgcode = ?",
+            (payload.cost_center, payload.orgcode),
+        )
+    except Exception as e:
+        return func.HttpResponse(
+            json.dumps({"error": str(e), "type": type(e).__name__}),
+            status_code=500,
+            mimetype="application/json",
+        )
 
     return func.HttpResponse(
-        json.dumps({"status": "deleted", "gl_code": payload.gl_code}),
+        json.dumps({
+            "status": "deleted",
+            "cost_center": payload.cost_center,
+            "orgcode": payload.orgcode,
+        }),
         status_code=200,
         mimetype="application/json",
     )

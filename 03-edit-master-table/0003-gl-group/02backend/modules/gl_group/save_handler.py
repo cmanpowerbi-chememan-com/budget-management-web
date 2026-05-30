@@ -11,7 +11,7 @@ import uuid
 import azure.functions as func
 from auth import authenticate, AuthError
 from db import execute, exists, find_group_id_by_name
-from models import SaveRequest
+from modules.gl_group.models import SaveRequest
 
 TABLE = "cfg_master.gl_group_mapping"
 

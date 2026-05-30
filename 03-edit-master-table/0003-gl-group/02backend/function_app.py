@@ -19,14 +19,14 @@ Hide-Document routes:
   POST   /api/master/hide-document/validate-docs
 """
 import azure.functions as func
-from handlers import list_handler, save_handler, delete_handler, reference_handler
-from handlers_orgcode_cc import (
+from modules.gl_group import list_handler, save_handler, delete_handler, reference_handler
+from modules.orgcode_costcenter import (
     list_handler as cc_list,
     save_handler as cc_save,
     delete_handler as cc_delete,
     reference_handler as cc_reference,
 )
-from handlers_hide_doc import (
+from modules.hide_document import (
     list_handler as hd_list,
     save_handler as hd_save,
     delete_handler as hd_delete,

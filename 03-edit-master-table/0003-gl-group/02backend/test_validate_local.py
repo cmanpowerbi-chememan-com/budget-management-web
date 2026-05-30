@@ -17,7 +17,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 # Make handler imports work when running this file directly
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE / "handlers_hide_doc"))
+sys.path.insert(0, str(HERE / "modules" / "hide_document"))
 
 # Load .env from project root
 try:
@@ -52,7 +52,7 @@ os.environ["AAD_CLIENT_SECRET"] = os.environ["ENTRA_CLIENT_SECRET"]
 # Allow the test "user" through auth.py if any handler is invoked
 os.environ.setdefault("ADMIN_EMAILS", "test@example.com")
 
-from handlers_hide_doc.validate_docs_handler import validate  # noqa: E402
+from modules.hide_document.validate_docs_handler import validate  # noqa: E402
 
 
 def run(name: str, codes: list[str], expect_valid: list[str], expect_invalid_contains: list[str]) -> bool:
