@@ -16,9 +16,9 @@ import threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-HTML_DIR = Path(__file__).resolve().parents[1] / "01frontend"
+HTML_DIR = Path(__file__).resolve().parents[2] / "01frontend"
 HTML_FILE = "hide-document.html"
-OUT  = Path(__file__).resolve().parents[3] / "verify_0008"
+OUT  = Path(__file__).resolve().parents[4] / "verify_0008"
 OUT.mkdir(exist_ok=True)
 
 

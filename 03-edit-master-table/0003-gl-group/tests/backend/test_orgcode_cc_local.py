@@ -7,7 +7,8 @@ Usage:
     py test_local.py
 """
 import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "02backend"))
 sys.stdout.reconfigure(encoding="utf-8")
 
 from db import get_conn

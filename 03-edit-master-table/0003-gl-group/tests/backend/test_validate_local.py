@@ -16,15 +16,16 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 # Make handler imports work when running this file directly
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE / "modules" / "hide_document"))
+BACKEND = HERE.parents[1] / "02backend"
+sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(BACKEND / "modules" / "hide_document"))
 
 # Load .env from project root
 try:
     from dotenv import load_dotenv
     # HERE = .../03-edit-master-table/0003-gl-group/02backend
     # parents[0]=0003-gl-group, [1]=03-edit-master-table, [2]=project-root
-    PROJECT_ROOT = HERE.parents[2]
+    PROJECT_ROOT = HERE.parents[3]
     env_path = PROJECT_ROOT / ".env"
     print(f"Loading env from: {env_path} (exists: {env_path.exists()})")
     load_dotenv(env_path)

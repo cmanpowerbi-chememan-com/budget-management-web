@@ -24,7 +24,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 # Load env
 from dotenv import load_dotenv
 HERE = Path(__file__).resolve().parent
-load_dotenv(HERE.parents[2] / ".env")
+load_dotenv(HERE.parents[3] / ".env")
 for v in ("FABRIC_SQL_SERVER", "FABRIC_SQL_DATABASE",
           "FABRIC_LAKEHOUSE_SERVER", "FABRIC_LAKEHOUSE_DATABASE",
           "ENTRA_CLIENT_ID", "ENTRA_CLIENT_SECRET"):
@@ -36,7 +36,8 @@ os.environ["AAD_CLIENT_SECRET"] = os.environ["ENTRA_CLIENT_SECRET"]
 # Allow our test user through auth
 os.environ.setdefault("ADMIN_EMAILS", "test@example.com")
 
-sys.path.insert(0, str(HERE))
+BACKEND = HERE.parents[1] / "02backend"
+sys.path.insert(0, str(BACKEND))
 
 from modules.hide_document import list_handler, save_handler, delete_handler  # noqa: E402
 
