@@ -1,4 +1,4 @@
-"""Azure Function entry point — GL Group Master + Orgcode-CostCenter Master.
+"""Azure Function entry point — GL Group + Orgcode-CostCenter + Hide-Document Masters.
 
 GL Group routes:
   GET    /api/master/gl-group/list
@@ -11,6 +11,12 @@ Orgcode-CostCenter routes:
   POST   /api/master/orgcode-costcenter/save
   DELETE /api/master/orgcode-costcenter/delete
   GET    /api/master/orgcode-costcenter/reference/{ref_name}
+
+Hide-Document routes:
+  GET    /api/master/hide-document/list
+  POST   /api/master/hide-document/save
+  DELETE /api/master/hide-document/delete
+  POST   /api/master/hide-document/validate-docs
 """
 import azure.functions as func
 from handlers import list_handler, save_handler, delete_handler, reference_handler
@@ -19,6 +25,12 @@ from handlers_orgcode_cc import (
     save_handler as cc_save,
     delete_handler as cc_delete,
     reference_handler as cc_reference,
+)
+from handlers_hide_doc import (
+    list_handler as hd_list,
+    save_handler as hd_save,
+    delete_handler as hd_delete,
+    validate_docs_handler as hd_validate,
 )
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -64,3 +76,24 @@ def cc_delete_route(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="master/orgcode-costcenter/reference/{ref_name}", methods=["GET"])
 def cc_reference_route(req: func.HttpRequest) -> func.HttpResponse:
     return cc_reference.handle(req)
+
+
+# ── Hide Document ─────────────────────────────────────────
+@app.route(route="master/hide-document/list", methods=["GET"])
+def hd_list_route(req: func.HttpRequest) -> func.HttpResponse:
+    return hd_list.handle(req)
+
+
+@app.route(route="master/hide-document/save", methods=["POST"])
+def hd_save_route(req: func.HttpRequest) -> func.HttpResponse:
+    return hd_save.handle(req)
+
+
+@app.route(route="master/hide-document/delete", methods=["DELETE"])
+def hd_delete_route(req: func.HttpRequest) -> func.HttpResponse:
+    return hd_delete.handle(req)
+
+
+@app.route(route="master/hide-document/validate-docs", methods=["POST"])
+def hd_validate_route(req: func.HttpRequest) -> func.HttpResponse:
+    return hd_validate.handle(req)

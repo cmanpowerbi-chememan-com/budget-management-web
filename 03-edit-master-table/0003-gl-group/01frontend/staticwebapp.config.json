@@ -9,6 +9,10 @@
       "allowedRoles": ["authenticated"]
     },
     {
+      "route": "/0008edit-document-number.html",
+      "allowedRoles": ["authenticated"]
+    },
+    {
       "route": "/api/master/*",
       "allowedRoles": ["authenticated"]
     },
