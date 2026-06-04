@@ -364,6 +364,53 @@
   }
   .page-eyebrow::before{content:'';width:18px;height:1px;background:var(--accent)}
 
+  /* ─── Logged-in user bar (login context above eyebrow) ─── */
+  .user-bar{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    margin:4px 0 22px;padding:13px 18px;
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 0 rgba(11,26,18,0.02), 0 12px 24px -18px rgba(11,26,18,0.12);
+  }
+  .user-id{display:flex;align-items:center;gap:13px;min-width:0}
+  .user-avatar{
+    width:42px;height:42px;border-radius:11px;flex-shrink:0;display:grid;place-items:center;
+    font-family:var(--mono);font-weight:700;font-size:15px;color:#fff;text-transform:uppercase;
+    background:linear-gradient(135deg, var(--accent-2), color-mix(in oklab,var(--accent-2) 58%, #000));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14);
+  }
+  .user-avatar.admin{ background:linear-gradient(135deg, var(--accent), color-mix(in oklab,var(--accent) 52%, #000)); }
+  .user-meta{min-width:0}
+  .user-name{font-weight:700;font-size:15px;letter-spacing:-0.01em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .user-email{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:2px}
+  .role-badge{
+    font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.06em;
+    padding:2px 7px;border-radius:999px;
+  }
+  .role-badge.admin{ background:color-mix(in oklab,var(--accent) 16%, transparent); color:var(--accent); border:1px solid color-mix(in oklab,var(--accent) 42%, var(--line)); }
+  .role-badge.user{ background:color-mix(in oklab,var(--accent-2) 16%, transparent); color:var(--accent-2); border:1px solid color-mix(in oklab,var(--accent-2) 42%, var(--line)); }
+  .user-chips{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .user-chip{
+    display:flex;flex-direction:column;gap:1px;padding:6px 12px;border-radius:9px;
+    background:var(--paper);border:1px solid var(--line);
+  }
+  .user-chip .k{font-family:var(--mono);font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .user-chip .v{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .user-chip.cc .v{font-family:var(--mono)}
+  .user-chip.cc{ border-color:color-mix(in oklab,var(--accent-2) 40%, var(--line)); background:color-mix(in oklab,var(--accent-2) 7%, var(--surface)); }
+  .user-chip.org{ border-color:color-mix(in oklab,var(--accent-2) 34%, var(--line)); background:color-mix(in oklab,var(--accent-2) 6%, var(--surface)); }
+  .user-chip.org .v{display:flex;align-items:center;gap:6px;font-weight:600}
+  .org-code{font-family:var(--mono);font-weight:700;color:var(--accent-2)}
+  .user-switch{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+  .scope-note{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.01em}
+  .switch-label{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .user-select{
+    padding:8px 30px 8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    font-size:13px;font-weight:600;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  .user-select:hover{border-color:var(--ink)}
+
   /* Summary chips */
   .summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
   .summary-chip{
@@ -633,12 +680,142 @@
   .detail-table .detail-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
   .detail-table .month-input{width:78px;text-align:right;font-family:var(--mono);font-weight:500}
   .detail-table .special-col-cell{background:color-mix(in oklab, var(--special-bg) 30%, var(--surface))}
+  /* readable width for the free-input / dropdown detail columns (table scrolls horizontally if needed) */
+  .detail-table th.special-col,.detail-table td.special-col-cell{min-width:182px}
+  .detail-table .detail-select{
+    width:100%;padding:7px 30px 7px 10px;border:1px solid var(--line);background:var(--surface);
+    border-radius:6px;font-size:12.5px;outline:none;cursor:pointer;color:var(--ink);
+    -webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237B5C1F' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat;background-position:right 9px center;
+  }
+  .detail-table .detail-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .detail-table .cell-disabled{
+    display:flex;align-items:center;justify-content:center;min-height:32px;
+    color:var(--ink-3);background:var(--paper-2);border:1px dashed var(--line);
+    border-radius:6px;padding:6px;font-size:12px;letter-spacing:0.04em;
+  }
   .detail-table tr.total-row td{
     background:var(--paper-2);font-weight:700;color:var(--ink);
     border-top:2px solid var(--ink);font-size:12.5px;
   }
   .detail-table tr.total-row td.label{font-family:var(--sans);text-transform:uppercase;font-size:11px;letter-spacing:0.05em}
   .detail-table tr.total-row td.grand{color:var(--accent);font-family:var(--mono);font-size:14px}
+
+  /* ─── Travelling Expense detail (per-traveler cards) ─── */
+  .travel-detail{display:flex;flex-direction:column;gap:16px}
+  .travel-note{
+    font-size:12px;color:var(--ink-2);line-height:1.55;
+    background:color-mix(in oklab, var(--special-bg) 55%, var(--surface));
+    border:1px solid var(--special-edge);border-radius:9px;padding:11px 14px;
+  }
+  .travel-note b{color:var(--ink)}
+  .travel-empty{padding:34px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+  .travel-card{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+  .travel-card-head{
+    display:flex;align-items:center;gap:12px;padding:11px 16px;
+    background:var(--paper-2);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  .travel-idx{
+    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-3);
+    background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 8px;
+  }
+  .travel-traveler{font-weight:700;font-size:14px;color:var(--ink)}
+  .travel-route{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+  .travel-route::before{content:'→ ';opacity:0.5}
+  .travel-type-chip{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.02em;
+    padding:3px 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-2);
+    border:1px solid var(--line);
+  }
+  .travel-type-chip.auto{
+    background:color-mix(in oklab, var(--accent) 12%, transparent);
+    color:var(--accent);border-color:color-mix(in oklab, var(--accent) 40%, var(--line));
+  }
+  /* ─── Side chip (5 = ผลิต/ต้นทุน · 6 = SG&A) ─── */
+  .side-chip{
+    display:inline-block;margin-left:7px;vertical-align:middle;
+    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:0.02em;
+    padding:2px 7px;border-radius:999px;white-space:nowrap;
+  }
+  .side-chip.cost{
+    background:color-mix(in oklab, var(--accent-2) 16%, transparent);color:var(--accent-2);
+    border:1px solid color-mix(in oklab, var(--accent-2) 42%, var(--line));
+  }
+  .side-chip.sga{
+    background:color-mix(in oklab, var(--status-approved) 14%, transparent);color:var(--status-approved);
+    border:1px solid color-mix(in oklab, var(--status-approved) 42%, var(--line));
+  }
+  .travel-rate-chip{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.02em;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;
+    background:color-mix(in oklab, var(--accent-3) 18%, transparent);
+    color:color-mix(in oklab, var(--accent-3) 72%, var(--ink));
+    border:1px solid color-mix(in oklab, var(--accent-3) 45%, var(--line));
+  }
+  /* ─── Travelling detail · GL context bar ─── */
+  .travel-glbar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:11px 14px;border:1px solid var(--line);border-radius:9px;background:var(--paper-2);
+  }
+  .travel-glcode{
+    font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);
+    background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;
+  }
+  .travel-gltype{font-weight:700;font-size:14.5px;color:var(--ink)}
+  .travel-glbar .side-chip{margin-left:0;font-size:10px;padding:3px 9px}
+  .travel-glnote{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:0.01em}
+  .travel-total{margin-left:auto;font-family:var(--mono);font-weight:700;color:var(--accent);font-size:14px}
+  .travel-card-head .action-btn{margin-left:0}
+  .travel-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px}
+  .tf{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .tf-l{font-family:var(--mono);font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .tf-i{
+    width:100%;padding:8px 10px;border:1px solid var(--line);background:var(--paper);
+    border-radius:7px;font-size:12.5px;outline:none;transition:all 160ms;
+  }
+  .tf-i:focus{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .tf-readonly{
+    display:flex;align-items:center;min-height:37px;
+    background:var(--paper-2);color:var(--ink-2);font-weight:600;
+    border-style:dashed;cursor:not-allowed;
+  }
+  select.tf-i{
+    appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:26px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;
+  }
+  .travel-months-label{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    padding:0 16px 9px;font-family:var(--mono);font-size:11px;
+  }
+  .travel-months-label .tm-head{color:var(--ink-2);font-weight:600;letter-spacing:0.02em}
+  .travel-months-label .tm-calc{color:var(--ink-3)}
+  .travel-months-label .tm-calc b{color:var(--accent);font-weight:700}
+  .travel-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:6px;padding:0 16px 16px}
+  .tm-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .tm-toggle{
+    font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 0;border-radius:6px;
+    border:1px solid var(--line);background:var(--paper);color:var(--ink-3);cursor:pointer;
+    transition:all 140ms;text-align:center;
+  }
+  .tm-toggle:hover{border-color:var(--accent);color:var(--accent)}
+  .tm-cell.on .tm-toggle{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tm-val{font-family:var(--mono);font-size:11px;text-align:right;padding:6px 8px;border-radius:6px;min-width:0}
+  .tm-val.input{
+    width:100%;border:1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+    background:var(--surface);color:var(--ink);font-weight:600;outline:none;
+  }
+  .tm-val.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .tm-val.auto{
+    background:color-mix(in oklab, var(--accent) 10%, var(--surface));color:var(--accent);font-weight:700;
+    border:1px dashed color-mix(in oklab, var(--accent) 40%, var(--line));
+  }
+  .tm-val.locked{
+    text-align:center;color:var(--ink-3);cursor:pointer;border:1px dashed var(--line);opacity:0.65;
+    background:repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 5px, transparent 5px, transparent 10px);
+  }
+  .tm-val.locked:hover{opacity:1;border-color:var(--accent);color:var(--accent)}
 
   /* Notification modal */
   .notice-modal{min-width:auto;width:auto;max-width:480px}
@@ -741,9 +918,6 @@
     <ul class="nav-links">
       <li><a href="0001index.html">Home</a></li>
       <li><a href="#" class="active">Export Template</a></li>
-      <li><a href="0003budget-gl-master.html">Edit GL Group</a></li>
-      <li><a href="#">Edit Org &amp; Cost center</a></li>
-      <li><a href="#">Hide Document Number</a></li>
     </ul>
     <div class="nav-actions">
       <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
@@ -771,6 +945,10 @@
       <span class="sep">/</span>
       <span style="color:var(--ink-2)">OPEX Data Management</span>
     </div>
+
+    <!-- Logged-in user context — admin sees all · user scoped to their cost center -->
+    <section class="user-bar" id="userBar" data-screen-label="Logged-in user"></section>
+
     <div class="page-title-row">
       <div>
         <div class="page-eyebrow">Module 02 · Data Entry</div>
@@ -788,7 +966,6 @@
       <input type="text" id="globalSearch" placeholder="ค้นหา cost center, GL code, GL name, remark…" oninput="renderTable()" />
     </div>
     <select class="year-select" id="yearFilter" onchange="renderTable()">
-      <option value="all">All years</option>
       <option value="2024">FY 2024</option>
       <option value="2025" selected>FY 2025</option>
       <option value="2026">FY 2026</option>
@@ -1030,88 +1207,337 @@
     'Lease & Rental':             ['ประเภทรถ', 'ทะเบียนรถ', 'สถานที่ใช้งาน', 'กิจกรรม'],
     'Professional & Legal Fee':   ['Project', 'รายละเอียด'],
     'Public Relation & Donation': ['วัตถุประสงค์', 'รายละเอียด'],
-    'Training & Seminar':         ['วัตถุประสงค์']
+    'Training & Seminar':         ['วัตถุประสงค์'],
+    'Travelling Expense':         ['Destination Country','Traveler Name','Position','Project','Purpose of Travel','Total Days','Travel Month']
   };
 
+  /* ── Special-group detail columns — dropdown options & GL-conditional rules ──
+     แหล่งจริง: docs/13Template Special/*.xlsx (data-validation + sheet GL) */
+  const DD_PLANTS      = ['BK','TK','KK','PB','RY'];
+  const DD_ENT_EXT     = ['Customer','Business partner','หน่วยงานราชการ','อื่นๆ'];          // GL ภายนอก …900030
+  const DD_ENT_INT     = ['พนักงานบริษัท','กรรมการบริษัท'];                                  // GL ภายใน …900031
+  const DD_LEASE_VEH   = ['Car','Van','Trucks'];                                            // GL …060 ยานพาหนะ
+  const DD_LEASE_MAC   = ['Mobile Scalper','Dumper','Tractors','Backhoe','Forklift','Tractor',
+                          'Excavator','Loader','Crane','Water Truck','Road Sweeper Truck'];  // GL …030 เครื่องจักร
+  const DD_LEASE_PLATE = ['6ขผ-3918','1นจ-3508','6ขจ-3513','5ขง-5712','1นจ-1468','6ขผ-8150','7ขถ-9660','ไม่ระบุ'];
+  const DD_TRAIN       = ['Inhouse','Public'];
+
+  /* คืน column spec ของฟอร์มย่อยตาม group + GL code (บาง dropdown/พื้นที่เทาขึ้นกับ GL) */
+  function detailColumns(group, glCode){
+    const code = glCode || '';
+    if (group === 'Entertainment'){
+      const opts = code.endsWith('900031') ? DD_ENT_INT : DD_ENT_EXT;   // ภายใน vs ภายนอก
+      return [ { key:'ประเภทการรับรอง', kind:'select', options:opts },
+               { key:'รายละเอียด',      kind:'text' } ];
+    }
+    if (group === 'Lease & Rental'){
+      const cat = code.slice(-3);          // 060 รถ · 030 เครื่องจักร · อื่น = เทา
+      let typeCol, plateCol;
+      if (cat === '060'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_VEH }; plateCol={ key:'ทะเบียนรถ', kind:'select', options:DD_LEASE_PLATE }; }
+      else if (cat === '030'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_MAC }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
+      else { typeCol={ key:'ประเภทรถ', kind:'grey' }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
+      return [ typeCol, plateCol,
+               { key:'สถานที่ใช้งาน', kind:'select', options:DD_PLANTS },
+               { key:'กิจกรรม',       kind:'text' } ];
+    }
+    if (group === 'Professional & Legal Fee')   return [ { key:'Project', kind:'text' }, { key:'รายละเอียด', kind:'text' } ];
+    if (group === 'Public Relation & Donation') return [ { key:'รายละเอียด', kind:'text' } ];
+    if (group === 'Training & Seminar')         return [ { key:'หลักสูตรอบรม', kind:'text' }, { key:'Method', kind:'select', options:DD_TRAIN } ];
+    return [];
+  }
+
+  /* Travelling Expense — per-diem engine.
+     เบี้ยเลี้ยง = Total Days × อัตราตามตำแหน่ง (USD/วัน) × อัตราแลกเปลี่ยน แล้วเฉลี่ยเท่ากันในเดือนที่เลือก */
+  /* อัตราแลกเปลี่ยน USD→THB ราย FY (ดึงจาก Currency Master · 0009) — 1 ปี 1 ค่า */
+  const FX_RATES = { 2020:31.30, 2021:31.98, 2022:35.06, 2023:34.81, 2024:35.59, 2025:33.95, 2026:34.20 };
+  function fxRate(year){ return FX_RATES[year] != null ? FX_RATES[year] : 33.95; }
+  const PER_DIEM_TYPE = 'เบี้ยเลี้ยง';
+  /* ฝั่งบัญชีของเบี้ยเลี้ยง/ค่าเดินทาง — กำหนดจาก SAP Actual ของผู้เดินทาง
+     5 = ฝั่งผลิต/ต้นทุน · 6 = ฝั่งบริหาร-ขาย (SG&A) — คนละ GL จึงรวมยอดข้ามกันไม่ได้ */
+  const SIDE_LABELS = {
+    COST: { short:'5 · ผลิต',  full:'ฝั่งผลิต / ต้นทุน (5)' },
+    SGA:  { short:'6 · SG&A', full:'ฝั่งบริหาร / ขาย · SG&A (6)' }
+  };
+  /* อัตราเบี้ยเลี้ยงต่อวัน แบ่ง 3 กลุ่มตามปลายทาง (อิงตารางบริษัท):
+     domestic = ในประเทศ (THB/วัน) · asian = ต่างประเทศ-อาเซียน (USD/วัน) · other = ต่างประเทศ-อื่นๆ (USD/วัน)
+     ตำแหน่งระดับบริหารไม่มีอัตราในประเทศ (null = —) */
+  const POSITION_PER_DIEM = {
+    'CEO':                        { domestic:null, asian:110, other:120 },
+    'Chief Officer (C-Level)':    { domestic:null, asian:110, other:120 },
+    'Vice President':             { domestic:null, asian:100, other:110 },
+    'Assistant Vice President':   { domestic:null, asian:100, other:110 },
+    'Advisor':                    { domestic:null, asian:110, other:120 },
+    'Department Head':            { domestic:300,  asian:80,  other:90  },
+    'Assistant Department Head':  { domestic:300,  asian:80,  other:90  },
+    'Senior Supervisor':          { domestic:250,  asian:70,  other:80  },
+    'Supervisor':                 { domestic:250,  asian:70,  other:80  },
+    'Operator':                   { domestic:200,  asian:70,  other:80  },
+    'Company Driver':             { domestic:200,  asian:60,  other:70  },
+    'Logistics Driver':           { domestic:200,  asian:60,  other:70  }
+  };
+
+  /* SAP employee master — เลือก Traveler Name แล้ว default Position มาเอง (lookup จากชื่อ) */
+  const EMPLOYEES = [
+    { name:'นิภาพร ทองกิ่ง',   position:'Senior Supervisor' },
+    { name:'วราพร ติรสิทธิ์',   position:'Assistant Department Head' },
+    { name:'มาลี รักงาน',       position:'Supervisor' },
+    { name:'ธนกร พงษ์ไพบูลย์',  position:'Vice President' },
+    { name:'อรทัย แก้วมณี',     position:'Operator' },
+    { name:'เกรียงไกร สุวรรณ',  position:'Chief Officer (C-Level)' }
+  ];
+  function lookupPosition(name){ const e = EMPLOYEES.find(x => x.name === name); return e ? e.position : ''; }
+
+  /* ปลายทาง → กลุ่มอัตรา */
+  const DOMESTIC_DEST = 'ไทย (ในประเทศ)';
+  const ASIAN_COUNTRIES = ['Papua New Guinea','China','Laos','Philippines','India','Vietnam','Myanmar','Indonesia','Bangladesh','South Africa','Cambodia','Malaysia'];
+  const OTHER_COUNTRIES = ['United States of America','United Kingdom','Australia','New Zealand','Switzerland','Japan','Korea','Taiwan','Germany','Oman','Singapore','Argentina','Italy','Dubai','Saudi Arabia','Norway'];
+  const SCOPE_LABEL = { domestic:'ในประเทศ', asian:'ต่างประเทศ·อาเซียน', other:'ต่างประเทศ·อื่นๆ' };
+  function destScope(country){
+    if (!country || country === DOMESTIC_DEST || country === 'Thailand') return 'domestic';
+    if (ASIAN_COUNTRIES.includes(country)) return 'asian';
+    return 'other';
+  }
+  function perDiemRate(position, scope){
+    const r = POSITION_PER_DIEM[position];
+    const raw = r ? r[scope] : null;
+    return { rate: (raw == null ? 0 : raw), na: (raw == null), currency: scope === 'domestic' ? 'THB' : 'USD' };
+  }
+
   const costCenters = [
-    { code:'10PB010000', clevel:'C-1', division:'Operations', department:'IT General' },
-    { code:'10PB020000', clevel:'C-2', division:'Operations', department:'IT Dev' },
-    { code:'10PB030000', clevel:'C-1', division:'Finance',    department:'Accounting' },
-    { code:'KKAW01',     clevel:'C-3', division:'Sales',      department:'North Region' },
-    { code:'KKAW02',     clevel:'C-2', division:'Sales',      department:'South Region' },
-    { code:'KKAW03',     clevel:'C-1', division:'HR',         department:'Training' },
-    { code:'MKT001',     clevel:'C-2', division:'Marketing',  department:'PR & Events' },
-    { code:'LEG001',     clevel:'C-1', division:'Legal',      department:'Compliance' }
+    // Plant Maint. Planning & Store (PBB) — anuchitm · org 1186411
+    { code:'10MN014200', name:'Plant Maint. Planning & Store (PBB)', clevel:'C-2', division:'Maintenance', department:'Plant Maint. Planning & Store' },
+    { code:'10MN014500', name:'Plant Maint. Planning & Store (PBB)', clevel:'C-2', division:'Maintenance', department:'Plant Maint. Planning & Store' },
+    // Warehouse (PBB) — banchornb · org 1186405 · paiboon acting 1186205
+    { code:'10PQ013100', name:'Warehouse (PBB)', clevel:'C-2', division:'Warehouse', department:'Warehouse' },
+    { code:'PBAW01',     name:'Warehouse (PBB)', clevel:'C-2', division:'Warehouse', department:'Warehouse' },
+    { code:'PBPK01',     name:'Warehouse (PBB)', clevel:'C-2', division:'Warehouse', department:'Warehouse' },
+    // Production (PBB) — paiboon primary 1186201
+    { code:'10PQ011000', name:'Production (PBB)', clevel:'C-1', division:'Production', department:'Production' },
+    // Quicklime Production (PBB)
+    { code:'10PQ011200', name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PB1SHUT',    name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PB1STRA',    name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PB2SHUT',    name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PB2STRA',    name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PBKK01',     name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PBKK02',     name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PBSW01',     name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'PBTRUCK',    name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    { code:'10QC012000', name:'Quicklime Production (PBB)', clevel:'C-2', division:'Production', department:'Quicklime Production' },
+    // CAL Production (PBB)
+    { code:'10PQ011300', name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBGM01',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBGM02',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBGM03',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBHM01',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBHM02',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    { code:'PBHM03',     name:'CAL Production (PBB)', clevel:'C-2', division:'Production', department:'CAL Production' },
+    // Raw Material and Fuel
+    { code:'10PQ011100', name:'Raw Material and Fuel', clevel:'C-2', division:'Production', department:'Raw Material & Fuel' }
   ];
 
   const glCodes = [
     { code:'5200016353', group:'ค่าใช้จ่ายสำนักงาน',   name:'ค่าวัสดุสำนักงาน' },
     { code:'5200016354', group:'ค่าเดินทาง',           name:'ค่าเดินทางในประเทศ' },
     { code:'5200016355', group:'ค่าบำรุงรักษา',         name:'ค่าบำรุงรักษาเครื่องจักร' },
-    { code:'5200016360', group:'Entertainment',              name:'ค่ารับรองลูกค้า' },
-    { code:'5200016361', group:'Lease & Rental',             name:'ค่าเช่ารถยนต์' },
-    { code:'5200016362', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษากฎหมาย' },
-    { code:'5200016363', group:'Public Relation & Donation', name:'ค่าประชาสัมพันธ์และบริจาค' },
-    { code:'5200016364', group:'Training & Seminar',         name:'ค่าฝึกอบรมและสัมมนา' }
+    // ─── Special GL groups — รหัสจริงจาก sheet GL ของไฟล์ docs/13Template Special ───
+    // Entertainment — dropdown ประเภทการรับรอง ขึ้นกับ GL: …900030 ภายนอก · …900031 ภายใน
+    { code:'6211900030', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายนอก' },
+    { code:'6211900031', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายใน' },
+    // Lease & Rental — dropdown/พื้นที่เทา ขึ้นกับ sub-category (suffix): 060 รถ · 030 เครื่องจักร · อื่น เทา
+    { code:'6211200060', group:'Lease & Rental',             name:'ค่าเช่า - ยานพาหนะ' },
+    { code:'6211200030', group:'Lease & Rental',             name:'ค่าเช่า - เครื่องจักร / อุปกรณ์โรงงาน' },
+    { code:'6211200020', group:'Lease & Rental',             name:'ค่าเช่า - อาคาร' },
+    // Professional & Legal Fee — text ล้วน (ไม่มี dropdown)
+    { code:'6210700030', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษา - ทางกฎหมาย' },
+    // Public Relation & Donation — text ล้วน (รายละเอียด คอลัมเดียว)
+    { code:'6211700030', group:'Public Relation & Donation', name:'เงินบริจาคสาธารณกุศล' },
+    // Training & Seminar — dropdown Method (Inhouse/Public)
+    { code:'6210100150', group:'Training & Seminar',         name:'ค่าอบรมและสัมมนา - ค่าธรรมเนียม' },
+    // ─── Travelling Expense — 1 GL = 1 ประเภท × 1 ฝั่ง (5 = ผลิต/ต้นทุน · 6 = SG&A บริหาร/ขาย) ───
+    { code:'5210400010', group:'Travelling Expense', name:'เบี้ยเลี้ยง · Per Diem',            expType:'เบี้ยเลี้ยง',          side:'COST' },
+    { code:'6210400010', group:'Travelling Expense', name:'เบี้ยเลี้ยง · Per Diem',            expType:'เบี้ยเลี้ยง',          side:'SGA'  },
+    { code:'5210400020', group:'Travelling Expense', name:'ค่าพาหนะเดินทาง · Transportation',   expType:'ค่าพาหนะเดินทาง',      side:'COST' },
+    { code:'6210400020', group:'Travelling Expense', name:'ค่าพาหนะเดินทาง · Transportation',   expType:'ค่าพาหนะเดินทาง',      side:'SGA'  },
+    { code:'5210400030', group:'Travelling Expense', name:'ค่าที่พัก · Accommodation',          expType:'ค่าที่พัก',            side:'COST' },
+    { code:'6210400030', group:'Travelling Expense', name:'ค่าที่พัก · Accommodation',          expType:'ค่าที่พัก',            side:'SGA'  },
+    { code:'5210400999', group:'Travelling Expense', name:'ค่าใช้จ่ายเดินทางอื่น · Other Travel', expType:'ค่าใช้จ่ายเดินทางอื่น', side:'COST' },
+    { code:'6210400999', group:'Travelling Expense', name:'ค่าใช้จ่ายเดินทางอื่น · Other Travel', expType:'ค่าใช้จ่ายเดินทางอื่น', side:'SGA'  }
   ];
 
   let transactions = [
-    { id:1, costCenter:'10PB010000', glCode:'5200016353', remark:'Office Supplies Q1-Q2', year:2025,
+    { id:1, costCenter:'10MN014200', glCode:'5200016353', remark:'Office Supplies Q1-Q2', year:2025,
       sap:     [45000,42000,48000,43000,47000,0,0,0,0,0,0,0],
       approved:[50000,50000,50000,50000,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,55000,55000,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:2, costCenter:'10PB020000', glCode:'5200016354', remark:'Travel Expense', year:2025,
+    { id:2, costCenter:'10MN014500', glCode:'5200016354', remark:'Travel Expense', year:2025,
       sap:     [12000,15000,18000,14000,16000,18000,0,0,0,0,0,0],
       approved:[15000,15000,20000,15000,18000,20000,22000,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,18000,18000,18000,0,0],
       pendingDetails:[] },
-    { id:3, costCenter:'KKAW01', glCode:'5200016355', remark:'Machine Maintenance', year:2025,
+    { id:3, costCenter:'10PQ013100', glCode:'5200016355', remark:'Machine Maintenance', year:2025,
       sap:     [80000,75000,82000,0,0,0,0,0,0,0,0,0],
       approved:[85000,85000,85000,85000,90000,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,90000,90000,90000,90000,0,0,0],
       pendingDetails:[] },
-    { id:4, costCenter:'MKT001', glCode:'5200016360', remark:'Customer Entertainment', year:2025,
+    { id:4, costCenter:'10PQ011000', glCode:'6211900030', remark:'Customer Entertainment', year:2025,
       sap:     [25000,30000,28000,35000,40000,0,0,0,0,0,0,0],
       approved:[30000,30000,30000,40000,45000,50000,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[
-        { id:1, 'วัตถุประสงค์':'รับรองลูกค้า VIP กลุ่ม A', 'ประเภทการรับรอง':'อาหาร/เครื่องดื่ม',  months:[0,0,0,0,0,0,25000,25000,0,0,0,0] },
-        { id:2, 'วัตถุประสงค์':'งานเลี้ยงต้อนรับ Partner', 'ประเภทการรับรอง':'กิจกรรมบันเทิง',      months:[0,0,0,0,0,0,0,30000,30000,0,0,0] }
+        { id:1, 'ประเภทการรับรอง':'Customer',          'รายละเอียด':'รับรองลูกค้า VIP กลุ่ม A',  months:[0,0,0,0,0,0,25000,25000,0,0,0,0] },
+        { id:2, 'ประเภทการรับรอง':'Business partner',  'รายละเอียด':'งานเลี้ยงต้อนรับ Partner',  months:[0,0,0,0,0,0,0,30000,30000,0,0,0] }
       ] },
-    { id:5, costCenter:'10PB030000', glCode:'5200016361', remark:'Car Lease Q1', year:2025,
+    { id:5, costCenter:'10QC012000', glCode:'6211200060', remark:'Vehicle Lease Q1', year:2025,
       sap:     [35000,35000,35000,35000,35000,35000,0,0,0,0,0,0],
       approved:[35000,35000,35000,35000,35000,35000,35000,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[
-        { id:1, 'ประเภทรถ':'Toyota Camry','ทะเบียนรถ':'กข-1234','สถานที่ใช้งาน':'สำนักงานใหญ่','กิจกรรม':'ผู้บริหาร', months:[0,0,0,0,0,0,0,35000,35000,35000,0,0] }
+        { id:1, 'ประเภทรถ':'Car','ทะเบียนรถ':'6ขผ-3918','สถานที่ใช้งาน':'BK','กิจกรรม':'รับ-ส่งผู้บริหาร', months:[0,0,0,0,0,0,0,35000,35000,35000,0,0] }
       ] },
-    { id:6, costCenter:'LEG001', glCode:'5200016362', remark:'Legal Consulting', year:2025,
+    { id:6, costCenter:'10PQ011300', glCode:'6210700030', remark:'Legal Consulting', year:2025,
       sap:     [100000,0,50000,0,75000,0,0,0,0,0,0,0],
       approved:[100000,100000,100000,100000,100000,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[
         { id:1, 'Project':'M&A Advisory Phase 2','รายละเอียด':'ที่ปรึกษากฎหมายควบรวมกิจการ', months:[0,0,0,0,0,120000,0,120000,0,0,0,0] }
       ] },
-    { id:7, costCenter:'MKT001', glCode:'5200016363', remark:'CSR Activities', year:2025,
+    { id:7, costCenter:'10PQ011100', glCode:'6211700030', remark:'CSR Activities', year:2025,
       sap:     [50000,0,75000,0,60000,0,0,0,0,0,0,0],
       approved:[50000,50000,100000,50000,75000,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[
-        { id:1, 'วัตถุประสงค์':'กิจกรรม CSR ประจำปี','รายละเอียด':'บริจาคโรงเรียน',     months:[0,0,0,0,0,50000,50000,0,0,0,0,0] },
-        { id:2, 'วัตถุประสงค์':'โครงการปลูกป่า','รายละเอียด':'ปลูกต้นไม้ 1000 ต้น',     months:[0,0,0,0,0,0,25000,25000,0,0,0,0] }
+        { id:1, 'รายละเอียด':'บริจาคโรงเรียน — กิจกรรม CSR ประจำปี', months:[0,0,0,0,0,50000,50000,0,0,0,0,0] },
+        { id:2, 'รายละเอียด':'โครงการปลูกป่า — ปลูกต้นไม้ 1000 ต้น', months:[0,0,0,0,0,0,25000,25000,0,0,0,0] }
       ] },
-    { id:8, costCenter:'KKAW03', glCode:'5200016364', remark:'Staff Training', year:2025,
+    { id:8, costCenter:'PBAW01', glCode:'6210100150', remark:'Staff Training', year:2025,
       sap:     [20000,25000,30000,0,45000,0,0,0,0,0,0,0],
       approved:[25000,25000,35000,35000,50000,55000,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[
-        { id:1, 'วัตถุประสงค์':'อบรม Leadership Development', months:[0,0,0,0,0,0,55000,55000,0,0,0,0] }
+        { id:1, 'หลักสูตรอบรม':'Leadership Development Program','Method':'Public', months:[0,0,0,0,0,0,55000,55000,0,0,0,0] }
+      ] },
+    { id:9, costCenter:'10PQ011000', glCode:'5210400010', remark:'เบี้ยเลี้ยงเดินทาง (ฝั่งผลิต)', year:2025,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Traveler Name':'นิภาพร ทองกิ่ง', 'Position':'Senior Supervisor', 'Destination Country':'ไทย (ในประเทศ)',
+          'Project':'ตรวจสายการผลิตสาขา', 'Purpose of Travel':'ตรวจประเมินสายการผลิตต่างจังหวัด',
+          'Total Days':6, 'Travel Months':[4],
+          months:[0,0,0,0,1500,0,0,0,0,0,0,0] },
+        { id:2, 'Traveler Name':'วราพร ติรสิทธิ์', 'Position':'Assistant Department Head', 'Destination Country':'Japan',
+          'Project':'Plant Expansion Study', 'Purpose of Travel':'ดูงานโรงงานและเจรจาคู่ค้า',
+          'Total Days':4, 'Travel Months':[2,8],
+          months:[0,0,6111,0,0,0,0,0,6111,0,0,0] }
+      ] },
+    { id:10, costCenter:'10PQ011000', glCode:'5210400030', remark:'ค่าที่พักระหว่างเดินทาง (ฝั่งผลิต)', year:2025,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Traveler Name':'วราพร ติรสิทธิ์', 'Position':'Assistant Department Head', 'Destination Country':'Japan',
+          'Project':'Plant Expansion Study', 'Purpose of Travel':'ค่าที่พักระหว่างดูงาน',
+          'Total Days':4, 'Travel Months':[2],
+          months:[0,0,32000,0,0,0,0,0,0,0,0,0] }
+      ] },
+    { id:11, costCenter:'10PQ011000', glCode:'6210400020', remark:'ค่าพาหนะเดินทาง (SG&A)', year:2025,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Traveler Name':'มาลี รักงาน', 'Position':'Supervisor', 'Destination Country':'Singapore',
+          'Project':'Regional Sales Summit', 'Purpose of Travel':'ประชุมตัวแทนภูมิภาคเอเชีย',
+          'Total Days':3, 'Travel Months':[5],
+          months:[0,0,0,0,0,18000,0,0,0,0,0,0] }
+      ] },
+    { id:12, costCenter:'10PQ011000', glCode:'5210400999', remark:'ค่าใช้จ่ายเดินทางอื่น (ฝั่งผลิต)', year:2025,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Traveler Name':'วราพร ติรสิทธิ์', 'Position':'Assistant Department Head', 'Destination Country':'Japan',
+          'Project':'Plant Expansion Study', 'Purpose of Travel':'ค่าวีซ่า / ประกันการเดินทาง',
+          'Total Days':4, 'Travel Months':[2],
+          months:[0,0,4500,0,0,0,0,0,0,0,0,0] }
+      ] },
+    { id:13, costCenter:'10PQ011000', glCode:'6210400999', remark:'ค่าใช้จ่ายเดินทางอื่น (SG&A)', year:2025,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:1, 'Traveler Name':'มาลี รักงาน', 'Position':'Supervisor', 'Destination Country':'Singapore',
+          'Project':'Regional Sales Summit', 'Purpose of Travel':'ค่าธรรมเนียมสนามบิน / เอกสาร',
+          'Total Days':3, 'Travel Months':[5],
+          months:[0,0,0,0,0,2800,0,0,0,0,0,0] }
       ] }
   ];
-  let transactionIdCounter = 9;
+  let transactionIdCounter = 14;
   let detailIdCounter = 20;
   let currentEditingTxnId = null;
+
+  /* ═══════════════════════════════════════
+     LOGIN / ROLE — admin เห็นทุก Cost Center · user เห็นเฉพาะของตน
+     ═══════════════════════════════════════ */
+  const USERS = {
+    admin:     { role:'admin', email:'admin@chememan.com', name:'ส่วนกลาง (Admin)' },
+    anuchitm:  { role:'user',  email:'anuchitm@chememan.com',
+      costCenters:['10MN014200','10MN014500'] },
+    banchornb: { role:'user',  email:'banchornb@chememan.com',
+      costCenters:['10PQ013100','PBAW01','PBPK01'] },
+    paiboon:   { role:'user',  email:'paiboon@chememan.com',
+      costCenters:['10PQ011000','10PQ011200','PB1SHUT','PB1STRA','PB2SHUT','PB2STRA','PBKK01','PBKK02','PBSW01','PBTRUCK','10QC012000','10PQ011300','PBGM01','PBGM02','PBGM03','PBHM01','PBHM02','PBHM03','10PQ011100','10PQ013100','PBAW01','PBPK01'] }
+  };
+  let currentUserKey = 'admin';
+  function currentUser(){ return USERS[currentUserKey] || USERS.admin; }
+  function userCostCenters(u){ return u.costCenters || []; }
+  function visibleByRole(list){
+    const u = currentUser();
+    if (u.role === 'admin') return list;
+    const ccs = userCostCenters(u);
+    return list.filter(t => ccs.includes(t.costCenter));
+  }
+  function switchUser(key){
+    if (!USERS[key]) return;
+    currentUserKey = key;
+    try { localStorage.setItem('cm.user', key); } catch(e){}
+    renderUserBar();
+    renderTable();
+  }
+  function renderUserBar(){
+    const u = currentUser();
+    const isAdmin = u.role === 'admin';
+    const displayName = u.name || u.email;
+    const initials = displayName.replace(/[()@._-]/g,' ').trim().slice(0,2);
+    let chips = '', subline = u.email;
+    if (!isAdmin){
+      const codes = u.costCenters || [];
+      const names = [...new Set(codes.map(code => {
+        const cc = costCenters.find(c => c.code === code);
+        return cc ? cc.name : code;
+      }))];
+      subline = `${codes.length} Cost Center${codes.length>1?'s':''} · ${names.length} distinct`;
+      chips = names.map(n =>
+        `<span class="user-chip cc"><span class="v">${n}</span></span>`).join('');
+    }
+    const opts = Object.entries(USERS).map(([k,v]) =>
+      `<option value="${k}" ${k===currentUserKey?'selected':''}>${v.role==='admin'?'Admin · '+v.name:v.email}</option>`).join('');
+    document.getElementById('userBar').innerHTML =
+      `<div class="user-id">
+        <div class="user-avatar ${isAdmin?'admin':''}">${initials}</div>
+        <div class="user-meta">
+          <div class="user-name">${displayName} <span class="role-badge ${isAdmin?'admin':'user'}">${isAdmin?'ADMIN':'USER'}</span></div>
+          <div class="user-email">${subline}</div>
+        </div>
+      </div>
+      <div class="user-chips">${chips}</div>
+      <div class="user-switch">
+        <span class="scope-note">${isAdmin?'เห็นข้อมูลทั้งหมด · ทุก Cost Center':'เห็นเฉพาะ Cost Center ของตน'}</span>
+        <label class="switch-label">เข้าสู่ระบบเป็น</label>
+        <select class="user-select" onchange="switchUser(this.value)">${opts}</select>
+      </div>`;
+  }
 
   /* ════════════════════════════════════════════
      HELPERS
@@ -1137,7 +1563,7 @@
      ════════════════════════════════════════════ */
   function renderSummary(){
     const yr = document.getElementById('yearFilter').value;
-    const filtered = transactions.filter(t => yr === 'all' || String(t.year) === yr);
+    const filtered = visibleByRole(transactions).filter(t => yr === 'all' || String(t.year) === yr);
     let approved = 0, pending = 0, specialCount = 0;
     filtered.forEach(t => {
       approved += sumArr(t.approved);
@@ -1159,7 +1585,7 @@
     const search = document.getElementById('globalSearch').value.toLowerCase();
     const yr = document.getElementById('yearFilter').value;
 
-    const filtered = transactions.filter(txn => {
+    const filtered = visibleByRole(transactions).filter(txn => {
       const cc = costCenters.find(c => c.code === txn.costCenter) || {};
       const gl = glCodes.find(g => g.code === txn.glCode) || {};
       const s = [txn.costCenter, gl.group, txn.glCode, gl.name, txn.remark, cc.clevel, cc.division, cc.department].join(' ').toLowerCase();
@@ -1192,7 +1618,7 @@
                  onblur="setTimeout(() => closeDropdown('cc_${txn.id}'), 200)">
           <div class="dropdown-list">
             ${costCenters.map(c => `<div class="dropdown-option" onclick="selectCostCenter(${txn.id},'${c.code}')">
-              <div class="code">${c.code}</div><div class="name">${c.division} · ${c.department}</div></div>`).join('')}
+              <div class="code">${c.code}</div><div class="name">${c.name}</div></div>`).join('')}
           </div>
         </div>
       </td>`;
@@ -1209,8 +1635,9 @@
           </div>
         </div>
       </td>`;
-      // GL Name (auto)
-      html += `<td rowspan="3" class="shared"><div class="auto-cell">${gl.name || '—'}</div></td>`;
+      // GL Name (auto) + side chip (5 ผลิต / 6 SG&A) for Travelling Expense GLs
+      const sideChip = gl.side ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}">${SIDE_LABELS[gl.side].short}</span>` : '';
+      html += `<td rowspan="3" class="shared"><div class="auto-cell">${gl.name || '—'}${sideChip}</div></td>`;
       // GL Group (only chip is rainbow; cell itself plain)
       html += `<td rowspan="3" class="shared">
         <div class="auto-cell ${isSpec ? 'special-gl-group' : ''}">${gl.group || '—'}</div>
@@ -1332,7 +1759,7 @@
   function addNewTransaction(){
     transactions.unshift({
       id: transactionIdCounter++,
-      costCenter: costCenters[0].code,
+      costCenter: currentUser().role === 'user' ? (userCostCenters(currentUser())[0] || costCenters[0].code) : costCenters[0].code,
       glCode: glCodes[0].code,
       remark: '',
       year: +document.getElementById('yearFilter').value === 'all' ? 2025 : (+document.getElementById('yearFilter').value || 2025),
@@ -1358,9 +1785,8 @@
     const txn = transactions.find(t => t.id === txnId);
     if (!txn) return;
     const gl = glCodes.find(g => g.code === txn.glCode);
-    const cols = specialGLGroups[gl.group] || [];
 
-    document.getElementById('detailModalTitle').innerHTML = `รายละเอียด <em>${gl.group}</em>`;
+    document.getElementById('detailModalTitle').innerHTML = `รายละเอียด <em>${gl.expType || gl.group}</em>`;
     document.getElementById('detailModalSubtitle').textContent = `${txn.costCenter} · ${gl.code} · ${gl.name}`;
 
     if (!txn.pendingDetails) txn.pendingDetails = [];
@@ -1375,12 +1801,13 @@
     const txn = transactions.find(t => t.id === currentEditingTxnId);
     if (!txn) return;
     const gl = glCodes.find(g => g.code === txn.glCode);
-    const cols = specialGLGroups[gl.group] || [];
+    if (gl && gl.group === 'Travelling Expense') { renderTravelDetail(txn); return; }
+    const cols = detailColumns(gl.group, gl.code);
 
     let html = `<table class="detail-table">
       <thead><tr>
         <th class="num-col" style="width:50px">#</th>
-        ${cols.map(c => `<th class="special-col">${c}</th>`).join('')}
+        ${cols.map(c => `<th class="special-col">${c.key}</th>`).join('')}
         ${MONTHS_TH.map(m => `<th class="month-col">${m}</th>`).join('')}
         <th class="month-col" style="background:color-mix(in oklab,var(--accent) 10%, var(--paper-2));color:var(--accent)">รวม</th>
         <th style="width:50px"></th>
@@ -1390,7 +1817,15 @@
       const total = sumArr(d.months);
       html += `<tr>
         <td class="num-col"><div class="idx-cell">${idx + 1}</div></td>
-        ${cols.map(c => `<td class="special-col-cell"><input class="detail-input" value="${d[c] || ''}" onchange="updateDetailField(${d.id},'${c.replace(/'/g,"\\'")}',this.value)"></td>`).join('')}
+        ${cols.map(c => {
+          if (c.kind === 'grey') return `<td class="special-col-cell"><div class="cell-disabled" title="ไม่ใช้กับ GL นี้">—</div></td>`;
+          const cur = (d[c.key] != null ? String(d[c.key]) : '');
+          if (c.kind === 'select'){
+            const opts = `<option value="">— เลือก —</option>` + c.options.map(o => `<option ${o===cur?'selected':''}>${o}</option>`).join('');
+            return `<td class="special-col-cell"><select class="detail-input detail-select" onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)">${opts}</select></td>`;
+          }
+          return `<td class="special-col-cell"><input class="detail-input" value="${cur.replace(/"/g,'&quot;')}" onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)"></td>`;
+        }).join('')}
         ${d.months.map((v,i) => `<td class="month-cell"><input class="detail-input month-input" value="${v || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateDetailMonth(${d.id},${i}, this.value)"></td>`).join('')}
         <td class="month-cell"><span class="month-value pending-readonly" id="rowTotal_${d.id}">${fmtCell(total)}</span></td>
         <td><button class="action-btn" onclick="removeDetailRow(${d.id})" title="Remove">
@@ -1429,15 +1864,214 @@
     const txn = transactions.find(t => t.id === currentEditingTxnId);
     if (!txn) return;
     const gl = glCodes.find(g => g.code === txn.glCode);
-    const cols = specialGLGroups[gl.group] || [];
+    if (gl && gl.group === 'Travelling Expense'){
+      txn.pendingDetails.push({
+        id: detailIdCounter++,
+        'Destination Country':'', 'Traveler Name':'', 'Position':'',
+        'Project':'', 'Purpose of Travel':'', 'Total Days':0,
+        'Travel Months':[],
+        months: new Array(12).fill(0)
+      });
+      renderDetailTable();
+      return;
+    }
+    const cols = detailColumns(gl.group, gl.code);
     const row = { id: detailIdCounter++, months: new Array(12).fill(0) };
-    cols.forEach(c => row[c] = '');
+    cols.forEach(c => row[c.key] = '');
     txn.pendingDetails.push(row);
     renderDetailTable();
   }
   function removeDetailRow(detailId){
     const txn = transactions.find(t => t.id === currentEditingTxnId);
     txn.pendingDetails = txn.pendingDetails.filter(d => d.id !== detailId);
+    renderDetailTable();
+  }
+
+  /* ── Travelling Expense: per-traveler cards + per-diem auto-calc ── */
+  function travelPerMonth(d){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const scope = destScope(d['Destination Country']);
+    const { rate, currency } = perDiemRate(d['Position'], scope);
+    const days = parseInt(d['Total Days'], 10) || 0;
+    const fx = currency === 'USD' ? fxRate(txn ? txn.year : 2025) : 1;
+    const total = days * rate * fx;
+    const sel = d['Travel Months'] || [];
+    return sel.length ? Math.round(total / sel.length) : 0;
+  }
+  function recalcTravelRow(d){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const gl = txn ? glCodes.find(g => g.code === txn.glCode) : null;
+    const expType = (gl && gl.expType) ? gl.expType : PER_DIEM_TYPE;
+    const sel = d['Travel Months'] || [];
+    if (expType === PER_DIEM_TYPE){
+      const pm = travelPerMonth(d);
+      d.months = MONTHS_TH.map((_, i) => sel.includes(i) ? pm : 0);
+    } else {
+      // Manual types: keep entered values but lock (zero) months that aren't selected
+      d.months = (d.months || new Array(12).fill(0)).map((v, i) => sel.includes(i) ? (v || 0) : 0);
+    }
+  }
+  function tEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+  function travelTextField(d, key, ph){
+    return `<label class="tf"><span class="tf-l">${key}</span>
+      <input class="tf-i" value="${tEsc(d[key])}" placeholder="${ph}" onchange="updateTravelField(${d.id},'${key}',this.value)"></label>`;
+  }
+  function renderTravelDetail(txn){
+    const gl = glCodes.find(g => g.code === txn.glCode) || {};
+    const expType = gl.expType || PER_DIEM_TYPE;
+    const isPerDiemGL = expType === PER_DIEM_TYPE;
+    const sideInfo = gl.side ? SIDE_LABELS[gl.side] : null;
+    const fxYr = fxRate(txn.year);
+    const body = document.getElementById('detailModalBody');
+
+    let html = `<div class="travel-detail">`;
+
+    // Context bar — every row in this modal posts to THIS one GL only
+    html += `<div class="travel-glbar">
+        <span class="travel-glcode">${gl.code || ''}</span>
+        <span class="travel-gltype">${expType}</span>
+        ${sideInfo ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}">${sideInfo.full}</span>` : ''}
+        <span class="travel-glnote">ทุกรายการในหน้านี้ลงที่ GL นี้เท่านั้น · คนละประเภท/คนละฝั่งต้องแยก GL (แยกแถว)</span>
+      </div>`;
+
+    if (isPerDiemGL){
+      html += `<div class="travel-note">
+        <b>เบี้ยเลี้ยง</b> คำนวณอัตโนมัติตาม <b>ตำแหน่ง × ปลายทาง</b> — 3 กลุ่ม: ในประเทศ (฿/วัน) ·
+        ต่างประเทศ-อาเซียน ($/วัน) · ต่างประเทศ-อื่นๆ ($/วัน) แล้ว × อัตราแลกเปลี่ยน (${fxYr} ฿/USD · FY${txn.year})
+        เฉลี่ยเท่ากันในเดือนที่เลือก · ตำแหน่งดึงอัตโนมัติจากชื่อผู้เดินทาง (SAP)</div>`;
+    } else {
+      html += `<div class="travel-note">
+        กรอกจำนวนเงิน <b>${expType}</b> เฉพาะเดือนที่เลือกเดินทาง — เดือนที่ไม่เลือกจะถูกล็อก (พื้นที่สีเทา)</div>`;
+    }
+
+    if (!txn.pendingDetails.length){
+      html += `<div class="travel-empty">ยังไม่มีรายการเดินทาง — กด “เพิ่มรายการ” เพื่อเริ่ม</div>`;
+    }
+
+    txn.pendingDetails.forEach((d, idx) => {
+      const sel = d['Travel Months'] || [];
+      const days = parseInt(d['Total Days'], 10) || 0;
+      const scope = destScope(d['Destination Country']);
+      const { rate, na, currency } = perDiemRate(d['Position'], scope);
+      const fx = currency === 'USD' ? fxYr : 1;
+      const perDiemTotal = days * rate * fx;
+      const perMonth = sel.length ? Math.round(perDiemTotal / sel.length) : 0;
+      const rowTotal = sumArr(d.months);
+      const rateText = currency === 'USD' ? `$${rate}` : `฿${rate}`;
+
+      // Traveler dropdown (SAP master) → auto Position · Position dropdown shows 3-group rates · Destination dropdown groups by scope
+      const travelerOpts = `<option value="">— เลือกผู้เดินทาง (SAP) —</option>` +
+        EMPLOYEES.map(e => `<option value="${tEsc(e.name)}" ${d['Traveler Name']===e.name?'selected':''}>${tEsc(e.name)}</option>`).join('');
+      const posLabelVal = d['Position'] || '— เลือกผู้เดินทางก่อน —';
+      const destOpts = `<option value="">— เลือกปลายทาง —</option>`
+        + `<optgroup label="ในประเทศ (THB)"><option value="${DOMESTIC_DEST}" ${d['Destination Country']===DOMESTIC_DEST?'selected':''}>${DOMESTIC_DEST}</option></optgroup>`
+        + `<optgroup label="ต่างประเทศ · อาเซียน (USD)">` + ASIAN_COUNTRIES.map(c => `<option value="${c}" ${d['Destination Country']===c?'selected':''}>${c}</option>`).join('') + `</optgroup>`
+        + `<optgroup label="ต่างประเทศ · อื่นๆ (USD)">` + OTHER_COUNTRIES.map(c => `<option value="${c}" ${d['Destination Country']===c?'selected':''}>${c}</option>`).join('') + `</optgroup>`;
+
+      let monthsHint;
+      if (isPerDiemGL){
+        if (na){
+          monthsHint = `ตำแหน่งนี้ไม่มีอัตราเบี้ยเลี้ยง${SCOPE_LABEL[scope]}`;
+        } else if (currency === 'USD'){
+          monthsHint = `เบี้ยเลี้ยง${SCOPE_LABEL[scope]} ${days} วัน × $${rate} × ${fxYr} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${perMonth.toLocaleString()}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        } else {
+          monthsHint = `เบี้ยเลี้ยง${SCOPE_LABEL[scope]} ${days} วัน × ฿${rate} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${perMonth.toLocaleString()}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        }
+      } else {
+        monthsHint = `กรอกจำนวนเงินในเดือนที่เลือก`;
+      }
+
+      const monthsHtml = MONTHS_TH.map((m, i) => {
+        const on = sel.includes(i);
+        const val = d.months[i] || 0;
+        let valCell;
+        if (!on){
+          valCell = `<div class="tm-val locked" onclick="toggleTravelMonth(${d.id},${i})" title="คลิกเพื่อเลือกเดือนนี้">—</div>`;
+        } else if (isPerDiemGL){
+          valCell = `<div class="tm-val auto" title="คำนวณอัตโนมัติ">${val ? val.toLocaleString() : '0'}</div>`;
+        } else {
+          valCell = `<input class="tm-val input" value="${val || ''}" inputmode="numeric" placeholder="0"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateTravelMonth(${d.id},${i},this.value)">`;
+        }
+        return `<div class="tm-cell ${on?'on':'off'}">
+          <button class="tm-toggle" onclick="toggleTravelMonth(${d.id},${i})">${m}</button>
+          ${valCell}
+        </div>`;
+      }).join('');
+
+      const posLabel = isPerDiemGL ? 'Position · auto จากชื่อ' : 'Position';
+
+      html += `<div class="travel-card">
+        <div class="travel-card-head">
+          <span class="travel-idx">${String(idx+1).padStart(2,'0')}</span>
+          <span class="travel-traveler">${tEsc(d['Traveler Name']) || 'ผู้เดินทางใหม่'}</span>
+          <span class="travel-route">${tEsc(d['Destination Country']) || '—'}</span>
+          <span class="travel-type-chip ${isPerDiemGL?'auto':''}">${expType}${isPerDiemGL?' (อัตโนมัติ)':''}</span>
+          ${isPerDiemGL && d['Position'] && d['Destination Country'] ? `<span class="travel-rate-chip">${SCOPE_LABEL[scope]} · ${na?'ไม่มีอัตรา':rateText+'/วัน'}</span>` : ''}
+          <span class="travel-total">฿${rowTotal.toLocaleString()}</span>
+          <button class="action-btn" onclick="removeDetailRow(${d.id})" title="ลบรายการ">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
+        <div class="travel-fields">
+          <label class="tf"><span class="tf-l">Traveler Name · SAP</span>
+            <select class="tf-i" onchange="updateTravelField(${d.id},'Traveler Name',this.value)">${travelerOpts}</select></label>
+          <label class="tf"><span class="tf-l">${posLabel}</span>
+            <div class="tf-i tf-readonly" title="กำหนดอัตโนมัติจากชื่อผู้เดินทาง (SAP) — แก้ไขไม่ได้">${posLabelVal}</div></label>
+          <label class="tf"><span class="tf-l">Destination · ปลายทาง</span>
+            <select class="tf-i" onchange="updateTravelField(${d.id},'Destination Country',this.value)">${destOpts}</select></label>
+          ${travelTextField(d,'Project','ชื่อโครงการ')}
+          ${travelTextField(d,'Purpose of Travel','วัตถุประสงค์การเดินทาง')}
+          <label class="tf"><span class="tf-l">Total Days / year · รวมทั้งปี</span>
+            <input class="tf-i" value="${d['Total Days']||''}" inputmode="numeric" placeholder="0"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateTravelField(${d.id},'Total Days',this.value)"></label>
+        </div>
+        <div class="travel-months-label">
+          <span class="tm-head">Travel Month — คลิกเลือกเดือนที่เดินทาง</span>
+          <span class="tm-calc">${monthsHint}</span>
+        </div>
+        <div class="travel-months">${monthsHtml}</div>
+      </div>`;
+    });
+
+    html += `</div>`;
+    body.innerHTML = html;
+
+    const grand = txn.pendingDetails.reduce((s,d) => s + sumArr(d.months), 0);
+    document.getElementById('detailModalFootInfo').innerHTML =
+      `Travelers: <b>${txn.pendingDetails.length}</b> · Year total: <b>฿${grand.toLocaleString()}</b>`;
+  }
+  function updateTravelField(id, key, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    d[key] = (key === 'Total Days') ? (parseInt(v,10) || 0) : v;
+    if (key === 'Traveler Name'){
+      const pos = lookupPosition(v);   // default Position lookup จาก SAP employee master
+      if (pos) d['Position'] = pos;
+    }
+    recalcTravelRow(d);
+    renderDetailTable();
+  }
+  function toggleTravelMonth(id, i){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    if (!d['Travel Months']) d['Travel Months'] = [];
+    const at = d['Travel Months'].indexOf(i);
+    if (at === -1) d['Travel Months'].push(i);
+    else { d['Travel Months'].splice(at, 1); d.months[i] = 0; }
+    d['Travel Months'].sort((a,b) => a - b);
+    recalcTravelRow(d);
+    renderDetailTable();
+  }
+  function updateTravelMonth(id, i, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    d.months[i] = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
     renderDetailTable();
   }
   function saveDetailData(){
@@ -1465,7 +2099,7 @@
     const headers = ['cost_center','gl_code','gl_name','gl_group','remark','c_level','division','department','jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec','year'];
     const rows = [headers.join(',')];
     const yr = document.getElementById('yearFilter').value;
-    transactions.filter(t => yr === 'all' || String(t.year) === yr).forEach(t => {
+    visibleByRole(transactions).filter(t => yr === 'all' || String(t.year) === yr).forEach(t => {
       const cc = costCenters.find(c => c.code === t.costCenter) || {};
       const gl = glCodes.find(g => g.code === t.glCode) || {};
       const esc = (v) => {
@@ -1529,7 +2163,7 @@
     hint.textContent = 'Submitting all transactions to budget.chememan.co.th/api/opex';
 
     const yr = document.getElementById('yearFilter').value;
-    const filtered = transactions.filter(t => yr === 'all' || String(t.year) === yr);
+    const filtered = visibleByRole(transactions).filter(t => yr === 'all' || String(t.year) === yr);
     setTimeout(() => {
       btn.classList.remove('is-loading');
       btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg><span>Submit to Database</span>';
@@ -1619,6 +2253,10 @@
     document.getElementById('intensityVal').textContent = savedIntensity + '%';
     setTheme(savedTheme);
     applyPreset(savedPreset);
+    let savedUser = 'admin';
+    try { savedUser = localStorage.getItem('cm.user') || 'admin'; } catch(e){}
+    if (USERS[savedUser]) currentUserKey = savedUser;
+    renderUserBar();
     renderTable();
     initColumnResize();
   })();
