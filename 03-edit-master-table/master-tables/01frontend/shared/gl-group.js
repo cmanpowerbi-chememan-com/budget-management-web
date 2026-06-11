@@ -1,468 +1,700 @@
 /* ═══════════════════════════════════════════════════════════
-   0003-gl-group.js — Modified application logic
-   Replaces the inline <script> section of the original HTML
-   (lines ~739-1155 in 0003budget-gl-master.html).
-
-   Preserves: theme system, dropdown UI, sort logic, modal
-              animations, render functions.
-   Changes:   data arrays now load from API; save/delete now
-              POST/DELETE to backend; admin access enforced.
+   gl-group.js — GL Group Master controller
+   Wired to gl-group.html (new UI design).
+   Element IDs used: glCodeInput, glGroupInput, glCodeDropdown,
+   glGroupDropdown, glCodeList, glGroupList, tableBody, modeBadge,
+   saveBtnLabel, countPill, tableSearch, confirmModal, confirmBtn,
+   confirmSummary, noticeModal, noticeMsg, noticeSummary,
+   stat-gl, stat-group, stat-unmapped, stat-sap.
+   API layer: shared/api-client-gl-group.js (glApiClient)
    ═══════════════════════════════════════════════════════════ */
 
-/* ── THEME (preserved from original) ── */
-const PRESETS = {
-  chememan: { forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
-  ocean:    { forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
-  sunset:   { forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
-  midnight: { forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
-  nature:   { forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
-  royal:    { forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' },
-};
-
+/* ── THEME ── */
 function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme');
-  document.documentElement.setAttribute('data-theme', cur === 'light' ? 'dark' : 'light');
+  const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('cm.theme', next); } catch (_) {}
 }
+window.toggleTheme = toggleTheme;
 
 function applyThemeFromStorage() {
-  const theme = localStorage.getItem('theme') || 'light';
+  const PRESETS = {
+    chememan: { forest: '#00522C', mint: '#1FA378', gold: '#C9963D' },
+    ocean:    { forest: '#0E4D6E', mint: '#37B5C7', gold: '#F2C661' },
+    sunset:   { forest: '#7B2D26', mint: '#E07B4C', gold: '#F2B752' },
+    midnight: { forest: '#1B244B', mint: '#5B73D9', gold: '#A88AE6' },
+    nature:   { forest: '#2D5016', mint: '#7BA428', gold: '#B8A04A' },
+    royal:    { forest: '#3D1F6E', mint: '#9B6DD9', gold: '#D6B16A' },
+  };
+  let theme = 'light', preset = 'ocean', intensity = 60;
+  try {
+    theme     = localStorage.getItem('cm.theme')       || 'light';
+    preset    = localStorage.getItem('cm.preset')      || 'ocean';
+    intensity = +(localStorage.getItem('cm.intensity') || 60);
+  } catch (_) {}
   document.documentElement.setAttribute('data-theme', theme);
+
+  const p = PRESETS[preset] || PRESETS.ocean;
+  const adjust = (hex, factor) => {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    const mix   = c => factor >= 1 ? Math.round(c * (2 - factor)) : Math.round(c + (255 - c) * (1 - factor));
+    const toHex = n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+    return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+  };
+  const f = intensity / 100;
+  document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
+  document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
+  document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
 }
 
 /* ═══════════════════════════════════════════════════════════
-   DATA — loaded from API at page init (no hardcoded arrays)
+   STATE
    ═══════════════════════════════════════════════════════════ */
-let sapGlCodes  = [];   // populated from /api/master/gl-group/reference/gl-codes
-let glGroups    = [];   // populated from /api/master/gl-group/reference/gl-groups
-let masterData  = [];   // populated from /api/master/gl-group/list
+let sapGlCodes  = [];   /* [{ code, name }]            — /reference/gl-codes */
+let glGroupDims = [];   /* [{ group_id, group_name }]  — /reference/gl-groups */
+let masterData  = [];   /* [{ gl_code, group_id, group_name }] — /list */
 
-/* UI state (preserved) */
-let editMode      = false;
-let editKey       = null;
-let newRowKey     = null;
-let pendingDelete = null;
-let sortCol       = null;
-let sortDir       = 'asc';
-let selectedGlCode  = null;  // from dropdown
-let selectedGroupId = null;  // from dropdown OR null if creating new
-let filteredRows    = [];    // current visible rows — used by exportCsv
+let editModeGlCode = null;   /* gl_code being edited, or null for new */
+let pendingDelete  = null;   /* gl_code awaiting confirm modal */
+let newRowKey      = null;   /* gl_code to highlight after save */
+let sortCol        = null;   /* 'glCode' | 'glGroup' | null */
+let sortDir        = 'asc';
+
+/* ─── HTML escaping (XSS prevention) ─── */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════
-   INIT — replaces the bottom of the original <script>
+   INIT
    ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   applyThemeFromStorage();
 
-  /* ── Static button wiring (replaces inline onclick in HTML) ── */
-  document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
-  document.getElementById('saveBtn').addEventListener('click', saveRecord);
-  document.getElementById('tableSearch').addEventListener('input', renderTable);
-  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-
-  /* Sort headers — event delegation on thead */
-  document.querySelector('.data-table thead').addEventListener('click', e => {
-    const th = e.target.closest('th[data-col]');
-    if (th) toggleSort(th.dataset.col);
-  });
-
-  /* Table action buttons — event delegation on table */
-  document.getElementById('dataTable').addEventListener('click', e => {
-    const btn = e.target.closest('button[data-gl-code]');
-    if (!btn) return;
-    const code = btn.dataset.glCode;
-    if (btn.classList.contains('btn-edit'))   editRecord(code);
-    else if (btn.classList.contains('btn-danger')) confirmDelete(code);
-  });
-
-  /* Notice modal */
-  document.getElementById('noticeModal').addEventListener('click', e => { if (e.target.id === 'noticeModal') closeNotice(); });
-  document.getElementById('noticeCloseBtn').addEventListener('click', closeNotice);
-  document.getElementById('noticeOkBtn').addEventListener('click', closeNotice);
-
-  /* Delete modal */
-  document.getElementById('deleteModal').addEventListener('click', e => { if (e.target.id === 'deleteModal') closeDeleteModal(); });
-  document.getElementById('deleteCloseBtn').addEventListener('click', closeDeleteModal);
-  document.getElementById('deleteCancelBtn').addEventListener('click', closeDeleteModal);
-  document.getElementById('deleteConfirmBtn').addEventListener('click', executeDelete);
-
-  /* Error modal */
-  document.getElementById('errorModal').addEventListener('click', e => { if (e.target.id === 'errorModal') closeErrorModal(); });
-  document.getElementById('errorCloseBtn').addEventListener('click', closeErrorModal);
-  document.getElementById('errorOkBtn').addEventListener('click', closeErrorModal);
-
-  /* Dropdown item clicks — event delegation */
-  document.getElementById('glCodeList').addEventListener('click', e => {
-    const item = e.target.closest('.dropdown-item[data-code]');
-    if (item) selectGlCode(item.dataset.code);
-  });
-  document.getElementById('glGroupList').addEventListener('click', e => {
-    const item = e.target.closest('.dropdown-item');
-    if (!item) return;
-    if ('createName' in item.dataset) selectGlGroupNew(item.dataset.createName);
-    else if (item.dataset.groupId)    selectGlGroup(item.dataset.groupId, item.dataset.groupName);
-  });
-
-  // Layer 1 of defense in depth: client-side group check
   const ok = await checkAdminAccess();
   if (!ok) return;
 
+  showTableLoading(true);
   try {
-    const [glCodes, groups, mappings] = await Promise.all([
-      apiClient.refGlCodes(),
-      apiClient.refGlGroups(),
-      apiClient.list(),
+    const [glCodes, glGroups, mappings] = await Promise.all([
+      glApiClient.refGlCodes(),
+      glApiClient.refGlGroups(),
+      glApiClient.list(),
     ]);
-    sapGlCodes = glCodes;
-    glGroups   = groups;
-    masterData = mappings;
-
-    const elCount = document.getElementById('glCodeCount');
-    const elSap   = document.getElementById('stat-sap');
-    const elUnmap = document.getElementById('stat-unmapped');
-    const mapped  = new Set(mappings.map(m => m.gl_code));
-    if (elCount) elCount.textContent = `${glCodes.length} GL code`;
-    if (elSap)   elSap.textContent   = glCodes.length;
-    if (elUnmap) elUnmap.textContent = glCodes.filter(c => !mapped.has(c.code)).length;
-
-    renderTable();
-    initDropdowns();
+    sapGlCodes  = glCodes;
+    glGroupDims = glGroups;
+    masterData  = mappings;
   } catch (err) {
-    showErrorModal(err);
+    showError(err);
+  } finally {
+    showTableLoading(false);
   }
+
+  initGlCodeDropdown();
+  initGlGroupDropdown();
+  renderTable();
+
+  /* Confirm-delete button */
+  document.getElementById('confirmBtn').addEventListener('click', () => executeConfirmedDelete());
+
+  /* Table body — event delegation for edit/delete buttons */
+  document.getElementById('tableBody')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    switch (btn.dataset.action) {
+      case 'edit':   editRecord(btn.dataset.glCode);  break;
+      case 'delete': askDelete(btn.dataset.glCode);   break;
+    }
+  });
+
+  /* Close dropdowns when clicking outside */
+  document.addEventListener('click', e => {
+    const codeWrap  = document.getElementById('glCodeDropdown');
+    const groupWrap = document.getElementById('glGroupDropdown');
+    if (codeWrap  && !codeWrap.contains(e.target))  codeWrap.classList.remove('open');
+    if (groupWrap && !groupWrap.contains(e.target)) groupWrap.classList.remove('open');
+  });
 });
 
 /* ═══════════════════════════════════════════════════════════
-   SAVE — async API call (replaces in-memory push/update)
+   GL CODE DROPDOWN
+   ═══════════════════════════════════════════════════════════ */
+function initGlCodeDropdown() {
+  const wrap  = document.getElementById('glCodeDropdown');
+  const input = document.getElementById('glCodeInput');
+  if (!wrap || !input) return;
+
+  input.addEventListener('focus', () => { wrap.classList.add('open'); renderGlCodeList(''); });
+  input.addEventListener('input', () => { wrap.classList.add('open'); renderGlCodeList(input.value); });
+  input.addEventListener('blur',  () => setTimeout(() => wrap.classList.remove('open'), 150));
+
+  /* Event delegation — mousedown so blur fires before click is lost */
+  document.addEventListener('mousedown', e => {
+    const item = e.target.closest('#glCodeList .dropdown-item[data-action="select-gl-code"]');
+    if (!item) return;
+    e.preventDefault();
+    selectGlCode(item.dataset.code, item.dataset.name);
+  });
+}
+
+function renderGlCodeList(filter) {
+  const list = document.getElementById('glCodeList');
+  if (!list) return;
+  const q = (filter || '').toLowerCase();
+  const filtered = sapGlCodes.filter(it =>
+    it.code.toLowerCase().includes(q) || (it.name || '').toLowerCase().includes(q)
+  );
+  if (!filtered.length) {
+    list.innerHTML = '<div class="dropdown-empty">ไม่พบ GL Code · No matches</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(it => `
+    <div class="dropdown-item"
+         data-action="select-gl-code"
+         data-code="${escapeHtml(it.code)}"
+         data-name="${escapeHtml(it.name || '')}">
+      <span class="code">${escapeHtml(it.code)}</span>
+      <span class="name">${escapeHtml(it.name || '')}</span>
+    </div>
+  `).join('');
+}
+
+function selectGlCode(code, name) {
+  const input = document.getElementById('glCodeInput');
+  if (input) input.value = code;
+  document.getElementById('glCodeDropdown')?.classList.remove('open');
+
+  /* Auto-fill GL Group if a mapping already exists for this code */
+  const existing = masterData.find(d => d.gl_code === code);
+  if (existing) {
+    const groupInput = document.getElementById('glGroupInput');
+    if (groupInput) {
+      groupInput.value                    = existing.group_name || '';
+      groupInput.dataset.selectedGroupId  = existing.group_id   || '';
+    }
+    setEditMode(code);
+  } else {
+    setEditMode(null);
+  }
+}
+window.selectGlCode = selectGlCode;
+
+/* ═══════════════════════════════════════════════════════════
+   GL GROUP DROPDOWN
+   ═══════════════════════════════════════════════════════════ */
+function initGlGroupDropdown() {
+  const wrap  = document.getElementById('glGroupDropdown');
+  const input = document.getElementById('glGroupInput');
+  if (!wrap || !input) return;
+
+  input.addEventListener('focus', () => { wrap.classList.add('open'); renderGlGroupList(''); });
+  input.addEventListener('input', () => { wrap.classList.add('open'); renderGlGroupList(input.value); });
+  input.addEventListener('blur',  () => setTimeout(() => wrap.classList.remove('open'), 150));
+
+  /* Event delegation */
+  document.addEventListener('mousedown', e => {
+    const item = e.target.closest('#glGroupList .dropdown-item[data-action]');
+    if (!item) return;
+    e.preventDefault();
+    if (item.dataset.action === 'select-gl-group') {
+      selectGlGroup(item.dataset.groupId, item.dataset.groupName);
+    } else if (item.dataset.action === 'create-gl-group') {
+      createNewGroup(item.dataset.name);
+    }
+  });
+}
+
+function renderGlGroupList(filter) {
+  const list = document.getElementById('glGroupList');
+  if (!list) return;
+  const q = (filter || '').toLowerCase();
+
+  /* Combine server dims + any locally known group names (already in masterData) */
+  const knownNames = [...new Set([
+    ...glGroupDims.map(d => d.group_name),
+    ...masterData.map(d => d.group_name).filter(Boolean),
+  ])].sort();
+
+  const filtered = knownNames.filter(g => g.toLowerCase().includes(q));
+  let html = '';
+
+  if (filtered.length) {
+    html += filtered.map(g => {
+      const dim = glGroupDims.find(d => d.group_name === g);
+      return `<div class="dropdown-item"
+               data-action="select-gl-group"
+               data-group-id="${escapeHtml(dim ? dim.group_id : '')}"
+               data-group-name="${escapeHtml(g)}">
+        <span class="code" style="font-family:var(--sans);font-weight:600;color:var(--ink)">${escapeHtml(g)}</span>
+      </div>`;
+    }).join('');
+  } else if (!filter) {
+    html = '<div class="dropdown-empty">ไม่มี GL Group · พิมพ์เพื่อสร้างใหม่</div>';
+  }
+
+  /* Offer "create new" when typed name does not exist */
+  const trimmed = (filter || '').trim();
+  if (trimmed && !knownNames.some(g => g.toLowerCase() === trimmed.toLowerCase())) {
+    html += `<div class="dropdown-item create-new"
+               data-action="create-gl-group"
+               data-name="${escapeHtml(trimmed)}">
+      <span>สร้างกลุ่มใหม่: <b>${escapeHtml(trimmed)}</b></span>
+    </div>`;
+  }
+
+  list.innerHTML = html || '<div class="dropdown-empty">No options</div>';
+}
+
+function selectGlGroup(groupId, groupName) {
+  const input = document.getElementById('glGroupInput');
+  if (input) {
+    input.value                    = groupName;
+    input.dataset.selectedGroupId  = groupId || '';
+  }
+  document.getElementById('glGroupDropdown')?.classList.remove('open');
+}
+window.selectGlGroup = selectGlGroup;
+
+function createNewGroup(name) {
+  /* group_id intentionally empty — backend creates new dim via create_on_save path */
+  selectGlGroup('', name);
+}
+window.createNewGroup = createNewGroup;
+
+/* ═══════════════════════════════════════════════════════════
+   MODE BADGE
+   ═══════════════════════════════════════════════════════════ */
+function setEditMode(glCode) {
+  editModeGlCode = glCode;
+  const badge = document.getElementById('modeBadge');
+  const label = document.getElementById('saveBtnLabel');
+  if (!badge || !label) return;
+  if (glCode) {
+    badge.textContent       = 'แก้ไข · UPDATE';
+    badge.style.color       = 'var(--gl-group)';
+    badge.style.borderColor = 'var(--gl-group)';
+    label.textContent       = 'อัปเดต';
+  } else {
+    badge.textContent       = 'เพิ่มใหม่ · NEW';
+    badge.style.color       = '';
+    badge.style.borderColor = '';
+    label.textContent       = 'บันทึก';
+  }
+}
+window.setEditMode = setEditMode;
+
+/* ═══════════════════════════════════════════════════════════
+   SAVE (async — calls real API)
    ═══════════════════════════════════════════════════════════ */
 async function saveRecord() {
-  const glCode    = document.getElementById('glCodeInput').value.trim();
-  const groupText = document.getElementById('glGroupInput').value.trim();
+  const glCode    = (document.getElementById('glCodeInput')?.value  || '').trim();
+  const glGroup   = (document.getElementById('glGroupInput')?.value || '').trim();
+  const groupIdEl = document.getElementById('glGroupInput');
+  const groupId   = groupIdEl?.dataset.selectedGroupId || '';
 
-  if (!glCode || !groupText) {
-    showWarning('กรุณากรอกข้อมูลให้ครบ');
+  if (!glCode || !glGroup) {
+    showNotice('โปรดกรอกข้อมูล', 'กรุณาเลือกทั้ง GL Code และ GL Group ก่อนบันทึก', null);
     return;
   }
 
-  // Build payload — either existing group_id OR new group_name
-  const existingGroup = glGroups.find(g => g.group_name === groupText);
-  const payload = { gl_code: glCode };
-  if (existingGroup) {
-    payload.group_id = existingGroup.group_id;
-  } else {
-    payload.group_name = groupText;   // backend will create_on_save
+  /* Validate GL Code is from SAP reference */
+  const sapItem = sapGlCodes.find(s => s.code === glCode);
+  if (!sapItem) {
+    showNotice('GL Code ไม่ถูกต้อง', 'กรุณาเลือก GL Code จากรายการของ SAP เท่านั้น', null);
+    return;
   }
 
-  // Frontend Fail Fast (UX) — backend re-checks as safety net
-  if (!editMode) {
-    const dup = masterData.some(r => r.gl_code === glCode);
-    if (dup) {
-      showErrorModal({
-        status: 409,
-        body: {
-          code: 'DUPLICATE_KEY',
-          message_th: 'GL Code นี้มีอยู่ในระบบแล้ว',
-        },
-      });
-      return;
-    }
-  }
+  const isEdit  = !!editModeGlCode;
+  const payload = groupId
+    ? { gl_code: glCode, group_id: groupId }
+    : { gl_code: glCode, group_name: glGroup };
+
+  const saveBtn = document.querySelector('.btn-save');
+  if (saveBtn) saveBtn.disabled = true;
 
   try {
-    const result = await apiClient.save(payload, editMode);
+    await glApiClient.save(payload, isEdit);
     newRowKey = glCode;
     await refreshAll();
     resetForm();
-    showSuccessToast(editMode ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ');
-    editMode = false;
-    editKey = null;
+    showNotice(
+      isEdit ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ',
+      isEdit
+        ? 'อัปเดต Mapping เรียบร้อย และย้ายขึ้นบนสุดของตาราง'
+        : 'เพิ่ม Mapping ใหม่ที่บนสุดของตาราง',
+      { action: isEdit ? 'UPDATE' : 'CREATE', glCode, glGroup, sapName: sapItem.name }
+    );
   } catch (err) {
-    showErrorModal(err);
+    if (saveBtn) saveBtn.disabled = false;
+    if (err.status === 409) {
+      showNotice(
+        'ข้อมูลซ้ำ',
+        err.body?.message_th || 'รหัส GL Code นี้มีอยู่ในระบบแล้ว กรุณา refresh แล้วลองใหม่',
+        null
+      );
+    } else {
+      showError(err);
+    }
+    return;
   }
+
+  if (saveBtn) saveBtn.disabled = false;
 }
+window.saveRecord = saveRecord;
 
 /* ═══════════════════════════════════════════════════════════
-   DELETE — async API call (replaces in-memory filter)
-   Modal pattern preserved from original HTML.
-   ═══════════════════════════════════════════════════════════ */
-function confirmDelete(glCode) {
-  pendingDelete = glCode;
-  document.getElementById('deleteModal').classList.add('show');
-}
-
-async function executeDelete() {
-  if (!pendingDelete) return;
-  try {
-    await apiClient.remove({ gl_code: pendingDelete });
-    await refreshAll();
-    closeDeleteModal();
-    showSuccessToast('ลบสำเร็จ');
-  } catch (err) {
-    closeDeleteModal();
-    showErrorModal(err);
-  }
-}
-
-function closeDeleteModal() {
-  document.getElementById('deleteModal').classList.remove('show');
-  pendingDelete = null;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   EDIT — populate form, set edit mode (no API call yet)
+   EDIT — pre-fill form from table row click
    ═══════════════════════════════════════════════════════════ */
 function editRecord(glCode) {
-  const row = masterData.find(r => r.gl_code === glCode);
-  if (!row) return;
-  document.getElementById('glCodeInput').value  = row.gl_code;
-  document.getElementById('glGroupInput').value = row.group_name;
-  selectedGlCode  = row.gl_code;
-  selectedGroupId = row.group_id;
-  editMode = true;
-  editKey  = glCode;
-}
+  const rec = masterData.find(d => d.gl_code === glCode);
+  if (!rec) return;
 
-function resetForm() {
-  document.getElementById('glCodeInput').value  = '';
-  document.getElementById('glGroupInput').value = '';
-  selectedGlCode  = null;
-  selectedGroupId = null;
-  editMode = false;
-  editKey  = null;
+  const codeInput  = document.getElementById('glCodeInput');
+  const groupInput = document.getElementById('glGroupInput');
+  if (codeInput)  codeInput.value = rec.gl_code;
+  if (groupInput) {
+    groupInput.value                   = rec.group_name || '';
+    groupInput.dataset.selectedGroupId = rec.group_id   || '';
+  }
+  setEditMode(rec.gl_code);
+  document.querySelector('.panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+window.editRecord = editRecord;
 
 /* ═══════════════════════════════════════════════════════════
-   REFRESH — re-pull all data after a write
+   DELETE
    ═══════════════════════════════════════════════════════════ */
-async function refreshAll() {
-  const [groups, mappings] = await Promise.all([
-    apiClient.refGlGroups(),
-    apiClient.list(),
-  ]);
-  glGroups   = groups;
-  masterData = mappings;
-  renderTable();
+function askDelete(glCode) {
+  pendingDelete = glCode;
+  const rec    = masterData.find(d => d.gl_code === glCode);
+  const sap    = sapGlCodes.find(s => s.code === glCode);
+  const sumEl  = document.getElementById('confirmSummary');
+  if (sumEl) {
+    sumEl.innerHTML = `
+      <div class="row"><span class="lbl">GL Code</span><span class="gl-code-pill">${escapeHtml(glCode)}</span></div>
+      <div class="row"><span class="lbl">SAP name</span><span style="color:var(--ink-2);font-size:12.5px">${escapeHtml(sap ? sap.name : '—')}</span></div>
+      <div class="row"><span class="lbl">GL Group</span><span class="gl-group-pill">${escapeHtml(rec ? rec.group_name : '—')}</span></div>
+    `;
+  }
+  document.getElementById('confirmModal')?.classList.add('open');
 }
+window.askDelete = askDelete;
+
+async function executeConfirmedDelete() {
+  if (!pendingDelete) return;
+  const glCode = pendingDelete;
+  closeConfirm();
+  try {
+    await glApiClient.remove({ gl_code: glCode });
+    await refreshAll();
+    showSuccessToast(`ลบ GL Code ${escapeHtml(glCode)} สำเร็จ`);
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function closeConfirm() {
+  document.getElementById('confirmModal')?.classList.remove('open');
+  pendingDelete = null;
+}
+window.closeConfirm = closeConfirm;
 
 /* ═══════════════════════════════════════════════════════════
-   RENDER — preserved from original, only field names adjusted
-   (glCode → gl_code, glGroup → group_name)
+   SORT
    ═══════════════════════════════════════════════════════════ */
-function renderTable() {
-  const tbody = document.querySelector('#dataTable tbody');
-  const search = document.getElementById('tableSearch').value.trim().toLowerCase();
-
-  let rows = masterData.filter(r =>
-    !search ||
-    r.gl_code.toLowerCase().includes(search) ||
-    (r.group_name || '').toLowerCase().includes(search)
-  );
-
-  if (sortCol) {
-    rows.sort((a, b) => {
-      const av = (a[sortCol] || '').toString();
-      const bv = (b[sortCol] || '').toString();
-      const cmp = av.localeCompare(bv);
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-  }
-
-  filteredRows = rows;
-
-  /* ── Filtered count status ── */
-  const countEl = document.getElementById('filteredCount');
-  if (countEl) {
-    const isFiltered = search.length > 0;
-    countEl.textContent = isFiltered
-      ? `${rows.length} GL codes (จาก ${masterData.length})`
-      : `${rows.length} GL codes`;
-    countEl.style.color = isFiltered ? 'var(--accent)' : 'var(--ink-3)';
-  }
-
-  tbody.innerHTML = rows.length === 0
-    ? `<tr class="empty"><td colspan="3">
-         <div class="empty-title">No mappings</div>
-         <div class="empty-sub">เพิ่ม mapping แรกได้จากฟอร์มด้านบน</div>
-       </td></tr>`
-    : rows.map(r => `
-        <tr ${r.gl_code === newRowKey ? 'class="row-new"' : ''}>
-          <td><span class="badge-code">${escapeHtml(r.gl_code)}</span></td>
-          <td><span class="badge-group">${escapeHtml(r.group_name || '—')}</span></td>
-          <td class="action-col">
-            <button class="btn-sm btn-edit" data-gl-code="${escapeAttr(r.gl_code)}">Edit</button>
-            <button class="btn-sm btn-danger" data-gl-code="${escapeAttr(r.gl_code)}">Delete</button>
-          </td>
-        </tr>
-      `).join('');
-
-  document.getElementById('countActive').textContent  = masterData.length;
-  document.getElementById('countGroups').textContent  = new Set(masterData.map(r => r.group_id)).size;
-
-  setTimeout(() => { newRowKey = null; }, 2400);
-}
-
 function toggleSort(col) {
   if (sortCol !== col) { sortCol = col; sortDir = 'asc'; }
   else if (sortDir === 'asc') sortDir = 'desc';
   else { sortCol = null; sortDir = 'asc'; }
+
   document.querySelectorAll('.data-table thead th[data-col]').forEach(th => {
     th.removeAttribute('data-sort');
     if (th.dataset.col === sortCol) th.setAttribute('data-sort', sortDir);
   });
   renderTable();
 }
+window.toggleSort = toggleSort;
 
 /* ═══════════════════════════════════════════════════════════
-   ERROR & SUCCESS UI — reuses modal markup from original HTML
+   REFRESH + RESET
    ═══════════════════════════════════════════════════════════ */
-function showErrorModal(err) {
-  const modal = document.getElementById('errorModal');
-  if (!modal) { alert(err.message || String(err)); return; }
+async function refreshAll() {
+  const [glGroups, mappings] = await Promise.all([
+    glApiClient.refGlGroups(),
+    glApiClient.list(),
+  ]);
+  glGroupDims = glGroups;
+  masterData  = mappings;
+  renderTable();
+}
 
-  const body = err.body || {};
-  const title = body.code === 'DUPLICATE_KEY' ? 'ข้อมูลซ้ำ'
-              : err.status === 403 ? 'ไม่มีสิทธิ์เข้าถึง'
-              : err.status === 401 ? 'เซสชันหมดอายุ'
-              : 'เกิดข้อผิดพลาด';
-
-  modal.querySelector('.modal-title').textContent = title;
-  modal.querySelector('.modal-body').textContent  =
-    body.message_th || body.message_en || err.message || 'ไม่ทราบสาเหตุ';
-  modal.querySelector('.modal-details').textContent = JSON.stringify(body, null, 2);
-  modal.classList.add('show');
+function resetForm() {
+  const codeInput  = document.getElementById('glCodeInput');
+  const groupInput = document.getElementById('glGroupInput');
+  if (codeInput)  codeInput.value = '';
+  if (groupInput) { groupInput.value = ''; groupInput.dataset.selectedGroupId = ''; }
+  setEditMode(null);
 }
 
 /* ═══════════════════════════════════════════════════════════
-   EXPORT CSV — downloads currently filtered rows
+   RENDER TABLE
+   ═══════════════════════════════════════════════════════════ */
+function renderSummary() {
+  const totalGl      = masterData.length;
+  const uniqueGroups = new Set(masterData.map(d => d.group_name)).size;
+  const mappedCodes  = new Set(masterData.map(d => d.gl_code));
+  const unmapped     = sapGlCodes.filter(s => !mappedCodes.has(s.code)).length;
+  const sapTotal     = sapGlCodes.length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('stat-gl',       totalGl);
+  set('stat-group',    uniqueGroups);
+  set('stat-unmapped', unmapped);
+  set('stat-sap',      sapTotal);
+}
+
+function renderTable() {
+  renderSummary();
+
+  const tbody = document.getElementById('tableBody');
+  if (!tbody) return;
+
+  const q = (document.getElementById('tableSearch')?.value || '').toLowerCase();
+  let filtered = masterData.filter(d =>
+    d.gl_code.toLowerCase().includes(q) ||
+    (d.group_name || '').toLowerCase().includes(q)
+  );
+
+  if (sortCol) {
+    const key = sortCol === 'glCode' ? 'gl_code' : 'group_name';
+    const dir = sortDir === 'asc' ? 1 : -1;
+    filtered = [...filtered].sort((a, b) => {
+      const va = (a[key] || '').toLowerCase();
+      const vb = (b[key] || '').toLowerCase();
+      if (va < vb) return -1 * dir;
+      if (va > vb) return  1 * dir;
+      return 0;
+    });
+  }
+
+  const countPill = document.getElementById('countPill');
+  if (countPill) countPill.innerHTML = `<b>${filtered.length}</b> / ${masterData.length} records`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="empty"><td colspan="3">
+      <div class="empty-title">No matches.</div>
+      <div class="empty-sub">Try clearing the search or add a new mapping above.</div>
+    </td></tr>`;
+    return;
+  }
+
+  /* Compute merge runs (consecutive identical group_name) */
+  const rowToRun = new Array(filtered.length);
+  let i = 0;
+  while (i < filtered.length) {
+    const g = filtered[i].group_name;
+    let len = 1;
+    while (i + len < filtered.length && filtered[i + len].group_name === g) len++;
+    const run = { length: len, group: g };
+    for (let k = 0; k < len; k++) rowToRun[i + k] = { run, posInRun: k };
+    i += len;
+  }
+
+  tbody.innerHTML = filtered.map((d, rowIdx) => {
+    const sap          = sapGlCodes.find(s => s.code === d.gl_code);
+    const displayIdx   = String(rowIdx + 1).padStart(2, '0');
+    const isNew        = d.gl_code === newRowKey;
+    const info         = rowToRun[rowIdx];
+    const isFirstOfRun = info.posInRun === 0;
+    const isMerged     = info.run.length > 1;
+
+    const codeCell = `<td>
+      <div class="gl-code-cell">
+        <span class="row-idx">${escapeHtml(displayIdx)}</span>
+        <div class="code-block">
+          <span class="gl-code-pill">${escapeHtml(d.gl_code)}</span>
+          <span class="sap-name">${escapeHtml(sap ? sap.name : '—')}</span>
+        </div>
+      </div>
+    </td>`;
+
+    let groupCell = '';
+    if (isFirstOfRun) {
+      const safeName = escapeHtml(d.group_name || '—');
+      if (isMerged) {
+        groupCell = `<td rowspan="${info.run.length}" class="group-merged-cell">
+          <div class="map-block" style="position:relative">
+            <span class="map-arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 7h17" stroke-dasharray="2 3"/>
+                <path d="M16 2l5 5-5 5"/>
+              </svg>
+            </span>
+            <span class="merged-wrap">
+              <span class="gl-group-pill merged">
+                <span class="count-tag">${info.run.length}× MERGED</span>
+                <span class="group-name">${safeName}</span>
+              </span>
+              <span class="drop drop-1"></span>
+              <span class="drop drop-2"></span>
+              <span class="drop drop-3"></span>
+              <span class="merged-shadow"></span>
+            </span>
+          </div>
+        </td>`;
+      } else {
+        groupCell = `<td>
+          <div class="map-block">
+            <span class="map-arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 7h17" stroke-dasharray="2 3"/>
+                <path d="M16 2l5 5-5 5"/>
+              </svg>
+            </span>
+            <div class="group-block">
+              <span class="gl-group-pill">${safeName}</span>
+            </div>
+          </div>
+        </td>`;
+      }
+    }
+
+    /* data-* attributes only — no inline onclick */
+    const actionsCell = `<td>
+      <div class="action-row">
+        <button class="action-btn edit"
+                data-action="edit"
+                data-gl-code="${escapeHtml(d.gl_code)}"
+                title="แก้ไข">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="action-btn delete"
+                data-action="delete"
+                data-gl-code="${escapeHtml(d.gl_code)}"
+                title="ลบ">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </td>`;
+
+    return `<tr class="${isNew ? 'row-new' : ''}">${codeCell}${groupCell}${actionsCell}</tr>`;
+  }).join('');
+
+  setTimeout(() => { newRowKey = null; }, 2500);
+}
+window.renderTable = renderTable;
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORT CSV — filtered rows, UTF-8 BOM, Thai-safe
    ═══════════════════════════════════════════════════════════ */
 function exportCsv() {
-  if (!filteredRows.length) return;
+  const q = (document.getElementById('tableSearch')?.value || '').toLowerCase();
+  const rows = masterData.filter(d =>
+    d.gl_code.toLowerCase().includes(q) ||
+    (d.group_name || '').toLowerCase().includes(q)
+  );
 
-  const rows = [
-    ['GL Code', 'GL Group'],
-    ...filteredRows.map(r => [r.gl_code, r.group_name || '']),
-  ];
+  const header = ['GL Code', 'SAP Name', 'GL Group'];
+  const lines  = [header.join(',')];
 
-  const csv = rows.map(cols =>
-    cols.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-  ).join('\r\n');
+  rows.forEach(d => {
+    const sap  = sapGlCodes.find(s => s.code === d.gl_code);
+    const cell = v => `"${String(v).replace(/"/g, '""')}"`;
+    lines.push([cell(d.gl_code), cell(sap ? sap.name : ''), cell(d.group_name || '')].join(','));
+  });
 
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  /* UTF-8 BOM ensures Excel opens Thai text correctly */
+  const bom  = '﻿';
+  const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `gl_group_mapping_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `gl-group-mapping-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+window.exportCsv = exportCsv;
+
+/* ═══════════════════════════════════════════════════════════
+   NOTICE / ERROR UI HELPERS
+   ═══════════════════════════════════════════════════════════ */
+function showNotice(title, body, summary) {
+  const titleEl = document.querySelector('#noticeModal .modal-title');
+  if (titleEl) {
+    const safeTitle = escapeHtml(title);
+    titleEl.innerHTML = title.includes('สำเร็จ')
+      ? safeTitle.replace('สำเร็จ', '<em>สำเร็จ</em>')
+      : safeTitle;
+  }
+  const msgEl = document.getElementById('noticeMsg');
+  if (msgEl) msgEl.textContent = body;
+
+  const sumEl = document.getElementById('noticeSummary');
+  if (sumEl) {
+    if (summary) {
+      sumEl.style.display = 'flex';
+      sumEl.innerHTML = `
+        <div class="row"><span class="lbl">Action</span><span style="font-family:var(--mono);font-weight:600;color:var(--accent)">${escapeHtml(summary.action)}</span></div>
+        <div class="row"><span class="lbl">GL Code</span><span class="gl-code-pill">${escapeHtml(summary.glCode)}</span></div>
+        <div class="row"><span class="lbl">SAP name</span><span style="color:var(--ink-2);font-size:12.5px">${escapeHtml(summary.sapName || '—')}</span></div>
+        <div class="row"><span class="lbl">GL Group</span><span class="gl-group-pill">${escapeHtml(summary.glGroup)}</span></div>
+      `;
+    } else {
+      sumEl.style.display = 'none';
+    }
+  }
+  document.getElementById('noticeModal')?.classList.add('open');
+}
+window.showNotice = showNotice;
 
 function closeNotice() {
-  document.getElementById('noticeModal').classList.remove('show');
+  document.getElementById('noticeModal')?.classList.remove('open');
 }
-
-function closeErrorModal() {
-  document.getElementById('errorModal').classList.remove('show');
-}
+window.closeNotice = closeNotice;
 
 function showSuccessToast(message) {
-  const toast = document.getElementById('successToast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
+  const titleEl = document.querySelector('#noticeModal .modal-title');
+  const msgEl   = document.getElementById('noticeMsg');
+  const sumEl   = document.getElementById('noticeSummary');
+  if (titleEl) titleEl.innerHTML = 'สำเร็จ';
+  if (msgEl)   msgEl.textContent = message;
+  if (sumEl)   sumEl.style.display = 'none';
+  document.getElementById('noticeModal')?.classList.add('open');
 }
 
-function showWarning(msg) {
-  const input = document.getElementById('glCodeInput');
-  input.classList.add('input-warning');
-  setTimeout(() => input.classList.remove('input-warning'), 600);
-}
+function showError(err) {
+  const body   = err?.body || {};
+  const title  = body.code === 'DUPLICATE_KEY' ? 'ข้อมูลซ้ำ'
+               : err?.status === 403            ? 'ไม่มีสิทธิ์เข้าถึง'
+               : err?.status === 401            ? 'เซสชันหมดอายุ'
+               : 'เกิดข้อผิดพลาด';
+  const detail = body.message_th || body.message_en || err?.message || 'ไม่ทราบสาเหตุ';
 
-/* ─── HTML-escape helpers (XSS prevention) ─── */
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-  ));
-}
-function escapeAttr(s) {
-  return String(s).replace(/['"\\]/g, c => '\\' + c);
+  const titleEl = document.querySelector('#noticeModal .modal-title');
+  const msgEl   = document.getElementById('noticeMsg');
+  const sumEl   = document.getElementById('noticeSummary');
+  if (titleEl) titleEl.innerHTML = `<span style="color:#C25A3F">${escapeHtml(title)}</span>`;
+  if (msgEl)   msgEl.textContent = detail;
+  if (sumEl)   sumEl.style.display = 'none';
+  document.getElementById('noticeModal')?.classList.add('open');
 }
 
 /* ═══════════════════════════════════════════════════════════
-   DROPDOWNS — filter + render lists for GL Code and GL Group
+   LOADING STATE
    ═══════════════════════════════════════════════════════════ */
-
-function renderGlCodeList(query) {
-  const list = document.getElementById('glCodeList');
-  const drop = document.getElementById('glCodeDropdown');
-  const q = query.toLowerCase();
-  const hits = q
-    ? sapGlCodes.filter(c => c.code.toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q))
-    : sapGlCodes;
-
-  list.innerHTML = hits.length === 0
-    ? `<div class="dropdown-empty">ไม่พบ GL Code ที่ตรงกัน</div>`
-    : hits.map(c =>
-        `<div class="dropdown-item" data-code="${escapeAttr(c.code)}">
-           <span class="code">${escapeHtml(c.code)}</span>
-           <span style="color:var(--ink-3);font-size:11px;margin-left:8px">${escapeHtml(c.name || '')}</span>
-         </div>`
-      ).join('');
-  drop.classList.add('open');
-}
-
-function selectGlCode(code) {
-  document.getElementById('glCodeInput').value = code;
-  selectedGlCode = code;
-  document.getElementById('glCodeDropdown').classList.remove('open');
-}
-
-function renderGlGroupList(query) {
-  const list = document.getElementById('glGroupList');
-  const drop = document.getElementById('glGroupDropdown');
-  const q = query.toLowerCase();
-  const hits = q ? glGroups.filter(g => g.group_name.toLowerCase().includes(q)) : glGroups;
-
-  const exactMatch = glGroups.some(g => g.group_name.toLowerCase() === q);
-  const createNew = query && !exactMatch
-    ? `<div class="dropdown-item create-new" data-create-name="${escapeAttr(query)}">
-         สร้างกลุ่มใหม่: "${escapeHtml(query)}"
-       </div>`
-    : '';
-
-  list.innerHTML = hits.map(g =>
-    `<div class="dropdown-item" data-group-id="${escapeAttr(g.group_id)}" data-group-name="${escapeAttr(g.group_name)}">
-       <span class="code">${escapeHtml(g.group_name)}</span>
-     </div>`
-  ).join('') + createNew || `<div class="dropdown-empty">ไม่มีกลุ่ม</div>`;
-  drop.classList.add('open');
-}
-
-function selectGlGroup(groupId, groupName) {
-  document.getElementById('glGroupInput').value = groupName;
-  selectedGroupId = groupId;
-  document.getElementById('glGroupDropdown').classList.remove('open');
-}
-
-function selectGlGroupNew(name) {
-  document.getElementById('glGroupInput').value = name;
-  selectedGroupId = null;
-  document.getElementById('glGroupDropdown').classList.remove('open');
-}
-
-function initDropdowns() {
-  const codeInput  = document.getElementById('glCodeInput');
-  const groupInput = document.getElementById('glGroupInput');
-
-  codeInput.addEventListener('input', () => renderGlCodeList(codeInput.value));
-  codeInput.addEventListener('focus', () => renderGlCodeList(codeInput.value));
-
-  groupInput.addEventListener('input', () => renderGlGroupList(groupInput.value));
-  groupInput.addEventListener('focus', () => renderGlGroupList(groupInput.value));
-
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#glCodeDropdown'))
-      document.getElementById('glCodeDropdown').classList.remove('open');
-    if (!e.target.closest('#glGroupDropdown'))
-      document.getElementById('glGroupDropdown').classList.remove('open');
-  });
+function showTableLoading(on) {
+  const tbody = document.getElementById('tableBody');
+  if (!tbody) return;
+  if (on) {
+    tbody.innerHTML = `<tr class="empty"><td colspan="3">
+      <div class="empty-title">Loading…</div>
+    </td></tr>`;
+  }
 }
