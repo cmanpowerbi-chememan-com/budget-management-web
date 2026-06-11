@@ -416,7 +416,8 @@ def build_body(img_meta, rids):
          "(ซ่อนสำหรับปีแรกสุด) · ป้ายแสดงผลบันทึก \"บันทึกสำเร็จ\" (เพิ่มใหม่) / "
          "\"อัปเดตสำเร็จ\" (แก้ไข) · ป้ายโหมด \"เพิ่มใหม่ · NEW\" / \"แก้ไข · UPDATE\" + "
          "ออกจากโหมดแก้ไขอัตโนมัติเมื่อเปลี่ยนปี · เพิ่มหมายเลขลำดับแถว · "
-         "ตัวอย่างอัตราตรงกับภาพ (32.45 / placeholder 35.50)"],
+         "ตัวอย่างอัตราตรงกับภาพ (32.45 / placeholder 35.50) · "
+         "แก้ไขรายชื่อผู้ดูแลระบบจาก 3 คน เป็น 4 คน (เพิ่ม piyadad@chememan.com)"],
     ]
     parts.append(table(meta_rows, META_WIDTHS))
 
@@ -439,13 +440,14 @@ def build_body(img_meta, rids):
         space_before=40, space_after=80,
     ))
     parts.append(para(
-        run("ผู้ดูแลระบบที่ได้รับสิทธิ์ (3 คน)", size_half_pt=22, bold=True,
+        run("ผู้ดูแลระบบที่ได้รับสิทธิ์ (4 คน)", size_half_pt=22, bold=True,
             color="1E3A24"),
         space_before=80, space_after=60,
     ))
     parts.append(bullet("nipapornt@chememan.com"))
     parts.append(bullet("warapornt@chememan.com"))
     parts.append(bullet("jakkaritw@chememan.com"))
+    parts.append(bullet("piyadad@chememan.com  (ปิยะดา ดวงพลจันทร์)"))
 
     # ---- Overview --------------------------------------------------------
     parts.append(heading("ภาพรวมหน้าจอ"))
