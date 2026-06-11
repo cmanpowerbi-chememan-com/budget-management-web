@@ -239,6 +239,8 @@ async function saveRecord() {
   const saved   = results.filter(r => r.status === 'fulfilled');
   const failed  = results.filter(r => r.status === 'rejected');
 
+  const savedOrgCode = selectedOrgcode.code;
+
   if (saved.length > 0) {
     /* Find the last fulfilled result by scanning allSettled results in reverse.
        Using saved.length-1 as a positional index into selectedCCs is wrong
@@ -251,7 +253,7 @@ async function saveRecord() {
   }
 
   if (failed.length === 0) {
-    showSuccessNotice(saved.length, selectedOrgcode.code);
+    showSuccessNotice(saved.length, savedOrgCode);
   } else {
     const errMsgs = failed.map(r => r.reason?.message || 'ไม่ทราบสาเหตุ').join('\n');
     showError({ status: 500, body: { message_th: `บันทึกไม่ครบ: ${saved.length}/${results.length} สำเร็จ\n${errMsgs}` } });
