@@ -1442,6 +1442,7 @@
     document.getElementById('saveBtnLabel').textContent = origBtnLabel;
 
     if (failed.length) {
+      try { await loadList(); } catch (e) { /* keep showing the save error below */ }
       showNotice('บันทึกผิดพลาด',
         `บันทึกไม่สำเร็จ ${failed.length} รายการ: ${failed.map(f => `${f.code} (${f.msg})`).join(', ')}`,
         null);
@@ -1473,13 +1474,6 @@
       { docs: docs.map(d => d.code), glGroup, action, period: `${monthName(mo)} ${yr}`, created, skipped }
     );
   }
-  function editRecord(idx){
-    const rec = masterData[idx];
-    document.getElementById('glCodeInput').value = rec.glCode;
-    document.getElementById('glGroupInput').value = rec.glGroup;
-    setEditMode(idx);
-    document.querySelector('.panel').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
   function askDelete(idx){
     pendingDelete = idx;
     const rec = masterData[idx];
@@ -1496,7 +1490,7 @@
     pendingDelete = null;
   }
   document.getElementById('confirmBtn').onclick = async () => {
-    if (!pendingDelete) return;
+    if (pendingDelete === null) return;
     const btn = document.getElementById('confirmBtn');
     const origText = btn.innerHTML;
     btn.disabled = true;
