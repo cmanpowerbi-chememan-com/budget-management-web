@@ -1,0 +1,26 @@
+# Images — derived artifacts (screenshots rendered from html). Excluded from graph: low value, expensive vision extraction.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.ico
+
+# Generated / vendored noise
+graphify-out/
+venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Video — mascot animation (noise) + requirement video (redundant with text specs); transcription is expensive
+*.mp4
+*.mov
+*.mp3
+*.wav
+*.m4a
+
+# Binary office docs graphify can't read as text (specs live as .py build scripts + we read docx separately)
+~$*.docx

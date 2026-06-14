@@ -31,9 +31,9 @@ jobs:
         env:
           FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
           FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
-          ENTRA_CLIENT_ID: ${{ secrets.ENTRA_CLIENT_ID }}
-          ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
-          ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
+          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
           CPOP_HR_SYSTEM_API_URL: ${{ secrets.CPOP_HR_SYSTEM_API_URL }}
           CPOP_HR_SYSTEM_API_KEY: ${{ secrets.CPOP_HR_SYSTEM_API_KEY }}
         run: python setup/sync_employees.py

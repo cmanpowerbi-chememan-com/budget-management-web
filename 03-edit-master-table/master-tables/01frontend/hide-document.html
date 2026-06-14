@@ -1474,17 +1474,6 @@
       { docs: docs.map(d => d.code), glGroup, action, period: `${monthName(mo)} ${yr}`, created, skipped }
     );
   }
-  function askDelete(idx){
-    pendingDelete = idx;
-    const rec = masterData[idx];
-    const sap = sapGlCodes.find(s => s.code === rec.glGroup);
-    document.getElementById('confirmSummary').innerHTML = `
-      <div class="row"><span class="lbl">Cost Center</span><span class="gl-code-pill">${rec.glCode}</span></div>
-      <div class="row"><span class="lbl">Orgcode</span><span class="gl-group-pill">${rec.glGroup}</span></div>
-      <div class="row"><span class="lbl">หน่วยงาน</span><span style="color:var(--ink-2);font-size:12.5px">${sap ? sap.name : '—'}</span></div>
-    `;
-    document.getElementById('confirmModal').classList.add('open');
-  }
   function closeConfirm(){
     document.getElementById('confirmModal').classList.remove('open');
     pendingDelete = null;
@@ -1510,9 +1499,6 @@
       } else if (pendingDelete.kind === 'pair') {
         triples = [{ docnum: pendingDelete.cc, period: pendingDelete.org }];
       }
-    } else if (typeof pendingDelete === 'number') {
-      const rec = masterData[pendingDelete];
-      if (rec) triples = [{ docnum: rec.glCode, period: rec.glGroup }];
     }
 
     let deleted = 0, ghosts = 0, failed = [];

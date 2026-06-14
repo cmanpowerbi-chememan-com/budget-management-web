@@ -403,12 +403,29 @@ def build_body(img_meta, rids):
 
     meta_rows = [
         ["รายการ", "รายละเอียด"],
-        ["เวอร์ชัน", "v0.2 (ฉบับร่าง)"],
-        ["วันที่", "11 มิถุนายน 2569 (2026-06-11)"],
+        ["เวอร์ชัน", "v0.3 (ฉบับร่าง)"],
+        ["วันที่", "14 มิถุนายน 2569 (2026-06-14)"],
         ["ผู้จัดทำ", "ทีม Data Analytics"],
         ["สถานะ", "รออนุมัติจากผู้ใช้"],
     ]
     parts.append(table(meta_rows, META_WIDTHS))
+
+    # ---- Changelog — keep a short history of doc revisions ---------------
+    parts.append(para(
+        run("ประวัติการแก้ไขเอกสาร (Changelog)", size_half_pt=22, bold=True,
+            color="1E3A24"),
+        space_before=120, space_after=60,
+    ))
+    changelog_rows = [
+        ["เวอร์ชัน", "วันที่", "รายละเอียดการแก้ไข"],
+        ["v0.2", "2026-06-11", "ฉบับร่างตรงกับหน้า demo (SWA) หลังเชื่อมต่อ Backend"],
+        ["v0.3", "2026-06-14",
+         "เพิ่มหัวข้อ \"การนำไปใช้ปลายทาง (Downstream consumption)\": อธิบายว่าเลขเอกสารที่ "
+         "ถูกซ่อนจะถูกตัดออกจากผลรวม Actuals (SUM ของ `gold_sap_gl_trans`) ตอน query "
+         "ที่ป้อนให้ dashboard — เสริมกับกฎ row-visibility (ADR-0010) และตัวกรอง Actuals "
+         "มาตรฐานใน CLAUDE.md"],
+    ]
+    parts.append(table(changelog_rows, [1400, 2000, 5960]))
 
     # ---- Context ---------------------------------------------------------
     parts.append(heading("บริบทและขอบเขต (Context)"))
@@ -559,6 +576,23 @@ def build_body(img_meta, rids):
          "การคำนวณ Not hidden / SAP Total จะเชื่อมต่อในเวอร์ชัน React (demo แสดง 0)"],
     ]
     parts.append(table(src_rows, SRC_WIDTHS))
+
+    parts.append(para(
+        run("การนำไปใช้ปลายทาง (Downstream consumption)", size_half_pt=22, bold=True,
+            color="1E3A24"),
+        space_before=120, space_after=60,
+    ))
+    parts.append(body_para(
+        "กฎการซ่อนในตารางนี้เป็น \"ตัวกรองตอน query\" — เลขเอกสารที่ถูกซ่อน (doc_num) ในงวด "
+        "(fiscal_year + fiscal_month) ที่กำหนด จะถูก ตัดออกจากผลรวม Actuals (SUM ของ "
+        "`gold_sap_gl_trans`) ที่ป้อนให้ dashboard และรายงานงบประมาณ ตอนคำนวณ — "
+        "ไม่ได้ลบแถวใน SAP/Lakehouse จริง แต่กรองออกเฉพาะตอนรวมยอด "
+        "(เช่น เพิ่มเงื่อนไข WHERE NOT EXISTS / anti-join กับ `cfg_master.hide_document_number` "
+        "บน (accounting_doc_number, fiscal_year, MONTH(posting_date))) "
+        "· เสริมกับกฎ row-visibility ของ dashboard (ADR-0010) และตัวกรอง Actuals มาตรฐานใน CLAUDE.md "
+        "(เช่น ตัด doc_type = 'CO', cost center ที่ยกเว้น, assignment = 'TFRS16') "
+        "· ผลลัพธ์: เอกสารที่ถูกซ่อนจะไม่ถูกนับใน Actuals ที่นำไปเทียบกับงบประมาณ"
+    ))
 
     # ---- Sign-off --------------------------------------------------------
     parts.append(heading("ช่องลงนามอนุมัติ (Sign-off)"))

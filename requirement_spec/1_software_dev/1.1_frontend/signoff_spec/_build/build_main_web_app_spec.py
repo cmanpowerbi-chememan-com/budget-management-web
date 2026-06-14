@@ -35,7 +35,7 @@ SIGNOFF_DIR = os.path.join(PROJECT_ROOT, "requirement_spec", "1_software_dev", "
 ASSETS_DIR = os.path.join(SIGNOFF_DIR, "assets")
 BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
 DOCX_PATH = os.path.join(SIGNOFF_DIR, "01_main_web_app_spec.docx")
-MOCKUP = pathlib.Path(PROJECT_ROOT, "design", "mockups", "0002claude design", "0002budget-export.html")
+MOCKUP = pathlib.Path(PROJECT_ROOT, "design", "mockups", "0002claude design", "0002.1budget-export.html")
 os.makedirs(ASSETS_DIR, exist_ok=True)
 os.makedirs(BIN_DIR, exist_ok=True)
 
@@ -96,89 +96,184 @@ def capture():
         pg = b.new_page(viewport={"width": 1700, "height": 1180}, device_scale_factor=SCALE)
         pg.goto(MOCKUP.as_uri()); pg.wait_for_selector(".data-table tbody tr")
         pg.wait_for_timeout(300)
+        # Pin the year filter to the SEED data year (2025) for capture only — the mockup's REAL
+        # default is FY2026 (current year), but the demo transactions are seeded in 2025, so the
+        # illustration rows (txn ids the markers anchor to) only render when the view = 2025.
+        # This does NOT change the documented default (2026); it just makes screenshots non-empty.
+        pg.select_option("#yearFilter", "2025"); pg.wait_for_timeout(200)
 
-        # ── 0) LOGIN BAR — two role views (NEW 2026-06-05) ──
-        #     The new mockup adds <section id="userBar"> showing WHO is logged in and
-        #     WHAT scope (avatar, name, ADMIN/USER badge, email-or-scope subline,
-        #     department-name chips, and a demo "เข้าสู่ระบบเป็น" switcher). We capture
-        #     it twice: admin (sees ALL CC) + a normal user (paiboon, scoped to own CC).
-        #     No markers (annotate handles []). Then switch BACK to admin so all later
-        #     captures (overview/sap/approved/pending/detail) stay in admin scope.
-        # LOGIN BAR — admin (sees all CC)
-        pg.evaluate("switchUser('admin')"); pg.wait_for_timeout(150)
+        # ── helpers (NEW 2026-06-13) — drive the new wired mockup ──
+        #   The page locks to ONE ฝ่าย (department) = the approval unit (ADR-0008) via the
+        #   ฝ่าย-picker (#faiPicker — NOT a <select>). Lock programmatically with pickDept().
+        #   Overlay admins (นิภาพร/วราพร) default to their base role; the 🛡️ "โหมด Admin" toggle
+        #   (#adminModeChk → onAdminModeToggle()) switches them into admin powers (sees-all, FX
+        #   display, admin-zone). Pure admin jakkaritw is always admin (no toggle).
+        def use_user(key):
+            pg.evaluate(f"switchUser('{key}')"); pg.wait_for_timeout(150)
+        def admin_on():
+            pg.evaluate("var c=document.getElementById('adminModeChk'); if(c){c.checked=true; onAdminModeToggle();}")
+            pg.wait_for_timeout(150)
+        def lock_dept(dept):
+            pg.evaluate(f"pickDept({dept!r})"); pg.wait_for_timeout(150)
+        def set_status(dept, status):  # drive edit-lock states for the locked-pending capture
+            pg.evaluate(f"DEPT_STATUS[{dept!r}]={status!r}; renderTable();"); pg.wait_for_timeout(150)
+
+        # ── 0) LOGIN BAR — two role views (V3 hierarchy) ──
+        #     <section id="userBar"> shows WHO is logged in and the scope (avatar, name,
+        #     ADMIN/USER/APPROVER badge, สายงาน › ฝ่าย(n) › Cost Centers(n), email in the
+        #     switcher). Captured twice: an admin (jakkaritw — always sees all CC) and a
+        #     normal submitter (suchanya — scoped to her own ฝ่าย). No markers (annotate []).
+        #     The real app has NO user-switcher — the demo switcher only shows both views here.
+        # LOGIN BAR — admin (sees all CC) = jakkaritw (pure admin, always-on)
+        use_user("jakkaritw")
         ub = pg.locator("#userBar").first
         la_path = os.path.join(BIN_DIR, "main_login_admin.png")
         ub.screenshot(path=la_path)
         out["login_admin"] = (la_path, [])
-        # LOGIN BAR — normal user (paiboon, scoped to own CC)
-        pg.evaluate("switchUser('paiboon')"); pg.wait_for_timeout(150)
+        # LOGIN BAR — normal submitter (suchanya · L3 Solution Delivery, scoped to own ฝ่าย)
+        use_user("suchanya")
         ub2 = pg.locator("#userBar").first
         lu_path = os.path.join(BIN_DIR, "main_login_user.png")
         ub2.screenshot(path=lu_path)
         out["login_user"] = (lu_path, [])
-        # back to admin for remaining captures
-        pg.evaluate("switchUser('admin')"); pg.wait_for_timeout(150)
+
+        # remaining table captures stay as submitter suchanya, locked to her own ฝ่าย
+        # "Solution Delivery" (status DRAFT → Pending cells editable, special row shows the
+        # detail button). All txn-ids used below (1/5) belong to that ฝ่าย so they render.
+        use_user("suchanya")
+        lock_dept("Solution Delivery")
 
         # ── 1) OVERVIEW — whole table panel (SAP + Approved + Pending rows) ──
-        #     EDIT (2026-06-04): removed the SAP-STATUS marker. It duplicated the
-        #     SAP green-VALUE marker (both said "this row is SAP Actuals"), so the
-        #     status badge ('.status-cell.sap') was dropped and the remaining 4
-        #     markers renumbered 1–4 (no gap). All markers still belong to ONE row
-        #     group via data-txn-id="4" (the Entertainment / MKT001 / 6211900030 row),
-        #     except marker 4 which points at the FIRST Pending month-value cell
-        #     (ม.ค./Jan) of txn-id 3 (KKAW01, normal GL) where the user drew the red
-        #     dot. (Re-anchored 2026-06-04 from the txn-3 PENDING status bar onto
-        #     this Pending input cell.)
-        #     Labels travel WITH the selector via zip() in _markers_from_rects, so no
-        #     positional auto-renumbering happens: marker "N" == the Nth selector.
-        #
-        #     New top-to-bottom order:
-        #       1 = SAP green value      (.month-value.sap, txn 4) — Actuals read-only
-        #       2 = APPROVED blue input  (.month-value.approved-input, txn 4) — Admin import/type
-        #       3 = PENDING input cell   (.month-value.pending-readonly, txn 4) — special GL, read-only sum from subform
-        #       4 = PENDING input cell   (.month-value.pending-input, txn 3 Jan) — normal GL, user types Pending directly
-        #
-        #     NB: Entertainment IS a Special GL group, so its Pending sub-row renders
-        #     .month-value.pending-readonly (the grey box) — NOT .pending-input — which
-        #     is why marker 3 uses the -readonly selector pinned to txn-id 4.
+        #     All markers anchor to ONE row group (data-txn-id="1" = Solution Delivery /
+        #     10IT012000 / GL 6211800030 Office expenses — a NORMAL GL with SAP + Approved +
+        #     Pending data), except marker 4 which points at the Jan Pending input cell of the
+        #     SAME normal row (editable because suchanya = submitter, ฝ่าย status DRAFT).
+        #     Labels travel WITH the selector via zip(), so marker "N" == the Nth selector.
+        #       1 = SAP green value     (.month-value.sap, txn 1) — Actuals read-only
+        #       2 = APPROVED blue value (.month-value.approved-ro, txn 1) — read-only, Import-only
+        #       3 = PENDING input cell  (.month-value.pending-input, txn 1 — Aug has a value) — normal GL, user types
+        #       4 = PENDING input cell  (.month-value.pending-input, txn 1 Jan) — leftmost editable cell
         panel = pg.locator(".table-panel").first
         pbox = panel.bounding_box()
         ov_points = [
-            ("1", 'tr[data-status="sap"][data-txn-id="4"] .month-value.sap'),
-            ("2", 'tr[data-status="approved"][data-txn-id="4"] .month-value.approved-input'),
-            ("3", 'tr[data-status="pending"][data-txn-id="4"] .month-value.pending-readonly'),
-            # marker 4 (re-anchored 2026-06-04): moved RIGHT off the txn-3 PENDING
-            # status bar onto the FIRST month-value cell (ม.ค./Jan) of that SAME
-            # txn-3 PENDING row where the user drew the red dot. txn-3 = KKAW01,
-            # GL 5200016355 (group 'ค่าบำรุงรักษา') is a NORMAL GL → its pending
-            # cells are editable .month-value.pending-input (not -readonly). The
-            # pending <tr> direct children are: [status td] then 12 month <td>s, so
-            # querySelector('.month-value.pending-input') (document order) returns
-            # the leftmost = Jan column (data-i="0") deterministically.
-            ("4", 'tr[data-status="pending"][data-txn-id="3"] .month-value.pending-input'),
+            ("1", 'tr[data-status="sap"][data-txn-id="1"] .month-value.sap'),
+            ("2", 'tr[data-status="approved"][data-txn-id="1"] .month-value.approved-ro'),
+            ("3", 'tr[data-status="pending"][data-txn-id="1"] .month-value.pending-input[data-i="7"]'),
+            # marker 4: leftmost editable Pending cell (Jan, data-i="0") of the same normal row.
+            ("4", 'tr[data-status="pending"][data-txn-id="1"] .month-value.pending-input[data-i="0"]'),
         ]
         ov_rects = pg.evaluate(RECT_JS, [s for _, s in ov_points])
         ov_path = os.path.join(BIN_DIR, "main_overview.png")
         panel.screenshot(path=ov_path)
         out["overview"] = (ov_path, _markers_from_rects(ov_points, ov_rects, pbox))
 
-        # ── 2) TOOLBAR — Export / Import / Add buttons ──
+        # ── 2) TOOLBAR — filters + user-action buttons (NEW DOM 2026-06-13) ──
+        #     The old <select id="divisionFilter"> is GONE — replaced by the custom ฝ่าย-picker
+        #     (#faiPicker, see capture 2c). The toolbar now holds: year filter, ฝ่าย-picker
+        #     trigger, + เพิ่ม Transaction, and แนบไฟล์ (attach to SharePoint per ฝ่าย/ปี).
+        #     Export/Import Approved live in a separate admin-zone (capture 2b).
+        #       ① #yearFilter · ② #faipTrig (ฝ่าย-picker trigger) · ③ .btn-add · ④ .btn-attach
         tb = pg.locator(".toolbar").first
         tbox = tb.bounding_box()
-        tb_points = [("1", ".btn-export"), ("2", ".btn-import"), ("3", "#yearFilter")]
+        tb_points = [("1", "#yearFilter"), ("2", "#faipTrig"), ("3", ".btn-add"), ("4", ".btn-attach")]
         tb_rects = pg.evaluate(RECT_JS, [s for _, s in tb_points])
         tb_path = os.path.join(BIN_DIR, "main_toolbar.png")
         tb.screenshot(path=tb_path)
         out["toolbar"] = (tb_path, _markers_from_rects(tb_points, tb_rects, tbox))
 
-        # ── 3) SAP COLUMNS (Actuals) — FIX A (2026-06-04) ──
-        #     Problem: the 2 SAP markers read poorly on the full wide panel — they were
-        #     tiny because the panel is ~1700px wide.
-        #     Fix: TIGHT crop. base_box = union of the SAP status badge + the SAP first
-        #     month value cell, padded, and only ONE row tall (the txn-1 SAP row). The
-        #     status badge sits in the far-left STATUS column and the green value is the
-        #     first month column — the crop spans status→Jan but is vertically tight, so
-        #     ①② render large and clear. Coords stay DOM-rect based relative to clip box.
+        # ── 2b) ADMIN ZONE — Approved board_budget Import/Export + READ-ONLY Master FX ──
+        #     Separate bar above the table, admin-only (hidden for normal users). Carries the
+        #     warning that Import/Export act on the WHOLE year / company per the CSV file — NOT
+        #     scoped by the view filters — plus the READ-ONLY Master FX display (owned by
+        #     Module 09, recompute-on-read, ADR-0015). Switch to an admin to make it visible.
+        #       ① .btn-import · ② .btn-export · ③ #fxDisplay (read-only Master FX)
+        use_user("jakkaritw")   # pure admin → admin-zone + FX visible without a toggle
+        az = pg.locator(".admin-zone").first
+        azbox = az.bounding_box()
+        az_points = [("1", ".admin-zone .btn-import"), ("2", ".admin-zone .btn-export"), ("3", "#fxDisplay")]
+        az_rects = pg.evaluate(RECT_JS, [s for _, s in az_points])
+        az_path = os.path.join(BIN_DIR, "main_admin_zone.png")
+        az.screenshot(path=az_path)
+        out["admin_zone"] = (az_path, _markers_from_rects(az_points, az_rects, azbox))
+
+        # ── 2c) ฝ่าย-PICKER (open) — approver view with รออนุมัติ / อนุมัติแล้ว badges (NEW) ──
+        #     The ฝ่าย-picker replaces the division filter (ADR-0008). For approvers each ฝ่าย
+        #     carries a รออนุมัติ (wait) / อนุมัติแล้ว (done) badge + a "เฉพาะที่รออนุมัติ" toggle to
+        #     trim to their queue. We open the panel as approver นิภาพร (base approver role, no
+        #     admin hat) and seed one ฝ่าย into PENDING_APPROVER2 so a wait badge shows.
+        #       ① #faipPanel (the open picker) · ② #faipOnlyWait (queue toggle)
+        use_user("nipaporn")    # base role = approver (step 2); admin hat OFF
+        set_status("Solution Delivery", "PENDING_APPROVER2")   # → นิภาพร's turn (wait badge)
+        pg.evaluate("toggleFaiPanel()"); pg.wait_for_timeout(250)
+        # The panel is position:absolute (overflows the #faiPicker wrapper) → screenshot the
+        # PANEL element itself and anchor markers to its children: ① ฝ่าย list · ② queue toggle.
+        fp = pg.locator("#faipPanel").first
+        fpbox = fp.bounding_box()
+        fp_points = [("1", "#faipList"), ("2", "#faipOnlyWait")]
+        fp_rects = pg.evaluate(RECT_JS, [s for _, s in fp_points])
+        fp_path = os.path.join(BIN_DIR, "main_fai_picker.png")
+        fp.screenshot(path=fp_path)
+        out["fai_picker"] = (fp_path, _markers_from_rects(fp_points, fp_rects, fpbox))
+        pg.evaluate("toggleFaiPanel()"); pg.wait_for_timeout(120)   # close panel
+
+        # ── 2d) ACTION BAR — approver (อนุมัติ / ตีกลับ) ──
+        #     #actionBar buttons depend on the SELECTED ฝ่าย, not the role: อนุมัติ/ตีกลับ show
+        #     when the ฝ่าย is at the current user's approval step. นิภาพร + Solution Delivery
+        #     (seeded PENDING_APPROVER2 above) = นิภาพร's turn → both buttons visible.
+        #       ① #approveBtn · ② #rejectBtn
+        lock_dept("Solution Delivery"); pg.wait_for_timeout(120)
+        abar = pg.locator("#actionBar").first
+        abbox = abar.bounding_box()
+        ab_points = [("1", "#approveBtn"), ("2", "#rejectBtn")]
+        ab_rects = pg.evaluate(RECT_JS, [s for _, s in ab_points])
+        ab_path = os.path.join(BIN_DIR, "main_action_approver.png")
+        abar.screenshot(path=ab_path)
+        out["action_approver"] = (ab_path, _markers_from_rects(ab_points, ab_rects, abbox))
+
+        # ── 2e) ADMIN-MODE toggle (overlay admin) — base role ↔ admin hat (ADR-0014) ──
+        #     นิภาพร is an overlay admin: defaults to her approver role, switches into admin
+        #     powers via the 🛡️ "โหมด Admin" toggle in the nav. Captured as a tight crop of the
+        #     nav actions so the toggle reads large.   ① #adminModeWrap (the toggle)
+        use_user("nipaporn"); pg.wait_for_timeout(120)   # reset to base role (toggle OFF, visible)
+        amw_rect = pg.evaluate(RECT_JS, ["#adminModeWrap"])[0]
+        pad = 18
+        amw_box = {"x": amw_rect["x"] - pad, "y": amw_rect["y"] - pad,
+                   "w": amw_rect["w"] + pad * 2, "h": amw_rect["h"] + pad * 2}
+        amw_path = os.path.join(BIN_DIR, "main_admin_mode.png")
+        pg.screenshot(path=amw_path, clip={"x": amw_box["x"], "y": amw_box["y"],
+                                           "width": amw_box["w"], "height": amw_box["h"]})
+        out["admin_mode"] = (amw_path, _markers_from_rects(
+            [("1", "#adminModeWrap")], [amw_rect], amw_box))
+
+        # ── 2f) EDIT-LOCK — a locked Pending row after Submit (ADR-0013 × role) ──
+        #     A submitter (suchanya) viewing her ฝ่าย once it has entered the chain
+        #     (PENDING_APPROVER1) sees the Pending cells LOCKED (read-only) with a 🔒 hint —
+        #     editing never changes status; status only moves via Submit/Approve/Reject.
+        #       ① status-cell.pending (carries the 🔒 lock hint) · ② .month-value.pending-readonly (Jan)
+        use_user("suchanya")
+        set_status("Solution Delivery", "PENDING_APPROVER1")   # submitter → locked
+        lock_dept("Solution Delivery"); pg.wait_for_timeout(150)
+        lock_points = [
+            ("1", 'tr[data-status="pending"][data-txn-id="1"] .status-cell.pending'),
+            ("2", 'tr[data-status="pending"][data-txn-id="1"] .month-value.pending-readonly[data-i="0"]'),
+        ]
+        # the locked normal-GL pending cell has no data-i attr; fall back to first readonly cell
+        lock_points[1] = ("2", 'tr[data-status="pending"][data-txn-id="1"] .month-value.pending-readonly')
+        lock_rects = pg.evaluate(RECT_JS, [s for _, s in lock_points])
+        lock_main = pg.locator(".table-panel").first
+        lkbox = lock_main.bounding_box()
+        lock_path = os.path.join(BIN_DIR, "main_edit_lock.png")
+        lock_main.screenshot(path=lock_path)
+        out["edit_lock"] = (lock_path, _markers_from_rects(lock_points, lock_rects, lkbox))
+        set_status("Solution Delivery", "DRAFT")   # restore for the captures below
+
+        # back to submitter suchanya, DRAFT (editable) for the SAP / Approved / Pending / detail captures
+        use_user("suchanya")
+        lock_dept("Solution Delivery")
+
+        # ── 3) SAP COLUMNS (Actuals) — tight crop so the two markers read large ──
+        #     base_box = union of the SAP status badge + the SAP first month value cell of
+        #     txn-id 1 (Solution Delivery, normal GL, has SAP actuals), padded, single row.
         #       ① = SAP status badge (.status-cell.sap, txn 1) → RED   (status colour)
         #       ② = SAP green value  (.month-value.sap,  txn 1) → GREEN (value colour)
         sap_points = [
@@ -200,18 +295,21 @@ def capture():
         out["sap"] = (sap_path, _markers_from_rects(
             sap_points, sap_rects, sap_box, colors=[(RED, RED_DARK), (GREEN, GREEN_DARK)]))
 
-        # ── 3b) APPROVED · งบ (สีฟ้า) + Submit button — FIX B (2026-06-04, NEW) ──
-        #     Shows the blue Approved input cell AND the Submit button that writes
-        #     Approved data straight to DB (NO approval loop). The mockup has ONE shared
-        #     .btn-submit (#submitBtn "Submit to Database") used by both Approved and
-        #     Pending — there is no Approved-only submit button — so we reuse it and the
-        #     caption makes clear that for the Approved part this submit writes directly
-        #     to DB without the approval loop. Markers default GOLD.
-        #       ① = APPROVED blue input (.month-value.approved-input, txn 1, Jan)
-        #       ② = Submit button (.btn-submit)
+        # ── 3b) APPROVED · งบ (สีฟ้า · READ-ONLY) + Import path — UPDATED 2026-06-12 ──
+        #     Approved is now READ-ONLY on the web (board_budget). It is NEVER typed in
+        #     the grid and has NO per-cell submit — the ONLY write path is Import Approved
+        #     Budget (whole-year CSV, Replace-by-Year) in the admin-zone. So this image
+        #     pairs the read-only Approved cell with the Import button that sets it.
+        #       ① = APPROVED read-only cell (.month-value.approved-ro, txn 1, blue, no input)
+        #       ② = Import Approved Budget button (.admin-zone .btn-import) — the write path.
+        #     NB: .admin-zone is hidden for the submitter suchanya (admin-only). We flip the
+        #     pure-admin jakkaritw on temporarily so BOTH the read-only cell AND the Import
+        #     button render in the SAME <main> screenshot, then switch back. jakkaritw sees all
+        #     CC, so we lock to Solution Delivery again to keep txn-id 1 in view.
+        use_user("jakkaritw"); lock_dept("Solution Delivery"); pg.wait_for_timeout(150)
         appr_points = [
-            ("1", 'tr[data-status="approved"][data-txn-id="1"] .month-value.approved-input'),
-            ("2", ".btn-submit"),
+            ("1", 'tr[data-status="approved"][data-txn-id="1"] .month-value.approved-ro'),
+            ("2", ".admin-zone .btn-import"),
         ]
         appr_rects = pg.evaluate(RECT_JS, [s for _, s in appr_points])
         appr_main = pg.locator("main.wrap").first
@@ -219,13 +317,18 @@ def capture():
         appr_path = os.path.join(BIN_DIR, "main_approved_submit.png")
         appr_main.screenshot(path=appr_path)
         out["approved"] = (appr_path, _markers_from_rects(appr_points, appr_rects, ambox))
+        # back to submitter suchanya · DRAFT for the editable Pending + detail captures
+        use_user("suchanya"); lock_dept("Solution Delivery")
 
         # ── 4) PENDING input cells + Submit button ──
-        #     Pending row of a NORMAL GL (txn id 1) has editable .pending-input fields.
+        #     Pending row of a NORMAL GL (txn id 1, Solution Delivery) has editable
+        #     .pending-input fields because suchanya = submitter and the ฝ่าย is DRAFT. The
+        #     #submitBtn is visible (ฝ่าย ∈ her fill-scope). Pinned to txn-id 1 for determinism.
+        #       ① status-cell.pending · ② first .month-value.pending-input (Jan) · ③ #submitBtn
         pend_points = [
-            ("1", 'tr[data-status="pending"] .status-cell.pending'),
-            ("2", 'tr[data-status="pending"] .month-value.pending-input'),
-            ("3", ".btn-submit"),
+            ("1", 'tr[data-status="pending"][data-txn-id="1"] .status-cell.pending'),
+            ("2", 'tr[data-status="pending"][data-txn-id="1"] .month-value.pending-input[data-i="0"]'),
+            ("3", "#submitBtn"),
         ]
         pend_rects = pg.evaluate(RECT_JS, [s for _, s in pend_points])
         # screenshot the <main> region so both pending row and submit button fit
@@ -236,12 +339,11 @@ def capture():
         out["pending"] = (pend_path, _markers_from_rects(pend_points, pend_rects, mbox))
 
         # ── 5) SPECIAL GL — "+ ใส่รายละเอียดงบทำการ" detail entry button (ref to doc 02) ──
-        #     EDIT (2026-06-04): re-anchor BOTH detail markers to the SAME special-GL
-        #     row = Lease & Rental (txn-id 5 · 10PB030000 / GL 6211200060 / group
-        #     'Lease & Rental' — verified in the mockup txn data). It is a Special GL
-        #     group, so its Pending <tr> renders the .btn-detail button THEN twelve
-        #     grey .month-value.pending-readonly cells (isSpec branch). Pinning both
-        #     markers to data-txn-id="5" makes the illustration coherent (one row).
+        #     Both detail markers on the SAME special-GL row = txn-id 5 · 10IT012000 /
+        #     GL 6210700030 / group 'Professional & Legal Fee' (Solution Delivery, visible to
+        #     suchanya). It is a Special GL group, so its Pending <tr> renders the .btn-detail
+        #     button THEN twelve grey .month-value.pending-readonly cells (isSpec branch). The
+        #     button is the editable form (suchanya = submitter, ฝ่าย DRAFT → not the 🔒 variant).
         #       ① = .btn-detail ("+ ใส่รายละเอียดงบทำการ") → RED   (opens subform — doc 02)
         #       ② = leftmost .month-value.pending-readonly cell (the grey "–" box right
         #           of the button = ม.ค./Jan, document order) → GREEN (read-only sum back).
@@ -386,52 +488,68 @@ def build_body(meta, rids):
     P.append(para(run("เอกสารข้อกำหนดเพื่อขออนุมัติ (User Sign-off Specification)", sz=40, bold=True, color="2F6B3F"), space_after=40))
     P.append(para(run("ส่วน A — หน้าหลักของระบบ · Module 01: หน้าจัดการข้อมูลงบประมาณ (Main Budget Web App)",
                       sz=24, bold=True, color="1E3A24"), space_after=160))
-    P.append(table([["รายการ", "รายละเอียด"], ["เวอร์ชัน", "v0.3 (ฉบับร่าง · Draft)"], ["วันที่", "5 มิถุนายน 2569 (2026-06-05)"],
-                    ["ผู้จัดทำ", "ทีม Data Analytics"], ["สถานะ", "รออนุมัติจากผู้ใช้"]], META))
+    P.append(table([["รายการ", "รายละเอียด"], ["เวอร์ชัน", "v0.7 (ฉบับร่าง · Draft)"], ["วันที่", "14 มิถุนายน 2569 (2026-06-14)"],
+                    ["ผู้จัดทำ", "ทีม Data Analytics"], ["สถานะ", "รออนุมัติจากผู้ใช้"],
+                    ["แก้ไขล่าสุด", "v0.7 — แก้ขอบเขต RLS SEE-scope ให้ตรงกับ ADR-0007 (union model: orgcode ∪ ฝ่าย ∪ admin overlay)"]], META))
 
     # ── 0. Login & role-based visibility (Points 1 + 8) ──
     P.append(heading("0) การเข้าสู่ระบบ & สิทธิ์การเห็นข้อมูล (Login & Role)"))
     P.append(body_para(
-        "ทั้งผู้ใช้ทั่วไป (User) และผู้ดูแลระบบ (Admin) เข้าสู่หน้าหลักนี้เหมือนกัน — ด้านบนของหน้ามี "
-        "\"แถบผู้ใช้ (Login bar)\" บอกว่ากำลัง login เป็นใคร และเห็นข้อมูลในขอบเขตใด: รูปย่อ (avatar) "
-        "+ ชื่อผู้ใช้ + ป้ายบทบาท ADMIN/USER + อีเมล/ขอบเขต + ป้ายชื่อฝ่าย (Department) ของ Cost Center ที่ตนดูแล"))
-    P.append(bullet("User (ผู้ใช้ทั่วไป): เห็นเฉพาะ Cost Center ที่ผูกกับ orgcode ของตน (ตาม RLS chain — ดูเอกสาร 10)"))
-    P.append(bullet("Admin: เห็นทุก Cost Center ทั้งบริษัท"))
-    P.append(para(run("ภาพประกอบ: Admin — เห็นทุก Cost Center", sz=21, bold=True, color="1E3A24"),
+        "ทั้งผู้ใช้ทั่วไป (User) และผู้ดูแลระบบ (Admin) เข้าสู่หน้าหลักนี้เหมือนกัน — เมื่อ login เข้ามา "
+        "ระบบจะ\"แสดงข้อมูลของผู้ใช้คนนั้นทันที\" (ตามสิทธิ์ของตัวเอง) ไม่มีการสลับผู้ใช้ · ด้านบนของหน้ามี "
+        "\"แถบผู้ใช้ (Login bar)\" บอกว่ากำลัง login เป็นใคร และเห็นข้อมูลในขอบเขตใด โดยจัดเรียงเป็น "
+        "ลำดับชั้นอ่านซ้าย→ขวา: รูปย่อ (avatar) + ชื่อผู้ใช้ + อีเมล + ป้ายบทบาท ADMIN/USER  ›  สายงาน (Division)  ›  "
+        "ฝ่าย (Department) พร้อมจำนวนฝ่าย และป้ายชื่อแต่ละฝ่าย  ›  จำนวน Cost Center ที่ดูแล — "
+        "จำนวนทั้งหมดวางอยู่ในบรรทัดเดียวติดกับสิ่งที่นับ เพื่อให้เห็นลำดับชั้นชัด"))
+    P.append(bullet("User / ผู้กรอก (Submitter · L3/L4): เห็น Cost Center ตามขอบเขต SEE แบบ union (orgcode∪ฝ่าย — ดู RLS chain ด้านล่าง · เอกสาร 10)"))
+    P.append(bullet("Approver (ผู้อนุมัติ · L1/L2): เห็นฝ่ายในคิวอนุมัติของตน — ตรวจและกดอนุมัติ/ตีกลับบนหน้าหลักนี้เลย (ไม่มีหน้า inbox แยก · ดูข้อ 12)"))
+    P.append(bullet("Admin (ผู้ดูแลระบบ · 4 คน): เห็นทุก Cost Center ทั้งบริษัท · แก้ Pending ได้ทุก CC"))
+    P.append(bullet("บทบาทซ้อน (overlay admin): บางคน (วราพร/นิภาพร/ปิยะดา) เป็นทั้ง approver/submitter และ admin — "
+                    "ปกติทำงานในบทบาทฐานของตน แล้วสลับเป็นบทบาท admin ผ่านปุ่ม \"🛡️ โหมด Admin\" (ดูข้อ 14) · "
+                    "Admin แท้ (jakkaritw) เป็น admin ตลอด ไม่มีปุ่มสลับ"))
+    P.append(bullet("หมายเหตุ: ภาพประกอบ 2 ภาพด้านล่าง (มุมมอง Admin / มุมมอง Submitter) มาจากตัวสลับผู้ใช้ใน "
+                    "\"แบบเดโม่ (mockup)\" เพื่อให้เห็นทั้งสองมุมมองในที่เดียวเท่านั้น — ระบบจริงไม่มีปุ่มสลับผู้ใช้"))
+    P.append(para(run("ภาพประกอบ: Admin (jakkaritw) — เห็นทุก Cost Center", sz=21, bold=True, color="1E3A24"),
                   space_before=80, space_after=40))
     P.append(image_para(rids["login_admin"], *meta["login_admin"][1], 106, "main_login_admin", width_in=5.6))
-    P.append(para(run("ภาพประกอบ: User (ตัวอย่าง) — เห็นเฉพาะ Cost Center ของตน", sz=21, bold=True, color="1E3A24"),
+    P.append(para(run("ภาพประกอบ: Submitter (สุชัญญา · L3 Solution Delivery) — เห็นเฉพาะ Cost Center ของตน", sz=21, bold=True, color="1E3A24"),
                   space_before=40, space_after=40))
     P.append(image_para(rids["login_user"], *meta["login_user"][1], 107, "main_login_user", width_in=5.6))
-    P.append(para(run("RLS chain — สายการ trace สิทธิ์ (รายละเอียดเต็มในเอกสาร 10):",
+    P.append(para(run("RLS chain — สายการ trace สิทธิ์ SEE แบบ union (ADR-0007 · รายละเอียดเต็มในเอกสาร 10):",
                       sz=21, bold=True, color="1E3A24"), space_before=60, space_after=40))
     P.append(table([
         ["ขั้น", "ตาราง / แหล่ง", "เชื่อมด้วย"],
-        ["1", "login email → dbo.mas_employee_data (Fabric SQL DB)", "empcode ↔ orgcode"],
-        ["2", "cfg_master.orgcode_costcenter_map (Fabric SQL DB)", "orgcode ↔ cost_center"],
-        ["3", "ผลลัพธ์: cost_center ของผู้ใช้", "→ กำหนดสิทธิ์ เห็น / กรอก ข้อมูล"],
+        ["1", "login email → dbo.mas_employee_data (Fabric SQL DB · ทั้ง Primary และ Acting)", "empcode ↔ orgcode"],
+        ["2a", "cfg_master.orgcode_costcenter_map (file 09)", "orgcode → cost_center (many-to-many)"],
+        ["2b", "ฝ่าย (Department) → cost center master (file 02)", "ฝ่าย → cost_center (ขอบเขตกรอก/fill)"],
+        ["3", "SEE = ผล 2a ∪ 2b ∪ overlay ของ Admin", "→ cost_center ที่ผู้ใช้ \"เห็น\""],
+        ["4", "FILL ⊆ SEE — กรอกได้เฉพาะ CC ในฝ่ายของตน (2b)", "→ กำหนดสิทธิ์ \"กรอก\""],
     ], [800, 5500, 2860]))
+    P.append(bullet("SEE-scope = union (ADR-0007): ขอบเขตเห็น = CC จาก orgcode (file 09 · many-to-many) ∪ CC จากฝ่ายของตน (file 02) ∪ overlay ของ Admin "
+                    "— ต้อง union ไม่งั้นบางคนกรอกได้แต่มองไม่เห็น · orgcode lookup ใช้ทั้ง Primary และ Acting", sz=20))
+    P.append(bullet("FILL-scope = ตามฝ่าย (file 02) เท่านั้น และ FILL ⊆ SEE เสมอ — กรอก/แก้ได้เฉพาะ CC ในฝ่ายของตน · Admin overlay เห็น/แก้ได้ทุก CC", sz=20))
 
     # ── 0b. Point 8 — login "cc name" == department (ฝ่าย), NOT Description ──
-    P.append(para(run("ชื่อที่แสดงคู่กับอีเมลคืออะไร? (ข้อ 8 — \"cc name\" = ชื่อฝ่าย/Department หรือไม่)",
+    P.append(para(run("ชื่อที่แถบ login แสดงคืออะไร? (ข้อ 8 — แสดง สายงาน/ฝ่าย ไม่ใช่ Description)",
                       sz=22, bold=True, color="1E3A24"), space_before=120, space_after=40))
     P.append(body_para(
-        "ตรวจสอบจากไฟล์ master docs/02cost center & department (master)_disable.xlsx "
+        "แถบ login แสดงลำดับชั้น 2 ระดับจากไฟล์ master docs/02cost center & department (master).xlsx "
         "(sheet 'Cost center (Update 18 Mar 26)' · คอลัมน์: Cost Ctr | Description | C Level | สายงาน[Division] | ฝ่าย[Department]) "
-        "ได้ข้อสรุปว่า: ชื่อที่แถบ login แสดง = คอลัมน์ ฝ่าย (Department) — ไม่ใช่ Description (ชื่อ CC จริง):", sz=21))
+        "คือ สายงาน (Division) เป็นหัวข้อหลัก และ ฝ่าย (Department) เป็นป้าย chips — ทั้งคู่ใช้คอลัมน์ "
+        "สายงาน / ฝ่าย จาก master ไม่ใช่ Description (ชื่อ CC จริง):", sz=21))
     P.append(table([
-        ["Cost Ctr", "ชื่อที่ระบบแสดง (= ฝ่าย/Department)", "Description (ชื่อ CC จริง)", "สายงาน (Division)"],
-        ["10MN014200", "Plant Maint. Planning & Store (PBB)", "Spare Parts & Equipment Store (PBB)", "Plant Maintenance (PBB)"],
-        ["10PQ013100", "Warehouse (PBB)", "Quicklime Warehouse (PBB)", "PBB Factory"],
-        ["10PQ011000", "Production (PBB)", "Quicklime Production Department (PBB)", "PBB Factory"],
+        ["Cost Ctr", "chips ที่ระบบแสดง (= ฝ่าย/Department)", "Description (ชื่อ CC จริง)", "สายงาน (Division)"],
+        ["10IT012000", "Solution Delivery", "Solution Delivery", "Digital Technology Division"],
+        ["10AC020000", "Budgeting and Management Accounting", "Budget&Cost Acc Div", "Budgeting and Cost Accounting Division"],
+        ["10GE000000", "General (orphan)", "General", "General"],
     ], [1500, 3100, 3100, 1860]))
     P.append(bullet("สถิติจากไฟล์จริง: Description ตรงกับ ฝ่าย เพียง 37% ของ 210 แถว → Description โดยทั่วไป "
                     "ไม่ใช่ชื่อฝ่าย ระบบจึงเลือกใช้คอลัมน์ ฝ่าย เป็นป้ายชื่อที่อ่านง่ายแทน", sz=20))
-    P.append(bullet("เหตุผล: 1 คนผูกได้หลาย Cost Center ที่รวมขึ้นเป็น 1 ฝ่าย (เช่น anuchitm: 2 CC → 1 ฝ่าย) "
-                    "→ แสดงชื่อฝ่ายอ่านง่ายกว่า · รหัส CC แสดงเป็นข้อมูลละเอียดรอง", sz=20))
+    P.append(bullet("เหตุผล: 1 คนผูกได้หลาย Cost Center ที่รวมขึ้นเป็น 1 ฝ่าย → แสดงชื่อฝ่ายอ่านง่ายกว่า · "
+                    "รหัส CC แสดงเป็นข้อมูลละเอียดรอง", sz=20))
     P.append(para(run(
-        "ข้อสรุป (ตัดสินแล้ว): แถบ login แสดง อีเมล + ชื่อฝ่าย (Department) เป็นขอบเขตที่อ่านง่าย · "
-        "\"cc name ที่แสดง = ชื่อฝ่าย (Department) ไม่ใช่ Description ของ cost center\"",
+        "ข้อสรุป (ตัดสินแล้ว): แถบ login แสดงลำดับ สายงาน (Division) › ฝ่าย (Department) › จำนวน Cost Center "
+        "เป็นขอบเขตที่อ่านง่าย — ใช้คอลัมน์ สายงาน/ฝ่าย ไม่ใช่ Description · อีเมลแสดงในแถบผู้ใช้ของคนที่ login",
         sz=21, bold=True, color="8C6423"), space_before=60, space_after=120))
 
     # ── 1. Overview ──
@@ -444,35 +562,58 @@ def build_body(meta, rids):
         "และ Pending · งบรออนุมัติ (กรอกมือ) — แต่ละชั้นมีแถบสีและสถานะกำกับชัดเจน", sz=21))
     P.append(para(run("เปลี่ยนแปลงจาก mockup (สรุปสั้น — รายละเอียด GL กลุ่มพิเศษอยู่ในเอกสาร 02):",
                       sz=21, bold=True, color="8C6423"), space_before=60, space_after=40))
-    P.append(bullet("เพิ่มแถบ Login bar บอกผู้ใช้/บทบาท/ขอบเขต + ตัวสลับผู้ใช้ (เดโม่) · กรองตาราง/สรุป/export/submit ตามบทบาท", sz=20))
-    P.append(bullet("ตัวกรองปี: เอาตัวเลือก \"ทุกปี (all)\" ออก — เหลือเฉพาะ FY2024 / FY2025 / FY2026 (ค่าเริ่มต้น 2025)", sz=20))
-    P.append(bullet("Cost Center ใช้ข้อมูลโรงงาน PBB จริง · GL ใช้ GL กลุ่มพิเศษจริง (รวม Travelling Expense 8 GL) — "
-                    "ดูฟอร์มย่อย/per-diem engine ในเอกสาร 02", sz=20))
+    P.append(bullet("เพิ่มแถบ Login bar (เวอร์ชันใหม่ V3) แสดงลำดับชั้น สายงาน › ฝ่าย(จำนวน) › Cost Center(จำนวน) "
+                    "พร้อมอีเมลผู้ใช้ · กรองตาราง/สรุป/submit ตามบทบาท (ระบบจริงไม่มีปุ่มสลับผู้ใช้ — login แล้วเห็นของตัวเองทันที)", sz=20))
+    P.append(bullet("อนุมัติบนหน้าหลักเลย — ไม่มีหน้า inbox แยก: ผู้อนุมัติตรวจและกด อนุมัติ/ตีกลับ บนหน้าเดียวกับผู้กรอก (ดูข้อ 12)", sz=20))
+    P.append(bullet("เปลี่ยนตัวกรองสายงาน (Division) เป็น \"ตัวเลือกฝ่าย (ฝ่าย-picker)\": ล็อกหน้าให้เหลือ 1 (ฝ่าย, ปี) = "
+                    "หน่วยอนุมัติ (ADR-0008) · จัดกลุ่มตามสายงาน · ผู้อนุมัติเห็นป้าย รออนุมัติ/อนุมัติแล้ว ต่อฝ่าย + toggle "
+                    "\"เฉพาะที่รออนุมัติ\" · ผู้กรอกถูกล็อกที่ฝ่ายของตนอัตโนมัติ (ดูข้อ 13)", sz=20))
+    P.append(bullet("ตัวกรองปี: เอาตัวเลือก \"ทุกปี (all)\" ออก — เหลือเฉพาะ FY2024 / FY2025 / FY2026 (ค่าเริ่มต้น 2026 = ปีปัจจุบัน)", sz=20))
+    P.append(bullet("Cost Center / GL ใช้ข้อมูลจริง (Solution Delivery · Budgeting · General orphan) · GL กลุ่มพิเศษจริง "
+                    "(รวม Travelling Expense 8 GL) — ดูฟอร์มย่อย/per-diem engine ในเอกสาร 02", sz=20))
+    P.append(bullet("Approved · งบ เป็น read-only บนเว็บ (แก้ในตารางไม่ได้) — แก้ได้ทาง Import .csv ทั้งปีเท่านั้น · "
+                    "ปุ่ม Export/Import + Master FX (read-only) อยู่ \"แถบ งบอนุมัติ (Approved) · Admin\" แยกจาก toolbar (ดูข้อ 4–5, 15)", sz=20))
+    P.append(bullet("เพิ่มปุ่ม \"🛡️ โหมด Admin\": overlay admin สลับระหว่างบทบาทฐาน ↔ บทบาท admin (ดูข้อ 14) · "
+                    "ล็อกการแก้ไขตามสถานะ × บทบาท (edit-lock — ดูข้อ 16)", sz=20))
+    P.append(bullet("ป้ายปีในวงเล็บที่ทุกแถว/legend: ยืนปีปัจจุบัน Y → SAP (Y) · Approved (Y) · Pending (Y+1) "
+                    "เปลี่ยนตามตัวกรองปี — กรอกงบปีหน้า เทียบ actual/งบอนุมัติปีนี้", sz=20))
+    P.append(bullet("ตารางเรียงตามกลุ่ม GL (GL group) · ป้ายกลุ่ม GL พิเศษเป็นสีเฉพาะกลุ่ม (Entertainment เหลือง · "
+                    "Lease ชมพู · Professional ม่วง · Public Relation ส้ม · Training ฟ้า · Travelling เขียว)", sz=20))
+    P.append(bullet("ปุ่ม \"+ เพิ่ม Transaction\" (เพิ่มแถว CC×GL เอง — เลือกจาก master, CC กรองตามฝ่าย) และปุ่ม "
+                    "\"แนบไฟล์\" (เก็บเอกสาร pdf/excel/รูป เข้า SharePoint ตามฝ่าย+ปี) อยู่ใน toolbar (ดูข้อ 11)", sz=20))
     P.append(image_para(rids["overview"], *meta["overview"][1], 100, "main_overview", width_in=6.3))
     P.append(table([
         ["#", "จุด", "ความหมาย"],
         ["①", "ยอด Actuals จาก SAP (สีเขียว · read-only)", "ดึงจาก Lakehouse gold_sap_gl_trans · คอลัมน์ company_curr_amount (อธิบายข้อ 3)"],
-        ["②", "APPROVED · งบ (ช่องกรอกสีฟ้า)", "Admin import .csv หรือกรอกมือที่ช่องนี้ → กด submit เข้า DB เลย (ไม่ผ่าน approval loop)"],
-        ["③", "ยอด Pending (รวมจาก subform) — ผู้ใช้กรอกมือ", "ผู้ใช้กรอกที่ subform (ปุ่ม \"ใส่รายละเอียดงบทำการ\") → ระบบรวมยอดมาแสดงผลที่ part นี้อัตโนมัติ (read-only) · ใช้กับ GL กลุ่มพิเศษ"],
-        ["④", "ช่อง Pending · รออนุมัติ (แถว GL ปกติ)", "ผู้ใช้กรอกยอด Pending มือโดยตรง (GL ปกติ) — ต่างจากข้อ 3 ที่เป็น read-only มาจาก subform ของ special GL"],
+        ["②", "APPROVED · งบ (สีฟ้า · read-only)", "งบที่อนุมัติแล้ว — แสดงอ่านอย่างเดียว แก้ในตารางไม่ได้ · ตั้งค่าได้ทาง Import .csv ทั้งปี (แถบ Admin) ไม่ผ่าน approval loop"],
+        ["③", "ช่อง Pending · รออนุมัติ (GL ปกติ · มียอด)", "ผู้ใช้กรอกยอด Pending มือโดยตรง — แก้ได้เมื่อสถานะ DRAFT/REJECTED เท่านั้น (edit-lock — ดูข้อ 16)"],
+        ["④", "ช่อง Pending · รออนุมัติ (เดือน ม.ค.)", "ช่องกรอกตัวซ้ายสุด (ม.ค.) ของแถว GL ปกติ — กรอกได้รายเดือน · GL กลุ่มพิเศษกรอกผ่าน subform แทน (ข้อ 2)"],
     ], [620, 3400, 5340]))
 
     # ── 2. RLS ──
     P.append(heading("2) การมองเห็นข้อมูล (RLS — Row Level Security ตาม Login)"))
     P.append(body_para(
-        "ผู้ใช้แต่ละคนเห็นเฉพาะข้อมูลของตัวเอง โดยกำหนดจากสายการ login (login chain) ต่อไปนี้ — "
-        "ตัวกำหนดสุดท้ายว่าใครเห็นข้อมูลอะไรได้บ้างคือ cost_center"))
+        "ผู้ใช้แต่ละคนเห็นเฉพาะข้อมูลของตัวเอง โดยขอบเขตการเห็น (SEE-scope) เป็น \"union\" ตาม ADR-0007 — "
+        "ตัวกำหนดสุดท้ายว่าใครเห็นข้อมูลอะไรได้บ้างคือ cost_center ที่ได้จากการรวม (union) ของ 2 เส้นทาง + overlay ของ Admin"))
     P.append(table([
         ["ขั้น", "ตาราง / แหล่ง", "เชื่อมด้วย"],
-        ["1", "dbo.mas_employee_data (Fabric SQL DB)", "empcode ↔ orgcode"],
-        ["2", "cfg_master.orgcode_costcenter_map (Fabric SQL DB)", "orgcode ↔ cost_center"],
-        ["3", "ผลลัพธ์: cost_center ของผู้ใช้", "→ กำหนดสิทธิ์เห็น/กรอกข้อมูล"],
+        ["1", "dbo.mas_employee_data (Fabric SQL DB · ทั้ง Primary และ Acting)", "empcode ↔ orgcode"],
+        ["2a", "cfg_master.orgcode_costcenter_map (file 09)", "orgcode → cost_center (many-to-many)"],
+        ["2b", "ฝ่าย (Department) → cost center master (file 02)", "ฝ่าย → cost_center (= ขอบเขตกรอก)"],
+        ["3", "SEE = ผล 2a ∪ 2b ∪ overlay ของ Admin", "→ cost_center ที่ผู้ใช้ \"เห็น\""],
     ], [800, 5500, 2860]))
-    P.append(para(run("สรุปกฎการเห็นข้อมูล:", sz=22, bold=True, color="1E3A24"), space_before=60, space_after=40))
-    P.append(bullet("cost_center เป็นตัวกำหนดว่าใครเห็นข้อมูลอะไรได้บ้าง — trace จาก login → empcode → orgcode → cost_center"))
-    P.append(bullet("User เห็นเฉพาะข้อมูลของตัวเอง (ตาม cost_center ที่ trace ได้)"))
-    P.append(bullet("Admin มี 3 คน — เห็นและแก้ไขได้ทุกอย่าง (ทุก cost_center)"))
+    P.append(para(run("สรุปกฎการเห็นข้อมูล (ADR-0007):", sz=22, bold=True, color="1E3A24"), space_before=60, space_after=40))
+    P.append(bullet("SEE-scope = union: CC จาก orgcode (file 09 · many-to-many) ∪ CC จากฝ่ายของตน (file 02) ∪ overlay ของ Admin — "
+                    "1 CC ถูกหลาย orgcode/ฝ่ายอ้างถึงได้ จึงแชร์การเห็นข้ามฝ่าย/สายงานได้"))
+    P.append(bullet("ทำไมต้อง union: file 09 (orgcode↔CC) กับ file 02 (ฝ่าย↔CC) เป็น mapping คนละชุด — ถ้าไม่ union บางคน (≈29 ราย) จะกรอกได้แต่มองไม่เห็น CC ของตัวเอง"))
+    P.append(bullet("orgcode lookup ใช้ทั้ง Primary และ Acting (ตาม RLS decision 2026-05-27) — บทบาท Acting ก็ให้สิทธิ์เห็น CC ของ orgcode นั้น"))
+    P.append(bullet("FILL-scope = ตามฝ่าย (file 02) เท่านั้น · FILL ⊆ SEE เสมอ — กรอก/แก้ได้เฉพาะ CC ในฝ่ายของตน (ขอบเขตเห็นกว้างกว่าหรือเท่ากับขอบเขตกรอกเสมอ)"))
+    P.append(bullet("User เห็นเฉพาะข้อมูลในขอบเขต SEE ของตัวเอง (ตาม cost_center ที่ trace ได้)"))
+    P.append(bullet("Admin มี 4 คน — เห็นและแก้ไขได้ทุกอย่าง (ทุก cost_center · overlay เหนือ SEE)"))
     P.append(bullet("ใครเข้าถึง (เห็น) อะไร → กรอก/แก้ได้แค่นั้น ทั้งหน้าหลักและการ \"ใส่รายละเอียดงบทำการ\" (subform ย่อย — ดูเอกสาร 02) · ยกเว้น Admin เห็นและแก้ทุกอย่าง"))
+    P.append(bullet("กรณี Cost Center ในสิทธิ์ที่ยังไม่มีแถวในตาราง (ยังไม่เคยกรอก): ผู้ใช้กดปุ่ม \"+ เพิ่ม Transaction\" "
+                    "เพื่อเพิ่มแถวเองได้ — dropdown Cost Center จำกัดเฉพาะฝ่ายที่ตนกรอกได้ (fill-scope) เท่านั้น "
+                    "จึงยังอยู่ในขอบเขตสิทธิ์เดิม (เห็น/กรอกได้แค่ของตน)"))
     P.append(para(run("จุดเข้าฟอร์มย่อย \"+ ใส่รายละเอียดงบทำการ\" (Special GL Group) — รายละเอียดเต็มอยู่ในเอกสาร 02:",
                       sz=21, bold=True, color="1E3A24"), space_before=80, space_after=40))
     P.append(image_para(rids["detail"], *meta["detail"][1], 104, "main_special_detail", width_in=6.3))
@@ -492,9 +633,9 @@ def build_body(meta, rids):
         ["1. SAP · ใช้จริง (Actuals) — สีเขียว",
          "ดึงจาก Lakehouse gold_sap_gl_trans · คอลัมน์ company_curr_amount",
          "อ่านอย่างเดียว (read-only) · ดึงอัตโนมัติ"],
-        ["2. Approved · งบ — สีฟ้า",
-         "Admin กรอก — import .csv จากปุ่มด้านบนเป็นหลัก หรือแก้มือก็ได้",
-         "หลังกรอก/แก้ กด submit → เข้า DB เลย ไม่ต้องผ่าน approval loop"],
+        ["2. Approved · งบ — สีฟ้า (read-only)",
+         "Admin import .csv ทั้งปีเท่านั้น (แถบ Admin) — แก้ในตารางไม่ได้",
+         "Import → เข้า DB เลย (Replace-by-Year) ไม่ผ่าน approval loop"],
         ["3. Pending · รออนุมัติ — สีดำ",
          "User (L3/L4) กรอกมือ (Admin แก้ส่วนนี้ด้วยมือได้)",
          "กด submit → เข้า approval loop: Submitter (L3/L4) → managerempcode → นิภาพร → วราพร "
@@ -508,13 +649,13 @@ def build_body(meta, rids):
         ["②", "ยอดรายเดือน (SAP · สีเขียว)", "ค่าจาก gold_sap_gl_trans.company_curr_amount — read-only"],
     ], [620, 3400, 5340]))
     # ── 3 · Approved illustration (FIX B — between SAP and Pending) ──
-    P.append(para(run("ภาพประกอบ: Approved · งบ (สีฟ้า) + ปุ่มส่ง (ไม่ผ่าน approval loop)",
+    P.append(para(run("ภาพประกอบ: Approved · งบ (สีฟ้า · read-only) + ทางตั้งค่า = Import .csv",
                       sz=22, bold=True, color="1E3A24"), space_before=80, space_after=40))
     P.append(image_para(rids["approved"], *meta["approved"][1], 105, "main_approved_submit", width_in=6.3))
     P.append(table([
         ["#", "จุด", "ความหมาย"],
-        ["①", "ช่องกรอก Approved · งบ (สีฟ้า)", "Admin import .csv หรือกรอกมือ"],
-        ["②", "ปุ่มส่ง (Submit)", "ส่งเข้า DB เลย — ไม่ผ่าน approval loop"],
+        ["①", "ช่อง Approved · งบ (สีฟ้า · read-only)", "แสดงอ่านอย่างเดียว — กรอก/แก้ในตารางไม่ได้"],
+        ["②", "ปุ่ม Import Approved Budget (แถบ Admin)", "ทางเดียวที่ตั้งค่า Approved — Import .csv ทั้งปี (Replace-by-Year) เข้า DB ตรง ไม่ผ่าน approval loop"],
     ], [620, 3400, 5340]))
     P.append(para(run("ภาพประกอบ: ช่องกรอก Pending · รออนุมัติ + ปุ่มส่ง/อนุมัติ", sz=22, bold=True, color="1E3A24"),
                   space_before=80, space_after=40))
@@ -533,40 +674,40 @@ def build_body(meta, rids):
         ["แหล่ง / ตาราง", "บทบาท"],
         ["1. gold_sap_gl_trans (Lakehouse) · company_curr_amount",
          "SAP · ใช้จริง (สีเขียว) — Actuals อ่านอย่างเดียว"],
-        ["2. Approved · งบ (สีฟ้า) — Admin import .csv หรือแก้มือ",
-         "งบที่อนุมัติแล้ว — submit เข้า DB เลย ไม่ผ่าน approval loop"],
+        ["2. Approved · งบ (สีฟ้า · read-only) — Admin Import .csv ทั้งปี",
+         "งบที่อนุมัติแล้ว — Import เข้า DB เลย (Replace-by-Year) ไม่ผ่าน approval loop · แก้ในตารางไม่ได้"],
         ["3. Pending · รออนุมัติ (สีดำ) — User กรอกมือ / Admin แก้ได้",
          "งบรออนุมัติ — submit เข้า approval loop (มี routing การส่งต่อ)"],
-        ["dbo.mas_employee_data + cfg_master.orgcode_costcenter_map (Fabric SQL DB)",
-         "RLS chain: empcode ↔ orgcode ↔ cost_center — กำหนดสิทธิ์เห็น/กรอกข้อมูล"],
+        ["dbo.mas_employee_data + cfg_master.orgcode_costcenter_map (file 09) + cost center master (file 02)",
+         "RLS chain (ADR-0007): SEE = (orgcode→file 09) ∪ (ฝ่าย→file 02) ∪ Admin overlay · FILL ⊆ SEE (กรอกตามฝ่าย) — กำหนดสิทธิ์เห็น/กรอกข้อมูล"],
     ], SRC))
 
     # ── 3c. See / Fill / Submit matrix per data part × role (Point 2 — centerpiece) ──
     P.append(heading("3.1) ใครเห็น / ใครกรอก / การ Submit (แยกตามส่วนข้อมูล × บทบาท)"))
     P.append(body_para(
         "ตารางสรุปสิทธิ์ต่อข้อมูล 3 ส่วน — User เห็น/กรอกได้เฉพาะ Cost Center ของตน (RLS) · "
-        "Admin เห็นทุก CC และแก้ Pending ได้ทุก CC แต่ \"ปุ่มส่ง\" จำกัดเฉพาะ CC ของตัวเอง (ดูข้อ 6):", sz=21))
+        "Admin เห็นทุก CC และแก้ Pending ได้ทุก CC · หน่วยส่ง = ฝ่าย และปุ่มส่งของ Admin มี 2 โหมด (ดูข้อ 8, 16.1):", sz=21))
     P.append(table([
         ["ส่วนข้อมูล (สี)", "ใครเห็น", "ใครกรอก + วิธีกรอก", "การ Submit"],
         ["SAP · ใช้จริง (เขียว)",
          "ทุกคนตาม RLS scope (User = CC ตน · Admin = ทุก CC)",
          "ไม่มีใครกรอก — auto จาก Lakehouse gold_sap_gl_trans.company_curr_amount (read-only)",
          "ไม่มี"],
-        ["Approved · งบ (ฟ้า)",
+        ["Approved · งบ (ฟ้า · read-only)",
          "ตาม scope",
-         "Admin เท่านั้น — import .csv (หลัก) หรือแก้มือช่องสีฟ้า",
-         "กดส่ง → เข้า DB ตรง · ไม่ผ่าน approval loop"],
+         "Admin เท่านั้น — Import .csv ทั้งปี (read-only ในตาราง แก้มือไม่ได้)",
+         "Import → เข้า DB ตรง (Replace-by-Year) · ไม่ผ่าน approval loop"],
         ["Pending · รออนุมัติ (ดำ)",
          "ตาม scope",
          "User (L3/L4) กรอก CC ของตน (รายเดือน ม.ค.–ธ.ค. หรือผ่าน subform สำหรับ special GL) · Admin แก้ของ CC ใดก็ได้",
-         "เข้า approval loop · Admin ส่งได้เฉพาะ CC ของตัวเอง"],
+         "Submit ทั้งฝ่าย → เข้า approval loop · Admin: orphan/หลัง deadline → APPROVED ตรงๆ"],
     ], [2100, 1900, 3300, 1600]))
 
     # Point 3 — Admin editing a normal user's Pending
     P.append(para(run("(ข้อ 3) สิทธิ์ Admin ในการแก้ Pending ของ User",
                       sz=22, bold=True, color="1E3A24"), space_before=80, space_after=40))
-    P.append(bullet("Admin แก้ไขงบ Pending ของ Cost Center ใดก็ได้ (บันทึกเป็นฉบับร่างของเจ้าของ CC นั้น)"))
-    P.append(bullet("ข้อจำกัด (เอกสาร 10 ข้อ 3): Admin กดส่ง (submit) ได้เฉพาะ CC ที่ผูกกับ orgcode ของตัวเอง — ส่งแทนเจ้าของไม่ได้"))
+    P.append(bullet("Admin แก้ไขงบ Pending ของ Cost Center ใดก็ได้ ทุกสถานะ (บันทึกเป็นฉบับร่างของเจ้าของ CC นั้น) — edit-lock ข้อ 16"))
+    P.append(bullet("ข้อจำกัดการส่ง (ADR-0012 · ดูข้อ 16.1): รอบปกติ Admin ส่งได้เฉพาะฝ่าย orphan → APPROVED ตรงๆ · หลัง deadline ส่งฝ่ายใดก็ได้แทน → APPROVED ตรงๆ"))
     P.append(bullet("กันยอดซ้ำ (ข้อ 4): คีย์ = (cost_center, fiscal_year, gl_account, month) ไม่มี empcode → 1 CC = ชุดงบเดียว · last-write-wins"))
 
     # Point 4 — How a normal user fills Pending
@@ -582,9 +723,14 @@ def build_body(meta, rids):
     P.append(body_para(
         "ปุ่มนี้สำหรับ Admin เท่านั้น — ใช้ส่งออกข้อมูลงบที่อนุมัติแล้วเป็นไฟล์ ใครเห็นอะไร (ตาม RLS) "
         "จะ export ออกมาตามหน้านั้น แต่ปุ่ม Export จะแสดงเฉพาะ Admin"))
+    P.append(bullet("ตำแหน่งปุ่ม (2026-06-12): Export/Import ย้ายออกจาก toolbar ไปอยู่ \"แถบ งบอนุมัติ (Approved) · Admin\" "
+                    "แยกต่างหากเหนือตาราง — กันเข้าใจผิดว่าตัวกรองปี/ฝ่ายมีผลกับการ import", sz=20))
+    P.append(bullet("แถบนี้แสดงเฉพาะ Admin — ผู้ใช้ทั่วไป (User) ไม่เห็นทั้งแถบ (ซ่อนทั้งก้อน)", sz=20))
+    P.append(bullet("Export ใช้ \"ตัวกรองปี\" กำหนดปีในชื่อไฟล์ (เช่น เลือก FY2025 → approved_budget_2025.csv) · "
+                    "ส่วน Import จะยึดปีจากตัวไฟล์เอง ไม่ขึ้นกับตัวกรอง (ดูข้อ 5)", sz=20))
     P.append(table([
         ["#", "หัวข้อ", "รายละเอียด"],
-        ["1", "สิทธิ์", "Admin เท่านั้น (3 คน)"],
+        ["1", "สิทธิ์", "Admin เท่านั้น (4 คน)"],
         ["2", "ขอบเขตข้อมูล", "Export ตามที่ผู้ใช้นั้นเห็น (ตาม RLS / cost_center)"],
         ["3", "Filter", "กรองตามปีที่เลือก (2024 / 2025 / 2026) — ไม่มีตัวเลือก \"ทุกปี\" แล้ว"],
         ["4", "ชื่อไฟล์", "ปีกำหนดชื่อไฟล์ เช่น approved_budget_2025.csv (เปลี่ยนตามปีที่เลือก)"],
@@ -619,14 +765,22 @@ def build_body(meta, rids):
     P.append(body_para(
         "นำไฟล์ที่ได้จากข้อ 4 (Export) มาแก้ไขข้อมูล แล้วใส่กลับเข้าระบบผ่านปุ่ม Import นี้ "
         "ข้อมูลที่ใส่เข้ามาจะวิ่งไปเก็บหลังบ้าน และเพิ่ม control column ตอนเก็บ ด้วย streaming mode batch"))
-    P.append(body_para("ภาพประกอบ: toolbar ปุ่ม Export / Import Approved Budget", sz=21))
-    P.append(image_para(rids["toolbar"], *meta["toolbar"][1], 103, "main_toolbar", width_in=6.3))
+    P.append(para(run("สำคัญ — Import ไม่ขึ้นกับตัวกรองปี/ฝ่าย:", sz=21, bold=True, color="8C6423"),
+                  space_before=60, space_after=40))
+    P.append(bullet("ขอบเขตการ import กำหนดโดย \"ไฟล์ CSV\" เท่านั้น — ปีจากชื่อไฟล์ + คอลัมน์ year (ต้องตรงกัน) · "
+                    "แทนที่ทั้งปี/ทั้งบริษัท (Replace-by-Year) ไม่ใช่เฉพาะปี/ฝ่ายที่กำลังกรองดูบนจอ", sz=20))
+    P.append(bullet("ตัวกรองปี/ฝ่ายบนหน้าเป็นแค่ \"มุมมอง\" ไม่ตัดขอบเขตข้อมูลที่ import — จึงย้ายปุ่มออกจาก toolbar "
+                    "มาอยู่แถบ Admin แยก พร้อมข้อความเตือนกำกับ", sz=20))
+    P.append(body_para("ภาพประกอบ: แถบ งบอนุมัติ (Approved) · Admin — ปุ่ม Import / Export + ข้อความเตือน + Master FX (read-only)", sz=21))
+    P.append(image_para(rids["admin_zone"], *meta["admin_zone"][1], 103, "main_admin_zone", width_in=6.3))
     P.append(table([
         ["#", "จุด", "ความหมาย"],
-        ["①", "ปุ่ม Export Approved Budget", "ส่งออกงบอนุมัติเป็น .csv (Admin) — ข้อ 4"],
-        ["②", "ปุ่ม Import Approved Budget", "นำไฟล์ที่แก้แล้วกลับเข้าระบบ (Admin) — ข้อ 5"],
-        ["③", "ตัวกรองปี (Year filter)", "กำหนดปีของข้อมูลที่ export / import"],
+        ["①", "ปุ่ม Import Approved Budget", "นำไฟล์ .csv ทั้งปีกลับเข้าระบบ (Replace-by-Year) — ข้อ 5"],
+        ["②", "ปุ่ม Export Approved Budget", "ส่งออกงบอนุมัติเป็น .csv (Admin) — ข้อ 4"],
+        ["③", "Master FX (USD→THB · read-only)", "อัตราแลกเปลี่ยน — แสดงอย่างเดียว · แก้ที่หน้า Master Currency (Module 09) เท่านั้น (ดูข้อ 15)"],
     ], [620, 3700, 5040]))
+    P.append(bullet("แถบนี้มีเส้นขอบฟ้า+ ข้อความ \"⚠ ทั้งปี/ทั้งบริษัท ตามไฟล์ CSV — ไม่ขึ้นกับตัวกรองปี/ฝ่าย\" กำกับชัด", sz=20))
+    P.append(bullet("แถบนี้แสดงเฉพาะ Admin — ถ้า login เป็นผู้ใช้ทั่วไป (ไม่ใช่ Admin) จะไม่เห็นแถบนี้เลย (ซ่อนทั้งก้อน)", sz=20))
 
     # ── 6. Control columns ──
     P.append(heading("6) Control Columns (เพิ่มตอน Import เก็บหลังบ้าน)"))
@@ -665,20 +819,22 @@ def build_body(meta, rids):
         ["Pending · รออนุมัติ (User กรอก)",
          "เข้า approval chain: ผู้กรอก (L3/L4) → managerempcode → นิภาพร ทองกิ่ง → วราพร ติรสิทธิ์ "
          "(มี special case: นิภาพร/วราพร กรอกเอง, C-Level — ดูเอกสาร 10 + เอกสาร approval workflow)"],
-        ["Approved · งบ (Admin)",
-         "เข้า DB ตรง — ไม่ผ่าน approval loop"],
+        ["Approved · งบ (Admin · read-only)",
+         "ตั้งค่าทาง Import .csv ทั้งปีเท่านั้น (Replace-by-Year) → เข้า DB ตรง ไม่ผ่าน approval loop · ไม่มีการกรอก/ส่งราย cell"],
     ], [3000, 6200]))
-    P.append(para(run("Special condition (สำคัญ) — ขอบเขตปุ่มส่งของ Admin:",
+    P.append(para(run("Special condition (สำคัญ) — หน่วยส่ง + ขอบเขตปุ่มส่งของ Admin (ปรับปรุง 2026-06-13):",
                       sz=22, bold=True, color="8C6423"), space_before=80, space_after=40))
-    P.append(bullet("Admin เห็นทุก CC และแก้ Pending ได้ทุก CC — แต่ \"ปุ่มส่ง\" จำกัดเฉพาะ CC ของตัวเอง "
-                    "(กันการกดส่งแทนทั้งบริษัทเข้า loop โดยไม่ตั้งใจ)"))
-    P.append(bullet("หมายเหตุ: ตัว mockup เดโม่ปัจจุบันกดส่งตามที่เห็นทั้งหมด — เป็นการ simplify ของเดโม่ · "
-                    "กฎที่ยึด = ส่งเฉพาะ CC ตัวเอง (ตามเอกสาร 10 ข้อ 3)"))
+    P.append(bullet("หน่วยส่ง = ฝ่าย (Department) — กด Submit 1 ครั้ง = ส่งทั้งฝ่าย (ทุก CC) เป็นก้อนเดียว ตามปีงบประมาณ "
+                    "(หน่วยอนุมัติ = (ฝ่าย, ปี) · ADR-0008) · ปุ่มขึ้นกับ \"ฝ่ายที่เลือก\" ไม่ใช่บทบาท (ดูข้อ 13.1)"))
+    P.append(bullet("Admin เห็นทุก CC และแก้ Pending ได้ทุก CC · แต่ปุ่มส่งของ Admin มี 2 โหมด (ADR-0012 · ดูข้อ 16.1): "
+                    "รอบปกติ = ส่งได้เฉพาะฝ่าย orphan → APPROVED ตรงๆ · หลัง deadline = ส่งฝ่ายใดก็ได้แทน → APPROVED ตรงๆ (log ADMIN_OVERRIDE)"))
 
     # ── 9. Other suggestions (Point 7) ──
     P.append(heading("9) ข้อเสนอแนะเพิ่มเติม / ประเด็นควรตัดสิน"))
-    P.append(bullet("Concurrency: หลายคนใน dept เดียวกันกรอก CC คนละตัว — last-write-wins ตามคีย์ "
-                    "(cost_center, year, gl, month) · ควรมีตัวบ่งชี้/ล็อกเบาๆ กันเขียนทับโดยไม่รู้ตัว"))
+    P.append(bullet("Concurrency (ตัดสินแล้ว — ไม่ทำอะไร): หลายคนใน dept เดียวกันกรอก CC คนละตัว — ใช้ last-write-wins "
+                    "ตามคีย์ (cost_center, year, gl, month) · ไม่ทำ lock/indicator (โอกาสชน CC+GL+เดือนเดียวกันต่ำมาก) · "
+                    "ยอมรับความเสี่ยงเขียนทับเงียบ แลกความ lean · control column _user/_updated_at ใช้ตรวจย้อนหลังได้ · "
+                    "ทางถอย: ถ้าเกิดจริงค่อยเพิ่ม optimistic warn (เช็ค _updated_at ตอน save) ภายหลัง — ไม่ต้องรื้อ schema"))
     P.append(bullet("Deadline lock: ถึงวันปิดรับ form ปิดอัตโนมัติ (GET /api/deadline)"))
     P.append(bullet("Validation ก่อน submit แบบ lean — เตือน (warn) ไม่บล็อก"))
     P.append(bullet("Audit ผ่าน control column _user / _updated_at — ไม่ต้องมี audit table แยก"))
@@ -688,19 +844,163 @@ def build_body(meta, rids):
     P.append(heading("10) ประสิทธิภาพเมื่อ Admin เห็นทุก CC (~1000+ รายการ)"))
     P.append(body_para(
         "ตอบตรงประเด็น: เว็บ \"ไม่ error\" — ทำงานได้ปกติ แต่ถ้า render ทุกแถวฝั่ง client พร้อมกันที่ "
-        "~1000+ แถวจะเริ่มหน่วง (mockup ปัจจุบัน render ทั้งหมดฝั่ง client). คำแนะนำ (lean · คงประสิทธิภาพระดับมาตรฐาน):", sz=21))
-    P.append(bullet("Server-side pagination + filter — กรองตาม Cost Center / Division / ปี ก่อนดึง · "
-                    "Admin เปิดมาให้เลือก scope ก่อน ไม่ดึงทั้งหมดทันที"))
-    P.append(bullet("Virtualized table — render เฉพาะแถวที่มองเห็นบนจอ"))
-    P.append(bullet("SAP actuals มาจาก Lakehouse gold (datawarehouse endpoint · อ่านอย่างเดียว · aggregate มาแล้ว) · "
-                    "Pending/Approved จาก Fabric SQL DB — ใส่ index (cost_center, fiscal_year, gl_account)"))
-    P.append(bullet("สรุป: ทำงานได้ปกติถ้าใช้ pagination / virtualization + server filter — ไม่ใช่ปัญหา error "
-                    "แต่เป็นเรื่อง UX/ความเร็วที่แก้ด้วยการแบ่งหน้า"))
+        "~1000+ แถวจะเริ่มหน่วง (เรื่อง UX/ความเร็ว ไม่ใช่ error). ตัวที่แก้จริงคือ \"เลือก scope ก่อนดู\" (scope-picker-first):", sz=21))
+    P.append(para(run("ทางแก้ที่ตัดสิน + ทำในแบบ (mockup) แล้ว:", sz=22, bold=True, color="1E3A24"),
+                  space_before=60, space_after=40))
+    P.append(bullet("ตัวเลือกฝ่าย (ฝ่าย-picker) — บังคับล็อก 1 ฝ่ายเสมอ (ไม่มี \"ทุกฝ่าย\") → ตาราง render เฉพาะแถวของ "
+                    "ฝ่ายนั้น ไม่มีทางแสดงทุก CC พร้อมกัน = แก้ที่ต้นเหตุ · ฝ่าย = หน่วยอนุมัติด้วย (ADR-0008 · ดูข้อ 13)"))
+    P.append(bullet("กรอบของปัญหา: ความหน่วงเกิดเฉพาะมุมมอง Admin เห็นทุก CC เท่านั้น · "
+                    "หน้ากรอกของ User = 1 CC เสมอ → ชุดข้อมูลเล็ก ไม่เคยโดน"))
+    P.append(para(run("ทางแก้ฝั่งหลังบ้าน (ทำควบคู่):", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(bullet("ใส่ index (cost_center, fiscal_year, gl_account) บนตาราง Pending/Approved ใน Fabric SQL DB — ของฟรี ทำเลย"))
+    P.append(bullet("SAP actuals มาจาก Lakehouse gold ผ่าน datawarehouse endpoint (อ่านอย่างเดียว · schema = dbo · "
+                    "aggregate มาแล้ว) → ไม่ join หนักฝั่ง client"))
+    P.append(bullet("ถ้ากรองสายงานเดียวแล้วยังได้แถวเยอะ ค่อยเพิ่ม server-side pagination + virtualized table ภายหลัง — "
+                    "ไม่ทำตั้งแต่แรก (เลี่ยง over-engineer ตาม lean)"))
+    P.append(para(run(
+        "สรุป: ไม่ใช่ปัญหา error · แก้ที่ \"เลือกสายงานก่อนดู\" (ทำแล้วในแบบ) + index หลังบ้าน · "
+        "pagination/virtualization เป็นทางสำรองเพิ่มทีหลังถ้าจำเป็น",
+        sz=21, bold=True, color="8C6423"), space_before=80, space_after=120))
+
+    # ── 11. Toolbar tools + year labels + GL color/sort (NEW 2026-06-12) ──
+    P.append(heading("11) เครื่องมือบน toolbar · ป้ายปี · สี/การเรียงกลุ่ม GL (ปรับปรุง 2026-06-12)"))
+    P.append(body_para(
+        "หลังย้าย Export/Import ไปแถบ Admin (ข้อ 4–5) toolbar เหลือเครื่องมือสำหรับผู้ใช้: ตัวกรองปี, "
+        "ตัวเลือกฝ่าย (ฝ่าย-picker), ปุ่ม \"+ เพิ่ม Transaction\" และปุ่ม \"แนบไฟล์\"", sz=21))
+    P.append(image_para(rids["toolbar"], *meta["toolbar"][1], 108, "main_toolbar", width_in=6.3))
+    P.append(table([
+        ["#", "จุด", "ความหมาย"],
+        ["①", "ตัวกรองปี (Year filter)", "FY2024 / 2025 / 2026 — เป็นมุมมอง · กำหนดปีในป้ายวงเล็บ + ชื่อไฟล์ Export"],
+        ["②", "ตัวเลือกฝ่าย (ฝ่าย-picker)", "ปุ่มเปิดแผงเลือกฝ่าย — ล็อกหน้าเหลือ 1 (ฝ่าย, ปี) = หน่วยอนุมัติ (ดูข้อ 13) · แทนตัวกรองสายงานเดิม"],
+        ["③", "ปุ่ม + เพิ่ม Transaction", "เพิ่มแถว Cost Center × GL เอง (CC จำกัดตามฝ่ายที่ผู้ใช้กรอกได้)"],
+        ["④", "ปุ่ม แนบไฟล์", "เก็บเอกสารประกอบเข้า SharePoint ตามฝ่าย+ปี"],
+    ], [620, 3700, 5040]))
+
+    P.append(para(run("(11.1) ตารางแสดงแถวไหน + ปุ่ม \"+ เพิ่ม Transaction\"",
+                      sz=22, bold=True, color="1E3A24"), space_before=80, space_after=40))
+    P.append(body_para(
+        "ตารางไม่ได้แสดง GL ทุกตัว — แถว (Cost Center × GL × ปี) ที่โผล่มาจาก 3 แหล่งรวมกัน โดยมี "
+        "\"SAP · ใช้จริง เป็นตัวนำ\": GL ที่เคยมียอดจริงใน SAP ปีนั้นจะโผล่ก่อน (Approved/Pending แสดงข้างกันรอกรอก) · "
+        "นอกจากนี้ยังโผล่ถ้ามีข้อมูลใน Approved (เช่น GL/CC ใหม่จากการ import) หรือ Pending (ที่กรอกไว้)", sz=21))
+    P.append(bullet("กฎการแสดงแถว = SAP actual (ตัวนำ) ∪ มี Approved ∪ มี Pending — มีข้อมูลแหล่งใดก็โผล่ · "
+                    "พอมีแล้วจะ \"ค้างถาวร\" โผล่ทุกครั้ง (งบที่กรอก/import ไม่หาย) — ดู ADR-0010", sz=20))
+    P.append(bullet("GL ที่ไม่เคยมี actual และยังไม่มีงบ → ไม่โผล่ตอนแรก · ถ้าจะใช้ปีนี้ ให้กด \"+ เพิ่ม Transaction\" "
+                    "(ไม่ใช่ระบบเสีย — แค่ยังไม่มีข้อมูลแหล่งใดเลย)", sz=20))
+    P.append(bullet("ปุ่ม + เพิ่ม Transaction: เลือก Cost Center + GL Code จาก dropdown ที่ดึงจาก master — "
+                    "รายการ CC กรองเฉพาะฝ่ายที่ผู้ใช้กรอกได้ (fill-scope)", sz=20))
+    P.append(bullet("ถ้า GL ที่เลือกเป็นกลุ่มพิเศษ → แถวเข้าโหมด subform อัตโนมัติ (ช่องรายเดือน read-only + ปุ่มใส่รายละเอียด) "
+                    "เหมือนแถวพิเศษทั่วไป · Travelling → เปิด Trip Manager → กรอกเสร็จ ยอดรวมโผล่หน้าหลักเหมือน GL อื่น (ดูเอกสาร 02)", sz=20))
+    P.append(bullet("เลือก CC+GL ซ้ำของเดิม = ลงที่แถวเดิม (ไม่เพิ่มซ้ำ)", sz=20))
+
+    P.append(para(run("(11.2) ปุ่ม \"แนบไฟล์\" — เก็บเอกสารเข้า SharePoint ตามฝ่าย + ปี",
+                      sz=22, bold=True, color="1E3A24"), space_before=120, space_after=40))
+    P.append(bullet("รองรับ pdf / xlsx / xls / png / jpg · เก็บเข้าโฟลเดอร์ปลายทางตามรูปแบบ <ฝ่าย> / <ปี> / (เช่น Solution Delivery / 2026 /)", sz=20))
+    P.append(bullet("ฝ่าย + ปี ของปลายทาง \"ล้อตามตัวกรองหน้าหลัก\" — แสดงแบบอ่านอย่างเดียวใน modal (ไม่มี dropdown ให้เลือกซ้ำ)", sz=20))
+    P.append(bullet("เก็บที่ SharePoint (ไม่เก็บใน DB) — โฟลเดอร์ = ดัชนี (ฝ่าย+ปี) · ผู้แนบ/วันที่ได้จาก metadata ของ SharePoint", sz=20))
+    P.append(bullet("รากโฟลเดอร์ (SharePoint root) อยู่ระหว่างกำหนด — ในแบบยังเป็น placeholder", sz=20))
+
+    P.append(para(run("(11.3) ป้ายปีในวงเล็บ — SAP (Y) · Approved (Y) · Pending (Y+1)",
+                      sz=22, bold=True, color="1E3A24"), space_before=120, space_after=40))
+    P.append(bullet("ทุกแถว + legend แสดงปีในวงเล็บ · ยืนปีปัจจุบัน Y → SAP/Approved = ปีปัจจุบัน (Y) · Pending = ปีที่วางแผน (Y+1)", sz=20))
+    P.append(bullet("เปลี่ยนตามตัวกรองปี เช่น เลือก 2026 → SAP (2026) · Approved (2026) · Pending (2027) — กรอกงบปีหน้า เทียบของปีนี้", sz=20))
+
+    P.append(para(run("(11.4) สีกลุ่ม GL พิเศษ + เรียงตามกลุ่ม",
+                      sz=22, bold=True, color="1E3A24"), space_before=120, space_after=40))
+    P.append(bullet("ตารางเรียงตามกลุ่ม GL (gl_group) แล้วตามรหัส GL — กลุ่มเดียวกันอยู่ติดกัน", sz=20))
+    P.append(bullet("ป้ายกลุ่ม GL พิเศษเป็นสีเฉพาะกลุ่ม (เดิมเป็นสีรุ้ง): Entertainment = เหลือง · Lease & Rental = ชมพู · "
+                    "Professional & Legal Fee = ม่วง · Public Relation & Donation = ส้ม · Training & Seminar = ฟ้า · Travelling Expense = เขียว", sz=20))
+
+    # ── 12. Approve on the main page — no separate inbox ──
+    P.append(heading("12) อนุมัติบนหน้าหลัก — ไม่มีหน้า inbox แยก"))
+    P.append(body_para(
+        "ผู้อนุมัติ (Approver) ตรวจและอนุมัติบน \"หน้าหลักเดียวกัน\" กับที่ผู้กรอกใช้ — ไม่มีหน้า inbox แยกอีกต่อไป "
+        "(หน้า approver-inbox เดิมถูกยกเลิก) · เลือกฝ่ายที่จะตรวจจากตัวเลือกฝ่าย (ดูข้อ 13) แล้วกด อนุมัติ/ตีกลับ ที่แถบล่าง", sz=21))
+    P.append(bullet("ปุ่มอนุมัติ/ตีกลับ จะโผล่เมื่อ \"ฝ่ายที่เลือก\" อยู่ที่ขั้นการอนุมัติของผู้ใช้คนนั้นพอดี (ดูข้อ 13.1)", sz=20))
+    P.append(bullet("กดอนุมัติ = ส่งต่อขั้นถัดไป (PENDING_APPROVER1→2→3→APPROVED) · กดตีกลับ = ทั้งฝ่ายกลับเป็น REJECTED + แจ้งผู้ส่งล่าสุด", sz=20))
+    P.append(bullet("อนุมัติ/ตีกลับ ทำทั้งฝ่ายเป็นก้อนเดียว (ทุก CC ในฝ่าย) — ไม่ใช่ราย CC หรือราย GL (หน่วยอนุมัติ = ฝ่าย)", sz=20))
+    P.append(para(run("ภาพประกอบ: แถบ Action (ผู้อนุมัติ — อนุมัติ/ตีกลับ)", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(image_para(rids["action_approver"], *meta["action_approver"][1], 109, "main_action_approver", width_in=6.3))
+    P.append(table([
+        ["#", "จุด", "ความหมาย"],
+        ["①", "ปุ่ม อนุมัติทั้งฝ่าย", "ส่งต่อขั้นถัดไป — โผล่เมื่อฝ่ายอยู่ที่ขั้นของผู้อนุมัติคนนี้พอดี"],
+        ["②", "ปุ่ม ตีกลับทั้งฝ่าย", "ตีกลับทั้งฝ่าย → REJECTED + แจ้งผู้ส่งล่าสุด (ต้องระบุเหตุผล)"],
+    ], [620, 3700, 5040]))
+
+    # ── 13. ฝ่าย-picker — the approval unit ──
+    P.append(heading("13) ตัวเลือกฝ่าย (ฝ่าย-picker) = หน่วยอนุมัติ (ADR-0008)"))
+    P.append(body_para(
+        "ตัวเลือกฝ่ายแทนตัวกรองสายงานเดิม · ล็อกหน้าให้เหลือ 1 (ฝ่าย/Department, ปีงบประมาณ) ซึ่งเป็น "
+        "\"หน่วยอนุมัติ\" (1 ฝ่าย/ปี = 1 ก้อนอนุมัติ) · รายการฝ่ายจัดกลุ่มตามสายงาน (Division)", sz=21))
+    P.append(bullet("ผู้กรอก (Submitter): ถูกล็อกที่ฝ่ายของตนอัตโนมัติ — กรอกได้เฉพาะฝ่ายของตน", sz=20))
+    P.append(bullet("ผู้อนุมัติ (Approver): แต่ละฝ่ายมีป้าย \"รออนุมัติ\" (ถึงคิวฉัน) / \"อนุมัติแล้ว\" (ผ่านขั้นฉันแล้ว) + "
+                    "toggle \"เฉพาะที่รออนุมัติ\" เพื่อกรองเหลือเฉพาะคิวของตน", sz=20))
+    P.append(para(run("ภาพประกอบ: ตัวเลือกฝ่าย (เปิด) — มุมมองผู้อนุมัติ พร้อมป้ายสถานะ", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(image_para(rids["fai_picker"], *meta["fai_picker"][1], 110, "main_fai_picker", width_in=6.3))
+    P.append(table([
+        ["#", "จุด", "ความหมาย"],
+        ["①", "แผงเลือกฝ่าย (จัดกลุ่มตามสายงาน)", "เลือก 1 ฝ่าย → ล็อกหน้า (ฝ่าย, ปี) · แต่ละฝ่ายมีป้าย รออนุมัติ/อนุมัติแล้ว สำหรับผู้อนุมัติ"],
+        ["②", "toggle เฉพาะที่รออนุมัติ", "กรองเหลือเฉพาะฝ่ายที่ถึงคิวอนุมัติของผู้ใช้คนนี้ (ผู้อนุมัติเท่านั้น)"],
+    ], [620, 3700, 5040]))
+    P.append(para(run("(13.1) แถบ Action — ปุ่มขึ้นกับ \"ฝ่ายที่เลือก\" ไม่ใช่บทบาท",
+                      sz=22, bold=True, color="1E3A24"), space_before=80, space_after=40))
+    P.append(bullet("ปุ่ม Submit โผล่เมื่อ ฝ่ายที่เลือก ∈ ขอบเขตการกรอก (fill-scope) ของผู้ใช้", sz=20))
+    P.append(bullet("ปุ่ม อนุมัติ/ตีกลับ โผล่เมื่อ ฝ่ายที่เลือก อยู่ที่ขั้นการอนุมัติของผู้ใช้พอดี", sz=20))
+
+    # ── 14. Admin-mode toggle (overlay admin) ──
+    P.append(heading("14) ปุ่ม 🛡️ โหมด Admin (overlay admin · ADR-0014)"))
+    P.append(body_para(
+        "ผู้ที่มีบทบาทซ้อน (overlay admin — วราพร/นิภาพร/ปิยะดา) ปกติทำงานในบทบาทฐานของตน (approver/submitter) "
+        "แล้วสลับเข้าสู่บทบาท admin (เห็นทุก CC · แก้ Pending ทุก CC · เห็นแถบ Admin/Import + Master FX) ผ่านปุ่ม "
+        "\"🛡️ โหมด Admin\" ที่มุมขวาบน · Admin แท้ (jakkaritw) เป็น admin ตลอดเวลา ไม่มีปุ่มสลับ", sz=21))
+    P.append(bullet("ปิดโหมด Admin → กลับสู่บทบาทฐาน (เช่น นิภาพรกลับเป็นผู้อนุมัติขั้นที่ 2) · เปิด → ได้บทบาท admin ทันที", sz=20))
+    P.append(bullet("เหตุผล: คนชุดเดียวกันทำหลายบทบาท — แยก \"หมวก\" ให้ชัด กันเผลอใช้บทบาท admin ตอนทำงานปกติ", sz=20))
+    P.append(para(run("ภาพประกอบ: ปุ่ม โหมด Admin (overlay admin · นิภาพร)", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(image_para(rids["admin_mode"], *meta["admin_mode"][1], 111, "main_admin_mode", width_in=3.4))
+
+    # ── 15. Master FX read-only here (owned by Module 09) ──
+    P.append(heading("15) Master FX เป็น read-only ที่หน้านี้ (เป็นของ Module 09 · ADR-0015)"))
+    P.append(body_para(
+        "อัตราแลกเปลี่ยน USD→THB (Master FX) แสดงในแถบ Admin แบบ \"อ่านอย่างเดียว\" — แก้ไขได้ที่หน้า "
+        "Master Currency (Module 09) เท่านั้น · หน้า OPEX นี้แค่อ่านค่ามาแสดง และใช้คำนวณเบี้ยเลี้ยงเดินทาง "
+        "ต่างประเทศ (per-diem) ใหม่ทุกครั้งที่อ่าน (recompute-on-read)", sz=21))
+    P.append(bullet("ค่า FX ผูกตามปีงบประมาณ (เช่น FY2025 = 35.00) — ตัวกรองปีเปลี่ยน → FX ที่แสดงเปลี่ยนตาม", sz=20))
+    P.append(bullet("แบบเดโม่ sync ค่าระหว่างหน้าผ่าน localStorage (cm.masterFX) — แก้ที่ Module 09 แล้วหน้านี้คิด per-diem ใหม่อัตโนมัติ", sz=20))
+    P.append(bullet("เฉพาะ Admin เห็นแถบนี้ (รวม Master FX) — ผู้ใช้ทั่วไปไม่เห็น", sz=20))
+
+    # ── 16. Edit-lock by status × role ──
+    P.append(heading("16) การล็อกการแก้ไข ตามสถานะ × บทบาท (edit-lock · ADR-0013)"))
+    P.append(body_para(
+        "การแก้ไขช่อง Pending ขึ้นกับ \"สถานะของฝ่าย\" และ \"บทบาทของผู้ใช้\" · การแก้ไขไม่เคยเปลี่ยนสถานะ — "
+        "สถานะเลื่อนได้ทาง Submit/Approve/Reject เท่านั้น · มี 6 สถานะ: "
+        "DRAFT / PENDING_APPROVER1 / PENDING_APPROVER2 / PENDING_APPROVER3 / APPROVED / REJECTED", sz=21))
+    P.append(table([
+        ["บทบาท", "สถานะที่แก้ Pending ได้", "หมายเหตุ"],
+        ["ผู้กรอก (Submitter)", "DRAFT, REJECTED เท่านั้น", "PENDING_* / APPROVED → ล็อก (อ่านอย่างเดียว · มีป้าย 🔒)"],
+        ["ผู้อนุมัติ (Approver)", "— (ไม่แก้)", "ดูเพื่อตรวจอย่างเดียว → read-only"],
+        ["Admin", "ทุกสถานะ", "แก้ Pending ได้ทุก CC ทุกสถานะ (รวม APPROVED)"],
+    ], [2400, 3000, 3800]))
+    P.append(para(run("ภาพประกอบ: แถว Pending ที่ถูกล็อก (หลัง Submit · มุมมองผู้กรอก)", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(image_para(rids["edit_lock"], *meta["edit_lock"][1], 112, "main_edit_lock", width_in=6.3))
+    P.append(table([
+        ["#", "จุด", "ความหมาย"],
+        ["①", "สถานะแถว Pending (มีป้าย 🔒)", "สถานะ PENDING_APPROVER1 — ผู้กรอกแก้ไม่ได้ (รออนุมัติ)"],
+        ["②", "ช่องรายเดือน (อ่านอย่างเดียว)", "ช่องกรอกถูกล็อกเป็น read-only — ปลดล็อกเมื่อถูกตีกลับ (REJECTED)"],
+    ], [620, 3700, 5040]))
+    P.append(para(run("(16.1) Admin submit — 2 โหมด (ADR-0012)", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(bullet("ในรอบปกติ: Admin Submit ได้เฉพาะ \"ฝ่าย orphan\" (ไม่มีผู้กรอก) → APPROVED ตรงๆ ไม่ผ่าน chain (log ADMIN_OVERRIDE)", sz=20))
+    P.append(bullet("หลัง deadline: Admin override-edit + Submit ฝ่ายใดก็ได้แทน (ผู้ใช้ถูกล็อก) → APPROVED ตรงๆ · มี toggle ทดสอบ \"🔒 หลัง deadline\"", sz=20))
+    P.append(bullet("ทั้ง 2 โหมด Submit/Approve ทำทั้งก้อน (ฝ่าย, ปี) เสมอ แม้แก้แค่ CC เดียว", sz=20))
 
     # ── Closing note ──
     P.append(heading("หมายเหตุท้ายเอกสาร"))
     P.append(para(run(
-        "เอกสารฉบับร่าง (Draft · v0.3) — ข้อสรุปการออกแบบทั้งหมดดูได้ในข้อ 7 · "
+        "เอกสารฉบับร่าง (Draft · v0.7) — ข้อสรุปการออกแบบทั้งหมดดูได้ในข้อ 7 · "
         "ภาพประกอบ render จากแบบ (mockup) ตัวเลข/ชื่อเป็นข้อมูลตัวอย่าง · "
         "วงกลมสีทองคือจุดอ้างอิงในตารางคำอธิบายของแต่ละหัวข้อ",
         sz=20, italic=True, color="8C6423"), space_before=40, space_after=120))
@@ -744,11 +1044,12 @@ def main():
     shots = capture()
     print("[2/4] Annotating with gold markers (Pillow) ...")
     meta = {}
-    # FIX B: "approved" added between "sap" and "pending" (matches section-3 order).
-    # 2026-06-05: login_admin/login_user prepended (login-bar section near top). They
-    # carry NO markers, so the PROOF loops below (sap/approved/pending/toolbar/detail)
-    # are unaffected — they never reference the login keys.
-    order = ["login_admin", "login_user", "overview", "sap", "approved", "pending", "toolbar", "detail"]
+    # login_admin/login_user carry NO markers (login-bar views near top). New 2026-06-13:
+    # fai_picker / action_approver / admin_mode / edit_lock document the wired approve-on-
+    # main-page flow (ฝ่าย-picker, action bar, admin-mode toggle, edit-lock by status×role).
+    order = ["login_admin", "login_user", "overview", "sap", "approved", "pending",
+             "toolbar", "admin_zone", "fai_picker", "action_approver", "admin_mode",
+             "edit_lock", "detail"]
     for k in order:
         src, markers = shots[k]
         meta[k] = annotate(src, os.path.basename(src), markers)
@@ -770,19 +1071,19 @@ def main():
           f"{sap_m[1]['ew']:.0f},{sap_m[1]['eh']:.0f}] inside={_inside(sap_m[1])} "
           f"fill={sap_m[1]['fill']} (GREEN={sap_m[1]['fill']==GREEN})")
     ap_m = shots["approved"][1]
-    print(f"[PROOF] APPROVED ①: leader=({ap_m[0]['tx']:.0f},{ap_m[0]['ty']:.0f}) "
-          f"in input box[{ap_m[0]['ex']:.0f},{ap_m[0]['ey']:.0f},"
+    print(f"[PROOF] APPROVED ① (read-only cell): leader=({ap_m[0]['tx']:.0f},{ap_m[0]['ty']:.0f}) "
+          f"in cell  box[{ap_m[0]['ex']:.0f},{ap_m[0]['ey']:.0f},"
           f"{ap_m[0]['ew']:.0f},{ap_m[0]['eh']:.0f}] inside={_inside(ap_m[0])} "
           f"fill={ap_m[0]['fill']} (GOLD={ap_m[0]['fill']==GOLD})")
-    print(f"[PROOF] APPROVED ②: leader=({ap_m[1]['tx']:.0f},{ap_m[1]['ty']:.0f}) "
-          f"in submit box[{ap_m[1]['ex']:.0f},{ap_m[1]['ey']:.0f},"
+    print(f"[PROOF] APPROVED ② (Import btn): leader=({ap_m[1]['tx']:.0f},{ap_m[1]['ty']:.0f}) "
+          f"in import box[{ap_m[1]['ex']:.0f},{ap_m[1]['ey']:.0f},"
           f"{ap_m[1]['ew']:.0f},{ap_m[1]['eh']:.0f}] inside={_inside(ap_m[1])} "
           f"fill={ap_m[1]['fill']} (GOLD={ap_m[1]['fill']==GOLD})")
-    # DETAIL image (EDIT 2026-06-04): both markers on the SAME Lease & Rental row
-    # (data-txn-id=5). ① = .btn-detail → RED · ② = leftmost pending-readonly → GREEN.
+    # DETAIL image: both markers on the SAME Professional & Legal Fee row (data-txn-id=5,
+    # Solution Delivery). ① = .btn-detail → RED · ② = leftmost pending-readonly → GREEN.
     det_m = shots["detail"][1]
     det_txn = "5"  # the data-txn-id both detail selectors are pinned to
-    print(f"[PROOF] DETAIL anchored to data-txn-id={det_txn} (both markers, Lease & Rental)")
+    print(f"[PROOF] DETAIL anchored to data-txn-id={det_txn} (both markers, Professional & Legal Fee)")
     print(f"[PROOF] DETAIL ① (btn-detail): leader=({det_m[0]['tx']:.0f},{det_m[0]['ty']:.0f}) "
           f"in button box[{det_m[0]['ex']:.0f},{det_m[0]['ey']:.0f},"
           f"{det_m[0]['ew']:.0f},{det_m[0]['eh']:.0f}] inside={_inside(det_m[0])} "
@@ -791,9 +1092,11 @@ def main():
           f"in cell  box[{det_m[1]['ex']:.0f},{det_m[1]['ey']:.0f},"
           f"{det_m[1]['ew']:.0f},{det_m[1]['eh']:.0f}] inside={_inside(det_m[1])} "
           f"fill={det_m[1]['fill']} (GREEN={det_m[1]['fill']==GREEN})")
-    for k in ("overview", "toolbar", "pending"):
-        allgold = all(m["fill"] == GOLD for m in shots[k][1])
-        print(f"[PROOF] {k}: markers default GOLD = {allgold}")
+    for k in ("overview", "toolbar", "pending", "admin_zone",
+              "fai_picker", "action_approver", "admin_mode", "edit_lock"):
+        ms = shots[k][1]
+        allgold = all(m["fill"] == GOLD for m in ms)
+        print(f"[PROOF] {k}: markers={len(ms)} default GOLD = {allgold}")
     # ----------------------------------------------------------------------- #
 
     media = {k: f"image{i+1}.png" for i, k in enumerate(order)}
