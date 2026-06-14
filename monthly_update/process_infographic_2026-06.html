@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Budget Process — As-Is vs To-Be</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI", Arial, sans-serif; background:#dfe3e8; padding:24px; }
+
+  /* PPT 16:9 */
+  .slide {
+    width:1280px; height:720px; position:relative; margin:0 auto; overflow:hidden;
+    background:linear-gradient(160deg, #ffffff 0%, #f6f8fa 55%, #eef3f0 100%);
+    border:1px solid #c8cdd2; box-shadow:0 8px 30px rgba(0,0,0,.12);
+  }
+  /* faint decorative circles */
+  .slide::before {
+    content:""; position:absolute; right:-120px; top:-120px; width:340px; height:340px;
+    border-radius:50%; background:radial-gradient(circle, rgba(15,122,61,.07), transparent 70%);
+  }
+  .slide::after {
+    content:""; position:absolute; left:-100px; bottom:-100px; width:300px; height:300px;
+    border-radius:50%; background:radial-gradient(circle, rgba(31,56,100,.07), transparent 70%);
+  }
+
+  /* ---------- Header ---------- */
+  .header { display:flex; align-items:center; padding:16px 28px 10px; position:relative; z-index:2; }
+  .accent {
+    width:6px; height:44px; border-radius:3px; margin-right:16px;
+    background:linear-gradient(180deg, #0f7a3d, #1f3864);
+  }
+  .title { font-size:25px; font-weight:800; color:#16202e; letter-spacing:-.4px; }
+  .title .sub { font-size:13.5px; font-weight:600; color:#5b6877; display:block; margin-top:2px; }
+  .logo { margin-left:auto; text-align:right; line-height:1; }
+  .logo .green { color:#0f7a3d; font-size:10px; font-weight:700; }
+  .logo .big { color:#0f7a3d; font-size:20px; font-weight:800; letter-spacing:1.5px; }
+  .logo .sub { color:#6b7480; font-size:8px; margin-top:2px; }
+
+  /* ---------- Band ---------- */
+  .band { padding:4px 28px 0; position:relative; z-index:2; }
+  .band-label {
+    display:inline-flex; align-items:center; gap:8px; font-weight:800; font-size:14px; color:#fff;
+    padding:6px 20px; border-radius:18px; margin-bottom:-14px; position:relative; z-index:3;
+    margin-left:14px; box-shadow:0 3px 8px rgba(0,0,0,.18);
+  }
+  .band-label.asis { background:linear-gradient(135deg, #7d8893, #5b6671); }
+  .band-label.tobe { background:linear-gradient(135deg, #15904a, #0c5c30); }
+  .band-label .tag { font-weight:600; font-size:11.5px; opacity:.9; }
+
+  .band-box {
+    border-radius:14px; padding:22px 16px 12px;
+    background:rgba(255,255,255,.75);
+    box-shadow:0 4px 14px rgba(22,32,46,.08), inset 0 0 0 1px rgba(22,32,46,.06);
+    backdrop-filter:blur(2px);
+  }
+  .band-box.asis-box { background:linear-gradient(180deg, #f7f8f9 0%, #f1f2f4 100%); }
+  .band-box.tobe-box { background:linear-gradient(180deg, #f3faf5 0%, #e9f5ee 100%);
+    box-shadow:0 4px 14px rgba(15,122,61,.10), inset 0 0 0 1px rgba(15,122,61,.10); }
+
+  /* ---------- Step flow ---------- */
+  .flow { display:flex; align-items:stretch; }
+  .step {
+    flex:1; background:#fff; border-radius:10px; padding:10px 10px 9px; position:relative;
+    min-height:124px; box-shadow:0 2px 8px rgba(22,32,46,.10);
+  }
+  .step::before {
+    content:""; position:absolute; top:0; left:0; right:0; height:4px; border-radius:10px 10px 0 0;
+  }
+  .asis-row .step::before { background:linear-gradient(90deg, #98a1ab, #6e7984); }
+  .tobe-row .step::before { background:linear-gradient(90deg, #1faa5b, #0c5c30); }
+
+  .step .num {
+    position:absolute; top:-10px; right:8px; width:24px; height:24px; border-radius:50%;
+    color:#fff; font-size:12px; font-weight:800; text-align:center; line-height:24px;
+    box-shadow:0 2px 5px rgba(0,0,0,.25);
+  }
+  .asis-row .step .num { background:linear-gradient(135deg, #8d97a1, #626d78); }
+  .tobe-row .step .num { background:linear-gradient(135deg, #1faa5b, #0c5c30); }
+
+  .ico-wrap {
+    width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:21px; margin-bottom:6px;
+  }
+  .asis-row .ico-wrap { background:linear-gradient(135deg, #eef0f2, #e0e3e7); box-shadow:inset 0 0 0 1px #d4d8dd; }
+  .tobe-row .ico-wrap { background:linear-gradient(135deg, #e2f4e9, #cdead9); box-shadow:inset 0 0 0 1px #b8dcc6; }
+
+  .step .st { font-size:13px; font-weight:800; color:#1c2733; line-height:1.25; }
+  .asis-row .step .st { color:#46505a; }
+  .tobe-row .step .st { color:#0c5c30; }
+  .step .sd { font-size:11px; color:#56616d; line-height:1.4; margin-top:3px; }
+
+  .arrow { align-self:center; flex:0 0 22px; text-align:center; position:relative; }
+  .arrow span {
+    font-size:15px; font-weight:900;
+  }
+  .asis-row .arrow span { color:#9aa4ae; }
+  .tobe-row .arrow span { color:#15904a; }
+
+  /* pain / gain strip */
+  .strip { display:flex; gap:10px; margin-top:12px; }
+  .chip {
+    flex:1; font-size:11.5px; font-weight:700; text-align:center;
+    padding:7px 8px; border-radius:999px; line-height:1.25;
+    box-shadow:0 2px 5px rgba(0,0,0,.07);
+  }
+  .pain { background:linear-gradient(135deg, #fdeeec, #fadbd7); color:#a8332b; box-shadow:inset 0 0 0 1px #efc3be, 0 2px 5px rgba(0,0,0,.06); }
+  .gain { background:linear-gradient(135deg, #e3f4ea, #cfecdc); color:#0c5c30; box-shadow:inset 0 0 0 1px #b5dcc5, 0 2px 5px rgba(0,0,0,.06); }
+
+  /* ---------- Transform divider ---------- */
+  .transform { display:flex; align-items:center; gap:16px; padding:13px 28px 9px; position:relative; z-index:2; }
+  .transform .line { flex:1; height:2px; background:linear-gradient(90deg, transparent, #1f3864 40%, #0f7a3d 60%, transparent); opacity:.35; border-radius:2px; }
+  .transform .label {
+    background:linear-gradient(135deg, #1f3864, #0f7a3d); color:#fff; font-weight:800; font-size:13px;
+    padding:7px 24px; border-radius:999px; letter-spacing:.6px;
+    box-shadow:0 4px 12px rgba(15,77,46,.30);
+  }
+
+  .copyr { position:absolute; bottom:7px; right:20px; font-size:8.5px; color:#9aa1a9; z-index:2; }
+  .pageno { position:absolute; bottom:7px; width:100%; text-align:center; font-size:10px; color:#7d858e; z-index:2; }
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="accent"></div>
+    <div class="title">Budget Management Web — Process Transformation
+      <span class="sub">OPEX budget cycle: from manual Excel consolidation to one web platform</span>
+    </div>
+    <div class="logo">
+      <div class="green">Human Chemical</div>
+      <div class="big">CHEMEMAN</div>
+      <div class="sub">COPYRIGHT © 2026</div>
+    </div>
+  </div>
+
+  <!-- AS-IS -->
+  <div class="band">
+    <div class="band-label asis">AS-IS <span class="tag">Manual Excel process today</span></div>
+    <div class="band-box asis-box">
+      <div class="flow asis-row">
+        <div class="step"><div class="num">1</div><div class="ico-wrap">🖥️</div>
+          <div class="st">SAP export by hand</div>
+          <div class="sd">Budget dept runs FAGLL03H every month, exports actuals to Excel</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">2</div><div class="ico-wrap">📧</div>
+          <div class="st">Email blank templates</div>
+          <div class="sd">Excel templates sent out to 38 divisions / ~275 users</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">3</div><div class="ico-wrap">✍️</div>
+          <div class="st">Fill Excel manually</div>
+          <div class="sd">Users key 12-month budget per GL account — no prior-year data pre-filled</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">4</div><div class="ico-wrap">🗂️</div>
+          <div class="st">Consolidate by hand</div>
+          <div class="sd">Files emailed back; Budget dept merges every sheet into one master file</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">5</div><div class="ico-wrap">🖨️</div>
+          <div class="st">Approve over email</div>
+          <div class="sd">Approval by email chain / print &amp; sign — no status visibility</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">6</div><div class="ico-wrap">📊</div>
+          <div class="st">Manual report</div>
+          <div class="sd">Budget vs actuals compared in Excel pivot, rebuilt every month</div>
+        </div>
+      </div>
+      <div class="strip">
+        <div class="chip pain">⏱ Weeks of effort per cycle</div>
+        <div class="chip pain">📑 Version chaos — 100+ files</div>
+        <div class="chip pain">⚠️ Copy-paste errors</div>
+        <div class="chip pain">🙈 No audit trail / no status tracking</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div class="transform">
+    <div class="line"></div>
+    <div class="label">▼ &nbsp;TRANSFORM — Go-live Aug 2026&nbsp; ▼</div>
+    <div class="line"></div>
+  </div>
+
+  <!-- TO-BE -->
+  <div class="band">
+    <div class="band-label tobe">TO-BE <span class="tag">Budget Management Web</span></div>
+    <div class="band-box tobe-box">
+      <div class="flow tobe-row">
+        <div class="step"><div class="num">1</div><div class="ico-wrap">🔐</div>
+          <div class="st">Single sign-on</div>
+          <div class="sd">Entra ID login — role, division &amp; cost centers auto-detected (RLS)</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">2</div><div class="ico-wrap">📝</div>
+          <div class="st">Smart budget form</div>
+          <div class="sd">Prior-year budget + SAP actuals pre-filled; totals auto-calculated</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">3</div><div class="ico-wrap">✅</div>
+          <div class="st">One-click submit</div>
+          <div class="sd">Approval flows Manager → Budget Staff → Budget Manager automatically</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">4</div><div class="ico-wrap">📨</div>
+          <div class="st">Auto notifications</div>
+          <div class="sd">Email at every approve / reject step — live status for everyone</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">5</div><div class="ico-wrap">⚙️</div>
+          <div class="st">SAP auto-pipeline</div>
+          <div class="sd">Actuals flow via gateway → Lakehouse (Bronze → Silver → Gold), monthly refresh</div>
+        </div>
+        <div class="arrow"><span>❯</span></div>
+        <div class="step"><div class="num">6</div><div class="ico-wrap">📈</div>
+          <div class="st">Live dashboard</div>
+          <div class="sd">Budget vs actuals by division, secured by RLS — Phase 2</div>
+        </div>
+      </div>
+      <div class="strip">
+        <div class="chip gain">⚡ Days, not weeks</div>
+        <div class="chip gain">🗄️ One database — zero consolidation</div>
+        <div class="chip gain">🔍 Full audit trail every step</div>
+        <div class="chip gain">🔒 Right data to right people (RLS)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pageno">- 3 -</div>
+  <div class="copyr">COPYRIGHT © 2026 CHEMEMAN PLC ALL RIGHTS RESERVED</div>
+</div>
+</body>
+</html>

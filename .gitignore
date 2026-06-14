@@ -1,5 +1,6 @@
 # Secrets — never commit
 .env
+.mcp.json
 local.settings.json
 
 # Large media files
@@ -35,4 +36,16 @@ Thumbs.db
 cman-prd-ingest-backend/
 
 # Local demo/reference data — not needed in repo
-docs/
+# docs/  ← ชั่วคราว: uncomment เพื่อให้ @ ref ใน Claude Code ได้
+
+# graphify knowledge-graph outputs + cache (local artifacts, rebuilt nightly)
+graphify-out/
+
+# Archived/moved-out files (recoverable from git history; kept on disk only)
+bin/
+# Playwright stored auth state (transient, never commit)
+.playwright_auth.json
+
+# Large source/demo data dumps (xlsx/csv/SAP exports) — not source, exceed GitHub limits
+docs/demo_data/
+docs/13Template Special/

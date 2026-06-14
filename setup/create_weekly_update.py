@@ -198,6 +198,14 @@ ROWS = [
     ("Data Pipeline", "gold_sap_m_gl_account_group_name",
      "gold_sap_m_gl_account (filter chart_of_accounts=1000, starts 5/6, distinct) → left join gl_group_mapping + gl_group_dim → 430 rows (137 matched, 293 unmatched SAP codes)",
      "Jakkarit", "26-May-26", "Done"),
+
+    ("Project Action", "Approval Workflow — Finalize User & Role Analysis",
+     "273 users confirmed: 177 submitter, 73 submitter+approver1, 21 approver1_only, Nipaporn+Waraporn dual-role. managerempcode-based chain. Special cases all confirmed. budget_actors_full.csv generated (16 cols).",
+     "Jakkarit", "27-May-26", "Done"),
+
+    ("Project Action", "Approval Workflow Spec — Draft (needs review)",
+     "requirement_spec/3_approval_workflow/approval_workflow_spec.md + .pdf created — chain, special cases, C-Level map, status flow, email triggers, signature block. INCOMPLETE — needs review and sign-off.",
+     "Jakkarit", "28-May-26", "In Progress"),
 ]
 
 

@@ -1,0 +1,82 @@
+# 6. Approval routing, snapshot chain, and escalation
+
+Date: 2026-06-07
+Status: Accepted
+Builds on: `requirement_spec/3_approval_workflow/approval_workflow_spec.md` (the chain + special cases)
+
+## Context
+
+The approval engine routes a submitted budget (one unit = `(ฝ่าย/department, fiscal_year)`
+per **ADR-0008** — was `(cost_center, fiscal_year)`; the per-CC first-wins / PENDING-lock /
+batch-skip parts of this ADR are superseded, but the routing/escalation/state-machine rules
+below still apply, now at the ฝ่าย level) through up to three approvers: `approver1 = the submitter's managerempcode`,
+`approver2 = Nipaporn (101032)`, `approver3 = Waraporn (100427)`. The spec already nails
+the chain, the special-case skips (Nipaporn/Waraporn self-submit, C-level approve
+themselves, intentional self-review), and reject→resubmit. Two things the spec left open
+and one control question surfaced in grilling (2026-06-07): when the chain is resolved,
+what happens when an approver is invalid, and what happens when one just sits on it.
+
+## Decision
+
+- **Resolve the chain at SUBMIT and snapshot it** into `approval_status` (store the
+  resolved approver1/2/3 empcodes). The chain is frozen for that submission — a later HR
+  reorg / managerempcode change does NOT shift an in-flight approval. (approver1 still
+  comes from `mas_employee_data.managerempcode`, posstatus='Primary', at submit time.)
+- **Invalid approver1 at submit** (null managerempcode, or it points to someone inactive /
+  excluded — L5 / Gritsman / left) → **fall back directly to Nipaporn (approver2)**; do not
+  block the submit, do not leave it ownerless.
+- **Auto-submit DRAFT ฝ่าย at the deadline** (decided 2026-06-10): when the cutoff passes, a
+  scheduled job submits every ฝ่าย still in DRAFT (with any working_budget rows) into the chain
+  so nothing is silently lost (the reminder email is deferred). There is no human clicker, so
+  `approver1 = managerempcode of the LAST EDITOR` of that ฝ่าย (the `_user` on the
+  most-recently-updated working_budget row); invalid / absent → fall back to Nipaporn. Logged
+  `AUTO_SUBMIT` (distinct from a normal submit). The normal chain then runs and any approver may
+  reject incomplete numbers. A ฝ่าย with no rows at all has nothing to submit; orphan ฝ่าย are
+  covered by the admin-fill fallback (ADR-0009), not auto-submit.
+- **Detection of a stuck approval** (no remedy needs the user to notice first):
+  1. submitter sees their own submission's status lingering;
+  2. a cross-check against the daily employee sync flags PENDING approvals whose current
+     approver empcode is no longer active in `mas_employee_data`;
+  3. age — PENDING beyond a threshold is flagged.
+  Surfaced in an **admin "overdue / stuck approvals" view**.
+- **Approver departed mid-flight** (snapshot approver becomes inactive after submit) →
+  admin reassign/override from that view, logged as `ADMIN_OVERRIDE` in `approval_log`.
+- **Approver valid but silent > 30 days** → **auto-escalate the stuck STEP only**: mark
+  that one step approved, advance to the NEXT approver, and log `AUTO_ESCALATE`. The
+  remaining real approvers (incl. budget dept Nipaporn/Waraporn) STILL review. This is
+  explicitly **not** a jump to final APPROVED — a budget must never reach final without
+  budget-dept review just because someone was slow.
+- **Status enum = neutral** `DRAFT / PENDING_APPROVER1 / PENDING_APPROVER2 /
+  PENDING_APPROVER3 / APPROVED / REJECTED` (the spec's `PENDING_L1/2/3` are the same
+  states — use the neutral names consistently; ADR-0003). Who each approver is + skip
+  logic live in backend routing, not the schema.
+- **Reject** → status resets to `PENDING_APPROVER1`; submitter edits and resubmits, which
+  re-runs the chain from the top (and re-snapshots).
+
+### State machine & edit-lock (grilling 2026-06-07)
+
+| Status | Submitter can edit? |
+|--------|--------------------|
+| `DRAFT` | Yes — auto-save. |
+| `PENDING_APPROVER1/2/3` | **Locked** — no edit AND **no recall**. Once submitted, it waits for approve/reject; the only way back is an approver rejecting it. (Editing while an approver is reviewing = an implicit recall, so it's disallowed.) |
+| `APPROVED` | Yes, but editing **resets the whole CC+year to re-approval** (status → back into the chain from `PENDING_APPROVER1`, re-snapshot). |
+| `REJECTED` | Treated as back to `DRAFT` — editable, then resubmit. |
+
+- **No recall** of a PENDING submission (decided). Mistakes after submit are handled by the
+  approver rejecting.
+- **Editing an APPROVED budget is guarded by an explicit confirm** ("editing will send the
+  whole CC budget back into approval — continue?"). This prevents auto-save from silently
+  un-approving an entire CC on a single keystroke. After confirm → DRAFT → edit (auto-save)
+  → resubmit. Logged.
+
+## Consequences
+
+- In-flight approvals are stable against HR churn; the trade-off is a snapshot can go
+  stale (the departed-approver case), which the sync cross-check + admin override cover.
+- The 30-day step auto-escalation keeps budgets moving without ever bypassing budget-dept
+  sign-off — slowness is bounded, control is preserved. Every automatic move is logged
+  (`AUTO_ESCALATE`) and auditable.
+- `approval_status` must store the snapshot approver empcodes (not only the current state),
+  so the data model gains approver1/2/3 columns on that table.
+- Open: the exact "overdue" age threshold for the admin view (the 30-day auto-escalate is
+  fixed; the *flag-to-admin* age can be shorter, e.g. 7–14 days) — confirm with budget dept.

@@ -331,7 +331,7 @@
   .year-tag.forecast{background:color-mix(in oklab, var(--c-sky) 18%, transparent);color:var(--c-blue)}
   [data-theme="dark"] .year-tag.forecast{color:var(--c-sky)}
 
-  /* Rate cell — arrow + numeric rate + unit */
+  /* Rate cell — arrow + numeric rate + unit + comparison (matches Closing-date layout) */
   .rate-cell{display:flex;align-items:center;gap:14px}
   .map-arrow{
     color:var(--ink-3);opacity:0.55;
@@ -340,16 +340,19 @@
   }
   .map-arrow svg{width:22px;height:14px;display:block}
   tr:hover .map-arrow{color:var(--accent);opacity:1;transform:translateX(3px)}
-  .rate-display{display:inline-flex;align-items:baseline;gap:8px}
+  .rate-display{display:inline-flex;align-items:baseline;gap:7px}
   .rate-display .num{
-    font-family:var(--serif);font-size:30px;line-height:1;font-weight:400;
-    color:var(--gl-group);font-variant-numeric:tabular-nums;letter-spacing:-0.015em;
+    font-family:var(--sans);font-size:22px;line-height:1;font-weight:700;
+    color:var(--gl-group);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;
   }
   .rate-display .unit{
-    font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:600;
-    letter-spacing:0.04em;text-transform:uppercase;
+    font-family:var(--sans);font-size:15px;color:var(--ink);font-weight:600;
+    letter-spacing:0;
   }
   [data-theme="dark"] .rate-display .num{color:#E8C75E}
+
+  /* "vs YYYY" label before the delta */
+  .vs-label{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:0.04em}
 
   /* Delta indicator */
   .delta{
@@ -361,7 +364,6 @@
   .delta.down{background:color-mix(in oklab, var(--c-mint) 16%, transparent);color:var(--c-mint)}
   .delta.flat{background:var(--paper-2);color:var(--ink-3)}
   .delta svg{width:11px;height:11px}
-  .delta-prev{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:0.04em;margin-right:8px}
 
   /* Actions */
   .action-row{display:flex;justify-content:flex-end;gap:6px}
@@ -658,10 +660,15 @@
     { year: 2022, rate: 35.06 },
     { year: 2023, rate: 34.81 },
     { year: 2024, rate: 35.59 },
-    { year: 2025, rate: 33.95 },
+    { year: 2025, rate: 35.00 },
     { year: 2026, rate: 34.20 }
   ];
   const CURRENT_YEAR = 2026;
+  // single source of truth shared with the OPEX page (read-only there) via localStorage
+  const FX_STORE_KEY = 'cm.masterFX';
+  function persistRates(){
+    try { localStorage.setItem(FX_STORE_KEY, JSON.stringify(Object.fromEntries(rates.map(r => [r.year, r.rate])))); } catch(e){}
+  }
   let newRowKey = null;
   let pendingDelete = null;
   let editingYear  = null;
@@ -739,6 +746,7 @@
     document.getElementById('rateInput').value = '';
     setEditMode(null);
     renderRecords();
+    persistRates();   // → localStorage (OPEX page reads this as the single source)
     showNotice(
       action === 'UPDATE' ? 'อัปเดต<em>สำเร็จ</em>' : 'บันทึก<em>สำเร็จ</em>',
       action === 'UPDATE' ? `อัปเดตอัตราของปี ${yr} เรียบร้อย` : `เพิ่มอัตราของปี ${yr} เรียบร้อย`,
@@ -776,6 +784,7 @@
     rates = rates.filter(r => r.year !== pendingDelete);
     closeConfirm();
     renderRecords();
+    persistRates();
   };
 
   /* ════════════════════════════════════════════
@@ -875,7 +884,7 @@
             <span class="num">${fmtRate(r.rate)}</span>
             <span class="unit">THB / USD</span>
           </span>
-          ${prev != null ? `<span class="delta-prev">vs ${r.year - 1}</span>` : ''}
+          ${prev != null ? `<span class="vs-label">vs ${r.year - 1}</span>` : ''}
           ${deltaHtml}
         </div>
       </td>`;
@@ -927,6 +936,7 @@
   (function init(){
     applyThemeFromStorage();
     renderRecords();
+    persistRates();   // publish seed so the OPEX page can read it even before any edit
   })();
 </script>
 </body>

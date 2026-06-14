@@ -124,21 +124,52 @@ def main():
             "direct-to-table",                            # decision 1
             "Replace by Year",                            # decision 2
             "7) ข้อสรุปการออกแบบ",  # section 7 heading (parenthetical removed 2026-06-04)
-            "v0.3",
-            # v0.3 additions (2026-06-05):
+            "v0.7",
+            # v0.4 additions (2026-06-05): login bar redesigned to V3 hierarchy
             "0) การเข้าสู่ระบบ & สิทธิ์การเห็นข้อมูล (Login & Role)",  # login section
-            "cc name ที่แสดง = ชื่อฝ่าย (Department) ไม่ใช่ Description ของ cost center",  # point 8 conclusion
+            "ใช้คอลัมน์ สายงาน/ฝ่าย ไม่ใช่ Description",  # point 8 conclusion (V3 wording)
             "3.1) ใครเห็น / ใครกรอก / การ Submit",  # point 2 matrix heading
             "8) การส่งข้อมูล (Submit)",  # point 6 section
             "10) ประสิทธิภาพเมื่อ Admin เห็นทุก CC",  # point 9 section
+            # v0.5 additions (2026-06-12): Approved read-only + admin-zone + new tools
+            "11) เครื่องมือบน toolbar",  # section 11
+            "Import ไม่ขึ้นกับตัวกรองปี/ฝ่าย",  # import-not-scoped-by-filter warning
+            "สีฟ้า · read-only",  # Approved read-only label
+            "Admin มี 4 คน",  # admin count fix (was 3)
+            "ระบบจริงไม่มีปุ่มสลับผู้ใช้",  # no user-switcher in production
+            "แถบนี้แสดงเฉพาะ Admin",  # admin-zone hidden for non-admin
+            "กฎการแสดงแถว",  # row-visibility rule (ADR-0010)
+            "SAP actual (ตัวนำ)",  # SAP-actual-led visibility
+            # v0.6 additions (2026-06-13): wired mockup — approve-on-main-page flow
+            "12) อนุมัติบนหน้าหลัก — ไม่มีหน้า inbox แยก",  # approve-on-main-page (no inbox)
+            "13) ตัวเลือกฝ่าย (ฝ่าย-picker) = หน่วยอนุมัติ",  # ฝ่าย-picker = approval unit
+            "14) ปุ่ม 🛡️ โหมด Admin",  # overlay admin-mode toggle
+            "15) Master FX เป็น read-only ที่หน้านี้",  # FX read-only (owned by Module 09)
+            "16) การล็อกการแก้ไข ตามสถานะ × บทบาท",  # edit-lock by status × role
+            "recompute-on-read",  # FX per-diem recompute
+            "ADMIN_OVERRIDE",  # admin direct-approve log code
+            # v0.7 additions (2026-06-14): RLS SEE-scope corrected to ADR-0007 union model
+            "ADR-0007",  # cite the authoritative ADR for the union see-scope
+            "FILL ⊆ SEE",  # invariant kept (fill never exceeds see)
         ]
         must_not = [
             "Open Questions",
             "ยังไม่สรุป",  # "ยังไม่สรุป"
             "v0.1 (ฉบับร่าง",        # "v0.1 (ฉบับร่าง"
+            "v0.6 (ฉบับร่าง",        # superseded — doc bumped to v0.7 (RLS union fix)
+            "v0.5",                  # superseded
+            "v0.4",                  # superseded
+            "v0.3",                  # superseded
+            "Admin ส่งได้เฉพาะ CC ของตัวเอง",   # OLD admin-submit rule (superseded by 2-mode, ADR-0012)
+            "cc name ที่แสดง",       # old point-8 wording (pre-V3) must be gone
             "(Confirmed · 2026-06-04)",   # removed parenthetical
             "2 ข้อที่เคยค้าง",            # removed intro line
             "ไม่ใช่ชื่อคอลัมน์",          # redundant footnote removed
+            "หรือกรอกมือที่ช่องนี้",       # OLD: Approved editable claim — must be gone
+            "import .csv (หลัก) หรือแก้มือช่องสีฟ้า",  # OLD: Approved manual-edit claim
+            "Admin มี 3 คน",              # OLD admin count — fixed to 4
+            "อีเมลอยู่ที่ตัวสลับผู้ใช้",   # OLD: email-on-switcher claim (no switcher in real app)
+            "พร้อมตัวสลับผู้ใช้ (เดโม่) ที่มีอีเมล",  # OLD overview switcher wording
         ]
         # NOTE: '_file_path' intentionally still appears in section 6/7 NOTES that
         # state file-related control columns are NOT stored (direct-to-table) — so it
