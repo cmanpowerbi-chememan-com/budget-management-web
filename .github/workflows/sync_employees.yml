@@ -27,43 +27,13 @@ jobs:
       - name: Install Python dependencies
         run: pip install pyodbc requests python-dotenv
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: >-
-            {
-              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
-              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
-              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
-            }
-
-      - name: Whitelist runner IP in Azure SQL firewall
-        run: |
-          RUNNER_IP=$(curl -s https://api.ipify.org)
-          echo "Runner IP: $RUNNER_IP"
-          az sql server firewall-rule create \
-            --resource-group CMAN-BUDGET-MNGT-WEB-RG \
-            --server cman-budget-mngt-web-sql \
-            --name github-actions-runner \
-            --start-ip-address $RUNNER_IP \
-            --end-ip-address $RUNNER_IP
-
       - name: Run employee sync
         env:
-          DB_SERVER: ${{ secrets.DB_SERVER }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
+          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
+          ENTRA_CLIENT_ID: ${{ secrets.ENTRA_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.ENTRA_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
           CPOP_HR_SYSTEM_API_URL: ${{ secrets.CPOP_HR_SYSTEM_API_URL }}
           CPOP_HR_SYSTEM_API_KEY: ${{ secrets.CPOP_HR_SYSTEM_API_KEY }}
         run: python setup/sync_employees.py
-
-      - name: Remove runner IP from Azure SQL firewall
-        if: always()
-        run: |
-          az sql server firewall-rule delete \
-            --resource-group CMAN-BUDGET-MNGT-WEB-RG \
-            --server cman-budget-mngt-web-sql \
-            --name github-actions-runner \
-            --yes
