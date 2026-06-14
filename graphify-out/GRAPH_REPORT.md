@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1211c82a`
+- Built from commit: `c052d8c9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -148,12 +148,12 @@ Cohesion: 0.14
 Nodes (14): BaseModel, GlGroupMappingBase, ListResponseItem, Pydantic models for GL Group Master JSON payloads.  Validation rules sourced fro, Core fields of a GL Group mapping row., One row in GET /list response., DeleteRequest, HideDocumentNumberBase (+6 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.17
-Nodes (7): make_request(), Unit tests for GL Group Master handlers.  Mocks pyodbc helpers + auth so tests r, Pydantic regex validation rejects non-digit gl_code, Fail Fast: locked decision #5, create_on_save: new group_name → INSERT dim, then mapping, TestListHandler, TestSaveHandler
-
-### Community 16 - "Community 16"
 Cohesion: 0.31
 Nodes (15): cc_delete_route(), cc_list_route(), cc_reference_route(), cc_save_route(), delete_route(), hd_delete_route(), hd_list_route(), hd_save_route() (+7 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.18
+Nodes (7): make_request(), Unit tests for GL Group Master handlers.  Mocks pyodbc helpers + auth so tests r, Pydantic regex validation rejects non-digit gl_code, Fail Fast: locked decision #5, create_on_save: new group_name → INSERT dim, then mapping, TestListHandler, TestSaveHandler
 
 ### Community 17 - "Community 17"
 Cohesion: 0.15
@@ -173,10 +173,10 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 22 - "Community 22"
-Cohesion: 0.28
+Cohesion: 0.24
 Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/gl-group/list  Returns all mappings joined with dim table so fro
 
 ### Community 23 - "Community 23"
@@ -201,15 +201,15 @@ Nodes (6): build_attachments(), confirm_mailbox(), get_token(), main(), Send sig
 
 ### Community 29 - "Community 29"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
+Nodes (4): HttpRequest, HttpResponse, handle(), DELETE /api/master/hide-document/delete  Hard delete by 3-col composite key (doc
 
 ### Community 30 - "Community 30"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), DELETE /api/master/orgcode-costcenter/delete  Hard delete by composite key (cost
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
 
 ### Community 31 - "Community 31"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
 
 ### Community 32 - "Community 32"
 Cohesion: 0.60
@@ -227,11 +227,11 @@ Nodes (3): get_connection(), test_connection(), Connection
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AuthError` connect `Community 22` to `Community 0`, `Community 1`, `Community 15`, `Community 19`, `Community 20`, `Community 21`, `Community 27`, `Community 29`, `Community 30`, `Community 31`?**
+- **Why does `AuthError` connect `Community 22` to `Community 0`, `Community 1`, `Community 16`, `Community 19`, `Community 20`, `Community 21`, `Community 27`, `Community 29`, `Community 30`, `Community 31`?**
   _High betweenness centrality (0.057) - this node is a cross-community bridge._
 - **Why does `authenticate()` connect `Community 21` to `Community 0`, `Community 19`, `Community 20`, `Community 22`, `Community 29`, `Community 30`, `Community 31`?**
   _High betweenness centrality (0.016) - this node is a cross-community bridge._
-- **Why does `execute()` connect `Community 0` to `Community 19`, `Community 30`?**
+- **Why does `execute()` connect `Community 0` to `Community 19`?**
   _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Are the 39 inferred relationships involving `AuthError` (e.g. with `HttpRequest` and `HttpResponse`) actually correct?**
   _`AuthError` has 39 INFERRED edges - model-reasoned connections that need verification._
