@@ -38,8 +38,10 @@ cman-prd-ingest-backend/
 # Local demo/reference data — not needed in repo
 # docs/  ← ชั่วคราว: uncomment เพื่อให้ @ ref ใน Claude Code ได้
 
-# graphify knowledge-graph outputs + cache (local artifacts, rebuilt nightly)
-graphify-out/
+# graphify knowledge-graph — key files tracked; cache/converted are ephemeral
+graphify-out/cache/
+graphify-out/converted/
+graphify-out/.graphify_labels.json
 
 # Archived/moved-out files (recoverable from git history; kept on disk only)
 bin/

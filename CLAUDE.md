@@ -112,8 +112,8 @@ db/
   schema.sql                           ← canonical table defs (Azure SQL era — retiring; connection.py archived to bin/azure-sql-legacy/)
 setup/                                 ← ops scripts: sync_employees, create_weekly_update, send_signoff/monthly_email, seed_*
 fabric/                                ← PySpark scripts — copy into Fabric Notebook UI only (do not run locally)
-.github/workflows/                     ← CI: sync_employees (daily 06:00 BKK), master-tables-deploy
-graphify-out/                          ← knowledge-graph (gitignored); nightly Task Scheduler rebuild
+.github/workflows/                     ← CI: sync_employees (daily 06:00 BKK), master-tables-deploy, graphify-nightly (03:00 BKK)
+graphify-out/                          ← knowledge-graph; graph.json/GRAPH_REPORT.md/graph.html tracked in git, rebuilt nightly via GitHub Actions (graphify-nightly.yml); cache/ and converted/ gitignored
 ```
 
 > **React + FastAPI main app: NOT yet built.** The budget submit/approve/dashboard app exists only as the wired mockup `0002.1budget-export.html`. Next phase scaffolds `frontend/` (React+Vite) + `backend/` (FastAPI). Auth = Entra ID Easy Auth + RLS layer (ADR-0004); old Streamlit MSAL flow archived with the scaffold.
