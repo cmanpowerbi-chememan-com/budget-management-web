@@ -29,8 +29,10 @@ Thumbs.db
 # Excel temp files
 ~$*.xlsx
 
-# Claude Code local settings
-.claude/
+# Claude Code local settings — track plan + project-context; ignore machine-local rest
+.claude/*
+!.claude/plan.md
+!.claude/project-context.md
 
 # Unrelated projects nested here
 cman-prd-ingest-backend/

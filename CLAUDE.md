@@ -156,6 +156,7 @@ Env-var names + the Fabric SQL DB / Lakehouse endpoint split → `.claude/projec
 
 ## Important Notes for Claude
 
+- **`plan.md` sync is mandatory** — `.claude/plan.md` is git-tracked. Before commit or session end: tick finished items, move done work to Done (archive), update Current Phase date. Same commit as the work. Full protocol → `.claude/project-context.md` § Plan sync.
 - Always use `ODBC Driver 17 for SQL Server` (not 18) in connection strings.
 - **NEVER install any tool/package/software on the developer machine** — no admin rights; UAC + antivirus block it (incident 2026-04-24). For installs/deploys, direct the user to Azure Cloud Shell.
 - All monetary values in THB. Fiscal year: January–December.
