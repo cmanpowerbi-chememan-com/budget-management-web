@@ -49,7 +49,7 @@ jobs:
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
         run: |
           python - <<'EOF'
-          import base64, os, sys, datetime, requests
+          import base64, os, re, sys, datetime, requests
 
           SENDER = "jakkaritw@chememan.com"
           RECIPIENT = "jakkaritw@chememan.com"
@@ -72,23 +72,38 @@ jobs:
           bkk_now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=7)
           bkk_str = bkk_now.strftime("%Y-%m-%d %H:%M") + " BKK"
 
-          # Read and encode report attachment
+          date_str = bkk_now.strftime("%Y-%m-%d")
+
+          # Read and encode report attachment + parse graph stats
           report_path = "graphify-out/GRAPH_REPORT.md"
+          nodes = edges = comms = None
           try:
               with open(report_path, "rb") as f:
-                  report_b64 = base64.b64encode(f.read()).decode()
+                  raw = f.read()
+              report_b64 = base64.b64encode(raw).decode()
               attachment_name = "GRAPH_REPORT.md"
+              m = re.search(r"(\d[\d,]*) nodes · (\d[\d,]*) edges · (\d[\d,]*) communities", raw.decode("utf-8", "ignore"))
+              if m:
+                  nodes, edges, comms = m.group(1), m.group(2), m.group(3)
           except FileNotFoundError:
               report_b64 = None
 
-          subject = f"[Graphify] Knowledge graph updated — {bkk_str}"
+          node_txt = f"{nodes} nodes" if nodes else "graph"
+          docs_txt = f"{nodes} nodes · {edges} edges · {comms} communities" if nodes else "knowledge graph rebuilt"
+
+          subject = f"[CMAN-BMW] Nightly graph sync — {date_str} (OK)"
           body_html = f"""
-          <p>The nightly Graphify knowledge graph build completed successfully.</p>
-          <ul>
-            <li><strong>Time:</strong> {bkk_str}</li>
-            <li><strong>Outputs:</strong> graph.json, GRAPH_REPORT.md, graph.html committed to repo</li>
-          </ul>
-          <p>GRAPH_REPORT.md is attached for review.</p>
+          <div style="font-family:Segoe UI,Arial,sans-serif;color:#1a1a1a;">
+            <p style="font-size:15px;margin:0 0 4px;"><strong>[Budget Management Web]</strong> — nightly graph sync</p>
+            <table style="border-collapse:collapse;font-size:13px;margin:12px 0;">
+              <tr><td style="color:#888;padding:2px 18px 2px 0;vertical-align:top;">Project</td><td><strong>Budget Management Web</strong></td></tr>
+              <tr><td style="color:#888;padding:2px 18px 2px 0;vertical-align:top;">Path</td><td><code>c:\\04.budget_management_web</code></td></tr>
+              <tr><td style="color:#888;padding:2px 18px 2px 0;vertical-align:top;">Time</td><td>{bkk_str}</td></tr>
+              <tr><td style="color:#888;padding:2px 18px 2px 0;vertical-align:top;">Docs</td><td>{docs_txt}</td></tr>
+            </table>
+            <p style="font-size:15px;margin:8px 0;"><strong>&#10004; Knowledge graph up to date ({node_txt}).</strong></p>
+            <p style="color:#999;font-size:12px;margin-top:16px;">Attached: GRAPH_REPORT.md &middot; This is the <strong>Budget Management Web</strong> job, separate from CMAN-DW.</p>
+          </div>
           """
 
           attachments = []
