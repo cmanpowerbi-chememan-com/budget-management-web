@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-06-18)
+# Graph Report - .  (2026-06-19)
 
 ## Corpus Check
 - 120 files · ~125,462 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `925886bf`
+- Built from commit: `c34b797c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -173,7 +173,7 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
 
 ### Community 22 - "Community 22"
 Cohesion: 0.28
@@ -209,7 +209,7 @@ Nodes (4): HttpRequest, HttpResponse, handle(), DELETE /api/master/orgcode-costc
 
 ### Community 31 - "Community 31"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 32 - "Community 32"
 Cohesion: 0.60
