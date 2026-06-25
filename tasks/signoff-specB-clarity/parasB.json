@@ -1,0 +1,4025 @@
+[
+{
+"i": 0,
+"text": " ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 1,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 2,
+"text": "บริษัท เคมีแมน จำกัด (มหาชน)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 3,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 4,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 5,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 6,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 7,
+"text": "เอกสารยืนยันข้อกำหนด เพื่อลงนามอนุมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 8,
+"text": "(User Sign-off Specification)",
+"runs": 2,
+"mixed_bold": true,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 9,
+"text": "Data Warehouse และ BI Dashboard Budgeting and Management",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 10,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 11,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 12,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 13,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 14,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 15,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 16,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 17,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 18,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 19,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 20,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 21,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 22,
+"text": "เอกสารยืนยันข้อกำหนด เพื่อลงนามอนุมัติ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 23,
+"text": "ส่วน B: ฟอร์มย่อยใส่รายละเอียดงบ (Special กลุ่มรหัสบัญชี Subform: Module 02)",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 24,
+"text": "ส่วน B: หน้ากรอกงบประมาณ: Module 02: ฟอร์มย่อยใส่รายละเอียด (Special กลุ่มรหัสบัญชี Subform)",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 25,
+"text": "รายการ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 26,
+"text": "รายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 27,
+"text": "เวอร์ชัน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 28,
+"text": "v0.4 (ฉบับร่าง)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 29,
+"text": "วันที่",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 30,
+"text": "14 มิถุนายน 2569 (2026-06-14)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 31,
+"text": "ผู้จัดทำ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 32,
+"text": "ทีม Data Analytics",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 33,
+"text": "สถานะ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 34,
+"text": "รออนุมัติจากผู้ใช้",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 35,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 36,
+"text": "ประวัติการแก้ไข: v0.4: แก้ตัวอย่างอัตราแลกเปลี่ยน (FX) ในสูตรเบี้ยเลี้ยงให้ตรงกับภาพตัวอย่าง (ภาพใช้ปี 2025 = 35.00 ตาม Master FX ของแบบ ไม่ใช่ FY2026 = 34.20 เดิม): v0.3: เพิ่มโหมดอ่านอย่างเดียว",
+"runs": 17,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 37,
+"text": "บริบทและขอบเขต (Context)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 38,
+"text": "ในหน้ากรอกงบประมาณ รหัสบัญชี (GL) บางกลุ่ม (Special กลุ่มรหัสบัญชี) ไม่ได้กรอกยอดรายเดือนตรงๆ แต่ต้องกด \"+ ใส่รายละเอียดงบทำการ\" เพื่อเปิดฟอร์มย่อย (Subform) กรอกรายละเอียดก่อน แล้วระบบรวมยอดกลับไปที่แถวงบรออนุมัติ เอกสารนี้ครอบคลุม 6 กลุ่ม โดยอ้างอิงคอลัมและตัวเลือก รายการเลือก จากไฟล์ master จริงใน docs/13Template Special เอกสาร 02 special gl",
+"runs": 38,
+"mixed_bold": false,
+"has_image": false,
+"has_link": true,
+"skip": true
+},
+{
+"i": 39,
+"text": "ผู้ใช้หน้านี้: ผู้กรอกงบประมาณ: ระดับ L3 + L4 (Department Head, Asst Dept Head, Supervisor ทุก tier) + L2 3 คน ",
+"runs": 11,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 40,
+"text": ": เปิดฟอร์มย่อยด้วยปุ่ม \"+ ใส่รายละเอียดงบทำการ\" ที่แถวของ GL กลุ่มพิเศษ (chip สีเฉพาะกลุ่ม)",
+"runs": 11,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 41,
+"text": "กลุ่มรหัสบัญชี (GL)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 42,
+"text": "คอลัมรายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 43,
+"text": "ชนิดการกรอก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 44,
+"text": "Entertainment",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 45,
+"text": "ประเภทการรับรอง, รายละเอียด",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 46,
+"text": "ประเภทการรับรอง = รายการเลือก (ตัวเลือกต่างกันตาม รหัสบัญชี (GL) ภายนอก/ภายใน)",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 47,
+"text": "Lease & Rental",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 48,
+"text": "ประเภทรถ, ทะเบียนรถ, สถานที่ใช้งาน, กิจกรรม",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 49,
+"text": "รายการเลือก + พื้นที่เทาตามชนิด รหัสบัญชี (GL) (รถ/เครื่องจักร/อื่น)",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 50,
+"text": "Professional & Legal Fee",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 51,
+"text": "Project, รายละเอียด",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 52,
+"text": "กรอกอิสระ (text), ไม่มี รายการเลือก",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 53,
+"text": "Public Relation & Donation",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 54,
+"text": "รายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 55,
+"text": "กรอกอิสระ (text): คอลัมเดียว",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 56,
+"text": "Training & Seminar",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 57,
+"text": "หลักสูตรอบรม, Method",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 58,
+"text": "Method = รายการเลือก (Inhouse/Public)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 59,
+"text": "Travelling Expense",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 60,
+"text": "Trip Manager (ทริป → 4 ประเภท × 2 ฝั่ง หมวด5 และ หมวด 6 = 8 รหัสบัญชี (GL))",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 61,
+"text": "กรอกทริปครั้งเดียว · เบี้ยเลี้ยง = อัตโนมัติ · อีก 3 ประเภทกรอกยอดรวม (ดูส่วนท้าย)",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 62,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 63,
+"text": "ภาพรวม: จุดเข้าฟอร์มย่อย (จากตารางหลัก)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 64,
+"text": "GL กลุ่มพิเศษในตารางหลักมี chip สีตามกลุ่ม (Entertainment · Lease · Professional · Public Relation · Training · Travelling) แทนการกรอกยอดรายเดือนตรง ๆ ให้กด \"+ ใส่รายละเอียดงบทำการ\" เปิดฟอร์มย่อย — ยอดรวมกลับไปคอลัมน์ Pending อัตโนมัติ",
+"runs": 16,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 65,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 66,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 67,
+"text": "จุด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 68,
+"text": "ความหมาย",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 69,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 70,
+"text": "ป้ายกลุ่มรหัสบัญชี (GL) (chip สีเฉพาะกลุ่ม)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 71,
+"text": "บอกว่า รหัสบัญชี (GL) นี้เป็นกลุ่มพิเศษ ต้องกรอกผ่านฟอร์มย่อย",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 72,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 73,
+"text": "ปุ่ม + ใส่รายละเอียดงบทำการ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 74,
+"text": "กดเพื่อเปิดฟอร์มย่อยของกลุ่มนั้น (เนื้อหาตามหัวข้อ 1–6)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 75,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 76,
+"text": "GL กลุ่มพิเศษแสดงในตารางหน้าเวปหลักได้ 2 ทาง ก. และ ข. — ทั้งคู่เข้าฟอร์มย่อยอัตโนมัติ",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 77,
+"text": "เปรียบเทียบ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 78,
+"text": "(ก) มีอยู่แล้วในตาราง",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 79,
+"text": "(ข) ผู้ใช้เพิ่มเอง",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 80,
+"text": "ที่มาของแถว",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 81,
+"text": "ระบบแสดงแถวตั้งแต่เปิดหน้า",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 82,
+"text": "กด \"+ เพิ่ม Transaction\" ที่หน้าหลัก — เลือก ศูนย์ต้นทุน (Cost Center) + รหัสบัญชี (GL) จาก master",
+"runs": 14,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 83,
+"text": "เงื่อนไข รหัสบัญชี (GL)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 84,
+"text": "รหัสบัญชี (GL) ที่มี SAP actual/งบ ปีนั้น",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 85,
+"text": "รหัสบัญชี (GL) ที่ \"ไม่เคยมี actual จริงใน SAP\" แต่จะใช้ปีนี้",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 86,
+"text": "เข้าโหมดฟอร์มย่อย",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 87,
+"text": "อัตโนมัติ — ตามกลุ่มของ รหัสบัญชี (GL)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 88,
+"text": "อัตโนมัติ — เหมือนแถวพิเศษทั่วไป (Travelling → Trip Manager)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 89,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 90,
+"text": "ถ้าเป็น GL กลุ่มพิเศษ ไม่ว่าที่มาจะเป็น ก. หรือ ข. → แถวเข้าโหมดฟอร์มย่อยโดยอัตโนมัติ",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 91,
+"text": "กรอกฟอร์มย่อยเสร็จ → ยอดรวมเด้งกลับแถว Pending ของ รหัสบัญชี (GL) นั้นในตารางหลัก เหมือน GL พิเศษอื่น (Travelling: ลงครบทั้ง 8 รหัสบัญชี (GL)",
+"runs": 18,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 92,
+"text": "หมายเหตุการกรอก: คอลัมรายละเอียดเป็น dropdown หรือ text ตามกลุ่ม — ตัวเลือกและพื้นที่เทาอ้างอิง docs/13Template Special (Entertainment / Lease & Rental เปลี่ยนตามรหัส GL)",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 93,
+"text": "โหมดอ่านอย่างเดียวของฟอร์มย่อย (Read-only lock)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 94,
+"text": "ฟอร์มย่อยจะเปิดในโหมด \"อ่านอย่างเดียว\" เมื่อฝ่ายนั้นแก้ไขไม่ได้สำหรับผู้ใช้ปัจจุบัน: เกิดใน 3 กรณี: (1) ส่งเข้าอนุมัติแล้ว (สถานะ PENDING_*): (2) อนุมัติแล้ว (APPROVED): (3) ผู้ใช้เป็นผู้อนุมัติ (เปิดเพื่อตรวจ)",
+"runs": 20,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 95,
+"text": "เมื่อ \"แก้ไม่ได้\" ฟอร์มย่อยปกติจะเปลี่ยนเป็น:",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 96,
+"text": "• ทุกช่องกรอก (input) และ รายการเลือก ถูก disabled: กดไม่ได้ พิมพ์ไม่ได้",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 97,
+"text": "• ปุ่ม \"เพิ่มรายการ\" และ \"บันทึก\" ถูกซ่อน: ปุ่ม \"ยกเลิก\" เปลี่ยนข้อความเป็น \"ปิด\"",
+"runs": 19,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 98,
+"text": "• หัวฟอร์มมี 🔒 ต่อท้ายชื่อ และคำว่า \"อ่านอย่างเดียว (แก้ไม่ได้)\": ปุ่มที่หน้าหลักเปลี่ยนเป็น \"🔒 ดูรายละเอียด\"",
+"runs": 15,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 99,
+"text": "ตัวอย่าง: ผู้กรอก (สุชัญญา) เปิดฟอร์ม Professional & Legal Fee หลังจากฝ่ายถูกส่งเข้าอนุมัติแล้ว (PENDING_APPROVER1)",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 100,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 101,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 102,
+"text": "จุด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 103,
+"text": "สถานะ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 104,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 105,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 106,
+"text": "หัวฟอร์ม + 🔒",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 107,
+"text": "อ่านอย่างเดียว",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 108,
+"text": "ชื่อกลุ่มมี 🔒 ต่อท้าย + ขึ้นข้อความ \"อ่านอย่างเดียว (แก้ไม่ได้)\"",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 109,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 110,
+"text": "ช่องกรอกรายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 111,
+"text": "disabled",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 112,
+"text": "ทุก input / รายการเลือก ถูกล็อก พิมพ์/เลือกไม่ได้",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 113,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 114,
+"text": "ปุ่มท้ายฟอร์ม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 115,
+"text": "ปิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 116,
+"text": "ซ่อน \"เพิ่มรายการ\"/\"บันทึก\" โดยเหลือปุ่ม \"ปิด\"",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 117,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 118,
+"text": "1) Entertainment: ประเภทการรับรอง (รายการเลือก ขึ้นกับ รหัสบัญชี (GL))",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 119,
+"text": "รหัสบัญชี (GL) ภายนอก (รหัสลงท้าย 900030 เช่น 6211900030 ค่าเลี้ยงรับรองภายนอก): ตัวเลือก 4 แบบ — Customer · Business partner · หน่วยงานราชการ · อื่นๆ",
+"runs": 14,
+"mixed_bold": true,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 120,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 121,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 122,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 123,
+"text": "ชนิด / ตัวเลือก",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 124,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 125,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 126,
+"text": "ประเภทการรับรอง",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 127,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 128,
+"text": "รหัสบัญชี (GL) ภายนอก (…900030) → Customer: Business partner: หน่วยงานราชการ: อื่นๆ",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 129,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 130,
+"text": "รายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 131,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 132,
+"text": "อธิบายรายการรับรอง เช่น รับรองลูกค้า VIP กลุ่ม A",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 133,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 134,
+"text": "ยอดรายเดือน ม.ค.–ธ.ค.",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 135,
+"text": "ตัวเลข",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 136,
+"text": "กรอกจำนวนเงินแต่ละเดือน: รวมอัตโนมัติคอลัมขวาสุด",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 137,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 138,
+"text": "รหัสบัญชี (GL) ภายใน (รหัส 6211900031 ค่าเลี้ยงรับรองภายใน): ตัวเลือก 2 แบบ : พนักงานบริษัท, กรรมการบริษัท",
+"runs": 15,
+"mixed_bold": true,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 139,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 140,
+"text": "\"ประเภทการรับรอง\" ต่างกันตามรหัส รหัสบัญชี (GL): ต้องสลับชุดตัวเลือกอัตโนมัติ:",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 141,
+"text": "รหัส รหัสบัญชี (GL)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 142,
+"text": "ประเภท",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 143,
+"text": "ตัวเลือก รายการเลือก \"ประเภทการรับรอง\"",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 144,
+"text": "5211900030: 6211900030",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 145,
+"text": "ค่าเลี้ยงรับรองภายนอก (External)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 146,
+"text": "Customer: Business partner: หน่วยงานราชการ: อื่นๆ (4 ตัวเลือก)",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 147,
+"text": "6211900031",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 148,
+"text": "ค่าเลี้ยงรับรองภายใน (Internal)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 149,
+"text": "พนักงานบริษัท: กรรมการบริษัท (2 ตัวเลือก)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 150,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 151,
+"text": "2) Lease & Rental: รายการเลือก + พื้นที่เทาตามชนิด รหัสบัญชี (GL)",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 152,
+"text": "รหัสบัญชี (GL) ยานพาหนะ (รหัสลงท้าย 060 เช่น 6211200060): กรอกได้ครบทุกคอลัม: ประเภทรถ + ทะเบียนรถ เป็น รายการเลือก",
+"runs": 17,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 153,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 154,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 155,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 156,
+"text": "ชนิด / ตัวเลือก",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 157,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 158,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 159,
+"text": "ประเภทรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 160,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 161,
+"text": "รหัสบัญชี (GL) ยานพาหนะ (…060) → Car: Van: Trucks",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 162,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 163,
+"text": "ทะเบียนรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 164,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 165,
+"text": "ป้ายทะเบียน 8 ตัวเลือก (6ขผ-3918, 1นจ-3508, …, ไม่ระบุ) โดยเฉพาะ รหัสบัญชี (GL) ยานพาหนะ",
+"runs": 11,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 166,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 167,
+"text": "สถานที่ใช้งาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 168,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 169,
+"text": "BK: TK: KK: PB: RY: ใช้ได้ทุกชนิด รหัสบัญชี (GL) ในกลุ่มนี้",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 170,
+"text": "④",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 171,
+"text": "กิจกรรม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 172,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 173,
+"text": "ระบุการใช้งาน เช่น รับ-ส่งผู้บริหาร",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 174,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 175,
+"text": "รหัสบัญชี (GL) เครื่องจักร (รหัสลงท้าย 030 เช่น 6211200030): ประเภทรถ เป็น รายการเลือก เครื่องจักร 11 ชนิด: ทะเบียนรถ = พื้นที่เทา () กรอกไม่ได้",
+"runs": 23,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 176,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 177,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 178,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 179,
+"text": "ชนิด / สถานะ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 180,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 181,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 182,
+"text": "ประเภทรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 183,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 184,
+"text": "รหัสบัญชี (GL) เครื่องจักร (…030) → Mobile Scalper: Dumper: Tractors: Backhoe: Forklift: Excavator: Loader: Crane: Water Truck: Road Sweeper Truck …",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 185,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 186,
+"text": "ทะเบียนรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 187,
+"text": "เทา / กรอกไม่ได้",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 188,
+"text": "รหัสบัญชี (GL) ไม่ใช่ยานพาหนะ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 189,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 190,
+"text": "สถานที่ใช้งาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 191,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 192,
+"text": "BK: TK: KK: PB: RY",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 193,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 194,
+"text": "รหัสบัญชี (GL) อื่น (Land 010: Building 020: Office Eq. 040: Computer 050: Other 999): ทั้ง ประเภทรถ + ทะเบียนรถ = พื้นที่เทา เหลือเฉพาะ สถานที่ใช้งาน (รายการเลือก) + กิจกรรม",
+"runs": 19,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 195,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 196,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 197,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 198,
+"text": "สถานะ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 199,
+"text": "เงื่อนไข",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 200,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 201,
+"text": "ประเภทรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 202,
+"text": "เทา / กรอกไม่ได้",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 203,
+"text": "รหัสบัญชี (GL) ไม่ใช่ยานพาหนะหรือเครื่องจักร",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 204,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 205,
+"text": "ทะเบียนรถ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 206,
+"text": "เทา / กรอกไม่ได้",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 207,
+"text": "รหัสบัญชี (GL) ไม่ใช่ยานพาหนะ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 208,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 209,
+"text": "สถานที่ใช้งาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 210,
+"text": "รายการเลือก (ใช้ได้)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 211,
+"text": "BK: TK: KK: PB: RY",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 212,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 213,
+"text": "3) Professional & Legal Fee: กรอกอิสระ (ไม่มี รายการเลือก)",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 214,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 215,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 216,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 217,
+"text": "ชนิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 218,
+"text": "การทำงาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 219,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 220,
+"text": "Project",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 221,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 222,
+"text": "ชื่อโครงการ/งานที่จ้าง",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 223,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 224,
+"text": "รายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 225,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 226,
+"text": "รายละเอียดงานที่ปรึกษา: ไฟล์ยืนยันไม่มี รายการเลือก",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 227,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 228,
+"text": "4) Public Relation & Donation: คอลัมเดียว (ไม่มี รายการเลือก)",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 229,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 230,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 231,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 232,
+"text": "ชนิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 233,
+"text": "การทำงาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 234,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 235,
+"text": "รายละเอียด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 236,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 237,
+"text": "รายละเอียดกิจกรรม/การบริจาค: คอลัมเดียว ไม่มี รายการเลือก",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 238,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 239,
+"text": "ยอดรายเดือน ม.ค.–ธ.ค.",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 240,
+"text": "ตัวเลข",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 241,
+"text": "กรอกจำนวนเงินแต่ละเดือน: รวมอัตโนมัติ",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 242,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 243,
+"text": "5) Training & Seminar: Method รายการเลือก",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 244,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 245,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 246,
+"text": "คอลัม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 247,
+"text": "ชนิด / ตัวเลือก",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 248,
+"text": "การทำงาน",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 249,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 250,
+"text": "หลักสูตรอบรม",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 251,
+"text": "กรอกอิสระ (text)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 252,
+"text": "ชื่อหลักสูตร/หัวข้อการอบรม",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 253,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 254,
+"text": "Method",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 255,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 256,
+"text": "Inhouse, Public",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 257,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 258,
+"text": "6) Travelling Expense: Trip Manager: 1 ทริปกรอกครั้งเดียว → ลง 8 รหัสบัญชี (GL) อัตโนมัติ",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 259,
+"text": "Travelling Expense ออกแบบใหม่เป็น \"Trip Manager\": ผู้ใช้กดจาก รหัสบัญชี (GL) Travelling แถวใดก็ได้ในตารางหลัก (กด \"+ ใส่รายละเอียดงบทำการ\") ระบบเปิด Trip Manager ที่ \"ใช้ร่วมกันทั้ง 8 รหัสบัญชี (GL) ของ ศูนย์ต้นทุน (Cost Center) + ปี เดียวกัน\" ไม่ใช่ฟอร์มแยกราย รหัสบัญชี (GL) อีกต่อไป",
+"runs": 34,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 260,
+"text": "แนวคิดหลัก: กรอก \"ข้อมูลทริปครั้งเดียว\" (ผู้เดินทาง: ปลายทาง: จำนวนวัน: ฝั่งบัญชี: เดือนที่เดินทาง) แล้วระบบลงบัญชีให้อัตโนมัติทั้ง 4 ประเภทค่าใช้จ่าย: เลิกการกรอกผู้เดินทาง/เดือนซ้ำทีละ รหัสบัญชี (GL) แบบเดิม (1 ทริปเคยต้องเปิด 4–5 ฟอร์ม กรอกเดือนซ้ำ ๆ ทุกครั้ง)",
+"runs": 36,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 261,
+"text": "โครงสร้าง Trip Manager (ต่อ 1 ทริป):",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 262,
+"text": "• ส่วน A: ข้อมูลทริป (กรอกครั้งเดียว): Traveler → Position(อัตโนมัติ) → Destination → Project/Purpose → Total Days → ฝั่งบัญชี (สวิตช์เปิด/ปิด : 5 ผลิต / 6 SG&A): เลือกเดือนที่เดินทาง 1 ชุด (ทุกประเภทใช้เดือนชุดเดียวกัน)",
+"runs": 24,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 263,
+"text": "• ส่วน B: ค่าใช้จ่าย 4 ประเภทในการ์ดเดียว: เบี้ยเลี้ยง (คำนวณอัตโนมัติ): ค่าพาหนะ / ค่าที่พัก / ค่าใช้จ่ายอื่น (กรอกยอดรวม/ทริป → ระบบแบ่งเท่ากันลงเดือนที่เลือก)",
+"runs": 23,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 264,
+"text": "• ฝั่งบัญชี (สวิตช์เปิด/ปิด 5/6) เป็นตัวเลือกว่าค่าใช้จ่ายทั้ง 4 ประเภทลงฝั่งผลิต(5) หรือ SG&A(6): กำหนด รหัสบัญชี (GL) ปลายทาง",
+"runs": 18,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 265,
+"text": "• กด \"บันทึก & ลงบัญชี\" → ระบบรวมยอดทุกทริปแยกตามประเภท×ฝั่ง แล้วเขียนกลับแถว Pending ของ รหัสบัญชี (GL) ที่ตรงกัน (ดูแถบสรุปการลงบัญชีท้ายหน้าต่าง)",
+"runs": 19,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 266,
+"text": "4 ประเภทค่าใช้จ่าย × 2 ฝั่งบัญชี = 8 รหัสบัญชี (GL) (จากชีต รหัสบัญชี (GL) ของไฟล์ Traveling expenses.xlsx)",
+"runs": 13,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 267,
+"text": "ประเภท (ชื่อไทย)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 268,
+"text": "รหัสบัญชี (GL) ฝั่งผลิต/ต้นทุน (5)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 269,
+"text": "รหัสบัญชี (GL) ฝั่ง SG&A (6)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 270,
+"text": "วิธีกรอก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 271,
+"text": "เบี้ยเลี้ยง: Per Diem",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 272,
+"text": "5210400010",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 273,
+"text": "6210400010",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 274,
+"text": "คำนวณอัตโนมัติ (per-diem engine)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 275,
+"text": "ค่าพาหนะเดินทาง: Transportation",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 276,
+"text": "5210400020",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 277,
+"text": "6210400020",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 278,
+"text": "กรอกเอง รายเดือน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 279,
+"text": "ค่าที่พัก: Accommodation",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 280,
+"text": "5210400030",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 281,
+"text": "6210400030",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 282,
+"text": "กรอกเอง รายเดือน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 283,
+"text": "ค่าใช้จ่ายเดินทางอื่น: Other Travel",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 284,
+"text": "5210400999",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 285,
+"text": "6210400999",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 286,
+"text": "กรอกเอง รายเดือน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 287,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 288,
+"text": "6.1) ส่วน A: ข้อมูลทริป (กรอกครั้งเดียว) + เบี้ยเลี้ยงคำนวณอัตโนมัติ",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 289,
+"text": "กรอกข้อมูลทริปครั้งเดียว (ส่วน A): เบี้ยเลี้ยง (ส่วน B แถวแรก) ระบบคิดยอดให้อัตโนมัติจาก [ตำแหน่ง × กลุ่มประเทศ] แล้วเฉลี่ยลงเดือนที่เลือก แก้ตัวเลขรายเดือนไม่ได้",
+"runs": 19,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 290,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 291,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 292,
+"text": "คอลัม / จุด",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 293,
+"text": "ชนิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 294,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 295,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 296,
+"text": "ขั้นตอน A B C (หัวฟอร์ม)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 297,
+"text": "คำอธิบาย",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 298,
+"text": "ย้ำ \"1 ทริป = กรอกครั้งเดียว\" ระบบลง รหัสบัญชี (GL) ให้ทั้ง 4 ประเภทอัตโนมัติ",
+"runs": 13,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 299,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 300,
+"text": "ผู้เดินทาง (Traveler)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 301,
+"text": "รายการเลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 302,
+"text": "เลือกจาก mas_employee_data.fullnameth (กรอกครั้งเดียว/ทริป)",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 303,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 304,
+"text": "ตำแหน่ง (Position)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 305,
+"text": "อัตโนมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 306,
+"text": "ดึงจากผู้เดินทาง: แก้ไม่ได้: ใช้คิดอัตราเบี้ยเลี้ยง",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 307,
+"text": "④",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 308,
+"text": "ฝั่งบัญชี (สวิตช์เปิด/ปิด)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 309,
+"text": "เลือก 5 / 6",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 310,
+"text": "เลือกฝั่งผลิต(5) หรือ SG&A(6): กำหนดว่าทั้ง 4 ประเภทลง GL กลุ่มไหน",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 311,
+"text": "⑤",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 312,
+"text": "เลือกเดือนเดินทาง",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 313,
+"text": "คลิก สวิตช์เปิด/ปิด",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 314,
+"text": "เลือกครั้งเดียว/ทริป ใช้ร่วมทุกประเภท: เดือนไม่เลือก = ล็อก",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 315,
+"text": "⑥",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 316,
+"text": "รหัสบัญชี (GL) ของเบี้ยเลี้ยง",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 317,
+"text": "อัตโนมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 318,
+"text": "ชิปบอก รหัสบัญชี (GL) ปลายทางของแถวเบี้ยเลี้ยง (5210400010 หรือ 6210400010 ตามฝั่ง)",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 319,
+"text": "⑦",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 320,
+"text": "ยอดเบี้ยเลี้ยง/ทริป",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 321,
+"text": "คำนวณอัตโนมัติ (แสดงผลอย่างเดียว (ไม่สามารถแก้ไขได้))",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 322,
+"text": "วัน × อัตรา × (FX ถ้าต่างประเทศ): แล้วแบ่งเท่ากันลงเดือนที่เลือก",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 323,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 324,
+"text": "สูตรเบี้ยเลี้ยง: ในประเทศ(ไทย) = วัน × อัตรา ฿ (ไม่คูณ FX): ต่างประเทศ = วัน × อัตรา $ × อัตราแลกเปลี่ยน (Master FX ของปีงบประมาณนั้น เช่น ภาพตัวอย่างปี 2025 = 35.00): อัตราตาม [ตำแหน่ง × กลุ่มประเทศ] จากชีต เบี้ยเลี้ยง (ตำแหน่งระดับบริหารในประเทศ = ไม่มีอัตรา/: )",
+"runs": 40,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 325,
+"text": "เบี้ยเลี้ยงคำนวณใหม่ทุกครั้งที่อ่าน (Recompute-on-read):",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 326,
+"text": "• ยอดเบี้ยเลี้ยงต่างประเทศ = วัน × อัตรา(ตำแหน่ง × กลุ่มประเทศ) × Master FX \"ของปีนั้น\": ระบบคำนวณใหม่ทุกครั้งที่เปิด/อ่าน \"ไม่ได้\" เก็บค่าแช่แข็ง (snapshot)",
+"runs": 21,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 327,
+"text": "• Master FX มี 1 อัตราต่อปีงบประมาณ: แก้ไขได้ที่หน้า Master Currency (Module 09) เท่านั้น",
+"runs": 8,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 328,
+"text": "• เมื่อแก้ Master FX ของปีใด → เบี้ยเลี้ยงต่างประเทศ \"ทุกทริปของปีนั้น\" คิดราคาใหม่ทันที รวมทั้งฝ่ายที่อนุมัติแล้ว (APPROVED) ด้วย",
+"runs": 14,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 329,
+"text": "• ค่าใช้จ่ายเดินทางอีก 3 ประเภท (พาหนะ / ที่พัก / อื่น) เป็นยอด ฿ ที่กรอกเอง: \"ไม่\" เปลี่ยนตาม FX",
+"runs": 19,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 330,
+"text": "ตารางอัตราเบี้ยเลี้ยง (ตำแหน่ง × กลุ่มประเทศ): จากชีต เบี้ยเลี้ยง",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 331,
+"text": "ตำแหน่ง",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 332,
+"text": "ในประเทศ ฿/วัน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 333,
+"text": "กลุ่ม 2 Asian $/วัน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 334,
+"text": "กลุ่ม 3 Other $/วัน",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 335,
+"text": "CEO / Chief Officer / Advisor",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 336,
+"text": ":  (ไม่มีอัตรา)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 337,
+"text": "110",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 338,
+"text": "120",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 339,
+"text": "Vice President / Assistant VP",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 340,
+"text": ":  (ไม่มีอัตรา)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 341,
+"text": "100",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 342,
+"text": "110",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 343,
+"text": "Department Head / Asst Dept Head",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 344,
+"text": "300",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 345,
+"text": "80",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 346,
+"text": "90",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 347,
+"text": "Senior Supervisor / Supervisor",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 348,
+"text": "250",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 349,
+"text": "70",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 350,
+"text": "80",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 351,
+"text": "Operator",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 352,
+"text": "200",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 353,
+"text": "70",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 354,
+"text": "80",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 355,
+"text": "Company Driver / Logistics Driver",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 356,
+"text": "200",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 357,
+"text": "60",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 358,
+"text": "70",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 359,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 360,
+"text": "กลุ่มประเทศ (กำหนดอัตราต่างกัน):",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 361,
+"text": "• กลุ่ม 1: ไทย (ในประเทศ): ใช้ ฿ ตรงๆ ไม่คูณอัตราแลกเปลี่ยน",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 362,
+"text": "• กลุ่ม 2: Asian ($): Papua New Guinea, China, Laos, Philippines, India, Vietnam, Myanmar, Indonesia, Bangladesh, South Africa, Cambodia, Malaysia",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 363,
+"text": "• กลุ่ม 3: Other ($): USA, UK, Australia, New Zealand, Switzerland, Japan, Korea, Taiwan, Germany, Oman, Singapore, Argentina, Italy, Dubai, Saudi Arabia, Norway",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 364,
+"text": "6.2) ส่วน B: ค่าพาหนะ / ที่พัก / ค่าใช้จ่ายอื่น (กรอกยอดรวม → แบ่งลงเดือน) + การลงบัญชี(สรุปผลรวม)",
+"runs": 17,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 365,
+"text": "อีก 3 ประเภทอยู่ในการ์ดทริปเดียวกัน (ไม่ต้องเปิดฟอร์มใหม่): กรอก \"ยอดรวม/ทริป\" 1 ช่อง ระบบแบ่งเท่ากัน ลงเฉพาะเดือนที่เลือก (เดือนที่ไม่เลือก = ล็อกเทา) แต่ละประเภทลง รหัสบัญชี (GL) ของตัวเองตามฝั่งบัญชีที่เลือกในส่วน A",
+"runs": 28,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 366,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 367,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 368,
+"text": "คอลัม / จุด",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 369,
+"text": "ชนิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 370,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 371,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 372,
+"text": "ยอดรวม/ทริป (ประเภท manual)",
+"runs": 6,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 373,
+"text": "กรอกเอง (ตัวเลข)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 374,
+"text": "พิมพ์ยอดรวมทั้งทริป 1 ช่อง: ระบบแบ่งเท่ากันลงเดือนที่เลือก",
+"runs": 5,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 375,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 376,
+"text": "ยอดรายเดือน (เดือนที่เลือก)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 377,
+"text": "แก้ได้รายช่อง",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 378,
+"text": "ค่าจากการแบ่งอัตโนมัติ ปรับรายเดือนเพิ่มได้",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 379,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 380,
+"text": "เดือนที่ไม่เลือก",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 381,
+"text": "ล็อก / เทา ()",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 382,
+"text": "อยู่นอกชุดเดือนของทริป → กรอกไม่ได้",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 383,
+"text": "④",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 384,
+"text": "แถบสรุปการลงบัญชี (ท้ายหน้าต่าง)",
+"runs": 4,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 385,
+"text": "อัตโนมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 386,
+"text": "ชิปบอกแต่ละ รหัสบัญชี (GL) ปลายทาง + ยอด เช่น \"6210400020 ฿…\": รวมทุกประเภท×ฝั่งของทุกทริป",
+"runs": 11,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 387,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 388,
+"text": "6.3) โหมดอ่านอย่างเดียวของ Trip Manager (Read-only lock)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 389,
+"text": "Trip Manager ใช้กฎล็อกเดียวกับฟอร์มย่อยอื่น (canEditPending → tripReadonly): เมื่อฝ่ายแก้ไม่ได้ (PENDING_* / APPROVED / ผู้ใช้เป็นผู้อนุมัติ) ระบบครอบเนื้อหาทั้งหมดด้วย <fieldset disabled> ทำให้ทุก input / select / ปุ่มภายในถูก disabled พร้อมกัน: ซ่อนปุ่ม \"เพิ่มทริป\" และ \"บันทึก & ลงบัญชี\": ปุ่ม \"ยกเลิก\" เปลี่ยนเป็น \"ปิด\" และหัวเรื่องขึ้น 🔒 \"อ่านอย่างเดียว (แก้ไม่ได้)\"",
+"runs": 45,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 390,
+"text": "ตัวอย่าง: ผู้กรอก (สุชัญญา) เปิด Trip Manager หลังจากฝ่ายถูกส่งเข้าอนุมัติแล้ว (PENDING_APPROVER1)",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 391,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": true,
+"has_link": false,
+"skip": true
+},
+{
+"i": 392,
+"text": "#",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 393,
+"text": "จุด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 394,
+"text": "สถานะ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 395,
+"text": "การทำงาน / เงื่อนไข",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 396,
+"text": "①",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 397,
+"text": "หัวเรื่อง + 🔒",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 398,
+"text": "อ่านอย่างเดียว",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 399,
+"text": "ขึ้น \"🔒 อ่านอย่างเดียว (แก้ไม่ได้)\" ต่อท้าย ศูนย์ต้นทุน (Cost Center): FY",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 400,
+"text": "②",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 401,
+"text": "ช่องในการ์ดทริป",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 402,
+"text": "disabled (fieldset)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 403,
+"text": "ทั้งการ์ดถูกครอบด้วย fieldset disabled → ทุก input/select/ปุ่ม กดไม่ได้",
+"runs": 9,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 404,
+"text": "③",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 405,
+"text": "ปุ่มท้ายหน้าต่าง",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 406,
+"text": "ปิด",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 407,
+"text": "ซ่อน \"เพิ่มทริป\"/\"บันทึก & ลงบัญชี\" โดยเหลือปุ่ม \"ปิด\"",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 408,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 409,
+"text": "การบันทึกฟอร์มย่อย",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 410,
+"text": "• กลุ่มพิเศษ 5 กลุ่ม (Entertainment / Lease / Professional / Public Relation / Training): กด บันทึก → รวมยอดทุกบรรทัด กลับไปแสดงที่แถว \"งบรออนุมัติ (Pending)\" ของ รหัสบัญชี (GL) นั้นในตารางหลัก (แสดงผลอย่างเดียว (ไม่สามารถแก้ไขได้))",
+"runs": 25,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 411,
+"text": "• Travelling (Trip Manager): กด \"บันทึก & ลงบัญชี\" → ระบบรวมยอดทุกทริปของ ศูนย์ต้นทุน (Cost Center) + ปีเดียวกัน แล้วเขียนกลับแถว Pending ของ รหัสบัญชี (GL) ที่ตรงกัน — ต่อ 1 ทริป: เลือกฝั่ง 5 หรือ 6 อย่างใดอย่างหนึ่ง → ลง 4 รหัสบัญชี (GL) (4 ประเภทค่าใช้จ่าย) · รวมทุกทริป: อาจมีค่าใน ได้ถึง 8 รหัสบัญชี (GL) ถ้ามีทริปคนละฝั่ง (ไม่ใช่ 1 ฟอร์ม = 1 รหัสบัญชี (GL) อีกต่อไป)",
+"runs": 55,
+"mixed_bold": true,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 412,
+"text": "• Trip Manager ใช้ร่วมกันทั้ง 8 รหัสบัญชี (GL) ของ ศูนย์ต้นทุน (Cost Center) + ปี เดียวกัน: เปิดจาก รหัสบัญชี (GL) Travelling แถวใดก็เห็นทริปชุดเดียวกัน",
+"runs": 18,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 413,
+"text": "• กด ยกเลิก/ปิด → ฟอร์มย่อยเป็นส่วนหนึ่งของหน้ากรอกงบ ยังไม่ส่งเข้าฐานข้อมูลจนกว่าจะกด Submit ที่หน้าหลัก",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 414,
+"text": "• กด เพิ่มทริป → เพิ่มอีก 1 ทริปในการ์ดถัดไป (ผู้เดินทาง/ปลายทางคนละชุด)",
+"runs": 13,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 415,
+"text": "สรุปแหล่งข้อมูล (Data sources)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 416,
+"text": "แหล่ง / ไฟล์",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 417,
+"text": "บทบาท",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 418,
+"text": "docs/13Template Special/*.xlsx (6 ไฟล์)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 419,
+"text": "นิยามคอลัม + ตัวเลือก รายการเลือก ของแต่ละกลุ่ม (sheet หลัก + sheet รหัสบัญชี (GL))",
+"runs": 12,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 420,
+"text": "docs/13Template Special/Traveling expenses.xlsx (sheet รหัสบัญชี (GL))",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 421,
+"text": "mapping 8 รหัสบัญชี (GL) → 4 ประเภท × 2 ฝั่ง (5 ผลิต / 6 SG&A): กำหนดว่า รหัสบัญชี (GL) ไหนคือประเภทใด",
+"runs": 14,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 422,
+"text": "docs/13Template Special/Traveling expenses.xlsx (sheet เบี้ยเลี้ยง)",
+"runs": 3,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 423,
+"text": "ตารางอัตราเบี้ยเลี้ยง [ตำแหน่ง × กลุ่มประเทศ] + รายชื่อประเทศแต่ละกลุ่ม",
+"runs": 7,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 424,
+"text": "cfg_master.master_currency_rate (Module 09)",
+"runs": 2,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 425,
+"text": "Master FX USD→THB 1 อัตรา/ปี: เจ้าของ/แก้ไขที่หน้า Master Currency เท่านั้น: หน้ากรอกงบอ่านอย่างเดียวแล้วคิดเบี้ยเลี้ยงใหม่ทุกครั้ง (recompute-on-read)",
+"runs": 13,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 426,
+"text": "dbo.mas_employee_data",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 427,
+"text": "รายการเลือก ผู้เดินทาง (fullnameth) → ตำแหน่ง (joblevel)",
+"runs": 10,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 428,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 429,
+"text": "ช่องลงนามอนุมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 430,
+"text": "บทบาท",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 431,
+"text": "ชื่อ-นามสกุล",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 432,
+"text": "ลายเซ็น",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 433,
+"text": "วันที่",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 434,
+"text": "ผู้จัดทำ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 435,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 436,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 437,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 438,
+"text": "ผู้ตรวจสอบ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 439,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 440,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 441,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 442,
+"text": "ผู้อนุมัติ",
+"runs": 1,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": false
+},
+{
+"i": 443,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 444,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 445,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+},
+{
+"i": 446,
+"text": "",
+"runs": 0,
+"mixed_bold": false,
+"has_image": false,
+"has_link": false,
+"skip": true
+}
+]
