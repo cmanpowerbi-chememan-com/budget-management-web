@@ -1,0 +1,21 @@
+[
+  {
+    "_comment": "#8 button label — remove the literal '+ ' (the plus is an icon, not text). Applies to all 3 occurrences.",
+    "find": "+ ใส่รายละเอียดงบทำการ",
+    "replace": "ใส่รายละเอียดงบทำการ",
+    "expect": 3
+  },
+  {
+    "_comment": "#2,#6,#7,#9 — 'เอกสาร 02' = SpecB (GL Subform). Expand uniformly so every reference is unambiguous. (Some occurrences may be run-split and not matched here — handle those in TASK-002.)",
+    "find": "เอกสาร 02",
+    "replace": "เอกสาร 02 — ฟอร์มย่อยใส่รายละเอียดงบ Special GL Subform",
+    "expect": 3
+  },
+  {
+    "_comment": "#10 — approval reference -> standalone approval document (owner decision 2026-06-25). Exact title TBC by manager.",
+    "find": "เอกสาร approval",
+    "replace": "เอกสารกระบวนการอนุมัติ (Approval Workflow)",
+    "expect": 1
+  }
+]
+
