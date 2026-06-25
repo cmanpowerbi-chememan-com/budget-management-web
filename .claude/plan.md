@@ -1,4 +1,4 @@
-# Current Phase (2026-06-16)
+# Current Phase (2026-06-25)
 
 ## Fabric SQL migration — Azure SQL retirement (ADR-0017)
 - [x] `setup/sync_employees.py` → Fabric SQL DB via Service Principal (ActiveDirectoryServicePrincipal, ENTRA_CLIENT_ID/SECRET) — verified: SP auth OK, mas_employee_data = 343 rows, API 645 Active → 343 include (in sync)
@@ -25,4 +25,5 @@ Completed milestones — one line each. Detail lives in git history.
 - master-currency.html created from mockup (4th master-edit page); nav hrefs repointed across all pages.
 - Budget transactional data model — `docs/specs/budget-transactional-data-model.md` (7 `budget.*` tables + refs, managerempcode chain).
 - Sign-off specs (MS Word) built/rebuilt: main web app (v0.6), GL Group, master currency, web-access/submit (module 10) — all re-pointed to canonical mockup `0002.1budget-export.html`, validators green.
+- SpecC (Master Tables) sign-off doc clarity polish (2026-06-25, version2/) — wording-only across all 5 modules via run-id OOXML edits (no install): colon-chains→bullets, tightened Context/Downstream/FX-impact prose, consistent phrasing; all facts/numbers/①–⑤/ADR/screenshots preserved (deterministic token check, 0 dropped). Per-module changelog+version bump (GL v0.2.2 · Closing v0.2.1 · OrgCC/Hide v0.3.1 · Currency v0.4.1). User added own `(L3/L4/L2 3 คน)` edit on the candidate, kept. Reusable tools: `tasks/signoff-spec-v2/_tools/{extract_runs,apply_runs,check_preservation,build_clarity_edits}.py`.
 - ADRs 0001–0017 written (RLS, see/fill/approval-unit, admin override/toggle, FX snapshot, Fabric SQL DB).
