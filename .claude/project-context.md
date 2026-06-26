@@ -138,3 +138,13 @@ start` + `swa start`.
 ## Out of scope (for the master-tables module)
 Budget submission form, approval workflow, dashboard, and ETL/pipeline code are separate
 modules (the last handled by `04-data-engineer`).
+
+---
+
+## CC ↔ Cursor Handoff (multi-file features)
+
+Multi-file features use skill `36-cc-cursor-handoff`. Quick fixes (1–2 files, 1–2 edits) stay in CC directly.
+
+- **Handoff:** CC writes `tasks/<feature>/{TODO.md,CURSOR_PROMPT.md}` → runs `handoff_to_cursor.ps1 -Project "C:\04.budget_management_web" -Feature <feature> -Wait` via Bash (agent CLI; **CC executes — never "paste in Cursor"**). Clipboard+GUI is fallback ONLY if the script exits non-zero / `agent` missing.
+- **Completion signal:** poll `git log` every 60s (max 1800s) for commit matching `[cursor-done] TASK-<NNN>`.
+- **Branch:** `main`, remote `origin/main` on GitHub.
