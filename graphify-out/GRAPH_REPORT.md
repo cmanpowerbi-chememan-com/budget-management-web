@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-02)
+# Graph Report - .  (2026-07-03)
 
 ## Corpus Check
 - 144 files · ~146,083 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6399bb17`
+- Built from commit: `b85b156b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -182,11 +182,11 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
 
 ### Community 22 - "Community 22"
 Cohesion: 0.24
-Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
+Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), POST /api/master/orgcode-costcenter/save
 
 ### Community 23 - "Community 23"
 Cohesion: 0.33
@@ -226,11 +226,11 @@ Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/gl-group/list  R
 
 ### Community 33 - "Community 33"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
 
 ### Community 34 - "Community 34"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), POST /api/master/orgcode-costcenter/save
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 35 - "Community 35"
 Cohesion: 0.60
@@ -272,7 +272,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.049) - this node is a cross-community bridge._
 - **Why does `authenticate()` connect `Community 21` to `Community 32`, `Community 0`, `Community 33`, `Community 34`, `Community 15`, `Community 20`, `Community 22`?**
   _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **Why does `execute()` connect `Community 0` to `Community 34`, `Community 15`?**
+- **Why does `execute()` connect `Community 0` to `Community 22`, `Community 15`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **Are the 39 inferred relationships involving `AuthError` (e.g. with `HttpRequest` and `HttpResponse`) actually correct?**
   _`AuthError` has 39 INFERRED edges - model-reasoned connections that need verification._
