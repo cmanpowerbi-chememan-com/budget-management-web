@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-08)
+# Graph Report - .  (2026-07-09)
 
 ## Corpus Check
 - 144 files · ~146,083 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0d9519df`
+- Built from commit: `b939d32f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -182,7 +182,7 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/gl-group/list  Returns all mappings joined with dim table so fro
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
 
 ### Community 22 - "Community 22"
 Cohesion: 0.24
@@ -222,15 +222,15 @@ Nodes (6): build_attachments(), confirm_mailbox(), get_token(), main(), Send sig
 
 ### Community 32 - "Community 32"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/gl-group/list  Returns all mappings joined with dim table so fro
 
 ### Community 33 - "Community 33"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
 
 ### Community 34 - "Community 34"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 35 - "Community 35"
 Cohesion: 0.60
@@ -268,9 +268,9 @@ Nodes (3): body_text(), metrics(), q()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AuthError` connect `Community 22` to `Community 0`, `Community 32`, `Community 33`, `Community 34`, `Community 1`, `Community 15`, `Community 17`, `Community 20`, `Community 21`, `Community 30`?**
+- **Why does `AuthError` connect `Community 22` to `Community 32`, `Community 0`, `Community 33`, `Community 34`, `Community 1`, `Community 15`, `Community 17`, `Community 20`, `Community 21`, `Community 30`?**
   _High betweenness centrality (0.049) - this node is a cross-community bridge._
-- **Why does `authenticate()` connect `Community 21` to `Community 0`, `Community 32`, `Community 33`, `Community 34`, `Community 15`, `Community 20`, `Community 22`?**
+- **Why does `authenticate()` connect `Community 21` to `Community 32`, `Community 0`, `Community 33`, `Community 34`, `Community 15`, `Community 20`, `Community 22`?**
   _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Why does `execute()` connect `Community 0` to `Community 22`, `Community 15`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
