@@ -1,8 +1,25 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-11T18:44:30+0700",
+  "updated": "2026-07-11T19:16:55+0700",
   "tasks": [
+    {
+      "id": "specC-signoff-v2-excel",
+      "state": "done",
+      "created": "2026-07-11T19:16:55+0700",
+      "updated": "2026-07-11T19:16:55+0700",
+      "agent": "01-sa-doc-writer",
+      "skills": [
+        "09-doc-templates"
+      ],
+      "files": [
+        {
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/laddawan/Spec C การจัดการตารางข้อมูลหลัก_V2.0.docx"
+        }
+      ],
+      "ai": "Rewrote laddawan Spec C sign-off docx to Excel-on-SharePoint reality (V2.0). New generator _build/build_spec_c_master_tables.py builds fresh no-install OOXML docx; dropped all 31 screenshots + UI-walkthrough/cfg_master/Entra/DEMO content; 6 sections (C-1..C-6) each = Context+admins(SharePoint perms)+Excel file(link+column table)+rules+Data sync(cman-dw-ws/modern_lh_cman_dw). C-3 reframed to org-reference only (RLS moved to C-6 per ADR-0019). C-6 new Filler map. Preserved ADR-0012 lock, ADR-0015 FX impact table, C-4 downstream filters. Signature block preserved, prep date 11/07/2026, reviewer/approver blank. Verified: XML well-formed, python-docx opens (135 paras/8 tables), 50 required tokens present, 0 forbidden. V1.0 untouched. Not committed.",
+      "human": "เขียน Spec C sign-off ใหม่ให้เป็นแบบแก้ผ่าน Excel บน SharePoint (V2.0)"
+    },
     {
       "id": "mastertables-excel-migration",
       "state": "done",
