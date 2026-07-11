@@ -1,4 +1,4 @@
-# Current Phase (2026-06-25)
+# Current Phase (2026-07-12)
 
 ## Fabric SQL migration — Azure SQL retirement (ADR-0017)
 - [x] `setup/sync_employees.py` → Fabric SQL DB via Service Principal (ActiveDirectoryServicePrincipal, ENTRA_CLIENT_ID/SECRET) — verified: SP auth OK, mas_employee_data = 343 rows, API 645 Active → 343 include (in sync)
@@ -8,10 +8,15 @@
 - [x] verify daily Action runs green — ✅ confirmed in prod 2026-06-14 (synced to Fabric SQL DB via SP)
 - [ ] after green several days → delete Azure SQL server `cman-budget-mngt-web-sql` + GitHub secrets `DB_*` + `.env` `DB_*`
 
-## Real build (next)
-- [ ] scaffold frontend/ (React+Vite) + backend/ (FastAPI) — main budget app (mockup 0002.1 = source)
+## Real build (next) — sequence grilled 2026-07-11/12 (see memory project_nextstep_design_decisions)
+- [ ] **build sync `cc dept.xlsx` → Fabric** (single gating dependency: CC→ฝ่าย feeds approval unit AND CC→Filler feeds RLS; Filler = UNION across duplicate CC rows)
+- [ ] **DDL `budget.*` 7 tables on Fabric SQL DB** from the reconciled spec (approval_status/log keyed (department, fiscal_year))
+- [ ] **board_budget SharePoint-drop sync** (ADR-0021: `approved_budget_<year>.xlsx`, sheet `sheet1`, cols A–N, year from filename strict; trigger open: Sync-now button vs daily poll)
+- [ ] scaffold frontend/ (React+Vite) + backend/ (FastAPI) — main budget app (mockup **0002.2** = source; 0002.1 superseded)
   - RLS must resolve via the Cost Center↔Filler map (ADR-0019), NOT the orgcode chain (ADR-0001/0007 superseded) — read this before coding auth/RLS
+  - SAP actuals = read-through DW `cman_dw_wh_gold.gold.fact_gl_trans` ws 302668d3 (ADR-0020): DW-side GROUP BY → FastAPI merge; verify SP Viewer grant + exact col names at build
 - [ ] test env → prod folder (TBC)
+- [ ] follow-up doc sweep: `.claude/project-context.md` + `docs/reference/data-platform-map.md`/`data-sources.md` still say `gold_sap_gl_trans`; mockup 0002.2 + signoff doc 01 still show the dropped CSV import/export buttons
 
 ## Master-tables → Excel migration (ADR-0018/0019, grilled 2026-07-11)
 - [ ] design + build the Excel(SharePoint)→Fabric sync job (`cman-dw-ws` / `modern_lh_cman_dw`) — cadence, validation-on-ingest, skip-blank-Filler-row tolerance (02-data-modeler + 04-data-engineer)
@@ -30,6 +35,7 @@ Completed milestones — one line each. Detail lives in git history.
 - gl-group.html wired to real backend (`/api/master/gl-group/*`, Export CSV) — code review APPROVE.
 - master-currency.html created from mockup (4th master-edit page); nav hrefs repointed across all pages.
 - Budget transactional data model — `docs/specs/budget-transactional-data-model.md` (7 `budget.*` tables + refs, managerempcode chain).
+- Spec reconciled to post-dating decisions (2026-07-12): approval unit → (ฝ่าย, fiscal_year) per ADR-0008; RLS → CC↔Filler map per ADR-0019; SAP actuals → DW `fact_gl_trans` read-through (**new ADR-0020**); board_budget → yearly Excel SharePoint drop, 14-col A–N, year-from-filename (**new ADR-0021**); CONTEXT.md glossary fixed; gate 06 passed after 1 blocker fix. Real-data verification: cc dept.xlsx = 210 CC / 114 ฝ่าย, 0 orphan, 0 multi-ฝ่าย; approved_budget file structure confirmed.
 - Sign-off specs (MS Word) built/rebuilt: main web app (v0.6), GL Group, master currency, web-access/submit (module 10) — all re-pointed to canonical mockup `0002.1budget-export.html`, validators green.
 - SpecC (Master Tables) sign-off doc clarity polish (2026-06-25, version2/) — wording-only across all 5 modules via run-id OOXML edits (no install): colon-chains→bullets, tightened Context/Downstream/FX-impact prose, consistent phrasing; all facts/numbers/①–⑤/ADR/screenshots preserved (deterministic token check, 0 dropped). Per-module changelog+version bump (GL v0.2.2 · Closing v0.2.1 · OrgCC/Hide v0.3.1 · Currency v0.4.1). User added own `(L3/L4/L2 3 คน)` edit on the candidate, kept. Reusable tools: `tasks/signoff-spec-v2/_tools/{extract_runs,apply_runs,check_preservation,build_clarity_edits}.py`.
 - SpecB (GL Subform) sign-off doc clarity polish (2026-06-26, version2/, commit 758d320 via **CC→Cursor handoff**) — SpecB is run-fragmented (no clean single-run paragraphs), so used a **paragraph-collapse** method (rebuild one run per paragraph, rPr preserves Thai `cs`+Latin `ascii` fonts). CC pre-built+proved tools `tasks/signoff-spec-v2/_tools/{extract_paras,apply_paras,check_paras}.py`; cs rewrote 40 paragraphs (colon-chains→bullets), version→v0.4.1 + changelog. Validate PASS: check_paras 0 dropped/0 wrong-index, images 14=14 untouched, markers/facts intact, commit scope clean.

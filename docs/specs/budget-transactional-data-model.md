@@ -5,10 +5,17 @@ Scope: the 7 transactional budget tables for the main app (submission + approval
 Out of scope: dashboard (Phase 2), email-notification tables (deferred).
 
 This model implements decisions already made in the ADRs; it does not re-decide them.
-Authority: ADR-0003 (two aligned wide tables, CC x year approval unit), ADR-0005 (special-GL
-detail layer + trip linkage), ADR-0001 / ADR-0004 (RLS + identity resolve through master
-tables — no new tables), CONTEXT.md (ubiquitous language), .claude/project-context.md
+Authority: ADR-0003 (two aligned wide tables), **ADR-0008 (approval unit = ฝ่าย ×
+fiscal_year — supersedes ADR-0003's CC × year)**, ADR-0005 (special-GL detail layer +
+trip linkage), **ADR-0019 / ADR-0004 (RLS via the CC↔Filler map + Entra identity —
+supersedes ADR-0001's orgcode chain)**, **ADR-0020 (SAP actuals read-through from the
+DW `fact_gl_trans`)**, **ADR-0021 (board_budget ingested as a yearly Excel file dropped
+on SharePoint)**, CONTEXT.md (ubiquitous language), .claude/project-context.md
 (Phase-1 scope, special-GL behaviour, GL-dropdown tiers, per-diem engine).
+
+> **Reconciled 2026-07-12** — this file originally predated ADR-0008/0018/0019/0020/0021;
+> the approval-unit key, RLS source, SAP source, and board_budget ingest path below have
+> been updated to match them.
 
 Supersedes `db/schema.sql` (Azure-SQL, division-based 4-level chain). That file is mined for
 column ideas only — `user_division_map` and the division-keyed `approval_status` are dropped.
@@ -22,10 +29,10 @@ column ideas only — `user_division_map` and the division-keyed `approval_statu
 | Table | Grain (PK) | Purpose | Lifecycle |
 |---|---|---|---|
 | `budget.pending_budget` | (cost_center, gl_account, fiscal_year) | Pending budget — user-entered, wide 12-month | Travels approval chain |
-| `budget.board_budget` | (cost_center, gl_account, fiscal_year) | Approved/board budget — admin import, same layout | Direct-to-table, Replace-by-Year |
+| `budget.board_budget` | (cost_center, gl_account, fiscal_year) | Approved/board budget — yearly Excel file drop on SharePoint (ADR-0021), same layout | Direct-to-table, Replace-by-Year |
 | `budget.pending_budget_detail` | detail_id (surrogate) | Special-GL subform lines, many per GL | Sums into pending_budget cell |
 | `budget.budget_trip` | trip_id (surrogate) | Travelling trip header (shared across the 4 travel GLs) | Referenced by detail lines |
-| `budget.approval_status` | (cost_center, fiscal_year) | Current approval state per approval unit | Replaced on re-submit (last-submitter-wins) |
+| `budget.approval_status` | (department, fiscal_year) | Current approval state per approval unit = ฝ่าย × year (ADR-0008; all CCs of the ฝ่าย approved as one) | Replaced on re-submit (last-submitter-wins) |
 | `budget.approval_log` | log_id (surrogate) | Append-only history of every approval action | Never updated/deleted |
 | `budget.submission_deadline` | fiscal_year | Global cutoff + reminder window per year | Admin-set |
 
@@ -34,12 +41,13 @@ column ideas only — `user_division_map` and the division-keyed `approval_statu
 | Table | Schema / connection | Real columns used | Owner / refresh |
 |---|---|---|---|
 | `mas_employee_data` | `dbo` (Fabric SQL DB) | email, empcode, orgcode, managerempcode, division, department, joblevelnameen, fullnameth | Synced daily from C-POP HR (setup/sync_employees.py); pre-filtered (Active, no Gritsman/Vietnam/L5) |
-| `orgcode_costcenter_map` | `cfg_master` (Fabric SQL DB) | orgcode, cost_center (many-to-many; id surrogate PK, UNIQUE(orgcode,cost_center)) | Admin-edited (module 0007) |
+| CC↔Filler map (from `cc dept.xlsx`) | landing per ADR-0018 (`cman-dw-ws`/`modern_lh_cman_dw`); runtime read location TBD at sync build | Cost Ctr, Description, C Level, สายงาน, **ฝ่าย** (→ approval unit), **คนกรอกข้อมูล** = Filler emails (→ RLS See/Fill, ADR-0019) | Admin-edited Excel on SharePoint `CMANDWPRD`; sync UNBUILT |
+| `orgcode_costcenter_map` | `cfg_master` (Fabric SQL DB) | orgcode, cost_center (many-to-many; id surrogate PK, UNIQUE(orgcode,cost_center)) — **NO LONGER read for RLS (ADR-0019)**; kept as its own admin dataset | Admin-edited (module 0007) |
 | `gl_group_mapping` | `cfg_master` (Fabric SQL DB) | gl_code (PK), group_id -> gl_group_dim.group_name | Admin-edited (master-tables) |
 | `gl_group_dim` | `cfg_master` (Fabric SQL DB) | group_id (PK), group_name (18 groups) | Admin-edited |
 | `sap_gl_code_ref` | `cfg_master` (Fabric SQL DB) | code (PK), name (137 GLs) | Seeded; static until SAP sync |
 | `gold_sap_m_cost_center` | `dbo` (Lakehouse, R/O) | cost_center_id, cost_center_name | Fabric notebook gold layer |
-| `gold_sap_gl_trans` | `dbo` (Lakehouse, R/O) | cost_center, gl_account_number, posting_date, company_curr_amount, debit_credit_ind, fiscal_year | Fabric notebook gold layer; actuals display + GL-dropdown Tier-1 ("used before") |
+| `fact_gl_trans` | `[cman_dw_wh_gold].[gold]` — DW **Warehouse**, ws `cman-dw-prod-ws` (`302668d3-…`), R/O read-through (ADR-0020) | transaction-grain GL postings; queried pre-aggregated `GROUP BY cost_center, gl_account, fiscal_year, month + SUM(THB amount)` — **exact column names verified at build** | Central DW project; actuals display + GL-dropdown Tier-1 ("used before"). Supersedes `gold_sap_gl_trans` (app-Lakehouse name in older docs) |
 | `master_currency_rate` | `cfg_master` (Fabric SQL DB) — PLANNED, not yet created (module 09) | fiscal_year (PK), USD->THB rate (FY2026 = 34.20) | Admin-set per year |
 
 Notes on the externals (verified against source SQL/notebooks, do not re-discover):
@@ -50,6 +58,17 @@ Notes on the externals (verified against source SQL/notebooks, do not re-discove
   cost_center_name) — the gold_/silver_ prefix is part of the table NAME, schema is `dbo`.
 - `master_currency_rate` does not exist yet (module 09 deferred). The per-diem auto-calc in
   pending_budget_detail depends on it; modelled as an external read-only join, flagged in section 5.
+- **CC↔Filler map source = `cc dept.xlsx`** (SharePoint `CMANDWPRD`, sourcedoc
+  `0A67CF18-2BFB-4D99-A8A4-BF2E9EF3A000`), verified via Graph 2026-07-11: single sheet,
+  columns `Cost Ctr | Description | C Level | สายงาน | ฝ่าย | คนกรอกข้อมูล`; 211 rows,
+  **210 distinct CC / 114 distinct ฝ่าย**; 0 orphan-ฝ่าย CC, 0 multi-ฝ่าย CC. Dedup rule for a
+  CC appearing on multiple rows (e.g. `10OS011400`): **Filler = UNION of the emails across all
+  its rows** — never last-row-wins (dropping a listed Filler is a silent lockout). ฝ่าย is
+  identical across duplicate rows, so CC→ฝ่าย stays 1:1.
+- **`fact_gl_trans` is in a workspace this project does not own** — `cman-fabric-write` needs
+  at least Viewer on `302668d3` (once blocked there; portal grant required). Verify before the
+  first backend integration test; a missing grant must fail loudly, not render an empty green
+  layer (ADR-0020).
 
 ### 1c. The 3 display layers (FINAL — confirmed with user 2026-06-12)
 
@@ -59,14 +78,24 @@ while users plan the next year (2027).
 
 | Layer | Source | Fiscal year shown | Entry method |
 |---|---|---|---|
-| 🟢 SAP · ใช้จริง (actuals) | Lakehouse `gold_sap_gl_trans` (R/O) | current year (2026) | auto from SAP — never entered |
-| 🔵 Approved · งบอนุมัติ | `budget.board_budget` | current year (2026), full Jan–Dec | **CSV import whole year ONLY — web entry disabled** |
+| 🟢 SAP · ใช้จริง (actuals) | DW `cman_dw_wh_gold.gold.fact_gl_trans` (R/O read-through, ADR-0020) | current year (2026) | auto from SAP — never entered |
+| 🔵 Approved · งบอนุมัติ | `budget.board_budget` | current year (2026), full Jan–Dec | **yearly Excel file dropped on SharePoint → synced whole-year (ADR-0021) — web entry disabled** |
 | ⚫ Pending · งบรออนุมัติ | `budget.pending_budget` (+detail/trip) | planning year (2027) | user types per cell + special-GL subforms |
 
-`board_budget` hard rules (confirmed):
-- **Read-only in the web UI** — no cell-level or month-level editing, ever.
-- Any correction (including mid-year revision) = re-upload the whole-year CSV →
-  Replace-by-Year (`DELETE WHERE fiscal_year=@yr` + bulk INSERT, one transaction).
+`board_budget` hard rules (confirmed; ingest path updated 2026-07-12, ADR-0021):
+- **Read-only in the web UI** — no cell-level or month-level editing, ever. The mockup's
+  admin CSV import/export buttons are DROPPED.
+- **Ingest = yearly Excel file dropped on SharePoint** (`CMANDWPRD` →
+  `Budgeting and Management/approved budget`): `approved_budget_<year>.xlsx`, sheet
+  `sheet1`, read **columns A–N only** (14: `cost_center, gl_code, jan..dec`).
+  **Fiscal year parsed from the FILENAME only** — strict `approved_budget_(\d{4})\.xlsx`,
+  any other name rejected (no in-file year column exists to cross-check).
+- Any correction (including mid-year revision) = replace the year's file on SharePoint →
+  re-sync → validate-all-then-Replace-by-Year (`DELETE WHERE fiscal_year=@yr` + bulk
+  INSERT, one transaction). Any bad row rejects the whole file; the DB keeps the old year.
+- The file carries NO dimension columns (gl_name/gl_group/c_level/division/department)
+  and NO remark — dimensions re-derived from masters at import (§4); `remark` stays NULL.
+- Sync trigger open: admin "Sync now" button vs daily poll (webhook rejected — ADR-0021).
 - Flat for ALL GLs including Travelling Expense — amounts arrive pre-summed per GL;
   no subform/trip/detail rows on the Approved layer.
 - Approved and Pending never collide: different fiscal_year (current vs planning) AND
@@ -77,9 +106,9 @@ while users plan the next year (2027).
 2. After year-end, even fully approved, those rows **stay in `pending_budget` unchanged** —
    a permanent record of what was requested/approved in the workflow. No migration, no
    transform, no export-becomes-Approved.
-3. The Approved-2027 CSV the admin imports is a **separate dataset**: Budget dept takes the
-   user-fill data, adjusts it offline (cuts/negotiations/board decisions), and produces the
-   final file. Approved ≠ snapshot of Pending.
+3. The Approved-2027 file the budget officer drops (ADR-0021) is a **separate dataset**:
+   Budget dept takes the user-fill data, adjusts it offline (cuts/negotiations/board
+   decisions), and produces the final file. Approved ≠ snapshot of Pending.
    → Comparing Pending 2027 vs Approved 2027 is meaningful: requested vs granted.
 
 **Row visibility — which `(CC, GL, year)` rows appear (FINAL 2026-06-12, ADR-0010):**
@@ -87,17 +116,21 @@ Not every GL is shown — the visible row set for a `(cost_center, fiscal_year)`
 three sources**, joined on the `(cost_center, gl_account, fiscal_year)` triple:
 
 ```
-visible(CC, year) = SAP-actual rows   (gold_sap_gl_trans — the LEADER / most common starting set)
-                  ∪ Approved rows     (board_budget — incl. a new GL/CC from a CSV import with no actual)
+visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LEADER / most common starting set)
+                  ∪ Approved rows     (board_budget — incl. a new GL/CC from a file import with no actual)
                   ∪ Pending rows       (pending_budget — incl. a GL/CC added by hand via "+ เพิ่ม transaction")
 ```
 
 - **SAP actual leads** the initial set; a row also appears if it has Approved OR Pending data.
 - Once a row exists in ANY layer it **persists** (reappears on later opens) — else entered/
   imported budget would vanish. "No SAP actual" is just *one* reason a GL must be hand-added.
-- `gold_sap_gl_trans` has **no orgcode** (`RACCT`=gl, `RCNTR`=cost_center only) — RLS filters by
-  the login's CC set (orgcode → file09 → CCs, ADR-0001) then joins SAP by cost_center.
-- Display query = 3-way outer-join/union on the triple, filtered by the RLS CC set. No new
+- `fact_gl_trans` has **no orgcode** (SAP carries `RACCT`=gl, `RCNTR`=cost_center only) — RLS
+  filters by the login's CC set (**CC↔Filler map, ADR-0019**: Fill = CCs whose Filler column
+  lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager) then joins SAP
+  by cost_center.
+- Display "query" = 3-source union on the triple, filtered by the RLS CC set — computed as a
+  **merge in FastAPI** (ADR-0020): the SAP side is fetched pre-aggregated from the DW, the
+  budget side from Fabric SQL DB; the two stores cannot be joined in one SQL query. No new
   table/column. Adding a Special-GL row routes it into its subform / Trip Manager (see §4a/§4b).
 
 ### 1d. Template 2 "งบประมาณกำหนดเอง" (FINAL — confirmed 2026-06-12)
@@ -113,8 +146,9 @@ Both doors write the same `pending_budget` rows (planning year), distinguished b
 
 - Year-end lifecycle: USER + ADMIN rows stay in `pending_budget` permanently (see §1c —
   no auto-conversion). Budget dept takes both, adjusts offline, and produces the separate
-  Approved CSV for `board_budget` import (the ไฟล์รวม Data consolidation; CSV `Template`
-  column = Opex / งบประมาณกำหนดเอง maps to this flag).
+  Approved file for `board_budget` import (the ไฟล์รวม Data consolidation). *Note
+  2026-07-12: the real ingest file has NO Template column (14 cols only, ADR-0021) — the
+  flag exists on `pending_budget` rows only; `board_budget` stores no template distinction.*
 - Model impact: **one column** — `pending_budget.template NVARCHAR(10) NOT NULL DEFAULT 'USER'`
   (values USER / ADMIN). ADMIN rows never enter the approval chain: no `approval_status`
   record needed; audit = one `approval_log` row per admin submit (action `ADMIN_SUBMIT`,
@@ -130,7 +164,7 @@ Both doors write the same `pending_budget` rows (planning year), distinguished b
 erDiagram
     pending_budget        ||--o{ pending_budget_detail : "special-GL cell = SUM of detail lines"
     budget_trip           ||--o{ pending_budget_detail : "trip referenced by travel detail lines"
-    pending_budget        ||--|| approval_status        : "CC x year approved as one unit"
+    pending_budget        }o--|| approval_status        : "all CCs of one fai x year approved as one unit"
     approval_status       ||--o{ approval_log           : "each state change appends a log row"
     submission_deadline   ||..o{ pending_budget         : "fiscal_year gates edit/submit (lock)"
 
@@ -141,9 +175,10 @@ erDiagram
     EXT_sap_gl_code_ref        ||..o{ board_budget     : "gl_account to gl_name (read-only)"
     EXT_mas_employee_data      ||..o{ approval_status  : "submitter/managerempcode chain (read-only)"
     EXT_mas_employee_data      ||..o{ budget_trip      : "traveler to position (read-only)"
-    EXT_orgcode_costcenter_map ||..o{ pending_budget   : "RLS orgcode to cost_center scope (read-only)"
+    EXT_cc_filler_map          ||..o{ pending_budget   : "RLS see-fill scope + CC to fai map (read-only, ADR-0019)"
+    EXT_cc_filler_map          ||..o{ approval_status  : "CC to fai resolves the approval unit (read-only)"
     EXT_master_currency_rate   ||..o{ pending_budget_detail : "per-diem FX by year (read-only, PLANNED)"
-    EXT_gold_sap_gl_trans      ||..o{ pending_budget   : "GL-dropdown Tier-1 + actuals (read-only)"
+    EXT_fact_gl_trans          ||..o{ pending_budget   : "GL-dropdown Tier-1 + actuals read-through (read-only, DW)"
 
     pending_budget {
         nvarchar cost_center PK_FK
@@ -207,7 +242,7 @@ erDiagram
         datetime2 control_updated_at "_updated_at"
     }
     approval_status {
-        nvarchar cost_center PK
+        nvarchar department PK "fai - via CC to fai map"
         int fiscal_year PK
         nvarchar status
         nvarchar submitter_empcode "owner of record"
@@ -222,7 +257,7 @@ erDiagram
     }
     approval_log {
         bigint log_id PK
-        nvarchar cost_center FK
+        nvarchar department FK "fai"
         int fiscal_year FK
         nvarchar action
         nvarchar action_by_empcode
@@ -244,7 +279,7 @@ erDiagram
 Cardinality summary:
 - pending_budget (1) - (0..N) pending_budget_detail — a special-GL row's monthly cells are the SUM of its detail lines; normal GLs have zero detail rows.
 - budget_trip (1) - (0..N) pending_budget_detail — one trip is referenced by up to 4 travel-GL detail lines (per-diem + 3 manual types); trip_id is NULL for non-travel detail lines.
-- pending_budget (1) - (1) approval_status per (cost_center, fiscal_year) — the approval unit is the CC x year; many GL rows of one CC x year share ONE approval record.
+- pending_budget (N) - (1) approval_status per (department, fiscal_year) — the approval unit is the ฝ่าย × year (ADR-0008); ALL GL rows of ALL CCs in one ฝ่าย share ONE approval record, joined through the CC→ฝ่าย column of the CC↔Filler map (`cc dept.xlsx`; 210 CC → 114 ฝ่าย, verified from the real file 2026-07-11).
 - approval_status (1) - (0..N) approval_log — append-only audit.
 - All EXT_* relationships are read-only joins (dotted, non-identifying); none are FK-enforced at the DB level in Fabric SQL DB (cross-schema/cross-DB) — validated at the app layer.
 
@@ -253,8 +288,9 @@ Cardinality summary:
 ## 3. Schema per layer
 
 This is NOT a medallion model. budget.* is transactional OLTP, not Bronze/Silver/Gold.
-The medallion layers (Bronze to Silver to Gold) belong to the SAP actuals pipeline (Lakehouse,
-gold_sap_gl_trans etc.), which this model only reads. Organised by the two budget sub-domains:
+The medallion layers (Bronze to Silver to Gold) belong to the SAP actuals pipeline in the
+central DW project (Warehouse `cman_dw_wh_gold.gold.fact_gl_trans`, ADR-0020), which this
+model only reads. Organised by the two budget sub-domains:
 Transaction (owned) and External reference (read-only).
 
 DBML note: inline string descriptions are written as // comments to keep notation simple.
@@ -297,8 +333,8 @@ Table budget.board_budget {
   fiscal_year   int           [not null]
   m01 .. m12    decimal(18,2) [not null, default: 0]   // 12 separate cols m01..m12
   total_year    decimal(18,2) [not null, default: 0]
-  remark        nvarchar(500)
-  gl_name       nvarchar(200)        // re-derived at import; CSV values discarded
+  remark        nvarchar(500)        // always NULL — the 14-col ingest file carries no remark (ADR-0021)
+  gl_name       nvarchar(200)        // re-derived at import from master; never read from the file
   gl_group      nvarchar(200)        // re-derived at import
   c_level       nvarchar(150)        // re-derived at import
   division      nvarchar(150)        // re-derived at import
@@ -357,7 +393,7 @@ Table budget.budget_trip {
 }
 
 Table budget.approval_status {
-  cost_center           nvarchar(20) [not null]
+  department            nvarchar(150) [not null]  // ฝ่าย — approval unit key (ADR-0008); CC resolves to ฝ่าย via the CC↔Filler map
   fiscal_year           int          [not null]
   status                nvarchar(40) [not null, default: DRAFT]
   // status enum: DRAFT, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3, APPROVED, REJECTED
@@ -373,7 +409,7 @@ Table budget.approval_status {
   _updated_at           datetime2    [not null]
 
   indexes {
-    (cost_center, fiscal_year)       [pk]
+    (department, fiscal_year)        [pk]
     (fiscal_year, status)            [name: ix_as_year_status]   // approver inbox WHERE status PENDING
     (approver1_empcode, fiscal_year) [name: ix_as_approver1]
   }
@@ -381,9 +417,9 @@ Table budget.approval_status {
 
 Table budget.approval_log {
   log_id            bigint       [pk, increment]
-  cost_center       nvarchar(20) [not null]
+  department        nvarchar(150)[not null]   // ฝ่าย — matches the approval unit (ADR-0008)
   fiscal_year       int          [not null]
-  action            nvarchar(40) [not null]   // SUBMIT, APPROVE, REJECT, RESUBMIT, ADMIN_OVERRIDE
+  action            nvarchar(40) [not null]   // SUBMIT, APPROVE, REJECT, RESUBMIT, ADMIN_OVERRIDE, ADMIN_SUBMIT
   action_by_empcode nvarchar(20)
   action_by_email   nvarchar(255)[not null]
   action_at         datetime2    [not null]
@@ -392,8 +428,8 @@ Table budget.approval_log {
   comment           nvarchar(1000)
 
   indexes {
-    (cost_center, fiscal_year) [name: ix_log_cc_year]
-    (action_at)                [name: ix_log_at]
+    (department, fiscal_year) [name: ix_log_dept_year]
+    (action_at)               [name: ix_log_at]
   }
 }
 
@@ -424,10 +460,20 @@ Table dbo.mas_employee_data {
   fullnameth     nvarchar
 }
 
+// CC↔Filler map — synced from cc dept.xlsx (ADR-0018/0019); exact target table name set at sync build
+Table ext.cc_filler_map {
+  cost_center   nvarchar   // "Cost Ctr"; UNION Filler emails across duplicate CC rows
+  description   nvarchar
+  c_level       nvarchar
+  division      nvarchar   // สายงาน
+  department    nvarchar   // ฝ่าย → approval unit key (ADR-0008)
+  filler_emails nvarchar   // คนกรอกข้อมูล — ≥1 comma-separated email → Fill-scope (ADR-0019)
+}
+
 Table cfg_master.orgcode_costcenter_map {
   id          int          [pk, increment]
   orgcode     nvarchar(20) [not null]
-  cost_center nvarchar(20) [not null]   // UNIQUE(orgcode,cost_center); many-to-many RLS bridge
+  cost_center nvarchar(20) [not null]   // UNIQUE(orgcode,cost_center); NO LONGER the RLS bridge (ADR-0019) — admin dataset only
 }
 
 Table cfg_master.gl_group_mapping {
@@ -448,13 +494,14 @@ Table dbo.gold_sap_m_cost_center {
   cost_center_name nvarchar
 }
 
-Table dbo.gold_sap_gl_trans {
-  cost_center         nvarchar
-  gl_account_number   nvarchar
-  posting_date        date
-  fiscal_year         int
-  company_curr_amount decimal   // THB actuals; sign already flipped in silver
-  debit_credit_ind    char      // S expense / H reversal
+// SAP actuals — DW Warehouse [cman_dw_wh_gold].[gold], ws cman-dw-prod-ws (ADR-0020).
+// Read-through only, pre-aggregated DW-side; EXACT column names verified at build time.
+Table gold.fact_gl_trans {
+  cost_center  nvarchar   // SAP RCNTR
+  gl_account   nvarchar   // SAP RACCT
+  fiscal_year  int
+  month        int        // conceptual — aggregation key; real date/period col TBV
+  amount_thb   decimal    // THB company-currency amount; sign handling TBV
 }
 
 // PLANNED, module 09, not yet created
@@ -469,7 +516,7 @@ Ref: budget.board_budget.cost_center          > dbo.gold_sap_m_cost_center.cost_
 Ref: budget.board_budget.gl_account           > cfg_master.sap_gl_code_ref.code             // app-validated
 Ref: budget.pending_budget_detail.trip_id     > budget.budget_trip.trip_id
 Ref: budget.budget_trip.traveler_empcode      > dbo.mas_employee_data.empcode               // app-validated
-Ref: budget.approval_log.cost_center          > budget.approval_status.cost_center          // (cc, year)
+Ref: budget.approval_log.department           > budget.approval_status.department           // (ฝ่าย, year)
 ```
 
 ### Index recommendations (summary)
@@ -485,10 +532,10 @@ Ref: budget.approval_log.cost_center          > budget.approval_status.cost_cent
 | pending_budget_detail | (cost_center, gl_account, fiscal_year) | Fetch all detail lines for a special-GL cell (SUM-back) |
 | pending_budget_detail | (trip_id) | Fetch all travel lines of a trip |
 | budget_trip | (cost_center, fiscal_year) | List a CC trips for the year subform |
-| approval_status | PK (cost_center, fiscal_year) | Approval unit identity |
+| approval_status | PK (department, fiscal_year) | Approval unit identity (ฝ่าย × year, ADR-0008) |
 | approval_status | (fiscal_year, status) | Approver inbox: WHERE status = PENDING_* |
 | approval_status | (approver1_empcode, fiscal_year) | Manager inbox: items routed to me |
-| approval_log | (cost_center, fiscal_year) | History of one approval unit |
+| approval_log | (department, fiscal_year) | History of one approval unit |
 | approval_log | (action_at) | Time-ordered audit scan |
 
 ---
@@ -498,7 +545,7 @@ Ref: budget.approval_log.cost_center          > budget.approval_status.cost_cent
 | Column / rule | Null? | Unique? | Range / domain | Cleaning / enforcement rule |
 |---|---|---|---|---|
 | pending_budget PK (cc, gl, year) | No | Yes (PK) | — | Last-write-wins on conflict (UPSERT). One CC = one budget set; no empcode in key. |
-| board_budget PK (cc, gl, year) | No | Yes (PK) | — | Replace-by-Year in one transaction: DELETE WHERE fiscal_year=X then bulk INSERT; rollback on any failure. CSV row identity = (cost_center, gl_code, year). **Web UI read-only — cell/month editing disabled; only path to change data is whole-year CSV re-import (see §1c).** |
+| board_budget PK (cc, gl, year) | No | Yes (PK) | — | Replace-by-Year in one transaction: DELETE WHERE fiscal_year=X then bulk INSERT; rollback on any failure. File row identity = (cost_center, gl_code); fiscal_year = from the FILENAME (strict `approved_budget_(\d{4})\.xlsx`, else reject — ADR-0021). **Web UI read-only — cell/month editing disabled; only path to change data is replacing the year's Excel on SharePoint + re-sync (see §1c).** |
 | cost_center (all owned tables) | No | — | Must exist in gold_sap_m_cost_center AND not excluded | Validate by EXISTENCE in master, never by length (short codes PBAW01 exist). Excluded CCs: CMRY01, CMKK01, CMPB01, MNLB00..04, 10SC012000 — reject for budget entry. |
 | gl_account | No | — | Must exist in sap_gl_code_ref.code | Validate by existence; numeric string. |
 | m01..m12 | No (default 0) | — | DECIMAL(18,2) THB | Reject non-numeric on import. Negative allowed? see Q2. All-zeros row is valid. |
@@ -511,7 +558,7 @@ Ref: budget.approval_log.cost_center          > budget.approval_status.cost_cent
 | is_auto_calc per-diem line | No | — | 0/1 | When 1, the 12 month amounts are recomputed = days x rate(position, country_group) x FX, split evenly across travel_months; LAST selected month absorbs rounding remainder so the 12-month sum equals the exact total (DECIMAL 18,2). Read-only in UI. |
 | country_group (trip) | No | — | 1 / 2 / 3 | 1 domestic (no FX, THB rate; C-level rate may be 0), 2 Asian (USD x FX), 3 Other (USD x FX). Derived from destination via country master. |
 | travel_months (trip) | No | — | comma list of 01..12 | Month-lock: manual travel detail lines editable ONLY in these months; other months greyed. |
-| approval_status PK (cc, year) | No | Yes (PK) | — | One approval unit per CC x year. Re-submit REPLACES the record (last-submitter-wins); submitter_empcode = latest submitter; chain re-routes to their managerempcode. |
+| approval_status PK (ฝ่าย, year) | No | Yes (PK) | — | One approval unit per ฝ่าย × year (ADR-0008; 114 ฝ่าย / 210 CC verified 2026-07-11). A CC resolves to its ฝ่าย via the CC↔Filler map. Re-submit REPLACES the record (last-submitter-wins); submitter_empcode = latest submitter; chain re-routes to their managerempcode. |
 | status flow | No | — | DRAFT to PENDING_APPROVER1 to PENDING_APPROVER2 to PENDING_APPROVER3 to APPROVED; any stage to REJECTED | managerempcode chain (Submitter -> managerempcode -> Nipaporn -> Waraporn), NOT the dead VP/division flow. Special-case skips handled in app routing, not schema. |
 | approval_log | append-only | — | — | INSERT only; never UPDATE/DELETE. Captures every SUBMIT/APPROVE/REJECT/ADMIN_OVERRIDE with before/after status. |
 | submission_deadline | No | Yes (fiscal_year PK) | one row per year | After deadline_date: lock user Pending (pending_budget) writes; admin override allowed; board_budget import NOT locked. |
@@ -654,7 +701,8 @@ Once added it gains a Pending row and persists.
 
 User picks Cost Center + GL code from dropdowns sourced from the master tables
 (`gold_sap_m_cost_center`, `sap_gl_code_ref` + `gl_group_mapping`), **CC list filtered to the
-user's ฝ่าย fill-scope** (file02 chain), GL list = all 137 (Tier-1 "used before" sort applies).
+user's fill-scope** (CCs whose Filler column lists the user's email — CC↔Filler map,
+ADR-0019), GL list = all 137 (Tier-1 "used before" sort applies).
 
 - **No model impact** — `pending_budget` PK (cost_center, gl_account, fiscal_year) already
   accepts any new row; duplicate pick = land on the existing row (UPSERT semantics), never a
@@ -687,6 +735,9 @@ user's ฝ่าย fill-scope** (file02 chain), GL list = all 137 (Tier-1 "used
 > - **Q4** → `approval_status` PK = **(cost_center, fiscal_year)**, NO gl_account
 >   (package approval — whole CC+year approved as one unit). `status` removed from
 >   `pending_budget`; GL rows join by cc+year.
+>   *(PK later superseded by ADR-0008 → **(department/ฝ่าย, fiscal_year)** — one record
+>   covers ALL CCs of the ฝ่าย; reconciled into §1a/§2/§3a on 2026-07-12. The "no
+>   gl_account / no status on pending_budget" parts still stand.)*
 > - **Q5** → **neutral** enum `DRAFT/PENDING_APPROVER1/2/3/APPROVED/REJECTED`; who each
 >   approver is + skip-logic in backend routing, not schema.
 > - **Q6** → **create `cfg_master.master_currency_rate` now** (fiscal_year PK,

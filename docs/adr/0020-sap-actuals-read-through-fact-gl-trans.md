@@ -1,0 +1,58 @@
+# 20. SAP actuals are read live from the DW warehouse (`fact_gl_trans`) — no copy into the app's stores
+
+Date: 2026-07-12
+Status: Accepted
+Amends: ADR-0010 — corrects the actuals **source table** and defines the **read
+mechanism**; the row-visibility rule itself (SAP-actual-led union of 3 sources) is
+unchanged. Also corrects CONTEXT.md "SAP / Actuals" and the transactional-model spec,
+which referred to `gold_sap_gl_trans` in the app's own Lakehouse.
+
+## Context
+
+Design docs (ADR-0010, CONTEXT.md, `docs/specs/budget-transactional-data-model.md`)
+named the SAP actuals source as `gold_sap_gl_trans` in the app's Lakehouse
+(`budget_management_web` / `lakehouse`). Confirmed with jakkaritw 2026-07-11: the real
+production source is the **central DW gold warehouse** owned by the separate DW project —
+`[cman_dw_wh_gold].[gold].[fact_gl_trans]`, workspace `cman-dw-prod-ws`
+(`302668d3-a84c-4410-9933-65ccae989620`) — transaction-grain GL postings.
+
+The budget app's transactional tables live in Fabric SQL Database (ADR-0017): a
+**different engine and workspace**, so one cross-store SQL JOIN is not possible (no
+linked-server / elastic-query equivalent between Fabric SQL DB and a Warehouse).
+
+Two options were grilled 2026-07-11:
+- **(A) read-through** — query the DW live on page load; no copy kept.
+- **(B) copy/snapshot** — a pipeline lands a monthly aggregate into the app's store;
+  reads are local but data goes stale between runs and the pipeline must be owned.
+
+## Decision
+
+- **Read-through (A).** No copy of SAP actuals is stored in Fabric SQL DB or the app
+  Lakehouse. `fact_gl_trans` in the DW is the single source of truth.
+- **Aggregation is pushed to the DW side**: the backend queries
+  `GROUP BY cost_center, gl_account, fiscal_year, <month>` +
+  `SUM(<THB amount>)` so only display-grain rows (not 233k+ raw postings) cross the
+  wire. Exact column names on `fact_gl_trans` are **verified at build time**, not
+  assumed from this ADR.
+- **The FastAPI backend merges** that aggregate with `budget.pending_budget` /
+  `budget.board_budget` on `(cost_center, gl_account, fiscal_year)` in app code —
+  the same split-connection pattern the deployed master-tables backend already uses
+  (`get_lakehouse_conn()` separate from the transactional connection).
+- **Service-principal access**: `cman-fabric-write` needs at least Viewer on workspace
+  `302668d3` (known gotcha — was once blocked there and required a portal grant).
+  Verify the grant before the first backend integration test.
+
+## Consequences
+
+- Actuals are always fresh; no copy pipeline, cadence, or reconcile job to own; no
+  duplicated financial data.
+- Page reads now depend on DW availability and on an SP grant in a workspace this
+  project does not own. A revoked grant must surface as a **loud backend error**, not
+  a silently empty green layer (silent-empty would look like "no actuals" and corrupt
+  budget decisions).
+- The 3-source union (ADR-0010) is computed in FastAPI, not in a DB view — the merge
+  code must be covered by the financial SUM rules (COST `5xxx` and SG&A `6xxx` totals
+  never cross; grouping by `gl_account` preserves this naturally).
+- Phase-2 dashboard may instead read the Fabric SQL DB OneLake mirror + a shortcut
+  UNION view entirely inside OneLake — out of scope here; this ADR governs the live
+  app read path only.

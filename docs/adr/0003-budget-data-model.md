@@ -3,6 +3,9 @@
 Date: 2026-06-06
 Status: Accepted
 Supersedes: the Azure-SQL `db/schema.sql` (division-based 4-level chain — now stale)
+Superseded in part by: ADR-0008 (approval unit → ฝ่าย × fiscal_year, not CC × year)
+Amended by: ADR-0021 (board_budget import path → yearly Excel file dropped on SharePoint,
+not an in-app CSV upload)
 
 ## Context
 

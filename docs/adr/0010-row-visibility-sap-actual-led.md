@@ -2,6 +2,9 @@
 
 Date: 2026-06-12
 Status: Accepted
+Amended by: ADR-0020 (actuals source = DW `cman_dw_wh_gold.gold.fact_gl_trans`
+read-through, not `gold_sap_gl_trans` in the app Lakehouse; the 3-source union rule
+itself is unchanged)
 
 ## Context
 

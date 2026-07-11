@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-11T19:16:55+0700",
+  "updated": "2026-07-12T00:20:50+0700",
   "tasks": [
+    {
+      "id": "reconcile-budget-schema-spec",
+      "state": "done",
+      "created": "2026-07-12T00:07:59+0700",
+      "updated": "2026-07-12T00:20:50+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "DONE: spec docs/specs/budget-transactional-data-model.md reconciled to ADR-0008 (approval unit dept,year), ADR-0019 (CC-Filler RLS), new ADR-0020 (SAP read-through fact_gl_trans DW ws 302668d3), new ADR-0021 (board_budget yearly Excel drop, 14-col A-N, year-from-filename strict). CONTEXT.md 4 spots fixed. ADR-0003/0010 got amended-by backlinks. GATE (06 combined, docs-only): initial REQUEST CHANGES — 1 blocker (spec line ~291 stale 'Lakehouse gold_sap_gl_trans' in section-3 intro) + 3 suggestions (1a lifecycle wording, remark DBML comment, ADR backlinks); ALL 4 fixed same session -> effectively APPROVE. Follow-up candidates (out of scope, not done): .claude/project-context.md, docs/reference/data-platform-map.md + data-sources.md still say gold_sap_gl_trans; mockup 0002.2 + signoff doc 01 still show import/export buttons; fact_gl_trans exact col names verify-at-build; sync trigger (Sync-now btn vs daily poll) open.",
+      "human": "-"
+    },
     {
       "id": "specC-signoff-v2-excel",
       "state": "done",

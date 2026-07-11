@@ -83,20 +83,24 @@ closed, admin is the only operator — also resolves the post-deadline deadlock)
 Submits, the budget goes **straight to `APPROVED` — NO approval chain** (no managerempcode, no
 Nipaporn/Waraporn, no admin-loop). Admin **cannot** Submit a normal owned ฝ่าย while the cycle is
 open (only edit it). Logged `ADMIN_OVERRIDE`. Submit/approve act on the whole `(ฝ่าย, year)` block.
-`board_budget` CSV import/export is the admin's separate lane (unaffected by the lock).
+`board_budget` file sync (SharePoint drop, ADR-0021) is the admin's separate lane (unaffected by the lock).
 **jakkaritw** = external (Data-Analytics) admin with no `mas_employee_data` row, but a **FULL
 production admin** — MAY Submit→APPROVED like the budget authorities (decided 2026-06-13, ADR-0012:
 internal tool, trusted; no separate system-vs-budget admin tier). In the mockup jakkaritw is a
 `superTest` persona that can Submit any ฝ่าย.
 
 ### SAP / Actuals
-Read-only realised spend pulled from Lakehouse `gold_sap_gl_trans.company_curr_amount`.
-Shown green. Nobody types it.
+Read-only realised spend, read live (read-through) from the central DW gold warehouse
+`cman_dw_wh_gold.gold.fact_gl_trans` (workspace `cman-dw-prod-ws`), pre-aggregated
+DW-side and merged into the page by the backend (ADR-0020 — supersedes the older
+`gold_sap_gl_trans` app-Lakehouse reference). Shown green. Nobody types it.
 
 ### Approved budget — code name `board_budget`
-Board-approved budget owned by the budget dept. Admin imports it (`.csv` whole-year,
-Replace-by-Year) — **web entry/editing disabled entirely** (confirmed 2026-06-12); it
-goes **straight to the DB with NO in-app approval loop**. Shown blue. The UI/sign-off label
+Board-approved budget owned by the budget dept. Arrives as **one Excel file per year**
+(`approved_budget_<year>.xlsx`, year taken from the filename) dropped on SharePoint and
+synced whole-year Replace-by-Year (ADR-0021 — replaces the old in-app `.csv` upload) —
+**web entry/editing disabled entirely** (confirmed 2026-06-12); it goes **straight to
+the DB with NO in-app approval loop**. Shown blue. The UI/sign-off label
 stays "Approved · งบ" (stakeholders signed off), but **code, tables and columns use
 `board_budget`** to avoid the back-to-front confusion (this "Approved" never passes the
 in-app workflow). NOT a snapshot of Pending — a separate dataset Budget dept adjusts
@@ -124,8 +128,8 @@ same triple.
 fiscal_year)` rows that have a SAP actual that year — Approved/Pending appear alongside, waiting
 to be filled. A row also appears if it has data in EITHER of the other two layers, so the
 effective visible set for a CC × year is the **union of three sources**:
-- **SAP actual** rows (the leader / most common initial source), `gold_sap_gl_trans`;
-- **Approved** rows — incl. a brand-new GL or CC introduced by an Approved CSV import that has
+- **SAP actual** rows (the leader / most common initial source), `fact_gl_trans` (ADR-0020);
+- **Approved** rows — incl. a brand-new GL or CC introduced by an Approved file import that has
   no SAP actual: the imported row still shows (Approved filled · SAP empty · Pending waiting);
 - **Pending** rows — incl. a GL **or CC** the user added by hand with `+ เพิ่ม transaction`
   (picks CC + GL freely from the cost-center / GL masters, within fill-scope).
