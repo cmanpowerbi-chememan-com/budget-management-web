@@ -69,6 +69,15 @@ Notes on the externals (verified against source SQL/notebooks, do not re-discove
   at least Viewer on `302668d3` (once blocked there; portal grant required). Verify before the
   first backend integration test; a missing grant must fail loudly, not render an empty green
   layer (ADR-0020).
+- **Manager-resolution rule (See-scope + approver1, resolved 2026-07-12 — closes the ADR-0019
+  open item):** direct manager = managerempcode of the Filler's **Primary position row only**;
+  Acting rows ignored (3 of the 4 multi-manager Fillers' "second manager" was themselves; the
+  one real case — taweesaks — decided Primary). 0 employees have two Primary rows, so the rule
+  is deterministic. Fallback: Filler absent from the employee master (real case `warapornkh@`,
+  likely a file typo) still Fills, but approver1 resolves via ADR-0006's invalid-approver1
+  fallback (→ Nipaporn); sync WARNS per such row. Build note: lookup source must cover ALL
+  active employees — the filtered 344-row `mas_employee_data` drops at least one real Filler
+  (thanakorny, only in the 649-row `employee_master_stg`).
 
 ### 1c. The 3 display layers (FINAL — confirmed with user 2026-06-12)
 
@@ -126,8 +135,9 @@ visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LE
   imported budget would vanish. "No SAP actual" is just *one* reason a GL must be hand-added.
 - `fact_gl_trans` has **no orgcode** (SAP carries `RACCT`=gl, `RCNTR`=cost_center only) — RLS
   filters by the login's CC set (**CC↔Filler map, ADR-0019**: Fill = CCs whose Filler column
-  lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager) then joins SAP
-  by cost_center.
+  lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager, where "direct
+  manager" = the managerempcode of the Filler's **PRIMARY position row only** — resolved
+  2026-07-12, same rule as ADR-0006 approver1; see ADR-0019) then joins SAP by cost_center.
 - Display "query" = 3-source union on the triple, filtered by the RLS CC set — computed as a
   **merge in FastAPI** (ADR-0020): the SAP side is fetched pre-aggregated from the DW, the
   budget side from Fabric SQL DB; the two stores cannot be joined in one SQL query. No new

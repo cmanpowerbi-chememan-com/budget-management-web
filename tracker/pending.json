@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-12T00:20:50+0700",
+  "updated": "2026-07-12T01:38:48+0700",
   "tasks": [
+    {
+      "id": "approver-primary-manager-rule",
+      "state": "done",
+      "created": "2026-07-12T01:38:48+0700",
+      "updated": "2026-07-12T01:38:48+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "RESOLVED ADR-0019 open item via real-data grilling: See-manager + approver1 = managerempcode from Filler's PRIMARY row only (Acting ignored). Tested+rejected 2 alt rules: org_code equality (90.4% zero-match, structural parent-child), CC-orgcode tie-break via cc orgcode.xlsx (many-to-many, 47% unresolved, redundant where it works). Key insight: 3/4 'multi-manager' Fillers had self-manager Acting rows; real case taweesaks -> Bunpot (user confirmed). Fallbacks: warapornkh not in master -> ADR-0006 Nipaporn fallback + sync WARN; lookup source must be unfiltered (thanakorny only in stg 649 not mas 344). ADR-0019 + spec updated. NOT committed yet.",
+      "human": "-"
+    },
     {
       "id": "reconcile-budget-schema-spec",
       "state": "done",

@@ -63,9 +63,35 @@ this decision is low.
   them" no longer applies. A manager **two** levels above a Filler does NOT
   automatically see that Filler's CCs under this rule (only the DIRECT manager does).
   Revisit if a wider roll-up turns out to be needed.
-- Open question (flag for the data-engineering session that builds the sync): does
-  the direct-manager lookup for See-scope need the same "Primary AND Acting
-  posstatus" nuance ADR-0007 required for orgcode lookups? Not yet decided.
+- ~~Open question: does the direct-manager lookup for See-scope need the same
+  "Primary AND Acting posstatus" nuance ADR-0007 required for orgcode lookups?~~
+  **RESOLVED 2026-07-12 (grilled against real data): the direct manager = the
+  `managerempcode` of the Filler's PRIMARY position row only.** Acting rows are
+  ignored for manager derivation (both See-scope and ADR-0006 approver1 — one rule).
+  Evidence from `employee_master_stg` (649 rows) × the real Filler list (100):
+  - Only 4 Fillers had >1 distinct manager across rows, and for 3 of them the
+    "second manager" was **themselves** (their Acting row reports to their own
+    Primary post) — no real ambiguity. The one real case (taweesaks: Bunpot-Primary
+    vs Nussarin-Acting) was decided by the user: **Primary wins** (and Nussarin
+    reports to Bunpot anyway, so the chain stays in-line).
+  - Two alternative rules were tested against real data and rejected:
+    org_code equality (selects nobody for 90.4% of Filler rows — a manager's
+    org_code is the PARENT of the report's, never equal) and a CC→orgcode
+    tie-break via `cc orgcode.xlsx` (47% unresolved — that file is many-to-many
+    with 3 shared-service orgcodes present on ALL 210 CCs; where it did resolve
+    it always agreed with Primary anyway).
+  - Safety checks: 0 employees have two Primary rows (deterministic), and every
+    referenced managerempcode exists in the master.
+  - Fallback (Filler not in the employee master at all — real case
+    `warapornkh@chememan.com`, likely a typo in the map): the Filler can still
+    Fill (being listed IS sufficient), but no See-manager resolves and, on
+    submit, approver1 falls back per ADR-0006's existing invalid-approver1 rule
+    (→ Nipaporn). The sync must WARN per such row, not fail the file.
+  - Build note: the manager lookup must run against an employee source that
+    includes ALL active employees — the 344-row filtered `mas_employee_data`
+    already drops at least one real Filler (thanakorny, empcode 101930, present
+    only in the unfiltered 649-row `employee_master_stg`). Resolve source/filters
+    at sync build.
 - No cold-start migration problem: `cc dept.xlsx` already contains real data
   (confirmed 2026-07-11) — the existing file becomes authoritative as-is once the
   sync exists, no need to seed ~200 blank rows.
