@@ -325,14 +325,21 @@ def admin_block():
     return "".join(parts)
 
 
-def sync_block(extra=None):
+# The sync mechanism (Excel on SharePoint -> Fabric) is the same for all 6
+# datasets, so the Data-sync block is shown ONCE (first section only). Any
+# dataset-specific sync rule lives inline in that section's principles instead.
+_sync_emitted = [False]
+
+
+def sync_block():
+    if _sync_emitted[0]:
+        return ""
+    _sync_emitted[0] = True
     txt = (
-        f"ข้อมูลในไฟล์ Excel นี้จะถูกซิงค์เข้าสู่คลังข้อมูลกลางบน Microsoft Fabric "
+        f"ข้อมูลในไฟล์ Excel ทั้ง 6 ชุดนี้จะถูกซิงค์เข้าสู่คลังข้อมูลกลางบน Microsoft Fabric "
         f"(workspace `{FABRIC_WS}`, lakehouse `{FABRIC_LH}`) เพื่อให้ระบบงบประมาณและรายงานนำไปใช้งานจริง "
+        "รอบเวลาการซิงค์และการตรวจสอบความถูกต้องของข้อมูล (validation) อยู่ระหว่างการออกแบบ"
     )
-    if extra:
-        txt += extra + " "
-    txt += "รอบเวลาการซิงค์และการตรวจสอบความถูกต้องของข้อมูล (validation) อยู่ระหว่างการออกแบบ"
     return subheading("การซิงค์ข้อมูลเข้าใช้งานจริง (Data sync)") + body_para(txt, space_after=160)
 
 
@@ -659,8 +666,9 @@ def build_body(logo_rid, logo_size):
     p.append(bullet(
         "การกำหนดสายการอนุมัติหลังส่งงบ (ผู้จัดการโดยตรงของผู้ส่ง → คุณนิภาพร → คุณวราพร) "
         "ไม่เปลี่ยนแปลง ไฟล์นี้กำหนดเฉพาะว่าใครกรอก/มองเห็นได้ ไม่เกี่ยวกับผู้อนุมัติ"))
-    p.append(sync_block(
-        extra="ทั้งนี้ แถวที่เว้นช่องผู้กรอกว่างไว้จะถูกข้ามเฉพาะแถวนั้นตอนซิงค์ ส่วนแถวอื่นในไฟล์ยังซิงค์ตามปกติ"))
+    p.append(bullet(
+        "ตอนซิงค์ข้อมูล แถวที่เว้นช่องผู้กรอกว่างไว้จะถูกข้ามเฉพาะแถวนั้น ส่วนแถวอื่นในไฟล์ยังซิงค์ตามปกติ"))
+    p.append(sync_block())
 
     # ==================================================================== #
     # Sign-off
