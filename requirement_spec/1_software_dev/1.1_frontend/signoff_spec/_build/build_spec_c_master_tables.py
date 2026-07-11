@@ -304,12 +304,20 @@ ADMINS = [
 ]
 
 
+# The admin/access block is shown ONCE (first section only); the same 4 people
+# and SharePoint permission model apply to every dataset, so it is not repeated.
+_admin_emitted = [False]
+
+
 def admin_block():
+    if _admin_emitted[0]:
+        return ""
+    _admin_emitted[0] = True
     parts = [label_para(ADMIN_INTRO)]
     for a in ADMINS:
         parts.append(bullet(a))
     parts.append(body_para(
-        "การเข้าถึงและสิทธิ์แก้ไขไฟล์ควบคุมด้วยสิทธิ์ของไฟล์/โฟลเดอร์บน SharePoint "
+        "การเข้าถึงและสิทธิ์แก้ไขไฟล์ทั้ง 6 ชุดนี้ควบคุมด้วยสิทธิ์ของไฟล์/โฟลเดอร์บน SharePoint "
         "(site CMANDWPRD) โดยตรง เฉพาะผู้ที่ได้รับสิทธิ์ข้างต้นเท่านั้นที่แก้ไขไฟล์ได้ "
         "ทั้งนี้ SharePoint บันทึกประวัติการแก้ไข (version history) ของไฟล์ให้อัตโนมัติ",
         space_after=140,
