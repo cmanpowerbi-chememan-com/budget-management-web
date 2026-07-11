@@ -42,10 +42,14 @@ this decision is low.
   decides who CAN submit a CC, not who approves it afterward.
 - **Approval unit is UNCHANGED** (ADR-0008 stands as-is): still `(ฝ่าย, fiscal_year)`,
   via the separate CC→ฝ่าย map (file02) — this ADR does not touch that map.
-- **Sync tolerance:** a CC row with a blank Filler cell is skipped individually at
-  sync — the rest of the file still lands. A CC with zero Fillers has nobody who can
-  fill/see it until an email is added; treat it the same as ADR-0009's "orphan ฝ่าย"
-  — it falls to the Admin fallback (`ADMIN_EMAILS` overlay, unaffected by this ADR).
+- **Sync tolerance & empty CCs:** a CC row with a blank Filler cell is skipped
+  individually at sync — the rest of the file still lands. A CC with zero Fillers has
+  **no owner: nobody can fill or see it until an email is added to that row** — there
+  is NO automatic admin-fallback ownership for it (decided 2026-07-11, aligning the
+  sign-off doc Spec C-6 and this ADR; supersedes the earlier "falls to the ADR-0009
+  orphan-ฝ่าย Admin fallback" wording). The `ADMIN_EMAILS` see-all / edit-any-Pending
+  overlay still exists as a general admin power (ADR-0012), but empty CCs are not
+  specially routed to it — they simply stay unfilled until an admin adds a Filler email.
 - `orgcode_costcenter_map` (file09) keeps existing as its own admin-edited dataset
   (item #2 in ADR-0018) — it is simply no longer read for RLS. Any other use of it is
   out of scope here.

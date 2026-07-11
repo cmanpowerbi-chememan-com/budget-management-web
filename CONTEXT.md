@@ -29,8 +29,9 @@ _Avoid_: "คนกรอกข้อมูล" untranslated — use Filler.
 Admin-maintained master table (dataset #6 of ADR-0018), synced from `cc dept.xlsx` into
 Fabric (`cman-dw-ws` / `modern_lh_cman_dw`). One row per Cost Center; its Filler column
 holds ≥1 email, comma-separated. Single source of truth for both See-scope and Fill-scope
-(ADR-0019) — a CC with zero Fillers falls to the Admin fallback, same treatment as an
-orphan ฝ่าย (ADR-0009).
+(ADR-0019) — a CC with zero Fillers has **no owner**: nobody can fill or see it until an
+email is added to that row (there is no automatic admin-fallback ownership; the general
+`ADMIN_EMAILS` overlay still exists per ADR-0012 but empty CCs are not specially routed to it).
 
 ### RLS scope (Row-Level Security)
 The set of Cost Centers a logged-in user may **see**. Resolved (per ADR-0019) as:
