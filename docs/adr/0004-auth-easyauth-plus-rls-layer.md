@@ -1,7 +1,10 @@
 # 4. Auth = Container Apps EasyAuth (all users) + separate RLS layer
 
 Date: 2026-06-06
-Status: Accepted
+Status: Accepted. **Note (2026-07-11, ADR-0019):** the RLS lookup chain in the
+Decision below (`orgcode_costcenter_map → cost_center list`) is superseded — RLS now
+resolves via the Cost Center↔Filler map. The auth/authentication layer (EasyAuth,
+`ADMIN_EMAILS` as role flag) is unaffected.
 
 ## Context
 

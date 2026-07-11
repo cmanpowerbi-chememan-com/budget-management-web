@@ -37,9 +37,189 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 28 June 2026 12:00 AM &bull; rendered: 28 June 2026 10:04 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (0)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 0</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 0</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 11 July 2026 6:44 PM &bull; rendered: 11 July 2026 6:44 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (11)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 10</button></div>
   
+    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#sap-actuals-view</span>
+        <span class="dt">9 July 2026 1:03 PM &rarr; 9 July 2026 1:24 PM</span>
+      </div>
+      <div class="id">sap-actuals-view</div>
+      <div class="who"><span class="tag agent">🤖 04-data-engineer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>BLOCKED on permissions: SP cman-fabric-write (de4b353f, same SP in budget+DW .env) has no grant on workspace 302668d3 (cman_dw_wh_gold). REST 403, OneLake 403, SQL 18456; sanity connect to cman-dw-ws OK so recipe correct. Endpoint host derived offline (base32 trick, saved to memory). Probe script ready in scratchpad (probe_fact_gl_trans.py, 16 probes). Next: user grants Viewer/ReadData in portal -&gt; rerun probe -&gt; resume workflow wf_4a5c10c5-155 (author+verify phases).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>งานสร้าง view ติดเรื่องสิทธิ์เข้าถึงข้อมูลชั่วคราว — ตัว service principal (บัญชีโปรแกรมชื่อ cman-fabric-write ที่ระบบใช้ต่อฐานข้อมูล) ยังไม่มีสิทธิ์เข้า workspace ที่เก็บตาราง fact_gl_trans จึงยัง probe ข้อมูลจริงไม่ได้ สิ่งที่ต้องทำ: เข้า Fabric portal แล้วให้สิทธิ์ Viewer กับ cman-fabric-write บน workspace นั้น (สิทธิ์นี้ backend ของแอปงบประมาณต้องใช้อยู่แล้วตอนดึงยอดใช้จริงขึ้นเว็บ ไม่ใช่สิทธิ์เกินจำเป็น) พอให้สิทธิ์แล้วบอก ผมจะ probe ต่อและส่ง SQL สร้าง view ที่ตรวจแล้วให้รัน</span></div>
+      
+    </div>
+
+    <div class="card latest" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#mastertables-excel-migration</span>
+        <span class="dt">11 July 2026 6:37 PM &rarr; 11 July 2026 6:44 PM</span>
+      </div>
+      <div class="id">mastertables-excel-migration</div>
+      <div class="who"><span class="tag skill">🧩 20-grill-with-docs</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center&lt;-&gt;Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>see ai field</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#employee-budget-view</span>
+        <span class="dt">9 July 2026 10:39 PM</span>
+      </div>
+      <div class="id">employee-budget-view</div>
+      <div class="who"><span class="tag agent">🤖 main</span><span class="tag skill">🧩 19-fast-mode</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data&#x27;s compact names (empcode/orgcode/joblevelnameen). Applied the project&#x27;s 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status=&#x27;Active&#x27;, employee_code NOT LIKE &#x27;4%&#x27; (Gritsman), org_code NOT LIKE &#x27;117%&#x27; (Vietnam/Office of Affiliate), job_level_name_en NOT IN (&#x27;Operator 1&#x27;,&#x27;Operator 2&#x27;,&#x27;Operator 3&#x27;,&#x27;Driver&#x27;,&#x27;Maid&#x27;) (L5). Added record_status=&#x27;active&#x27; as forward-proofing (user probe: only value present is &#x27;active&#x27;, 649 rows; Fabric Warehouse collation is case-sensitive so &#x27;active&#x27; lower vs &#x27;Active&#x27; upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>เสร็จแล้ว — สร้าง view กรองรายชื่อพนักงานสำหรับระบบ budget จากตาราง employee_master (ตัว mirror warehouse ตัวเดียวตามที่พี่ระบุ)
+
+view ชื่อ: dbo.vw_employee_budget (CREATE OR ALTER — รันซ้ำได้ไม่ error)
+
+ตรรกะการกรอง (เหมือนกฎเดิมที่สคริปต์ sync_employees.py ใช้กรอง mas_employee_data เป๊ะ):
+- เอาเฉพาะพนักงาน Active (hr_status = &#x27;Active&#x27;)
+- ตัด Gritsman (employee_code ไม่ขึ้นต้น 4)
+- ตัด Vietnam / Office of Affiliate (org_code ไม่ขึ้นต้น 117)
+- ตัดระดับ L5 Operator/Driver/Maid (ไม่ได้ใช้ระบบ)
+- เพิ่ม record_status = &#x27;active&#x27; กันเหนียว (เผื่อ mirror flag แถวที่ถูกลบต้นทางในอนาคต)
+
+ผลตรวจ (รันจริง 1 รอบ): จาก 649 คน active เหลือ 344 คนหลังกรอง — จำนวนสมเหตุสมผล ตรงตรรกะเดียวกับ sync เดิม
+
+ทำเป็นเวอร์ชัน slim = เลือกเฉพาะคอลัมน์ที่ budget ใช้ ตัด PII (id_card, religion_name, personal_email, ที่อยู่) และตัดคอลัมน์ metadata ของ pipeline (_load_dt, _load_dttm, record_status) แต่ยังเก็บ manager_employee_code ไว้ให้ approval chain ใช้ต่อ
+
+หมายเหตุ: view สร้างจาก mode fast (ผมส่ง SQL ให้พี่รันเอง ตรวจผลรอบเดียว) เป็น DDL อย่างเดียว — ตัว view นี้ยังไม่ได้เก็บเข้าไฟล์ .sql ใน repo ถ้าอยากให้ commit เก็บไว้เป็นหลักฐาน บอกได้ ผมเซฟให้</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#emp-ingest-to-dw-prompt</span>
+        <span class="dt">9 July 2026 3:27 PM</span>
+      </div>
+      <div class="id">emp-ingest-to-dw-prompt</div>
+      <div class="who"><span class="tag agent">🤖 main</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Generated a self-contained cross-project handoff prompt to migrate mas_employee_data ingestion (C-POP HR REST API) from the external Python sync (sync_employees.py DELETE+INSERT into budget_management_web Fabric SQL DB, GitHub Action 06:00 BKK) INTO the cman-dw-ws (adeb7108) medallion master lane. Recon via Fabric MCP: cman-dw-ws is a mature registry-driven medallion DW with an existing master lane (pl_daily_master -&gt; pl_copy_landing_master + pl_batch_ingest_master/NB_batch_orchestrator &#x27;loop over source specs&#x27; -&gt; 02_NB_land_to_bronze_master_{sap,non_sap} -&gt; 03_NB_bronze_to_silver_master_{sap,non_sap} -&gt; gold via 04_NB_vendor/NB_gold_asset_costcenter), Lakehouse modern_lh_cman_dw (bronze_src/silver_master/gold_master schemas) + in-ws fabric_sql_database, varlib_env VariableLibrary, env_spark Environment. Employee = new source KIND rest_api (existing kinds: gateway-copy SAP master, SharePoint xlsx MNL_M_ non-SAP). Prompt file tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md embeds: API contract (POST keyDate/empCode, Authorization header, employeeList, &#x27;hr status&#x27; key w/ space, empty-&gt;NULL, date fields), 4 filters applied at SILVER (Active, drop empcode 4*, drop orgcode 117*, drop L5 Operator/Driver/Maid), full ~80-col gold contract == current mas_employee_data, build steps (register source -&gt; land JSON -&gt; bronze -&gt; silver+filter+dedup -&gt; gold_master.employee -&gt; optional fabric_sql_database mirror -&gt; ride pl_daily_master, retire GitHub Action), secrets in varlib_env/KeyVault not GitHub, SP cman-fabric-write needs Contributor on cman-dw-ws + Spark egress, fabric-deploy-gotchas + TDD. User answered Q1=generate a copy-paste prompt for the other project, Q2=app reads from the new ws. Actual Fabric build happens in the DW project (not this repo).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>สร้าง prompt สำหรับก๊อปไปวางที่โปรเจกต์ DW (คนที่ดูแล workspace cman-dw-ws) เพื่อย้ายการนำเข้าข้อมูลพนักงาน (mas_employee_data) จาก C-POP HR API เข้าไปทำใน Fabric ที่ workspace ใหม่แทนสคริปต์ Python เดิม
+
+ทำอะไรไปแล้ว:
+- สำรวจของจริง: cman-dw-ws (id adeb7108) เป็น data warehouse ทรง medallion ที่มี &quot;master lane&quot; อัตโนมัติอยู่แล้ว (pipeline pl_daily_master → land → bronze → silver → gold) และมีทั้ง Lakehouse (modern_lh_cman_dw) กับ Fabric SQL DB ในตัว
+- เขียนไฟล์ prompt แบบพกครบในตัว: tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md — ข้างในมี API contract (วิธีเรียก, header, body), ตัวกรอง 4 ข้อ (Active/ตัด Gritsman/ตัด Vietnam/ตัด L5), รายชื่อคอลัมน์ครบ ~80 ช่อง, ชื่อ notebook/pipeline เดิมที่ให้ต่อยอด, ที่เก็บ secret, สิทธิ์ที่ต้องให้ Service Principal
+
+วิธีที่ prompt สั่งให้ทำ (สรุป): ลงทะเบียน C-POP HR API เป็น master source ตัวใหม่ในสาย master ที่มีอยู่ → ดึง API เขียน JSON ลง landing → ไหลผ่าน bronze → silver (ใส่ตัวกรองตรงนี้) → gold_master.employee (คอลัมน์เท่ากับ mas_employee_data เดิมเป๊ะ) → ให้แอปอ่านจากที่ใหม่ → เกาะ schedule รายวันเดิม แล้วเลิกใช้ GitHub Action ตัวเก่า
+
+ยังไม่ได้ทำ (ต้องทำที่โปรเจกต์ DW ปลายทาง):
+- ตัวงานจริงใน 	Fabric ยังไม่ถูกสร้าง — งานนี้ผมส่งแค่ prompt ให้พี่เอาไปวางที่โปรเจกต์นั้น
+- ยังไม่ได้เลิก/ลบ GitHub Action + สคริปต์ Python เดิม (ทำหลัง lane ใหม่รันเขียวสัก 2-3 วัน)
+
+พี่ต้องทำต่อ: เปิดไฟล์ CROSS_PROJECT_PROMPT.md ก๊อปบล็อก prompt ไปวางที่ session ของโปรเจกต์ DW; และช่วยยืนยันว่าจะให้แอปอ่าน employee จาก gold ของ Lakehouse (อ่านอย่างเดียว) หรือให้ pipeline คัดลอกเข้า Fabric SQL DB ในworkspace ใหม่ด้วย (prompt รองรับทั้งสองแบบ)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#pubrel-subform-filled-asset</span>
+        <span class="dt">29 June 2026 10:20 AM &rarr; 29 June 2026 12:05 PM</span>
+      </div>
+      <div class="id">pubrel-subform-filled-asset</div>
+      <div class="who"><span class="tag agent">🤖 main</span><span class="tag skill">🧩 35-webapp-testing</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Public Relation &amp; Donation special-GL subform example snapshot from mockup 0002.1budget-export.html. v2 (user follow-up &#x27;ใส่ annotation 1 2 3 4&#x27;): regenerated as the LOCKED read-only + FILLED state to match the pasted legend (① 🔒, ② disabled, ③ ปิด, ④ monthly amounts→auto-sum) — the earlier unlocked-filled version contradicted that legend. Headless: switchUser(&#x27;suchanya&#x27;) + DEPT_STATUS[&#x27;Solution Delivery&#x27;]=&#x27;PENDING_APPROVER1&#x27; (ADR-0013 lock), repointed txn #5 glCode→6211700030, seeded 2 pendingDetails rows (รายละเอียด + scattered 12-month numbers, every month populated), openDetailModal(5). Then baked 4 gold markers (①②③④) via the same Pillow _circle/_leader/annotate pipeline as build_special_gl_subform_spec.py, coords from live getBoundingClientRect of #detailModalTitle / first รายละเอียด .detail-input / #detailCloseBtn / first month-cell input. Asserts PASS: title has 🔒 + &#x27;Public Relation &amp; Donation&#x27;, close btn=&#x27;ปิด&#x27;, first input disabled=true, Year total ฿249,000, 0 missing marker rects. Cropped #detailModal .modal @ device_scale_factor=2 (118 KB). OVERWRITES sub_pubrel_filled.png (now locked+annotated, not the prior unlocked one). Distinct from existing sub_pubrel.png. NOT yet wired into Spec B docx. Awaiting user visual confirm (image not opened by Claude).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ภาพฟอร์มย่อย Public Relation &amp; Donation — v2: ทำใหม่เป็นสถานะ &#x27;ล็อก/อ่านอย่างเดียว + กรอกแล้ว&#x27; ให้ตรงกับตาราง legend (① 🔒, ② disabled, ③ ปิด, ④ ยอดรายเดือน→รวมอัตโนมัติ ฿249,000) แล้ววาง marker ทอง ①②③④ ตามตำแหน่งจริงด้วย Pillow (วิธีเดียวกับ build Spec B); ทับไฟล์ sub_pubrel_filled.png เดิม; ยังไม่ wire เข้า docx; รอผู้ใช้เปิดดูยืนยัน</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#glgroup-merged-rows-asset</span>
+        <span class="dt">29 June 2026 10:00 AM &rarr; 29 June 2026 12:05 PM</span>
+      </div>
+      <div class="id">glgroup-merged-rows-asset</div>
+      <div class="who"><span class="tag agent">🤖 main</span><span class="tag skill">🧩 35-webapp-testing</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Generated the missing screenshot asset for the &#x27;Merged rows (rowspan)&#x27; section of Spec 03 (Edit GL Group). Rendered gl-group.html via file:// (auto demo seed), then overrode the top-level lexical bindings sapGlCodes/glGroupDims/masterData (bare-name assignment — window.* does NOT reach the `let` binding renderTable reads) to inject a 3-run + 2-run + single so a &#x27;3× MERGED&#x27; rowspan cell appears, matching the spec&#x27;s example. Headless asserts PASS: rowspans [&#x27;3&#x27;,&#x27;2&#x27;], count_tags [&#x27;3× MERGED&#x27;,&#x27;2× MERGED&#x27;], 6 data rows (display-only merge, each GL code still 1 &lt;tr&gt;). Cropped to section.panel:has(.data-table) at device_scale_factor=2 (151 KB). NOT yet wired into build_edit_gl_group_spec.py / docx. Awaiting user visual confirm (per CLAUDE.md, image not opened by Claude).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>สร้างภาพ &#x27;07_merged.png&#x27; ประกอบหัวข้อ &#x27;รวมแถว (Merged rows)&#x27; ของ Spec 03 (Edit GL Group) — แสดงช่อง 3× MERGED (rowspan) จาก gl-group.html, ครอปเฉพาะตาราง; ยังไม่ได้ wire เข้า build script/docx; รอผู้ใช้เปิดดูยืนยัน</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#lease-rental-subform-snapshot</span>
+        <span class="dt">29 June 2026 11:30 AM</span>
+      </div>
+      <div class="id">lease-rental-subform-snapshot</div>
+      <div class="who"><span class="tag agent">🤖 main</span><span class="tag skill">🧩 35-webapp-testing</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Generated a PNG snapshot of the Lease &amp; Rental detail subform (GL ...060 vehicle) from the wired mockup 0002.1budget-export.html. Playwright file:// render; bypassed openDetailModal by bare-name assigning the global lexical bindings (transactions.push + currentEditingTxnId=999 + detailReadonly=false — window.* does NOT reach the `let` bindings), injected a pending Lease&amp;Rental txn (CC 10AC020000, GL 6211200060) with 3 filled detail rows: Car/6ขผ-3918/BK/รับ-ส่งผู้บริหาร, Van/1นจ-3508/RY/ขนส่งวัตถุดิบโรงงาน, Trucks/6ขจ-3513/KK/ขนส่งสินค้าสำเร็จรูป — each with 12 monthly numbers. Called renderDetailTable() + added .open class. Then overlaid 5 gold circled-number markers ①②③④⑤ (.legend-marker divs, abs-positioned from live getBoundingClientRect of row-1 cells) matching the legend: ①ประเภทรถ ②ทะเบียนรถ ③สถานที่ใช้งาน ④กิจกรรม ⑤ยอดรายเดือน. Screenshotted #detailModal .modal at device_scale_factor=2 (viewport 1820w, 158 KB). Headless asserts PASS: 3 data + 1 total row, markers=5, Year total ฿632,000 (300k+242k+90k), subtitle 10AC020000·6211200060·ค่าเช่า-ยานพาหนะ, 0 console errors. Filename ★-prefixed to sort to top; MOVED into signoff_spec/assets/. NOT yet wired into build_special_gl_subform_spec.py / Spec B docx. Not opened by Claude — awaiting user visual confirm.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>สร้างภาพ PNG ฟอร์มย่อย Lease &amp; Rental (GL ...060 รถ) จาก mockup 0002.1 — 3 แถว (Car/Van/Trucks) + ตัวเลข 12 เดือน รวม ฿632,000 + marker ทอง ①②③④⑤ ตรง legend; ตั้งชื่อขึ้นต้น ★ ให้ลอยขึ้นบนสุด ย้ายเข้า signoff_spec/assets แล้ว; ยังไม่ wire เข้า build/docx; รอผู้ใช้เปิดดูยืนยัน</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#specA-master-fx-screenshots</span>
+        <span class="dt">28 June 2026 10:28 PM</span>
+      </div>
+      <div class="id">specA-master-fx-screenshots</div>
+      <div class="who"><span class="tag agent">🤖 main</span><span class="tag skill">🧩 35-webapp-testing</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Added two figures under §15 (Master FX read-only) of Spec A main web app sign-off spec. (1) Tight Playwright crop of the read-only Master FX chip — anchored via #fxDisplay.closest(&#x27;.admin-zone-note&#x27;) because #fxDisplay is only the number and there are two .admin-zone-note spans. (2) Full screenshot of the Master Currency edit page (Module 09, main.wrap of 03-edit-master-table/.../master-currency.html, self-contained demo data FY2025=35.00). Wired both into build_main_web_app_spec.py: new fx_only + mc_page captures, MC_PAGE constant, order list entries, image_para calls under item 15; rebuilt docx (2.97 MB). Uncommitted. Times exact (this session).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>เพิ่มภาพ 2 รูปใต้ข้อ 15 (Master FX) เอกสาร Spec A — crop แถบ FX read-only + ภาพหน้า Master Currency (Module 09) ที่แก้อัตราจริง; wire เข้า build script แล้ว rebuild docx (ยังไม่ commit)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#repo-cleanup</span>
+        <span class="dt">28 June 2026 10:09 PM</span>
+      </div>
+      <div class="id">repo-cleanup</div>
+      <div class="who"><span class="tag agent">🤖 cursor (CC→Cursor handoff)</span><span class="tag skill">🧩 36-cc-cursor-handoff</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Repo cleanup shipped via CC→Cursor handoff (TASK-001). Tidied repo layout; recorded as commit 1a2d3fc in plan.md (handoff/plan record commits 276b2fb, 46d9992). Reconstructed from git history — best-effort.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ทำความสะอาดโครงสร้าง repo (handoff ให้ Cursor ทำ, CC วางแผน+ตรวจ)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#specB-clarity-polish</span>
+        <span class="dt">28 June 2026 10:09 PM</span>
+      </div>
+      <div class="id">specB-clarity-polish</div>
+      <div class="who"><span class="tag agent">🤖 cursor (CC→Cursor handoff)</span><span class="tag skill">🧩 36-cc-cursor-handoff</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Clarity polish of Special GL Group Subform sign-off spec (Spec B / Module 02) via CC→Cursor handoff (commits f96962f, 8a693e8; underlying 758d320). Readability + wording tightening. Reconstructed from git history — best-effort.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ปรับ Spec B (ฟอร์มย่อย Special GL) ให้อ่านง่าย/ชัดขึ้น (handoff Cursor)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#specC-mastertables-polish</span>
+        <span class="dt">28 June 2026 10:09 PM</span>
+      </div>
+      <div class="id">specC-mastertables-polish</div>
+      <div class="who"><span class="tag agent">🤖 cursor (CC→Cursor handoff)</span><span class="tag skill">🧩 36-cc-cursor-handoff</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Readability/concision polish of Master-Tables sign-off spec (Spec C) — mechanical (TASK-001) + judgment (TASK-002) fixes, signoff-spec-v2 (commits 781460a, 2d0de47). Reconstructed from git history — best-effort.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ปรับ Spec C (Master Tables) ให้กระชับ อ่านง่าย (handoff Cursor)</span></div>
+      
+    </div>
   <div class="meta" style="margin-top:18px">
     อ้างอิง task เวลาคุยกับ CC: พิมพ์ <code>#&lt;id&gt;</code> เช่น <code>#phase2-agents</code><br>
     source of truth: <code>tracker/pending.json</code> — AI อ่านไฟล์นี้ก่อนทำงานทุกครั้ง แล้วอัปเดต state เสมอ. แก้ json แล้วรัน <code>python tracker/render_pending.py</code>

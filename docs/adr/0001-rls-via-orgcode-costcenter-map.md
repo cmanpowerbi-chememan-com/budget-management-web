@@ -1,7 +1,9 @@
 # 1. Row-Level Security resolves through the orgcode↔CostCenter map only
 
 Date: 2026-06-06
-Status: Accepted
+Status: Superseded by ADR-0019 (RLS now resolves via the Cost Center↔Filler map,
+`cc dept.xlsx`, not the orgcode↔CC map). Kept for history — the reasoning below (why
+two access mechanisms can't coexist) still applies to the newer decision.
 
 ## Context
 

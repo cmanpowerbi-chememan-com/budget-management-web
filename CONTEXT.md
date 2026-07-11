@@ -14,35 +14,53 @@ never by length. Every budget row, access check, and submit scope resolves to a 
 ### orgcode
 7-digit numeric string (e.g. `1120000`) identifying a person's org unit in the HR system
 (`mas_employee_data`). Does NOT match Cost Center format — the two are bridged by the
-orgcode↔CC map (file 09), which is **many-to-many**.
+orgcode↔CC map (file 09), which is **many-to-many**. **No longer used for RLS** (see
+RLS scope) since ADR-0019 — file 09 still exists as its own admin-edited master dataset,
+just not read for access resolution anymore.
+
+### Filler
+A person authorized to fill (enter numbers into) one or more Cost Centers, identified by
+email and assigned **directly** in the Cost Center↔Filler map (`cc dept.xlsx`, admin-edited
+Excel on SharePoint) — not derived from orgcode or ฝ่าย. A CC may have ≥1 Filler. Introduced
+by ADR-0019, replacing the derived Submitter concept below for RLS purposes.
+_Avoid_: "คนกรอกข้อมูล" untranslated — use Filler.
+
+### Cost Center ↔ Filler map
+Admin-maintained master table (dataset #6 of ADR-0018), synced from `cc dept.xlsx` into
+Fabric (`cman-dw-ws` / `modern_lh_cman_dw`). One row per Cost Center; its Filler column
+holds ≥1 email, comma-separated. Single source of truth for both See-scope and Fill-scope
+(ADR-0019) — a CC with zero Fillers falls to the Admin fallback, same treatment as an
+orphan ฝ่าย (ADR-0009).
 
 ### RLS scope (Row-Level Security)
-The set of Cost Centers a logged-in user may **see**. Resolved by a **union** (per ADR-0007):
-`(orgcode → file09 → CC) ∪ (ฝ่าย → file02 → CC) ∪ admin-overlay`. The orgcode↔CC map
-(file 09) is many-to-many and broad — one CC is reachable from many orgcodes, so higher
-tiers see their subordinates' CCs too — but it must be UNIONed with the user's ฝ่าย CCs
-(file 02), else ~29 users could fill a CC they cannot see (FILL ⊄ SEE). The orgcode lookup
-uses **both Primary AND Acting** posstatus. To fix a wrong permission, edit file 09 / file 02
-— never hard-code. (Superseded & dead: the single-chain orgcode-only design, the
-`get_visible_ccs` string-prefix design, and `capps_m_employee`.)
-**Seeing a CC ≠ being able to fill it** — see Submitter and See-scope vs Fill-scope.
+The set of Cost Centers a logged-in user may **see**. Resolved (per ADR-0019) as:
+`(CC↔Filler map → this user's CCs) ∪ (CC↔Filler map → each of those CCs' Fillers' direct
+manager's CCs) ∪ admin-overlay`. In plain terms: you see the CCs you fill, plus the CCs
+filled by anyone whose direct manager you are. To fix a wrong permission, edit the CC↔Filler
+map (`cc dept.xlsx`) — never hard-code.
+(Superseded & dead: the orgcode↔CC-map union design of ADR-0001/ADR-0007, the single-chain
+orgcode-only design, the `get_visible_ccs` string-prefix design, and `capps_m_employee`.)
+**Seeing a CC ≠ being able to fill it** — see Filler and See-scope vs Fill-scope.
 
 ### Submitter
-A user allowed to **fill and submit** budget — the 254-person submitter set (L3 + L4 +
-the 3 special L2 + Nipaporn + Waraporn), identified by role in the actor table. Filling is
-gated by this role, NOT by visibility: an `approver1_only` user (L1/L2 manager) can SEE a
-CC to approve it but the fill form is locked for them. The approval unit a submitter acts
-on is one `(ฝ่าย/department, fiscal_year)` (per ADR-0008 — was per-CC; CC→ฝ่าย is 1:1 so
-ฝ่าย is a clean partition); the UI batches all CCs of a ฝ่าย into one "report"-style
-submit/approve. A submitter spanning multiple ฝ่าย submits each ฝ่าย separately (N units).
+A user allowed to **fill and submit** budget. **Since ADR-0019, "allowed to fill" =
+listed as a Filler for that CC in the Cost Center↔Filler map — full stop.** Confirmed
+2026-07-11: the old L3/L4/special-L2 actor-table role gate is gone; there is no separate
+HR-level check layered on top. Being listed in the Filler map IS sufficient to fill,
+regardless of position level. The approval unit a submitter acts on is still one
+`(ฝ่าย/department, fiscal_year)` (ADR-0008, unaffected by ADR-0019) — the UI batches all
+CCs of a ฝ่าย into one "report"-style submit/approve. A submitter spanning multiple ฝ่าย
+submits each ฝ่าย separately (N units).
 
 ### See-scope vs Fill-scope
-- **Fill** = the CCs of one's own **ฝ่าย (department)** — `ฝ่าย → file02 → cost_center`.
-  A submitter's ฝ่าย comes from the curated `user_fill_dept` map (empcode → ฝ่าย).
-- **See** = **`(orgcode → file09 → CC) ∪ (ฝ่าย → file02 → CC)`** — orgcode access UNION
-  your ฝ่าย's CCs. The union guarantees the invariant **FILL ⊆ SEE** (you always see what
-  you can fill); without it, file09 and file02 diverge and ~29 users could fill unseen CCs.
-- Seeing a CC does NOT grant filling it (fill is the narrower ฝ่าย set, role-gated).
+- **Fill** = the CCs where the user's email is listed as a **Filler** in the Cost
+  Center↔Filler map (ADR-0019). Replaces the old `ฝ่าย → file02 → cost_center` derivation.
+- **See** = **a CC's Filler(s) ∪ each Filler's direct manager's CCs** (ADR-0019) —
+  `mas_employee_data.managerempcode` looked up per Filler. Replaces the old
+  `(orgcode → file09 → CC) ∪ (ฝ่าย → file02 → CC)` union. The invariant **FILL ⊆ SEE**
+  still holds (a Filler always sees their own CC).
+- Seeing a CC does NOT grant filling it (fill = listed as that CC's Filler; a Filler's
+  manager sees but does not fill, unless also separately listed as a Filler).
 
 ### ฝ่าย (department)
 The department grouping of a Cost Center. Single source = file 09's `Cost Center Name`

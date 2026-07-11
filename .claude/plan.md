@@ -10,7 +10,13 @@
 
 ## Real build (next)
 - [ ] scaffold frontend/ (React+Vite) + backend/ (FastAPI) — main budget app (mockup 0002.1 = source)
+  - RLS must resolve via the Cost Center↔Filler map (ADR-0019), NOT the orgcode chain (ADR-0001/0007 superseded) — read this before coding auth/RLS
 - [ ] test env → prod folder (TBC)
+
+## Master-tables → Excel migration (ADR-0018/0019, grilled 2026-07-11)
+- [ ] design + build the Excel(SharePoint)→Fabric sync job (`cman-dw-ws` / `modern_lh_cman_dw`) — cadence, validation-on-ingest, skip-blank-Filler-row tolerance (02-data-modeler + 04-data-engineer)
+- [ ] once sync is live and proven: decommission `03-edit-master-table/master-tables/01frontend/{gl-group,orgcode-costcenter,hide-document}.html` + their backend modules
+- [ ] open question carried from ADR-0019: does the direct-manager See-scope lookup need Primary+Acting posstatus (like the old orgcode lookup did)?
 
 ---
 
@@ -29,3 +35,4 @@ Completed milestones — one line each. Detail lives in git history.
 - SpecB (GL Subform) sign-off doc clarity polish (2026-06-26, version2/, commit 758d320 via **CC→Cursor handoff**) — SpecB is run-fragmented (no clean single-run paragraphs), so used a **paragraph-collapse** method (rebuild one run per paragraph, rPr preserves Thai `cs`+Latin `ascii` fonts). CC pre-built+proved tools `tasks/signoff-spec-v2/_tools/{extract_paras,apply_paras,check_paras}.py`; cs rewrote 40 paragraphs (colon-chains→bullets), version→v0.4.1 + changelog. Validate PASS: check_paras 0 dropped/0 wrong-index, images 14=14 untouched, markers/facts intact, commit scope clean.
 - Repo cleanup (2026-06-26, commit 1a2d3fc via **CC→Cursor handoff**) — user-approved exact-list delete: temp junk (`tasks/_tmp_*`), 6 superseded one-off SpecB scripts, `bin/` verify throwaway (~1.8MB, gitignored); `git rm` 4 done v2 tools + `edits_specA.json`; `git rm` `version2/` SpecA/B/C docx (live on SharePoint, in git history). Committed stray CURSOR_PROMPT.md. Kept 9 reusable `_tools` + task records. Validate PASS: commit scope clean (only cleanup paths), pre-existing unrelated changes + `index.html` untouched.
 - ADRs 0001–0017 written (RLS, see/fill/approval-unit, admin override/toggle, FX snapshot, Fabric SQL DB).
+- master-tables `01frontend/index.html` rebuilt as a real Home/overview grid (2026-07-06) — replaces the old `<meta refresh>` redirect stub with 5 module cards (GL Group/Orgcode-CC/Hide Document/Master Currency/Closing Date), reusing budget-closing-date.html's design system verbatim (theme, fonts, nav). Playwright headless verify PASS (13/13 assertions: 5 cards, hrefs, module badges 03/07/08/09/10, downstream tags, nav active state, 0 console errors, theme toggle). No backend/data wiring — static presentational page only.

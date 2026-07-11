@@ -1,7 +1,10 @@
 # 7. See-scope vs Fill-scope, and shared Cost Centers
 
 Date: 2026-06-09
-Status: Accepted
+Status: Partially superseded by ADR-0019 (2026-07-11) — the See-scope/Fill-scope
+*derivation mechanism* below (orgcode→file09→ฝ่าย→CC) is replaced by the Cost
+Center↔Filler map. The shared-CC / approval-unit reasoning that this ADR fed into
+ADR-0008 is UNCHANGED and still stands.
 Builds on: ADR-0001 (RLS via orgcode↔CC map), ADR-0003/0006 (per-CC approval)
 
 ## Context

@@ -43,6 +43,12 @@ module, and shared env vars. Everything else links out — do not restate it her
 
 ## master-tables module — `03-edit-master-table/master-tables/`
 
+> **RETIRING (ADR-0018, 2026-07-11).** All 6 admin master datasets (the 5 below + the new
+> Cost Center↔Filler map, ADR-0019) move to admin-edited Excel on SharePoint (site
+> `CMANDWPRD`), synced into Fabric workspace `cman-dw-ws` / lakehouse `modern_lh_cman_dw`.
+> The 3 deployed editors below are decommissioned once that sync is live — do not build
+> new features on this module; do not delete it until the Excel→Fabric path is proven.
+
 Single deployed SWA hosting 3 admin master-edit pages (+ a 4th, currency, in progress):
 
 | Page | Table |
