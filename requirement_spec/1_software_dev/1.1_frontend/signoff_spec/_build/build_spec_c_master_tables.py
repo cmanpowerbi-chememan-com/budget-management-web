@@ -380,6 +380,18 @@ def build_body(logo_rid, logo_size):
     ))
 
     # ==================================================================== #
+    # Preamble: shared for all 6 datasets (editors + sync) — shown once
+    # ==================================================================== #
+    p.append(section_heading("ข้อมูลทั่วไป (ใช้ร่วมกับข้อมูลหลักทั้ง 6 ชุด)",
+                             page_break_before=True))
+    p.append(body_para(
+        "ส่วนนี้ระบุผู้ที่มีสิทธิ์แก้ไขไฟล์และวิธีการซิงค์ข้อมูล ซึ่งใช้ร่วมกันกับข้อมูลหลักทั้ง 6 ชุด "
+        "(Spec C-1 ถึง C-6) ในเอกสารนี้ รายละเอียดเฉพาะของแต่ละชุดอยู่ในหัวข้อของชุดนั้น"
+    ))
+    p.append(admin_block())
+    p.append(sync_block())
+
+    # ==================================================================== #
     # Spec C-1: GL Account Group
     # ==================================================================== #
     p.append(section_heading(
@@ -390,8 +402,6 @@ def build_body(logo_rid, logo_size):
         "(GL Group) เพื่อจัดหมวดหมู่รายการบัญชีในรายงานงบประมาณ ผู้ดูแลระบบดูแลข้อมูลนี้ผ่าน "
         "ไฟล์ Excel หนึ่งไฟล์บน SharePoint"
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ (SharePoint site CMANDWPRD):", LINK_GL))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -414,8 +424,6 @@ def build_body(logo_rid, logo_size):
         "ทุกแถวที่อยู่กลุ่มเดียวกัน"))
     p.append(bullet(
         "ปัจจุบันมี 18 กลุ่ม ครอบคลุมรหัสบัญชี 137 รายการ"))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Spec C-2: Budget Closing Date
     # ==================================================================== #
@@ -428,8 +436,6 @@ def build_body(logo_rid, logo_size):
         "วันปิดรับไม่ตายตัวและเปลี่ยนแปลงได้ทุกปีตามแผนการจัดทำงบประมาณ ผู้ดูแลระบบดูแลข้อมูลนี้ "
         "ผ่านไฟล์ Excel หนึ่งไฟล์บน SharePoint"
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ (SharePoint site CMANDWPRD):", LINK_CLOSE))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -450,8 +456,8 @@ def build_body(logo_rid, logo_size):
     p.append(subheading("การนำไปใช้ปลายทาง (Downstream)"))
     p.append(body_para(
         "เมื่อถึงวันปิดรับของปีนั้น ระบบจะล็อกฟอร์มกรอกงบประมาณ (Submit Budget Form) "
-        "ให้เป็นอ่านอย่างเดียวสำหรับผู้กรอกทั่วไป (ระดับ L3/L4 และ L2 จำนวน 3 คน) "
-        "ไม่ให้กรอกหรือแก้ไขเพิ่มเติม"
+        "ให้เป็นอ่านอย่างเดียวสำหรับผู้กรอกทั่วไป (ผู้ที่ถูกกำหนดเป็นผู้กรอกในไฟล์ Cost Center ↔ ผู้กรอก "
+        "ตาม Spec C-6 และไม่ใช่ผู้ดูแลระบบ) ไม่ให้กรอกหรือแก้ไขเพิ่มเติม"
     ))
     p.append(body_para(
         "ข้อยกเว้นสำคัญ (ตาม ADR-0012): การล็อกนี้ไม่ใช่การล็อกทั้งระบบ ผู้ดูแลระบบทั้ง 4 คน "
@@ -461,8 +467,6 @@ def build_body(logo_rid, logo_size):
         "ด้วยวันปิดนี้ เนื่องจากเป็นคนละกระบวนการกัน",
         space_after=160,
     ))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Spec C-3: Org Code <-> Cost Center
     # ==================================================================== #
@@ -481,8 +485,6 @@ def build_body(logo_rid, logo_size):
         "ไฟล์ชุดนี้จึงมีบทบาทเป็นข้อมูลอ้างอิงและการจัดกลุ่มในรายงานเท่านั้น",
         space_after=140,
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ (SharePoint site CMANDWPRD):", LINK_ORG))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -502,8 +504,6 @@ def build_body(logo_rid, logo_size):
     p.append(bullet(
         "หน่วยงานหรือ Cost Center ที่ยังไม่ถูกจับคู่ มีผลเฉพาะความครบถ้วนของข้อมูลอ้างอิงในรายงานเท่านั้น "
         "ไม่กระทบต่อสิทธิ์การมองเห็นหรือกรอกข้อมูล (ซึ่งกำหนดโดยไฟล์ Spec C-6)"))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Spec C-4: Hide Document Number
     # ==================================================================== #
@@ -517,8 +517,6 @@ def build_body(logo_rid, logo_size):
         "รายการที่อยู่ระหว่างการตรวจสอบ หรือรายการปรับปรุงที่ไม่ควรนำมาเปรียบเทียบกับงบประมาณ "
         "ผู้ดูแลระบบดูแลข้อมูลนี้ผ่านไฟล์ Excel หนึ่งไฟล์บน SharePoint"
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ (SharePoint site CMANDWPRD):", LINK_HIDE))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -554,8 +552,6 @@ def build_body(logo_rid, logo_size):
         "doc_type = 'CO', Cost Center ที่ยกเว้น และ assignment = 'TFRS16'",
         space_after=160,
     ))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Spec C-5: Master Currency
     # ==================================================================== #
@@ -568,8 +564,6 @@ def build_body(logo_rid, logo_size):
         "เพื่อนำไปคำนวณเบี้ยเลี้ยงการเดินทางต่างประเทศในกลุ่มค่าใช้จ่าย Travelling Expense "
         "ผู้ดูแลระบบดูแลข้อมูลนี้ผ่านไฟล์ Excel หนึ่งไฟล์บน SharePoint"
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ (SharePoint site CMANDWPRD):", LINK_CUR))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -621,8 +615,6 @@ def build_body(logo_rid, logo_size):
         "โดยไม่ต้องเปิดหรือส่งอนุมัติทีละงบ",
         space_after=160,
     ))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Spec C-6: Cost Center <-> Filler map (NEW)
     # ==================================================================== #
@@ -637,8 +629,6 @@ def build_body(logo_rid, logo_size):
         "จะได้สิทธิ์กรอกของ Cost Center นั้นโดยตรง ไม่มีการตรวจสอบระดับตำแหน่งหรือ role เพิ่มเติม "
         "ผู้ดูแลระบบดูแลข้อมูลนี้ผ่านไฟล์ Excel หนึ่งไฟล์บน SharePoint"
     ))
-    p.append(admin_block())
-
     p.append(subheading("ไฟล์ Excel"))
     p.append(link_para("ตำแหน่งไฟล์ — cc dept.xlsx (SharePoint site CMANDWPRD):", LINK_FILLER))
     p.append(label_para("โครงสร้างคอลัมน์"))
@@ -668,8 +658,6 @@ def build_body(logo_rid, logo_size):
         "ไม่เปลี่ยนแปลง ไฟล์นี้กำหนดเฉพาะว่าใครกรอก/มองเห็นได้ ไม่เกี่ยวกับผู้อนุมัติ"))
     p.append(bullet(
         "ตอนซิงค์ข้อมูล แถวที่เว้นช่องผู้กรอกว่างไว้จะถูกข้ามเฉพาะแถวนั้น ส่วนแถวอื่นในไฟล์ยังซิงค์ตามปกติ"))
-    p.append(sync_block())
-
     # ==================================================================== #
     # Sign-off
     # ==================================================================== #
