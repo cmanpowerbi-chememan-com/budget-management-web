@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-11)
+# Graph Report - .  (2026-07-12)
 
 ## Corpus Check
 - 144 files · ~146,083 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a3c68064`
+- Built from commit: `b450015b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -81,15 +81,15 @@
 
 ## Surprising Connections (you probably didn't know these)
 - `HttpRequest` --uses--> `AuthError`  [INFERRED]
-  03-edit-master-table/master-tables/02backend/modules/gl_group/list_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
-- `HttpResponse` --uses--> `AuthError`  [INFERRED]
-  03-edit-master-table/master-tables/02backend/modules/gl_group/list_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
-- `HttpRequest` --uses--> `AuthError`  [INFERRED]
   03-edit-master-table/master-tables/02backend/modules/gl_group/reference_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
 - `HttpResponse` --uses--> `AuthError`  [INFERRED]
   03-edit-master-table/master-tables/02backend/modules/gl_group/reference_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
 - `HttpRequest` --uses--> `AuthError`  [INFERRED]
   03-edit-master-table/master-tables/02backend/modules/hide_document/list_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
+- `HttpResponse` --uses--> `AuthError`  [INFERRED]
+  03-edit-master-table/master-tables/02backend/modules/hide_document/list_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
+- `HttpRequest` --uses--> `AuthError`  [INFERRED]
+  03-edit-master-table/master-tables/02backend/modules/hide_document/validate_docs_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
 
 ## Import Cycles
 - None detected.
@@ -182,11 +182,11 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 21 - "Community 21"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/gl-group/list  Returns all mappings joined with dim table so fro
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 22 - "Community 22"
 Cohesion: 0.24
-Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
+Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/gl-group/list  Returns all mappings joined with dim table so fro
 
 ### Community 23 - "Community 23"
 Cohesion: 0.33
@@ -226,7 +226,7 @@ Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/li
 
 ### Community 33 - "Community 33"
 Cohesion: 0.40
-Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (4): HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/reference/{ref_name}  ref_name = orgcodes
 
 ### Community 34 - "Community 34"
 Cohesion: 0.40
