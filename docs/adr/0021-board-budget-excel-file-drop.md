@@ -54,11 +54,13 @@ filename.
     produced OFFLINE by the Budget dept, spec §1c/§1d), so it is removed as a dead
     surface rather than re-homed. If an export is ever needed it is a fresh
     read-path feature with its own justification.
-- **Sync trigger: OPEN.** A Graph change-notification webhook was rejected as
-  over-engineering for a file that changes 1–3×/year (public callback endpoint +
-  subscription renewal to babysit). Decide between an admin **"Sync now" button** and
-  a **daily poll** (both reuse the existing Azure-Functions + Graph pattern) when the
-  sync job is built.
+- **Sync trigger: RESOLVED 2026-07-14 — BOTH an admin "Sync now" button AND a daily
+  auto-sync.** The button applies the file immediately after the admin drops it; the daily
+  auto-sync is the safety net if they forget the button. A Graph change-notification webhook
+  was rejected as over-engineering (public callback endpoint + subscription renewal to babysit)
+  for a file that changes 1–3×/year. Both reuse the existing Azure-Functions + Graph pattern.
+  (The SharePoint→Fabric MASTER syncs run daily on the SAME cadence as `employee_master`, all
+  landing in `[fabric_sql_database].[dbo]` — ADR-0022.)
 
 ## Consequences
 
