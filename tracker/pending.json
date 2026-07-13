@@ -1,8 +1,25 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-13T21:16:53+0700",
+  "updated": "2026-07-13T23:05:45+0700",
   "tasks": [
+    {
+      "id": "gridgeist-0002-3",
+      "state": "done",
+      "created": "2026-07-13T23:05:45+0700",
+      "updated": "2026-07-13T23:05:45+0700",
+      "agent": "05-software-developer",
+      "skills": [
+        "gridgeist"
+      ],
+      "files": [
+        {
+          "path": "design/mockups/0002claude design/0002.3budget-export.html"
+        }
+      ],
+      "ai": "Gridgeist REDESIGN of 0002.2budget-export.html -> new 0002.3budget-export.html. Redesign mode: preserved all ids/onclick/JS/table+modal structure, CSS-only restyle. Removed AI-slop (glassSweep/twinkle/rainbowShift/rainbowGlow/addGlow=0), candy per-button gradients, gradient nav-mark; unified button set (rust accent solid=Submit/Save only, green Approve, outline Reject), single radius --r:6px (65 uses), strengthened 12-mo table grid (hairline rules, mono tabular nums, status swatch not color-alone), Newsreader section headers, removed decorative shadows (kept modal/overlay elevation), prefers-reduced-motion. Verify headless PASS: 0 console errs, 30 rows, detail modal open/close, dark<->light OK. Screenshots %TEMP%/0002_3_light.png + _dark.png NOT read - awaiting user visual gate. Not committed.",
+      "human": "Gridgeist redesign of the budget mockup - new 0002.3 variant, de-slopped, awaiting your visual review"
+    },
     {
       "id": "perdiem-master-inspect",
       "state": "done",

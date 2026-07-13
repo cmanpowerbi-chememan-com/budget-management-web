@@ -1,0 +1,3413 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPEX Data Management — Chememan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── Theme tokens — Northstar editorial system (warm paper · charcoal ink · rust accent) ─── */
+  :root{
+    --c-forest:#B24222;
+    --c-mint:#4A5E80;
+    --c-gold:#A8763A;
+    --c-blue:#4A5E80;
+    --accent: #B24222;
+    --accent-2: #4A5E80;
+    --accent-3: #A8763A;
+
+    --ink:#1C1A16;
+    --ink-2:#4A463D;
+    --ink-3:#86806F;
+    --paper:#F2EEE5;
+    --paper-2:#EAE4D7;
+    --surface:#FBF9F3;
+    --line:rgba(28,26,22,0.14);
+    --line-2:rgba(28,26,22,0.07);
+
+    --status-sap: #5E7A50;
+    --status-approved: #4A5E80;
+    --status-pending: var(--ink);
+    --special-bg: #F0E7D3;
+    --special-edge: #C9A24B;
+
+    --serif:'Newsreader', Georgia, serif;
+    --sans:'Archivo','IBM Plex Sans Thai',-apple-system,system-ui,sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+
+    /* ─── Gridgeist: one radius token — square cells, quiet everything else ─── */
+    --r:6px;
+  }
+  [data-theme="dark"]{
+    --ink:#F2EEE5;
+    --ink-2:#C6C0B2;
+    --ink-3:#8B857A;
+    --paper:#1C1A16;
+    --paper-2:#242019;
+    --surface:#2A251E;
+    --line:rgba(242,238,229,0.12);
+    --line-2:rgba(242,238,229,0.07);
+    --special-bg:#33280F;
+    --special-edge:#5C4915;
+    --status-sap:#8FA97E;
+    --status-approved:#8098C0;
+    --status-pending:#F2EEE5;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);background:var(--paper);color:var(--ink);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    transition:background 240ms ease, color 240ms ease;
+  }
+  a{color:inherit;text-decoration:none}
+  button,input,select,textarea{font-family:inherit;color:inherit}
+  .wrap{max-width:1980px;margin:0 auto;padding:0 28px}
+
+  /* ─── Nav (matches 0001) ─── */
+  .nav{
+    position:sticky;top:0;z-index:100;
+    background:color-mix(in oklab, var(--paper) 80%, transparent);
+    backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    border-bottom:1px solid var(--line-2);
+  }
+  .nav-inner{display:flex;align-items:center;gap:18px;height:64px;max-width:1980px;margin:0 auto;padding:0 28px}
+  .nav-logo{display:flex;align-items:center;gap:12px}
+  .nav-mark{
+    width:32px;height:32px;border-radius:var(--r);
+    background:var(--ink);
+    display:grid;place-items:center;flex-shrink:0;
+  }
+  .nav-mark svg{width:16px;height:16px;color:var(--paper)}
+  .nav-logo-text{display:flex;flex-direction:column;line-height:1.05;gap:1px}
+  .nav-logo-text .name{font-weight:600;font-size:14.5px;letter-spacing:-0.005em}
+  .nav-logo-text .sub{font-size:10.5px;color:var(--ink-3);font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
+  .nav-links{display:flex;gap:4px;list-style:none;margin-left:18px}
+  .nav-links a{
+    display:inline-block;color:var(--ink-2);font-size:13.5px;font-weight:500;
+    padding:7px 13px;border-radius:var(--r);transition:all 160ms ease;letter-spacing:-0.005em;
+  }
+  .nav-links a:hover{color:var(--ink);background:var(--paper-2)}
+  .nav-links a.active{color:var(--accent);background:color-mix(in oklab, var(--accent) 10%, transparent)}
+  .nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .icon-btn{
+    width:36px;height:36px;border-radius:var(--r);border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:grid;place-items:center;
+    transition:all 160ms ease;color:var(--ink-2);
+  }
+  .icon-btn:hover{border-color:var(--ink);color:var(--ink);transform:translateY(-1px)}
+  .icon-btn svg{width:15px;height:15px}
+  .sun-icon{display:none}
+  [data-theme="dark"] .sun-icon{display:block}
+  [data-theme="dark"] .moon-icon{display:none}
+
+  /* ─── Buttons ─── */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:10px 16px;border-radius:var(--r);font-size:13px;font-weight:600;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    cursor:pointer;transition:border-color 160ms ease, background 160ms ease, color 160ms ease;
+    letter-spacing:-0.005em;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--ink);background:var(--paper-2)}
+  .btn svg{width:14px;height:14px}
+  .btn-dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .btn-dark:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* ─── Toolbar buttons — flat surface, differentiated by label + icon, not color ─── */
+  .btn-export, .btn-import, .btn-add, .btn-attach{
+    border-radius:var(--r);
+    transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+  }
+  .btn-import, .btn-add, .btn-attach{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line);
+  }
+  .btn-import:hover, .btn-add:hover, .btn-attach:hover{
+    border-color:var(--ink); background:var(--paper-2);
+  }
+  /* Save (.btn-export) commits data — shares the one accent moment with Submit */
+  .btn-export{ background:var(--accent); color:#fff; border:1px solid var(--accent); }
+  .btn-export:hover{ background:#8F3216; border-color:#8F3216; }
+  /* ─── Attach files modal ─── */
+  .attach-ctrl{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .attach-field{display:flex;flex-direction:column;gap:5px}
+  .attach-field .lbl{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.06em;text-transform:uppercase;font-weight:600}
+  .attach-field select{padding:8px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font-size:13px;min-width:200px}
+  .attach-ro{padding:8px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--paper-2);color:var(--ink);font-size:13px;font-weight:600;min-width:200px}
+  .attach-ro-note{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);align-self:center}
+  .attach-dest{
+    font-family:var(--mono);font-size:12px;color:var(--ink-2);
+    background:color-mix(in oklab, var(--status-approved) 7%, var(--paper-2));
+    border:1px solid color-mix(in oklab, var(--status-approved) 25%, var(--line));
+    border-radius:var(--r);padding:10px 13px;margin-bottom:14px;word-break:break-all;
+  }
+  .attach-dest b{color:var(--status-approved)}
+  .attach-dest .root-todo{color:var(--ink-3);font-style:italic}
+  .attach-drop{
+    display:block;box-sizing:border-box;width:100%;
+    border:1.5px dashed color-mix(in oklab, var(--accent) 40%, var(--line));
+    border-radius:var(--r);padding:18px;text-align:center;cursor:pointer;
+    background:var(--paper);transition:all 150ms ease;margin-bottom:14px;
+  }
+  .attach-drop:hover{border-color:var(--accent);background:color-mix(in oklab, var(--accent) 5%, var(--paper))}
+  .attach-drop .hint{font-size:12.5px;color:var(--ink-2)}
+  .attach-drop .types{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:5px}
+  .attach-table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .attach-table th{text-align:left;font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.05em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .attach-table td{padding:8px;border-bottom:1px solid var(--paper-2);color:var(--ink-2)}
+  .attach-table .fname{color:var(--ink);font-weight:600}
+  .attach-ext{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:var(--r);margin-right:7px;color:#fff}
+  .attach-ext.pdf{background:#D7443E}.attach-ext.xls{background:#1D8A4C}.attach-ext.img{background:#7A5BD6}
+  .attach-empty{padding:24px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+  .attach-del{background:none;border:none;cursor:pointer;color:var(--ink-3);padding:3px}
+  .attach-del:hover{color:#D7443E}.attach-del svg{width:15px;height:15px}
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:var(--r)}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+  .btn-ghost:hover{color:var(--ink);background:transparent}
+  /* ─── Detail / Back buttons — same flat surface language, sized for their context ─── */
+  .btn-detail, .btn-back{
+    background:var(--surface); color:var(--ink); border:1px solid var(--line);
+    padding:6px 11px;font-size:11.5px;font-weight:600;border-radius:var(--r);
+    display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;
+    transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+    text-decoration:none;
+  }
+  .btn-detail:hover, .btn-back:hover{ border-color:var(--ink); background:var(--paper-2); }
+  /* Nav-sized variant */
+  .btn-back{padding:9px 16px;font-size:13px;gap:7px}
+  .btn-back svg{width:13px;height:13px}
+  .btn-detail svg{width:11px;height:11px}
+
+  /* ─── Page header ─── */
+  .page-head{padding:32px 0 22px}
+  .breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);margin-bottom:14px;font-family:var(--mono);letter-spacing:-0.005em}
+  .breadcrumb a{color:var(--accent);transition:color 160ms}
+  .breadcrumb a:hover{color:var(--ink)}
+  .breadcrumb .sep{opacity:0.5}
+  .page-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .page-title{
+    font-family:var(--serif);font-size:clamp(48px, 7vw, 86px);line-height:0.98;letter-spacing:-0.025em;font-weight:400;
+    color:var(--accent);
+  }
+  .page-title em{font-style:italic;color:var(--accent);opacity:0.85}
+
+  /* ─── Glassy text effect ─── */
+  .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 35%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 80%, #ffffff) 28%,
+        var(--accent) 52%,
+        color-mix(in oklab, var(--accent) 85%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.55))
+      drop-shadow(0 2px 8px rgba(11,26,18,0.10));
+    position:relative;isolation:isolate;
+  }
+  .glassy em{
+    background:inherit;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:brightness(0.85) saturate(1.15);
+  }
+  [data-theme="dark"] .glassy{
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 30%, #ffffff) 0%,
+        color-mix(in oklab, var(--accent) 60%, #ffffff) 32%,
+        var(--accent) 60%,
+        color-mix(in oklab, var(--accent) 70%, #000000) 100%);
+    -webkit-background-clip:text;background-clip:text;
+    filter:
+      drop-shadow(0 1px 0 rgba(255,255,255,0.25))
+      drop-shadow(0 2px 10px rgba(0,0,0,0.45));
+  }
+  .page-subtitle{font-size:14.5px;color:var(--ink-2);margin-top:10px;max-width:62ch;line-height:1.55}
+  .page-eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:8px;margin-bottom:8px;
+  }
+  .page-eyebrow::before{content:'';width:18px;height:1px;background:var(--accent)}
+
+  /* ─── Logged-in user bar (login context above eyebrow) ─── */
+  .user-bar{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    margin:4px 0 22px;padding:13px 18px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  }
+  .user-id{display:flex;align-items:center;gap:13px;min-width:0}
+  .user-avatar{
+    width:42px;height:42px;border-radius:var(--r);flex-shrink:0;display:grid;place-items:center;
+    font-family:var(--mono);font-weight:700;font-size:15px;color:#fff;text-transform:uppercase;
+    background:var(--accent-2);
+  }
+  .user-avatar.admin{ background:var(--accent); }
+  .user-meta{min-width:0}
+  .user-name{font-weight:700;font-size:15px;letter-spacing:-0.01em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .user-email{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:2px}
+  .meta-tag{font-family:var(--mono);font-size:9px;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink-3);font-weight:700;padding:2px 7px;border-radius:var(--r);background:var(--paper-2);border:1px solid var(--line-2);white-space:nowrap}
+  .user-chips .meta-tag{align-self:center}
+  .role-badge{
+    font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.06em;
+    padding:2px 7px;border-radius:999px;
+  }
+  .role-badge.admin{ background:color-mix(in oklab,var(--accent) 16%, transparent); color:var(--accent); border:1px solid color-mix(in oklab,var(--accent) 42%, var(--line)); }
+  .role-badge.user{ background:color-mix(in oklab,var(--accent-2) 16%, transparent); color:var(--accent-2); border:1px solid color-mix(in oklab,var(--accent-2) 42%, var(--line)); }
+  .user-chips{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .user-chip{
+    display:flex;flex-direction:column;gap:1px;padding:6px 12px;border-radius:var(--r);
+    background:var(--paper);border:1px solid var(--line);
+  }
+  .user-chip .k{font-family:var(--mono);font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .user-chip .v{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .user-chip.cc .v{font-family:var(--mono)}
+  .user-chip.cc{ border-color:color-mix(in oklab,var(--accent-2) 40%, var(--line)); background:color-mix(in oklab,var(--accent-2) 7%, var(--surface)); }
+  .user-chip.org{ border-color:color-mix(in oklab,var(--accent-2) 34%, var(--line)); background:color-mix(in oklab,var(--accent-2) 6%, var(--surface)); }
+  .user-chip.org .v{display:flex;align-items:center;gap:6px;font-weight:600}
+  .org-code{font-family:var(--mono);font-weight:700;color:var(--accent-2)}
+  .user-switch{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+  .scope-note{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.01em}
+  .switch-label{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .user-select{
+    padding:8px 30px 8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    font-size:13px;font-weight:600;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  .user-select:hover{border-color:var(--ink)}
+
+  /* ─── User bar · V4 layout (flex-based; count-badge hierarchy: สายงาน › ฝ่าย(n) › Cost Centers(n) / GL Codes(n)) ─── */
+  .user-bar.v3{gap:0;row-gap:14px}
+  .v3 .v3-id{display:flex;align-items:center;gap:11px;flex-shrink:0;padding-right:18px;margin-right:20px;border-right:1px solid var(--line-2)}
+  .v3 .v3-id-text{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .v3 .v3-name{font-weight:700;font-size:13.5px;letter-spacing:-0.01em;color:var(--ink);line-height:1.2}
+  .v3 .v3-email{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.01em;line-height:1}
+  .v3 .role-badge.user, .v3 .role-badge.admin{align-self:flex-start;padding:2px 7px}
+  .v3 .v3-flow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+  .v3 .v3-seg{display:flex;align-items:center;gap:8px;min-width:0}
+  .v3 .v3-arrow{color:var(--ink-3);opacity:0.45;flex-shrink:0}
+  .v3 .v3-division{font-family:var(--serif);font-size:20px;line-height:1;color:var(--accent);letter-spacing:-0.01em;white-space:nowrap}
+  .v3 .v3-label-wrap{display:inline-flex;align-items:center;gap:5px;flex-shrink:0}
+  .v3 .v3-count{font-family:var(--mono);font-size:9.5px;font-weight:800;line-height:1;color:var(--accent-2);background:color-mix(in oklab,var(--accent-2) 15%, transparent);border:1px solid color-mix(in oklab,var(--accent-2) 42%, var(--line));border-radius:999px;min-width:17px;height:17px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+  .v3 .v3-depts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+  .v3 .user-chip.cc{display:inline-flex;align-items:center;flex-direction:row;gap:0;padding:4px 10px;border-radius:var(--r);border:1px solid color-mix(in oklab,var(--accent-2) 30%, var(--line));background:color-mix(in oklab,var(--accent-2) 6%, var(--surface))}
+  .v3 .user-chip.cc .v{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+  .v3 .v3-metrics{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .v3 .v3-cc-pill,.v3 .v3-gl-pill{display:inline-flex;align-items:baseline;gap:6px;flex-shrink:0;padding:5px 13px;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10);white-space:nowrap}
+  .v3 .v3-cc-pill{background:var(--accent);color:#fff}
+  .v3 .v3-gl-pill{background:var(--accent-2);color:#fff}
+  .v3 .v3-cc-pill .n,.v3 .v3-gl-pill .n{font-family:var(--mono);font-size:13px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .v3 .v3-cc-pill .t,.v3 .v3-gl-pill .t{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;opacity:0.86}
+  .v3 .v3-allnote{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:0.01em}
+  .v3 .v3-switch{display:flex;align-items:center;gap:12px;margin-left:auto;padding-left:20px;border-left:1px solid var(--line-2);flex-shrink:0}
+  .v3 .v3-scope{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right;flex-shrink:0}
+  .v3 .v3-scope .scope-note{line-height:1.3;white-space:nowrap}
+  .v3 .v3-scope .switch-label{line-height:1;white-space:nowrap}
+  .v3 .user-select{padding:8px 30px 8px 12px;min-width:180px;flex-shrink:0}
+
+  /* Summary chips */
+  .summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .summary-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 14px;background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;
+    font-size:12.5px;font-weight:500;color:var(--ink-2);
+  }
+  .summary-chip .v{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .summary-chip .lbl{color:var(--ink-3);font-size:11px;font-family:var(--mono);letter-spacing:0.04em;text-transform:uppercase}
+  .summary-chip.sap{border-color:color-mix(in oklab, var(--status-sap) 50%, var(--line))}
+  .summary-chip.approved{border-color:color-mix(in oklab, var(--status-approved) 50%, var(--line))}
+  .summary-chip.pending{border-color:color-mix(in oklab, var(--ink) 30%, var(--line))}
+  .summary-chip.special{border-color:var(--special-edge);background:color-mix(in oklab, var(--special-bg) 60%, var(--surface))}
+
+  /* ─── Toolbar ─── */
+  .toolbar{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:14px 16px;background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--r);
+    margin-bottom:18px;
+  }
+  /* Admin-only zone — Approved board_budget import/export, separated from view filters */
+  .admin-zone{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:13px 16px;margin-bottom:18px;border-radius:var(--r);
+    background:color-mix(in oklab, var(--status-approved) 7%, var(--surface));
+    border:1px solid color-mix(in oklab, var(--status-approved) 32%, var(--line));
+    border-left:4px solid var(--status-approved);
+  }
+  .admin-zone-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .admin-zone-ic{width:16px;height:16px;color:var(--status-approved);flex-shrink:0}
+  .admin-zone-title{font-family:var(--serif);font-weight:500;font-size:17px;letter-spacing:-0.005em;color:var(--status-approved)}
+  .admin-zone-note{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:0.01em}
+  .admin-zone-note b{color:var(--status-approved);font-weight:700}
+  .admin-zone-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .search-box{
+    display:flex;align-items:center;gap:8px;padding:8px 12px;
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
+    min-width:280px;flex:1;max-width:380px;
+  }
+  .search-box:focus-within{border-color:var(--accent);background:var(--surface)}
+  .search-box svg{width:14px;height:14px;color:var(--ink-3);flex-shrink:0}
+  .search-box input{flex:1;border:none;background:transparent;outline:none;font-size:13.5px}
+  .search-box input::placeholder{color:var(--ink-3)}
+  .year-select{
+    padding:9px 30px 9px 12px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    font-size:13px;font-weight:500;cursor:pointer;
+    appearance:none;-webkit-appearance:none;min-width:120px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+  }
+  .year-select:hover{border-color:var(--ink)}
+
+  /* Status legend */
+  .legend{display:flex;align-items:center;gap:14px;padding:0 4px;font-size:11.5px;color:var(--ink-3);font-family:var(--mono);letter-spacing:0.02em}
+  .legend-item{display:inline-flex;align-items:center;gap:6px}
+  .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .legend-dot.sap{background:var(--status-sap)}
+  .legend-dot.approved{background:var(--status-approved)}
+  .legend-dot.pending{background:var(--status-pending)}
+  .toolbar-spacer{flex:1}
+  .toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  /* ─── Table ─── */
+  .table-panel{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--r);overflow:hidden;
+  }
+  .table-wrap{overflow:auto;max-height:calc(100vh - 380px);min-height:480px}
+  .data-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:1850px}
+  /* ─── Freeze left identity columns (# · Cost Center · GL Code) ───
+     left offsets set by applyFreeze() (JS) from real widths → survives auto-layout + col-resize */
+  :root{ --frz1:0px; --frz2:0px; --frz3:0px; }
+  .data-table th.frz, .data-table td.frz{ position:sticky; z-index:5; background:var(--surface); }
+  .data-table thead th.frz{ z-index:16; background:var(--paper-2); }   /* corner: above sticky-top thead (z10) + sticky-left body (z5) */
+  .data-table .frz-1{ left:var(--frz1); }
+  .data-table .frz-2{ left:var(--frz2); }
+  .data-table .frz-3{ left:var(--frz3); box-shadow: 6px 0 8px -6px rgba(0,0,0,0.28); }  /* edge shadow = scroll cue */
+  .data-table thead tr.group-head-row th{
+    position:sticky; top:0; z-index:11;
+    height:22px; padding:5px 10px; text-align:center;
+    font-family:var(--mono); font-size:9.5px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--ink-3); background:var(--paper-2);
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  .data-table thead tr.group-head-row th.frz{ text-align:left; z-index:17; }
+  .data-table thead tr.col-filter-row th{ top:31px; }
+  .data-table thead th{
+    background:var(--paper-2);font-weight:600;color:var(--ink-2);
+    font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;
+    padding:8px 10px 10px;text-align:left;white-space:nowrap;
+    position:sticky;top:0;z-index:10;
+    border-bottom:1px solid var(--line);
+    vertical-align:bottom;
+  }
+  .data-table thead th .th-label{display:block;line-height:1.2}
+  .col-filter{
+    display:block;width:100%;margin-top:6px;padding:5px 7px;
+    border:1px solid var(--line);border-radius:var(--r);font-size:11px;
+    background:var(--surface);color:var(--ink);outline:none;
+    font-weight:400;text-transform:none;letter-spacing:normal;
+    min-width:0;
+  }
+  .col-filter:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent)}
+  .col-filter::placeholder{color:var(--ink-3);font-size:10.5px}
+  .col-filter-spacer{height:27px;margin-top:6px}
+  /* Column resize handle */
+  .col-resize{
+    position:absolute; top:0; bottom:0; right:-3px; width:7px;
+    cursor:col-resize; z-index:20; user-select:none;
+    background:transparent;
+    transition: background 140ms ease;
+  }
+  .col-resize::after{
+    content:''; position:absolute; right:3px; top:25%; bottom:25%;
+    width:1px; background:var(--line); transition: background 140ms ease, width 140ms ease;
+  }
+  .col-resize:hover::after{ background:var(--accent); width:2px; right:2.5px }
+  .col-resize.is-dragging::after{ background:var(--accent); width:2px; right:2.5px }
+  body.col-dragging{ cursor:col-resize !important; user-select:none !important }
+  body.col-dragging *{ cursor:col-resize !important }
+  .data-table thead th.month-col,
+  .data-table thead th.action-col{text-align:right}
+  .data-table thead th.month-col .th-label{
+    font-size:14px;font-weight:700;letter-spacing:0.02em;text-transform:none;
+  }
+  /* Hairline tracks — the 12 month columns read as a rigid grid, not a fill */
+  .data-table thead tr.col-filter-row th.month-col,
+  .data-table td.month-cell{ border-right:1px solid var(--line-2) }
+  .data-table thead th.month-col.now{color:var(--accent);background:color-mix(in oklab,var(--accent) 8%,var(--paper-2))}
+  .data-table thead th.month-col.now .th-label{display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2}
+  .data-table thead th.month-col.now .th-label::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--c-gold);box-shadow:0 0 0 2px color-mix(in oklab,var(--c-gold) 25%,transparent);flex-shrink:0}
+  .data-table thead th.month-col.now .th-label::after{content:'';width:20px;height:2px;background:var(--accent);border-radius:2px;flex-shrink:0}
+  .data-table td.month-cell.now{background:color-mix(in oklab,var(--accent) 5%,transparent)}
+  .data-table thead th.idx-col{width:48px;text-align:center}
+  /* GL Group column matches other columns now — the chip inside does the talking */
+
+  .data-table td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle;font-variant-numeric:tabular-nums}
+  .data-table td.frz-2,.data-table td.frz-3{vertical-align:top}
+  .data-table tr.txn-row.first td{border-top:2px solid var(--line)}
+  .data-table tr.txn-row.last td{border-bottom:2px solid var(--line)}
+
+  /* Status indicator (first column) — swatch + text, never color alone */
+  .status-cell{
+    display:flex;align-items:center;gap:8px;font-family:var(--mono);white-space:nowrap;
+    font-size:10.5px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
+    color:var(--ink-3);
+  }
+  .status-cell::before{content:'';width:7px;height:7px;flex-shrink:0;background:currentColor}
+  .status-cell.sap{color:var(--status-sap)}
+  .status-cell.approved{color:var(--status-approved)}
+  .status-cell.pending{color:var(--status-pending)}
+
+  .idx-cell{
+    font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-3);
+    text-align:center;
+  }
+  .auto-cell{
+    color:var(--ink-2);font-size:12.5px;padding:4px 0;
+  }
+  /* Special GL group chip — solid color per group (was rainbow) */
+  .auto-cell.special-gl-group{
+    --chip-bg:#888; --chip-fg:#fff; --chip-glow:rgba(0,0,0,0.25);
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.20);
+    padding: 5px 11px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.25);
+    font-weight: 700; font-size: 11.5px;
+    display: inline-block; letter-spacing:-0.005em;
+    box-shadow: 0 0 12px var(--chip-glow), 0 1px 0 rgba(255,255,255,0.20) inset;
+    position: relative;
+  }
+  /* Entertainment = Yellow (dark text for contrast) */
+  .auto-cell.gl-yellow{ --chip-bg:#F2B705; --chip-fg:#3A2E00; --chip-glow:rgba(242,183,5,0.50); text-shadow:none; }
+  /* Lease & Rental = Pink */
+  .auto-cell.gl-pink{   --chip-bg:#EC4899; --chip-fg:#fff; --chip-glow:rgba(236,72,153,0.50); }
+  /* Professional & Legal Fee = Purple */
+  .auto-cell.gl-purple{ --chip-bg:#845EF7; --chip-fg:#fff; --chip-glow:rgba(132,94,247,0.50); }
+  /* Public Relation & Donation = Orange */
+  .auto-cell.gl-orange{ --chip-bg:#F97316; --chip-fg:#fff; --chip-glow:rgba(249,115,22,0.50); }
+  /* Training & Seminar = Blue */
+  .auto-cell.gl-blue{   --chip-bg:#3B82F6; --chip-fg:#fff; --chip-glow:rgba(59,130,246,0.50); }
+  /* Travelling Expense = Green (not specified by user) */
+  .auto-cell.gl-green{  --chip-bg:#22C55E; --chip-fg:#fff; --chip-glow:rgba(34,197,94,0.50); }
+  /* Month value cells */
+  .month-cell{text-align:right;padding:6px 10px}
+  .month-value{
+    font-family:var(--mono);font-size:11.5px;font-weight:500;
+    padding:4px 8px;border-radius:var(--r);display:inline-block;min-width:60px;text-align:right;
+  }
+  .month-value.sap{color:var(--status-sap);background:color-mix(in oklab, var(--status-sap) 10%, transparent)}
+  .month-value.approved-input{
+    border:1px solid color-mix(in oklab, var(--status-approved) 35%, var(--line));
+    background:color-mix(in oklab, var(--status-approved) 6%, var(--surface));
+    color:var(--status-approved);
+    outline:none;width:80px;text-align:right;
+  }
+  .month-value.approved-input:focus{border-color:var(--status-approved);background:var(--surface)}
+  /* Approved read-only — board_budget set via CSV import only (web entry disabled) */
+  .month-value.approved-ro{color:var(--status-approved);background:color-mix(in oklab, var(--status-approved) 10%, transparent)}
+  .month-value.pending-input{
+    border:1px solid var(--line);
+    background:var(--paper);
+    color:var(--ink);font-weight:600;
+    outline:none;width:80px;text-align:right;
+  }
+  .month-value.pending-input:focus{border-color:var(--ink);background:var(--surface)}
+  .month-value.pending-readonly{
+    color:var(--ink);background:var(--paper-2);font-weight:600;
+  }
+  .month-value.zero{color:var(--ink-3);background:transparent;font-weight:400;opacity:0.6}
+
+  /* Dropdown cell */
+  .dropdown-cell{position:relative;min-width:120px}
+  .dropdown-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);
+    background:var(--surface);border-radius:var(--r);font-size:12px;
+    font-family:var(--mono);outline:none;transition:all 160ms;
+  }
+  .dropdown-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .dropdown-list{
+    position:fixed;min-width:260px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:0 16px 32px -10px rgba(11,26,18,0.18);
+    max-height:280px;overflow:hidden;display:none;z-index:9999;
+    flex-direction:column;
+  }
+  .dropdown-cell.open .dropdown-list{display:block}
+  .dropdown-head{
+    padding:8px;border-bottom:1px solid var(--line);background:var(--paper-2);flex-shrink:0;
+  }
+  .dropdown-search{
+    width:100%;border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;
+    font-size:12px;background:var(--surface);color:var(--ink);outline:none;
+    font-family:var(--sans);
+  }
+  .dropdown-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent)}
+  .dropdown-search::placeholder{color:var(--ink-3)}
+  .dropdown-options{overflow-y:auto;max-height:220px;padding:4px;flex:1}
+  .dropdown-empty{padding:16px 10px;text-align:center;color:var(--ink-3);font-size:11.5px;font-family:var(--mono);display:none}
+  .dropdown-input[readonly]{cursor:pointer;background:var(--paper)}
+  .dropdown-input[readonly]:focus{cursor:text}
+  .dropdown-option{
+    padding:7px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;
+    transition:all 120ms;color:var(--ink);
+  }
+  .dropdown-option:hover{background:color-mix(in oklab, var(--accent) 10%, transparent);color:var(--accent)}
+  .dropdown-option .code{font-family:var(--mono);font-weight:600;font-size:11px;color:var(--ink)}
+  .dropdown-option:hover .code{color:var(--accent)}
+  .dropdown-option .name{color:var(--ink-3);font-size:11px;margin-top:1px}
+
+  .text-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);
+    background:var(--surface);border-radius:var(--r);font-size:12px;
+    outline:none;transition:all 160ms;
+  }
+  .text-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+
+  /* Row tinting */
+  .data-table tr[data-status="sap"] td:not(.shared){background:color-mix(in oklab, var(--status-sap) 3%, var(--surface))}
+  .data-table tr[data-status="approved"] td:not(.shared){background:color-mix(in oklab, var(--status-approved) 3%, var(--surface))}
+  .data-table tr[data-status="pending"] td:not(.shared){background:color-mix(in oklab, var(--ink) 2%, var(--surface))}
+
+  /* Actions column */
+  .action-cell{text-align:right;padding-right:14px}
+  .action-btn{
+    width:26px;height:26px;border-radius:var(--r);border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:inline-grid;place-items:center;
+    color:var(--ink-3);transition:all 160ms;
+  }
+  .action-btn:hover{color:#C25A3F;border-color:#C25A3F}
+  .action-btn svg{width:12px;height:12px}
+
+  /* ─── Modal ─── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(11,26,18,0.55);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    z-index:500;display:none;align-items:flex-start;justify-content:center;
+    padding:40px 20px;overflow-y:auto;
+  }
+  .modal-backdrop.open{display:flex}
+  /* Notice always on top — it can be raised from inside another open modal (e.g. attach reject) */
+  #noticeModal{z-index:600}
+  .modal{
+    background:var(--paper);color:var(--ink);
+    border-radius:var(--r);border:1px solid var(--line);
+    min-width:1400px;max-width:95vw;width:100%;
+    box-shadow:0 32px 80px -20px rgba(11,26,18,0.30);
+    overflow:hidden;animation:modalIn 240ms ease;
+  }
+  @keyframes modalIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .modal-head{
+    padding:22px 28px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:18px;
+    background:var(--surface);
+  }
+  .modal-head .modal-title{font-family:var(--serif);font-size:30px;line-height:1.1;letter-spacing:-0.015em;font-weight:400}
+  .modal-head .modal-title em{font-style:italic;color:var(--accent)}
+  .modal-head .modal-subtitle{margin-top:6px;font-size:13px;color:var(--ink-3);font-family:var(--mono)}
+  .modal-close{
+    width:36px;height:36px;border-radius:var(--r);border:1px solid var(--line);
+    background:var(--surface);cursor:pointer;display:grid;place-items:center;color:var(--ink-2);
+  }
+  .modal-close:hover{border-color:var(--ink);color:var(--ink)}
+  .modal-body{padding:22px 28px;max-height:65vh;overflow:auto;background:var(--paper)}
+  .modal-foot{
+    padding:18px 28px;border-top:1px solid var(--line);background:var(--surface);
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .modal-foot-info{font-size:12.5px;color:var(--ink-3);font-family:var(--mono);letter-spacing:0.02em}
+  .modal-foot-info b{color:var(--ink);font-weight:600}
+  .modal-actions{display:flex;gap:10px}
+
+  .detail-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .detail-table th{
+    background:var(--paper-2);font-weight:600;color:var(--ink-2);font-size:10.5px;
+    letter-spacing:0.05em;text-transform:uppercase;padding:10px 8px;text-align:left;
+    border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:5;
+  }
+  .detail-table th.month-col,.detail-table th.num-col{text-align:right}
+  .detail-table th.special-col{background:var(--special-bg);color:#7B5C1F}
+  .detail-table td{padding:6px 8px;border-bottom:1px solid var(--line-2);font-variant-numeric:tabular-nums}
+  .detail-table .detail-input{
+    width:100%;padding:6px 8px;border:1px solid var(--line);background:var(--surface);
+    border-radius:var(--r);font-size:12px;outline:none;transition:all 160ms;
+  }
+  .detail-table .detail-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .detail-table .month-input{width:78px;text-align:right;font-family:var(--mono);font-weight:500}
+  .detail-table .special-col-cell{background:color-mix(in oklab, var(--special-bg) 30%, var(--surface))}
+  /* readable width for the free-input / dropdown detail columns (table scrolls horizontally if needed) */
+  .detail-table th.special-col,.detail-table td.special-col-cell{min-width:182px}
+  .detail-table .detail-select{
+    width:100%;padding:7px 30px 7px 10px;border:1px solid var(--line);background:var(--surface);
+    border-radius:var(--r);font-size:12.5px;outline:none;cursor:pointer;color:var(--ink);
+    -webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237B5C1F' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat;background-position:right 9px center;
+  }
+  .detail-table .detail-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .detail-table .cell-disabled{
+    display:flex;align-items:center;justify-content:center;min-height:32px;
+    color:var(--ink-3);background:var(--paper-2);border:1px dashed var(--line);
+    border-radius:var(--r);padding:6px;font-size:12px;letter-spacing:0.04em;
+  }
+  .detail-table tr.total-row td{
+    background:var(--paper-2);font-weight:700;color:var(--ink);
+    border-top:2px solid var(--ink);font-size:12.5px;
+  }
+  .detail-table tr.total-row td.label{font-family:var(--sans);text-transform:uppercase;font-size:11px;letter-spacing:0.05em}
+  .detail-table tr.total-row td.grand{color:var(--accent);font-family:var(--mono);font-size:14px}
+
+  /* ─── Travelling Expense detail (per-traveler cards) ─── */
+  .travel-detail{display:flex;flex-direction:column;gap:16px}
+  .travel-note{
+    font-size:12px;color:var(--ink-2);line-height:1.55;
+    background:color-mix(in oklab, var(--special-bg) 55%, var(--surface));
+    border:1px solid var(--special-edge);border-radius:var(--r);padding:11px 14px;
+  }
+  .travel-note b{color:var(--ink)}
+  .travel-empty{padding:34px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+  .travel-card{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+  .travel-card-head{
+    display:flex;align-items:center;gap:12px;padding:11px 16px;
+    background:var(--paper-2);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  .travel-idx{
+    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-3);
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:4px 8px;
+  }
+  .travel-traveler{font-weight:700;font-size:14px;color:var(--ink)}
+  .travel-route{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+  .travel-route::before{content:'→ ';opacity:0.5}
+  .travel-type-chip{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.02em;
+    padding:3px 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-2);
+    border:1px solid var(--line);
+  }
+  .travel-type-chip.auto{
+    background:color-mix(in oklab, var(--accent) 12%, transparent);
+    color:var(--accent);border-color:color-mix(in oklab, var(--accent) 40%, var(--line));
+  }
+  /* ─── Side chip (5 = ผลิต/ต้นทุน · 6 = SG&A) ─── */
+  .side-chip{
+    display:inline-block;margin-left:7px;vertical-align:middle;
+    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:0.02em;
+    padding:2px 7px;border-radius:999px;white-space:nowrap;
+  }
+  .side-chip.cost{
+    background:color-mix(in oklab, var(--accent-2) 16%, transparent);color:var(--accent-2);
+    border:1px solid color-mix(in oklab, var(--accent-2) 42%, var(--line));
+  }
+  .side-chip.sga{
+    background:color-mix(in oklab, var(--status-approved) 14%, transparent);color:var(--status-approved);
+    border:1px solid color-mix(in oklab, var(--status-approved) 42%, var(--line));
+  }
+  .travel-rate-chip{
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.02em;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;
+    background:color-mix(in oklab, var(--accent-3) 18%, transparent);
+    color:color-mix(in oklab, var(--accent-3) 72%, var(--ink));
+    border:1px solid color-mix(in oklab, var(--accent-3) 45%, var(--line));
+  }
+  /* ─── Travelling detail · GL context bar ─── */
+  .travel-glbar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:11px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--paper-2);
+  }
+  .travel-glcode{
+    font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:4px 9px;
+  }
+  .travel-gltype{font-weight:700;font-size:14.5px;color:var(--ink)}
+  .travel-glbar .side-chip{margin-left:0;font-size:10px;padding:3px 9px}
+  .travel-glnote{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:0.01em}
+  .travel-total{margin-left:auto;font-family:var(--mono);font-weight:700;color:var(--accent);font-size:14px}
+  .travel-card-head .action-btn{margin-left:0}
+  .travel-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px}
+  .tf{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .tf-l{font-family:var(--mono);font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .tf-i{
+    width:100%;padding:8px 10px;border:1px solid var(--line);background:var(--paper);
+    border-radius:var(--r);font-size:12.5px;outline:none;transition:all 160ms;
+  }
+  .tf-i:focus{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .tf-readonly{
+    display:flex;align-items:center;min-height:37px;
+    background:var(--paper-2);color:var(--ink-2);font-weight:600;
+    border-style:dashed;cursor:not-allowed;
+  }
+  select.tf-i{
+    appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:26px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;
+  }
+  .travel-months-label{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    padding:0 16px 9px;font-family:var(--mono);font-size:11px;
+  }
+  .travel-months-label .tm-head{color:var(--ink-2);font-weight:600;letter-spacing:0.02em}
+  .travel-months-label .tm-calc{color:var(--ink-3)}
+  .travel-months-label .tm-calc b{color:var(--accent);font-weight:700}
+  .travel-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:6px;padding:0 16px 16px}
+  .tm-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .tm-toggle{
+    font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 0;border-radius:var(--r);
+    border:1px solid var(--line);background:var(--paper);color:var(--ink-3);cursor:pointer;
+    transition:all 140ms;text-align:center;
+  }
+  .tm-toggle:hover{border-color:var(--accent);color:var(--accent)}
+  .tm-cell.on .tm-toggle{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tm-val{font-family:var(--mono);font-size:11px;text-align:right;padding:6px 8px;border-radius:var(--r);min-width:0}
+  .tm-val.input{
+    width:100%;border:1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+    background:var(--surface);color:var(--ink);font-weight:600;outline:none;
+  }
+  .tm-val.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
+  .tm-val.auto{
+    background:color-mix(in oklab, var(--accent) 10%, var(--surface));color:var(--accent);font-weight:700;
+    border:1px dashed color-mix(in oklab, var(--accent) 40%, var(--line));
+  }
+  .tm-val.locked{
+    text-align:center;color:var(--ink-3);cursor:pointer;border:1px dashed var(--line);opacity:0.65;
+    background:repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 5px, transparent 5px, transparent 10px);
+  }
+  .tm-val.locked:hover{opacity:1;border-color:var(--accent);color:var(--accent)}
+
+  /* ─── Trip Manager modal ─── */
+  .trip-modal{min-width:min(98vw,860px);max-width:min(98vw,1100px)}
+  .trip-modal .modal-body{max-height:72vh}
+  .trip-manager-note{
+    font-size:12.5px;line-height:1.6;
+    background:color-mix(in oklab, var(--special-bg) 55%, var(--surface));
+    border:1px solid var(--special-edge);border-radius:var(--r);padding:12px 16px;
+    margin-bottom:16px;
+  }
+  .trip-manager-note b{color:var(--ink)}
+  .trip-manager-note .tip-steps{
+    display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;
+  }
+  .trip-manager-note .tip-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  }
+  .trip-step-num{
+    width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:9px;font-weight:700;display:grid;place-items:center;flex-shrink:0;
+  }
+  /* Trip card new style */
+  .trip-card{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin-bottom:14px;overflow:hidden}
+  .trip-card-head{
+    display:flex;align-items:center;gap:10px;padding:10px 16px;
+    background:var(--paper-2);border-bottom:1px solid var(--line);flex-wrap:wrap;
+    cursor:pointer;user-select:none;
+  }
+  .trip-card-head:hover{background:color-mix(in oklab,var(--paper-2) 70%,var(--accent) 30%)}
+  .trip-card-body{padding:16px;display:flex;flex-direction:column;gap:16px}
+  .trip-section-label{
+    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--ink-3);padding-bottom:8px;
+    border-bottom:1px solid var(--line);margin-bottom:4px;
+  }
+  .trip-section-label b{color:var(--ink-2)}
+  .trip-field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  /* Side toggle */
+  .side-toggle-wrap{display:flex;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;width:fit-content}
+  .side-toggle-btn{
+    padding:8px 16px;font-family:var(--mono);font-size:11.5px;font-weight:700;
+    border:none;cursor:pointer;background:var(--surface);color:var(--ink-3);
+    transition:all 140ms;letter-spacing:0.01em;
+  }
+  .side-toggle-btn.active.cost{background:color-mix(in oklab,var(--accent-2) 18%,transparent);color:var(--accent-2)}
+  .side-toggle-btn.active.sga{background:color-mix(in oklab,var(--status-approved) 16%,transparent);color:var(--status-approved)}
+  .side-toggle-btn:not(.active):hover{background:var(--paper-2);color:var(--ink)}
+  /* Month chips with value rows */
+  .trip-months-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:6px}
+  .trip-month-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+  /* Expense type sub-rows */
+  .trip-exp-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .trip-exp-table thead th{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:0.05em;text-transform:uppercase;
+    color:var(--ink-3);padding:5px 8px;border-bottom:1px solid var(--line);
+    font-weight:600;white-space:nowrap;
+  }
+  .trip-exp-table thead th:first-child{text-align:left}
+  .trip-exp-table tbody td{padding:5px 8px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  .trip-exp-table tbody tr:last-child td{border-bottom:none}
+  .trip-exp-table .exp-type-name{font-weight:600;color:var(--ink)}
+  .trip-exp-table .exp-gl-chip{
+    font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:var(--r);
+    background:var(--paper-2);color:var(--ink-3);border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .trip-exp-table .exp-total-input{
+    width:110px;padding:6px 8px;border:1px solid var(--line);background:var(--paper);
+    border-radius:var(--r);font-size:12px;text-align:right;font-family:var(--mono);outline:none;
+    transition:all 140ms;
+  }
+  .trip-exp-table .exp-total-input:focus{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 15%,transparent)}
+  .trip-exp-table .exp-total-input.auto-calc{
+    background:color-mix(in oklab,var(--accent) 8%,var(--surface));color:var(--accent);
+    border-color:color-mix(in oklab,var(--accent) 40%,var(--line));cursor:not-allowed;
+    pointer-events:none;
+  }
+  .trip-exp-table .exp-detail-input{
+    width:100%;padding:5px 8px;border:1px solid var(--line);background:var(--paper);
+    border-radius:var(--r);font-size:12px;outline:none;transition:all 140ms;
+  }
+  .trip-exp-table .exp-detail-input:focus{border-color:var(--accent);background:var(--surface)}
+  .trip-exp-table .exp-hint{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);padding:2px 0}
+  .trip-exp-table .exp-hint b{color:var(--accent)}
+  .trip-exp-month-row td{padding:3px 8px!important;border-bottom:none!important}
+  .trip-month-val-auto{
+    font-family:var(--mono);font-size:10.5px;font-weight:700;text-align:right;
+    color:var(--accent);padding:4px 5px;background:color-mix(in oklab,var(--accent) 8%,var(--surface));
+    border:1px dashed color-mix(in oklab,var(--accent) 40%,var(--line));border-radius:var(--r);
+  }
+  .trip-month-val-input{
+    width:100%;padding:4px 5px;border:1px solid color-mix(in oklab,var(--accent) 35%,var(--line));
+    background:var(--surface);border-radius:var(--r);font-size:10.5px;font-family:var(--mono);
+    font-weight:700;text-align:right;outline:none;color:var(--ink);
+    transition:all 140ms;
+  }
+  .trip-month-val-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in oklab,var(--accent) 15%,transparent)}
+  .trip-month-val-locked{
+    font-family:var(--mono);font-size:10px;text-align:center;color:var(--ink-3);
+    padding:4px 5px;opacity:0.5;
+    background:repeating-linear-gradient(45deg,var(--paper-2),var(--paper-2) 4px,transparent 4px,transparent 8px);
+    border:1px dashed var(--line);border-radius:var(--r);
+  }
+  /* Posting summary */
+  .trip-posting-summary{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+    font-family:var(--mono);font-size:12px;
+  }
+  .trip-post-chip{
+    padding:4px 10px;border-radius:var(--r);font-weight:700;
+    background:color-mix(in oklab,var(--accent) 10%,var(--surface));
+    border:1px solid color-mix(in oklab,var(--accent) 35%,var(--line));
+    color:var(--accent);
+  }
+  .trip-post-chip.zero{
+    background:var(--paper-2);color:var(--ink-3);
+    border-color:var(--line);font-weight:400;
+  }
+  .trip-grand-total{font-size:14px;font-weight:700;color:var(--accent);margin-left:4px}
+  .trip-empty{padding:40px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+  /* Notification modal */
+  .notice-modal{min-width:auto;width:auto;max-width:480px}
+  .notice-modal .modal-head{border-bottom:none;padding:24px 28px 8px}
+  .notice-modal .modal-body{padding:0 28px 16px}
+  .notice-modal .modal-foot{justify-content:flex-end}
+
+  /* ─── Responsive ─── */
+  @media (max-width:900px){
+    .nav-links{display:none}
+    .page-title{font-size:36px}
+    .toolbar{padding:12px}
+    .search-box{min-width:auto;width:100%;max-width:none}
+    .modal{min-width:auto}
+    .modal-head,.modal-body,.modal-foot{padding-left:18px;padding-right:18px}
+  }
+
+  /* ─── Submit row — the one accent moment: solid rust, white text ─── */
+  .submit-row{
+    display:flex;justify-content:flex-end;align-items:center;gap:14px;
+    margin-top:18px;padding:0 4px;flex-wrap:wrap;
+  }
+  .submit-row .hint{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em}
+  .btn-submit{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:13px 26px;border-radius:var(--r);
+    font-size:14px;font-weight:700;letter-spacing:-0.005em;
+    color:#fff;cursor:pointer;
+    background:var(--accent);
+    border:1px solid var(--accent);
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+  .btn-submit:hover{ background:#8F3216; border-color:#8F3216; }
+  .btn-submit:active{ transform: translateY(1px) }
+  .btn-submit svg{width:15px;height:15px;color:#fff}
+  .btn-submit.is-loading{ pointer-events:none; opacity:0.85 }
+  .btn-submit.is-loading .spinner{
+    width:13px;height:13px;border-radius:50%;
+    border:2px solid rgba(255,255,255,0.35);
+    border-top-color:#fff;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg) } }
+
+  /* Hidden file input */
+  .hidden-file{display:none}
+
+  /* ─── ฝ่าย-picker (department selector + รออนุมัติ badge) — replaces divisionFilter ─── */
+  .faip{position:relative}
+  .faip-trigger{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);cursor:pointer;font-size:13px;font-weight:600;transition:border-color 140ms;text-align:left}
+  .faip-trigger:hover{border-color:var(--ink)}
+  .faip-trigger.open{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 14%,transparent)}
+  .faip-cur{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .faip-cur .d{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);font-weight:600;display:block;line-height:1.2}
+  .faip-caret{color:var(--ink-3);flex-shrink:0;transition:transform 160ms}
+  .faip-trigger.open .faip-caret{transform:rotate(180deg)}
+  .faip-mono{font-family:var(--mono)}
+  .faip-hidden{display:none !important}
+  /* pending pill (shared) */
+  .pp{font-family:var(--mono);font-size:9.5px;font-weight:800;letter-spacing:0.02em;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;flex-shrink:0}
+  .pp.wait{background:color-mix(in oklab,var(--c-gold) 18%,transparent);color:#8a5a12;border:1px solid color-mix(in oklab,var(--c-gold) 50%,var(--line))}
+  .pp.wait::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--c-gold);animation:ppPulse 1.8s infinite}
+  .pp.done{background:color-mix(in oklab,var(--status-approved) 14%,transparent);color:var(--status-approved);border:1px solid color-mix(in oklab,var(--status-approved) 40%,var(--line))}
+  @keyframes ppPulse{0%{box-shadow:0 0 0 0 rgba(201,150,61,0.55)}70%{box-shadow:0 0 0 5px rgba(201,150,61,0)}100%{box-shadow:0 0 0 0 rgba(201,150,61,0)}}
+  .faip-panel{position:absolute;top:calc(100% + 6px);left:0;min-width:360px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 22px 44px -14px rgba(11,26,18,0.28);z-index:60;display:none;overflow:hidden}
+  .faip.open .faip-panel{display:block}
+  .faip-head{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--paper-2)}
+  .faip-search{flex:1;border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;font-size:12.5px;background:var(--surface);color:var(--ink);outline:none}
+  .faip-search:focus{border-color:var(--accent)}
+  .faip-toggle{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--ink-2);white-space:nowrap;user-select:none}
+  .faip-toggle input{display:none}
+  .faip-sw{width:32px;height:18px;border-radius:999px;background:var(--line);position:relative;transition:background 160ms;flex-shrink:0}
+  .faip-sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:transform 160ms}
+  .faip-toggle input:checked + .faip-sw{background:var(--c-gold)}
+  .faip-toggle input:checked + .faip-sw::after{transform:translateX(14px)}
+  .faip-list{max-height:340px;overflow-y:auto;padding:6px}
+  .faip-grp{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-3);padding:9px 10px 5px}
+  .faip-opt{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:var(--r);cursor:pointer;transition:background 120ms}
+  .faip-opt:hover{background:color-mix(in oklab,var(--accent) 8%,transparent)}
+  .faip-opt.sel{background:color-mix(in oklab,var(--accent) 12%,transparent)}
+  .faip-opt .nm{flex:1;min-width:0}
+  .faip-opt .nm .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .faip-opt .nm .m{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:1px}
+  .faip-opt.muted .nm .t{color:var(--ink-3);font-weight:500}
+  .faip-empty{padding:22px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+
+  /* ─── Approver action bar — Approve = solid status-sap green, Reject = outline → red on hover ─── */
+  .act-status{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:0.02em;margin-right:auto}
+  .btn-approve, .btn-reject{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:10px 16px;border-radius:var(--r);font-size:13px;font-weight:600;
+    cursor:pointer;white-space:nowrap;letter-spacing:-0.005em;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+  .btn-approve{
+    color:#fff; background:var(--status-sap); border:1px solid var(--status-sap);
+  }
+  .btn-approve:hover{
+    background:color-mix(in oklab, var(--status-sap) 78%, black);
+    border-color:color-mix(in oklab, var(--status-sap) 78%, black);
+  }
+  .btn-reject{
+    color:var(--ink); background:var(--surface); border:1px solid var(--line);
+  }
+  .btn-reject:hover{ color:#fff; background:#A8443A; border-color:#A8443A; }
+  .btn-approve svg, .btn-reject svg{ width:14px;height:14px }
+
+  /* ─── โหมด Admin toggle (nav) — larger, prominent ─── */
+  #adminModeWrap{
+    font-size:13.5px;font-weight:700;gap:10px;padding:8px 14px;border-radius:var(--r);
+    border:1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+    background:color-mix(in oklab, var(--accent) 7%, var(--surface));color:var(--accent);
+  }
+  #adminModeWrap .faip-sw{ width:44px;height:25px }
+  #adminModeWrap .faip-sw::after{ width:21px;height:21px;top:2px;left:2px }
+  #adminModeWrap input:checked + .faip-sw{ background:var(--accent) }
+  #adminModeWrap input:checked + .faip-sw::after{ transform:translateX(19px) }
+
+  /* ═══════════════════════════════════════════════════════════
+     GRIDGEIST — one radius token across surfaces, flat title, reduced motion
+     ═══════════════════════════════════════════════════════════ */
+  .user-bar,.toolbar,.table-panel,.modal{ border-radius:var(--r); }
+  .year-select,.user-select,.search-box,.col-filter,.text-input,
+  .dropdown-input,.dropdown-list,.month-value{ border-radius:var(--r); }
+  .summary-chip,.v3-cc-pill,.v3-gl-pill,.user-chip.cc{ border-radius:var(--r); }
+
+  .glassy,.glassy em{
+    background:none;
+    -webkit-background-clip:border-box;
+    background-clip:border-box;
+    -webkit-text-fill-color:currentColor;
+    color:var(--accent);
+    filter:none;
+    text-shadow:none;
+  }
+  .glassy em{ font-style:italic;color:var(--ink); }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{
+      animation-duration:0.001ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.001ms !important;
+      scroll-behavior:auto !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── PAGE BODY ─── -->
+<main class="wrap">
+  <header class="page-head" data-screen-label="Page header">
+    
+
+    <!-- Logged-in user context — admin sees all · user scoped to their cost center -->
+    <section class="user-bar v3" id="userBar" data-screen-label="Logged-in user"></section>
+
+    <div class="page-title-row">
+      <div>
+        <h1 class="page-title glassy">OPEX <em>Management.</em></h1>
+      </div>
+      <label class="faip-toggle" id="adminModeWrap" style="display:none" title="สลับหมวก: ปกติ (user/approver) ↔ โหมด Admin (sees-all, แก้ทุก CC) — ADR-0004">
+        <input type="checkbox" id="adminModeChk" onchange="onAdminModeToggle()"><span class="faip-sw"></span>🛡️ โหมด Admin
+      </label>
+    </div>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="toolbar" data-screen-label="Toolbar">
+    <select class="year-select" id="yearFilter" onchange="renderTable()">
+      <option value="2024">Year 2024</option>
+      <option value="2025">Year 2025</option>
+      <option value="2026" selected>Year 2026</option>
+    </select>
+    <!-- ฝ่าย-picker — locks main page to one (ฝ่าย, year) = the approval unit (ADR-0008).
+         Grouped by สายงาน. Approver sees รออนุมัติ badge + "เฉพาะที่รออนุมัติ" toggle.
+         Submitter auto-locks to own ฝ่าย. Built in buildFaiPicker(). -->
+    <div class="faip" id="faiPicker" style="min-width:300px" title="เลือกฝ่าย (หน่วยอนุมัติ)">
+      <button type="button" class="faip-trigger" id="faipTrig" onclick="toggleFaiPanel()">
+        <span class="faip-cur" id="faipCur">— เลือกฝ่าย —</span>
+        <span class="pp wait faip-hidden" id="faipPP">รออนุมัติ</span>
+        <svg class="faip-caret" width="11" height="7" viewBox="0 0 12 8" fill="none"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <div class="faip-panel" id="faipPanel">
+        <div class="faip-head">
+          <input class="faip-search" id="faipSearch" placeholder="ค้นหาฝ่าย…" oninput="renderFaiList()">
+          <label class="faip-toggle" id="faipToggleWrap"><input type="checkbox" id="faipOnlyWait" checked onchange="onFaiToggle()"><span class="faip-sw"></span>เฉพาะที่รออนุมัติ <span id="faipWaitN" class="faip-mono"></span></label>
+        </div>
+        <div class="faip-list" id="faipList"></div>
+      </div>
+    </div>
+
+    <label class="faip-toggle" id="deadlineToggleWrap" style="display:none;margin:0 6px" title="ทดสอบ: หลัง deadline admin จัดการเองทุกฝ่าย (ADR-0012)">
+      <input type="checkbox" id="postDeadlineChk" onchange="onDeadlineToggle()"><span class="faip-sw"></span>🔒 หลัง deadline (ทดสอบ)
+    </label>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot sap"></span>SAP · ใช้จริง (<span id="legendYrSap">—</span>)</span>
+      <span class="legend-item"><span class="legend-dot approved"></span>Approved · งบอนุมัติ (<span id="legendYrApproved">—</span>)</span>
+      <span class="legend-item"><span class="legend-dot pending"></span>Pending · งบรออนุมัติ (<span id="legendYrPending">—</span>)</span>
+    </div>
+
+    <button class="btn btn-sm btn-ghost" onclick="resetColWidths()" title="Reset all column widths" style="margin-left:4px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Reset columns
+    </button>
+
+    <div class="toolbar-spacer"></div>
+
+    <div class="toolbar-actions">
+      <button class="btn btn-add" onclick="addNewTransaction()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        เพิ่ม Transaction
+      </button>
+      <button class="btn btn-attach" onclick="openAttachModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        แนบไฟล์
+      </button>
+    </div>
+  </div>
+
+  <!-- Admin-only zone · งบอนุมัติ (Approved board_budget) — แยกจาก toolbar กันเข้าใจผิดว่า filter scope -->
+  <div class="admin-zone" data-screen-label="Admin · Approved">
+    <div class="admin-zone-head">
+      <svg class="admin-zone-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="admin-zone-title">งบอนุมัติ (Approved) · Admin</span>
+      <span class="admin-zone-note">⚠ ทั้งปี / ทั้งบริษัท ตามไฟล์ Excel — <b>ไม่ขึ้นกับตัวกรองปี / ฝ่าย</b> ที่เลือกดู</span>
+      <span style="margin-left:auto;display:inline-flex;align-items:center;gap:10px">
+        <span class="admin-zone-note" title="แก้ที่ Master Currency (Module 09) เท่านั้น · OPEX โชว์ค่านี้ + คิดเบี้ยเลี้ยงตามค่านี้ (recompute-on-read, ADR-0015)">💱 Master FX (USD→THB · FY<span id="fxYearLbl">2025</span>): <b id="fxDisplay" style="color:var(--status-approved);font-family:var(--mono);font-size:14px">—</b> <span style="color:var(--ink-3)">(read-only)</span></span>
+        <a href="../../../03-edit-master-table/master-tables/01frontend/master-currency.html" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--status-approved);text-decoration:underline">แก้ที่ Master Currency ↗</a>
+      </span>
+    </div>
+    <div class="admin-zone-actions">
+      <span class="admin-zone-note">📄 งบอนุมัติ (Approved) มาจากไฟล์ Excel รายปีที่วางใน SharePoint › <b>Budgeting and Management</b> › <b>approved budget</b> — เว็บอ่านอย่างเดียว แก้ไม่ได้</span>
+    </div>
+  </div>
+
+  <!-- Table panel -->
+  <div class="table-panel" data-screen-label="Table">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr class="group-head-row">
+            <th colspan="3" style="position:sticky;left:var(--frz1);z-index:17;background:var(--paper-2)"></th>
+            <th colspan="3"></th>
+            <th colspan="12" id="monthYearLabel" style="font-family:var(--serif);font-size:21px;font-weight:500;letter-spacing:-0.005em;color:var(--ink)">Year</th>
+            <th colspan="1"></th>
+          </tr>
+          <tr class="col-filter-row">
+            <th class="idx-col frz frz-1"><span class="th-label">#</span><div class="col-filter-spacer"></div></th>
+            <th class="frz frz-2" style="min-width:140px">
+              <span class="th-label">Cost Center</span>
+              <input type="text" class="col-filter" id="colFilterCC" placeholder="ค้นหา CC…" oninput="renderTable()">
+            </th>
+            <th class="frz frz-3" style="min-width:140px">
+              <span class="th-label">GL Code</span>
+              <input type="text" class="col-filter" id="colFilterGL" placeholder="ค้นหา GL…" oninput="renderTable()">
+            </th>
+            <th style="min-width:160px">
+              <span class="th-label">GL Group</span>
+              <input type="text" class="col-filter" id="colFilterGLGroup" placeholder="ค้นหา group…" oninput="renderTable()">
+            </th>
+            <th style="min-width:140px">
+              <span class="th-label">Remark</span>
+              <input type="text" class="col-filter" id="colFilterRemark" placeholder="ค้นหา remark…" oninput="renderTable()">
+            </th>
+            <th style="min-width:168px">
+              <span class="th-label">Status</span>
+              <input type="text" class="col-filter" id="colFilterStatus" placeholder="SAP, งบ, รอ…" oninput="renderTable()">
+            </th>
+            <th class="month-col"><span class="th-label">Jan</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Feb</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Mar</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Apr</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">May</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Jun</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Jul</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Aug</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Sep</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Oct</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Nov</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Dec</span><div class="col-filter-spacer"></div></th>
+            <th class="action-col" style="min-width:60px"><span class="th-label"></span><div class="col-filter-spacer"></div></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  
+
+  <!-- Action bar — buttons swap by selected ฝ่าย: Submit (own ฝ่าย) / Approve+Reject (ฝ่ายที่อนุมัติ).
+       jakkaritw = super-test → all buttons. Built in updateActionBar(). -->
+  <div class="submit-row" id="actionBar">
+    <span class="act-status" id="actStatus"></span>
+    <span class="hint" id="submitHint"></span>
+    <button class="btn-reject" id="rejectBtn" onclick="approverReject()" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      <span>ตีกลับทั้งฝ่าย</span>
+    </button>
+    <button class="btn-approve" id="approveBtn" onclick="approverApprove()" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span>อนุมัติทั้งฝ่าย</span>
+    </button>
+    <button class="btn-submit" id="submitBtn" onclick="submitToDB()" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+      <span>Submit to Database</span>
+    </button>
+  </div>
+</main>
+
+<!-- ─── DETAIL MODAL ─── -->
+<div class="modal-backdrop" id="detailModal" onclick="if(event.target.id==='detailModal') closeDetailModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title" id="detailModalTitle">รายละเอียดงบทำการ</h2>
+        <p class="modal-subtitle" id="detailModalSubtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeDetailModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailModalBody"></div>
+    <div class="modal-foot">
+      <div class="modal-foot-info" id="detailModalFootInfo">—</div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeDetailModal()" id="detailCloseBtn">ยกเลิก</button>
+        <button class="btn btn-add" onclick="addDetailRow()" id="detailAddBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          เพิ่มรายการ
+        </button>
+        <button class="btn btn-export" onclick="saveDetailData()" id="detailSaveBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          บันทึก
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TRIP MANAGER MODAL ─── -->
+<div class="modal-backdrop" id="tripModal" onclick="if(event.target.id==='tripModal') closeTripModal()">
+  <div class="modal trip-modal">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title">Travelling Expense — <em>จัดการทริป</em></h2>
+        <p class="modal-subtitle" id="tripModalSubtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeTripModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="tripModalBody"></div>
+    <div class="modal-foot">
+      <div class="modal-foot-info" id="tripModalFootInfo">—</div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeTripModal()" id="tripCloseBtn">ยกเลิก</button>
+        <button class="btn btn-add" onclick="addTrip()" id="tripAddBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          เพิ่มทริป
+        </button>
+        <button class="btn btn-export" onclick="saveTripData()" id="tripSaveBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          บันทึก &amp; ลงบัญชี
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── NOTICE MODAL ─── -->
+<div class="modal-backdrop" id="noticeModal" onclick="if(event.target.id==='noticeModal') closeNotice()">
+  <div class="modal notice-modal">
+    <div class="modal-head" style="padding-bottom:14px">
+      <h2 class="modal-title" id="noticeTitle" style="font-size:24px">Notice</h2>
+      <button class="modal-close" onclick="closeNotice()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="noticeBody" style="font-size:14px;color:var(--ink-2);line-height:1.55"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-dark" onclick="closeNotice()">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ATTACH FILES MODAL (per ฝ่าย × ปี → SharePoint) ─── -->
+<div class="modal-backdrop" id="attachModal" onclick="if(event.target.id==='attachModal') closeAttachModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title">แนบเอกสารประกอบงบทำการ</h2>
+        <p class="modal-subtitle">เก็บไฟล์เข้า SharePoint ตามฝ่าย + ปี — pdf / excel / รูปภาพ</p>
+      </div>
+      <button class="modal-close" onclick="closeAttachModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="attach-ctrl">
+        <div class="attach-field">
+          <span class="lbl">ฝ่าย (Department)</span>
+          <div class="attach-ro" id="attachDeptLbl">—</div>
+        </div>
+        <div class="attach-field">
+          <span class="lbl">ปีงบประมาณ</span>
+          <div class="attach-ro" id="attachYearLbl">—</div>
+        </div>
+        <span class="attach-ro-note">ล้อตามตัวกรองหน้าหลัก</span>
+      </div>
+      <div class="attach-dest" id="attachDest">—</div>
+      <label class="attach-drop" for="attachFileInput">
+        <div class="hint"><b>คลิกเพื่อเลือกไฟล์</b> — เก็บเข้าโฟลเดอร์ฝ่าย/ปี ด้านบน</div>
+        <div class="types">รองรับ: PDF · XLSX · XLS · PNG · JPG</div>
+        <input id="attachFileInput" type="file" class="hidden-file" multiple
+               accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg" onchange="onAttachPick(this)">
+      </label>
+      <table class="attach-table" id="attachTable"></table>
+    </div>
+    <div class="modal-foot">
+      <div class="modal-foot-info" id="attachFootInfo">—</div>
+      <div class="modal-actions">
+        <button class="btn btn-dark" onclick="closeAttachModal()">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TWEAKS PANEL (compact, same options as 0001) ─── -->
+<div class="modal-backdrop" id="tweaksBackdrop" onclick="if(event.target.id==='tweaksBackdrop') toggleTweaks()" style="align-items:center">
+  <div class="modal notice-modal" style="max-width:380px;min-width:0;width:auto">
+    <div class="modal-head" style="padding-bottom:14px">
+      <h2 class="modal-title" style="font-size:22px">Theme tweaks</h2>
+      <button class="modal-close" onclick="toggleTweaks()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding-top:0">
+      <label style="font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;font-weight:600;display:block;margin-bottom:8px">Color preset</label>
+      <div id="presetGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px"></div>
+
+      <label style="font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;font-weight:600;display:block;margin-bottom:8px">Intensity</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="intensitySlider" min="50" max="150" value="60" oninput="applyColorsWithIntensity()" style="flex:1" />
+        <span id="intensityVal" style="font-family:var(--mono);font-size:12px;font-weight:600;min-width:36px;text-align:right">60%</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="resetTheme()">Reset to Ocean 60%</button>
+      <button class="btn btn-dark" onclick="toggleTweaks()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ════════════════════════════════════════════
+     THEME · same system as 0001index.html
+     ════════════════════════════════════════════ */
+  const PRESETS = {
+    chememan: { name:'Chememan',  forest:'#00522C', mint:'#1FA378', gold:'#C9963D' },
+    ocean:    { name:'Ocean',     forest:'#0E4D6E', mint:'#37B5C7', gold:'#F2C661' },
+    sunset:   { name:'Sunset',    forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
+    midnight: { name:'Midnight',  forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
+    nature:   { name:'Nature',    forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
+    royal:    { name:'Royal',     forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' },
+    northstar:{ name:'Northstar', forest:'#B24222', mint:'#4A5E80', gold:'#A8763A' }
+  };
+  let activePreset = 'northstar';
+  let activeTheme  = 'light';
+  let intensity    = 100;
+
+  function toggleTheme(){ setTheme(activeTheme === 'light' ? 'dark' : 'light'); }
+  function setTheme(t){
+    activeTheme = t;
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('cm22.theme', t); } catch(e){}
+  }
+  function applyPreset(name){
+    activePreset = name;
+    document.querySelectorAll('.tw-preset').forEach(el => el.classList.toggle('on', el.dataset.preset === name));
+    applyColorsWithIntensity();
+    try { localStorage.setItem('cm22.preset', name); } catch(e){}
+  }
+  function applyColorsWithIntensity(){
+    intensity = +document.getElementById('intensitySlider').value;
+    document.getElementById('intensityVal').textContent = intensity + '%';
+    try { localStorage.setItem('cm22.intensity', String(intensity)); } catch(e){}
+    const p = PRESETS[activePreset];
+    const adjust = (hex, factor) => {
+      const h = hex.replace('#','');
+      const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      const mix = c => factor >= 1 ? Math.round(c*(2-factor)) : Math.round(c+(255-c)*(1-factor));
+      const toHex = n => Math.max(0,Math.min(255,n)).toString(16).padStart(2,'0');
+      return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+    };
+    const f = intensity/100;
+    document.documentElement.style.setProperty('--accent',   adjust(p.forest, f));
+    document.documentElement.style.setProperty('--accent-2', adjust(p.mint,   f));
+    document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
+  }
+  function resetTheme(){
+    activePreset = 'northstar';
+    document.getElementById('intensitySlider').value = 100;
+    setTheme('light');
+    applyPreset('northstar');
+    try { localStorage.removeItem('cm22.theme'); localStorage.removeItem('cm22.preset'); localStorage.removeItem('cm22.intensity'); } catch(e){}
+  }
+  function toggleTweaks(){ document.getElementById('tweaksBackdrop').classList.toggle('open'); }
+  (function buildPresets(){
+    const grid = document.getElementById('presetGrid');
+    Object.entries(PRESETS).forEach(([key, p]) => {
+      const btn = document.createElement('button');
+      btn.className = 'tw-preset' + (key === activePreset ? ' on' : '');
+      btn.dataset.preset = key;
+      btn.style.cssText = 'background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:6px;transition:all 160ms';
+      btn.onmouseenter = () => btn.style.borderColor = 'var(--ink)';
+      btn.onmouseleave = () => btn.style.borderColor = key === activePreset ? 'var(--accent)' : 'var(--line)';
+      btn.onclick = () => { applyPreset(key); document.querySelectorAll('#presetGrid button').forEach(b => b.style.borderColor = b.dataset.preset === key ? 'var(--accent)' : 'var(--line)'); };
+      btn.innerHTML = `<div style="display:flex;gap:3px">
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.forest}"></span>
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.mint}"></span>
+        <span style="flex:1;height:14px;border-radius:3px;background:${p.gold}"></span>
+      </div><div style="font-size:11px;font-weight:600">${p.name}</div>`;
+      if (key === activePreset) btn.style.borderColor = 'var(--accent)';
+      grid.appendChild(btn);
+    });
+  })();
+
+  /* ════════════════════════════════════════════
+     DATA
+     ════════════════════════════════════════════ */
+  /* Special GL group → chip color class (matches CSS .gl-* modifiers) */
+  const GROUP_CHIP_CLASS = {
+    'Entertainment':              'gl-yellow',
+    'Lease & Rental':             'gl-pink',
+    'Professional & Legal Fee':   'gl-purple',
+    'Public Relation & Donation': 'gl-orange',
+    'Training & Seminar':         'gl-blue',
+    'Travelling Expense':         'gl-green'
+  };
+  function groupChipClass(group){ return GROUP_CHIP_CLASS[group] || ''; }
+
+  const specialGLGroups = {
+    'Entertainment':              ['วัตถุประสงค์', 'ประเภทการรับรอง'],
+    'Lease & Rental':             ['ประเภทรถ', 'ทะเบียนรถ', 'สถานที่ใช้งาน', 'กิจกรรม'],
+    'Professional & Legal Fee':   ['Project', 'รายละเอียด'],
+    'Public Relation & Donation': ['วัตถุประสงค์', 'รายละเอียด'],
+    'Training & Seminar':         ['วัตถุประสงค์'],
+    'Travelling Expense':         ['Destination Country','Traveler Name','Position','Project','Purpose of Travel','Total Days','Travel Month']
+  };
+
+  /* ── Special-group detail columns — dropdown options & GL-conditional rules ──
+     แหล่งจริง: docs/13Template Special/*.xlsx (data-validation + sheet GL) */
+  const DD_PLANTS      = ['BK','TK','KK','PB','RY'];
+  const DD_ENT_EXT     = ['Customer','Business partner','หน่วยงานราชการ','อื่นๆ'];          // GL ภายนอก …900030
+  const DD_ENT_INT     = ['พนักงานบริษัท','กรรมการบริษัท'];                                  // GL ภายใน …900031
+  const DD_LEASE_VEH   = ['Car','Van','Trucks'];                                            // GL …060 ยานพาหนะ
+  const DD_LEASE_MAC   = ['Mobile Scalper','Dumper','Tractors','Backhoe','Forklift','Tractor',
+                          'Excavator','Loader','Crane','Water Truck','Road Sweeper Truck'];  // GL …030 เครื่องจักร
+  const DD_LEASE_PLATE = ['6ขผ-3918','1นจ-3508','6ขจ-3513','5ขง-5712','1นจ-1468','6ขผ-8150','7ขถ-9660','ไม่ระบุ'];
+  const DD_TRAIN       = ['Inhouse','Public'];
+
+  /* คืน column spec ของฟอร์มย่อยตาม group + GL code (บาง dropdown/พื้นที่เทาขึ้นกับ GL) */
+  function detailColumns(group, glCode){
+    const code = glCode || '';
+    if (group === 'Entertainment'){
+      const opts = code.endsWith('900031') ? DD_ENT_INT : DD_ENT_EXT;   // ภายใน vs ภายนอก
+      return [ { key:'ประเภทการรับรอง', kind:'select', options:opts },
+               { key:'รายละเอียด',      kind:'text' } ];
+    }
+    if (group === 'Lease & Rental'){
+      const cat = code.slice(-3);          // 060 รถ · 030 เครื่องจักร · อื่น = เทา
+      let typeCol, plateCol;
+      if (cat === '060'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_VEH }; plateCol={ key:'ทะเบียนรถ', kind:'select', options:DD_LEASE_PLATE }; }
+      else if (cat === '030'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_MAC }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
+      else { typeCol={ key:'ประเภทรถ', kind:'grey' }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
+      return [ typeCol, plateCol,
+               { key:'สถานที่ใช้งาน', kind:'select', options:DD_PLANTS },
+               { key:'กิจกรรม',       kind:'text' } ];
+    }
+    if (group === 'Professional & Legal Fee')   return [ { key:'Project', kind:'text' }, { key:'รายละเอียด', kind:'text' } ];
+    if (group === 'Public Relation & Donation') return [ { key:'รายละเอียด', kind:'text' } ];
+    if (group === 'Training & Seminar')         return [ { key:'หลักสูตรอบรม', kind:'text' }, { key:'Method', kind:'select', options:DD_TRAIN } ];
+    return [];
+  }
+
+  /* Travelling Expense — per-diem engine.
+     เบี้ยเลี้ยง = Total Days × อัตราตามตำแหน่ง (USD/วัน) × อัตราแลกเปลี่ยน แล้วเฉลี่ยเท่ากันในเดือนที่เลือก */
+  /* อัตราแลกเปลี่ยน USD→THB ราย FY (ดึงจาก Currency Master · 0009) — 1 ปี 1 ค่า */
+  // Master Currency — 1 avg USD→THB rate per fiscal year (cfg_master.master_currency_rate).
+  // Admin-editable & mutable; per-diem is recompute-on-read from this (ADR-0015, supersedes ADR-0011 snapshot).
+  const FX_RATES = { 2020:31.30, 2021:31.98, 2022:35.06, 2023:34.81, 2024:35.59, 2025:35.00, 2026:34.20 };
+  function fxRate(year){ return FX_RATES[year] != null ? FX_RATES[year] : 35.00; }
+  const PER_DIEM_TYPE = 'เบี้ยเลี้ยง';
+  /* ฝั่งบัญชีของเบี้ยเลี้ยง/ค่าเดินทาง — กำหนดจาก SAP Actual ของผู้เดินทาง
+     5 = ฝั่งผลิต/ต้นทุน · 6 = ฝั่งบริหาร-ขาย (SG&A) — คนละ GL จึงรวมยอดข้ามกันไม่ได้ */
+  const SIDE_LABELS = {
+    COST: { short:'5 · ผลิต',  full:'ฝั่งผลิต / ต้นทุน (5)' },
+    SGA:  { short:'6 · SG&A', full:'ฝั่งบริหาร / ขาย · SG&A (6)' }
+  };
+  /* อัตราเบี้ยเลี้ยงต่อวัน แบ่ง 3 กลุ่มตามปลายทาง (อิงตารางบริษัท):
+     domestic = ในประเทศ (THB/วัน) · asian = ต่างประเทศ-อาเซียน (USD/วัน) · other = ต่างประเทศ-อื่นๆ (USD/วัน)
+     ตำแหน่งระดับบริหารไม่มีอัตราในประเทศ (null = —) */
+  const POSITION_PER_DIEM = {
+    'CEO':                        { domestic:null, asian:110, other:120 },
+    'Chief Officer (C-Level)':    { domestic:null, asian:110, other:120 },
+    'Vice President':             { domestic:null, asian:100, other:110 },
+    'Assistant Vice President':   { domestic:null, asian:100, other:110 },
+    'Advisor':                    { domestic:null, asian:110, other:120 },
+    'Department Head':            { domestic:300,  asian:80,  other:90  },
+    'Assistant Department Head':  { domestic:300,  asian:80,  other:90  },
+    'Senior Supervisor':          { domestic:250,  asian:70,  other:80  },
+    'Supervisor':                 { domestic:250,  asian:70,  other:80  },
+    'Operator':                   { domestic:200,  asian:70,  other:80  },
+    'Company Driver':             { domestic:200,  asian:60,  other:70  },
+    'Logistics Driver':           { domestic:200,  asian:60,  other:70  }
+  };
+
+  /* SAP employee master — เลือก Traveler Name แล้ว default Position มาเอง (lookup จากชื่อ) */
+  const EMPLOYEES = [
+    { name:'สุชัญญา ยุปา',      position:'Assistant Department Head' },  // L3 Solution Delivery
+    { name:'เจณภพ สุริยะวงศ์',   position:'Supervisor' },                 // L4 Solution Delivery
+    { name:'กัญญาณัฐ พวงเงิน',   position:'Supervisor' },                 // L4 Solution Delivery
+    { name:'นิภาพร ทองกิ่ง',   position:'Senior Supervisor' },
+    { name:'วราพร ติรสิทธิ์',   position:'Assistant Department Head' },
+    { name:'อาทิตย์ สาหร่าย',   position:'Assistant Vice President' },
+    { name:'มาลี รักงาน',       position:'Supervisor' },
+    { name:'ธนกร พงษ์ไพบูลย์',  position:'Vice President' },
+    { name:'อรทัย แก้วมณี',     position:'Operator' },
+    { name:'เกรียงไกร สุวรรณ',  position:'Chief Officer (C-Level)' }
+  ];
+  function lookupPosition(name){ const e = EMPLOYEES.find(x => x.name === name); return e ? e.position : ''; }
+
+  /* ปลายทาง → กลุ่มอัตรา */
+  const DOMESTIC_DEST = 'ไทย (ในประเทศ)';
+  const ASIAN_COUNTRIES = ['Papua New Guinea','China','Laos','Philippines','India','Vietnam','Myanmar','Indonesia','Bangladesh','South Africa','Cambodia','Malaysia'];
+  const OTHER_COUNTRIES = ['United States of America','United Kingdom','Australia','New Zealand','Switzerland','Japan','Korea','Taiwan','Germany','Oman','Singapore','Argentina','Italy','Dubai','Saudi Arabia','Norway'];
+  const SCOPE_LABEL = { domestic:'ในประเทศ', asian:'ต่างประเทศ·อาเซียน', other:'ต่างประเทศ·อื่นๆ' };
+  function destScope(country){
+    if (!country || country === DOMESTIC_DEST || country === 'Thailand') return 'domestic';
+    if (ASIAN_COUNTRIES.includes(country)) return 'asian';
+    return 'other';
+  }
+  function perDiemRate(position, scope){
+    const r = POSITION_PER_DIEM[position];
+    const raw = r ? r[scope] : null;
+    return { rate: (raw == null ? 0 : raw), na: (raw == null), currency: scope === 'domestic' ? 'THB' : 'USD' };
+  }
+
+  // division = สายงาน · department = ฝ่าย — REAL codes from docs/14.CC_master.csv
+  const costCenters = [
+    // Solution Delivery (Digital Technology Division) — L3 สุชัญญา fills · L2 อาทิตย์ approves
+    { code:'10IT012000', name:'Solution Delivery', clevel:'CTO', division:'Digital Technology Division', department:'Solution Delivery' },
+    // Budgeting and Management Accounting — นิภาพร / วราพร (budget dept · own budget)
+    { code:'10AC020000', name:'Budget&Cost Acc Div', clevel:'CFO', division:'Budgeting and Cost Accounting Division', department:'Budgeting and Management Accounting' },
+    // Orphan ฝ่าย — no submitter in user_fill_dept (ADR-0012). admin fills + submits → APPROVED directly.
+    { code:'10GE000000', name:'General', clevel:'C-0', division:'General', department:'General (orphan)' }
+  ];
+
+  const glCodes = [
+    // Normal GL — REAL codes from docs/04gl code & gl group & gl thai name (master).xlsx
+    { code:'6211800030', group:'Office expenses',                       name:'อุปกรณ์และเครื่องใช้สำนักงาน (< 5,000 บาท)' },
+    { code:'5211100080', group:'Repair & Maintenance',                  name:'ค่าซ่อมบำรุง - คอมพิวเตอร์' },
+    { code:'6211100110', group:'Maintenance - License for software',    name:'ค่าซ่อมบำรุง - ซอฟต์แวร์' },
+    { code:'6210600020', group:'Communication Expense',                 name:'ค่าเช่า/บริการ วงจรสื่อสาร' },
+    // ─── Special GL groups — รหัสจริงจาก sheet GL ของไฟล์ docs/13Template Special ───
+    // Entertainment — dropdown ประเภทการรับรอง ขึ้นกับ GL: …900030 ภายนอก · …900031 ภายใน
+    { code:'6211900030', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายนอก' },
+    { code:'6211900031', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายใน' },
+    // Lease & Rental — dropdown/พื้นที่เทา ขึ้นกับ sub-category (suffix): 060 รถ · 030 เครื่องจักร · อื่น เทา
+    { code:'6211200060', group:'Lease & Rental',             name:'ค่าเช่า - ยานพาหนะ' },
+    { code:'6211200030', group:'Lease & Rental',             name:'ค่าเช่า - เครื่องจักร / อุปกรณ์โรงงาน' },
+    { code:'6211200020', group:'Lease & Rental',             name:'ค่าเช่า - อาคาร' },
+    // Professional & Legal Fee — text ล้วน (ไม่มี dropdown)
+    { code:'6210700030', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษา - ทางกฎหมาย' },
+    // Public Relation & Donation — text ล้วน (รายละเอียด คอลัมเดียว)
+    { code:'6211700030', group:'Public Relation & Donation', name:'เงินบริจาคสาธารณกุศล' },
+    // Training & Seminar — dropdown Method (Inhouse/Public)
+    { code:'6210100150', group:'Training & Seminar',         name:'ค่าอบรมและสัมมนา - ค่าธรรมเนียม' },
+    // ─── Travelling Expense — 1 GL = 1 ประเภท × 1 ฝั่ง (5 = ผลิต/ต้นทุน · 6 = SG&A บริหาร/ขาย) ───
+    { code:'5210400010', group:'Travelling Expense', name:'เบี้ยเลี้ยง · Per Diem',            expType:'เบี้ยเลี้ยง',          side:'COST' },
+    { code:'6210400010', group:'Travelling Expense', name:'เบี้ยเลี้ยง · Per Diem',            expType:'เบี้ยเลี้ยง',          side:'SGA'  },
+    { code:'5210400020', group:'Travelling Expense', name:'ค่าพาหนะเดินทาง · Transportation',   expType:'ค่าพาหนะเดินทาง',      side:'COST' },
+    { code:'6210400020', group:'Travelling Expense', name:'ค่าพาหนะเดินทาง · Transportation',   expType:'ค่าพาหนะเดินทาง',      side:'SGA'  },
+    { code:'5210400030', group:'Travelling Expense', name:'ค่าที่พัก · Accommodation',          expType:'ค่าที่พัก',            side:'COST' },
+    { code:'6210400030', group:'Travelling Expense', name:'ค่าที่พัก · Accommodation',          expType:'ค่าที่พัก',            side:'SGA'  },
+    { code:'5210400999', group:'Travelling Expense', name:'ค่าใช้จ่ายเดินทางอื่น · Other Travel', expType:'ค่าใช้จ่ายเดินทางอื่น', side:'COST' },
+    { code:'6210400999', group:'Travelling Expense', name:'ค่าใช้จ่ายเดินทางอื่น · Other Travel', expType:'ค่าใช้จ่ายเดินทางอื่น', side:'SGA'  }
+  ];
+
+  let transactions = [
+    // ── Solution Delivery (10IT012000) — L3 สุชัญญา fills · L2 อาทิตย์ approves ──
+    { id:1, costCenter:'10IT012000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน IT', year:2026,
+      sap:     [12000,0,15000,0,18000,0,0,0,0,0,0,0],
+      approved:[15000,15000,15000,15000,15000,15000,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,20000,20000,0,0,0],
+      pendingDetails:[] },
+    { id:2, costCenter:'10IT012000', glCode:'5211100080', remark:'ซ่อมคอมพิวเตอร์ / Notebook', year:2026,
+      sap:     [0,8000,0,0,12000,0,0,0,0,0,0,0],
+      approved:[10000,10000,10000,10000,10000,10000,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:3, costCenter:'10IT012000', glCode:'6211100110', remark:'License ซอฟต์แวร์ประจำปี', year:2026,
+      sap:     [120000,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[120000,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:4, costCenter:'10IT012000', glCode:'6210600020', remark:'วงจรสื่อสาร / Internet', year:2026,
+      sap:     [9000,9000,9000,9000,9000,0,0,0,0,0,0,0],
+      approved:[9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:5, costCenter:'10IT012000', glCode:'6210700030', remark:'ที่ปรึกษาระบบ / กฎหมายไอที', year:2026,
+      sap:     [0,0,50000,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:6, costCenter:'10IT012000', glCode:'6210100150', remark:'อบรม Cloud / Security', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    // ── Travelling Expense (SGA side · 6xxx) — Solution Delivery · Trip Manager (เบี้ยเลี้ยง auto + 3 manual) ──
+    { id:10, costCenter:'10IT012000', glCode:'6210400010', remark:'เบี้ยเลี้ยงเดินทาง', year:2026,
+      sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
+    { id:11, costCenter:'10IT012000', glCode:'6210400020', remark:'ค่าพาหนะเดินทาง', year:2026,
+      sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
+    { id:12, costCenter:'10IT012000', glCode:'6210400030', remark:'ค่าที่พัก', year:2026,
+      sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
+    { id:13, costCenter:'10IT012000', glCode:'6210400999', remark:'ค่าใช้จ่ายเดินทางอื่น', year:2026,
+      sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
+    // ── Budgeting and Management Accounting (10AC020000) — นิภาพร / วราพร own budget ──
+    { id:7, costCenter:'10AC020000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน (งบฝ่าย)', year:2026,
+      sap:     [5000,5000,6000,0,0,0,0,0,0,0,0,0],
+      approved:[6000,6000,6000,6000,6000,6000,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    { id:8, costCenter:'10AC020000', glCode:'6211900030', remark:'เลี้ยงรับรองผู้สอบบัญชี', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] },
+    // ── General (orphan 10GE000000) — admin fills + submits → APPROVED directly ──
+    { id:9, costCenter:'10GE000000', glCode:'6211800030', remark:'งบกลาง (orphan — admin fills)', year:2026,
+      sap:     [8000,8000,0,0,0,0,0,0,0,0,0,0],
+      approved:[10000,10000,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[] }
+  ];
+  let transactionIdCounter = 14;
+  let detailIdCounter = 20;
+  let currentEditingTxnId = null;
+  let detailReadonly = false;   // subform locked (view-only) when the ฝ่าย is not editable (ADR-0013)
+
+  /* ═══════════════════════════════════════
+     LOGIN / ROLE — admin เห็นทุก Cost Center · user เห็นเฉพาะของตน
+     ═══════════════════════════════════════ */
+  // REAL actors from docs/12budget_actors_full.csv. approver: step(1/2/3) + approverScope(ฝ่ายในสาย).
+  // wait/done badge derived from DEPT_STATUS vs step (approverStepStatus). admin:true = overlay admin
+  // (toggle 🛡️). superTest = jakkaritw test (Submit any ฝ่าย).
+  const USERS = {
+    suchanya:  { role:'user', email:'suchanyay@chememan.com', name:'สุชัญญา ยุปา (L3 · Solution Delivery)',
+      costCenters:['10IT012000'] },                                  // submitter — fills Solution Delivery
+    arthit:    { role:'approver', email:'arthits@chememan.com', name:'อาทิตย์ สาหร่าย (L2/AVP · Digital Tech)', tier:'ขั้นที่ 1', step:1,
+      approverScope:['Solution Delivery'] },                         // approver1 of สุชัญญา (approver1_only, ไม่กรอก)
+    nipaporn:  { role:'approver', email:'nipapornt@chememan.com', name:'นิภาพร ทองกิ่ง (Budget Staff)', tier:'ขั้นที่ 2', step:2, admin:true,
+      fillDepts:['Budgeting and Management Accounting'],             // own budget (submitter) + approver2 + admin overlay
+      approverScope:['Solution Delivery'] },
+    waraporn:  { role:'approver', email:'warapornt@chememan.com', name:'วราพร ติรสิทธิ์ (Budget Manager)', tier:'ขั้นที่ 3', step:3, admin:true,
+      fillDepts:['Budgeting and Management Accounting'],             // own budget (submitter) + approver3 + admin overlay
+      approverScope:['Solution Delivery'] },
+    jakkaritw: { role:'admin', email:'jakkaritw@chememan.com', name:'Jakkaritw (Admin · Test ทุกปุ่ม)', superTest:true }
+  };
+  let currentUserKey = 'suchanya';
+  let selectedDept = null;   // the (ฝ่าย) the main page is locked to
+  let faiOnlyWait = true;    // toggle "เฉพาะที่รออนุมัติ" (approver only)
+  let _faiData = [];         // cached [{div, dept, status, nCC, total}] for the picker list
+  let postDeadline = false;  // test toggle — after the cutoff, admin handles everything (ADR-0012)
+  let adminMode = false;     // overlay-admin hat toggle (ADR-0004): off = base role, on = admin powers
+  // ฝ่าย with no submitter in user_fill_dept (ADR-0009/0012). admin fills + submits → APPROVED directly.
+  const ORPHAN_DEPTS = new Set(['General (orphan)']);
+  // approval status per ฝ่าย (demo seed; real = approval_status keyed (ฝ่าย,ปี)). unknown → DRAFT.
+  const DEPT_STATUS = {
+    'Solution Delivery':'DRAFT',                       // L3 สุชัญญา can edit
+    'Budgeting and Management Accounting':'DRAFT'       // นิภาพร/วราพร own budget — editable (submitter hat)
+    // others default DRAFT
+  };
+  function deptStatusOf(dept){ return DEPT_STATUS[dept] || 'DRAFT'; }
+  function currentUser(){ return USERS[currentUserKey] || USERS.jakkaritw; }
+  function approverDepts(u){ return u.approverScope || []; }
+  // chain order: DRAFT/REJECTED=0 · PENDING_APPROVER1/2/3=1/2/3 · APPROVED=4
+  const STEP_ORDER = { DRAFT:0, REJECTED:0, PENDING_APPROVER1:1, PENDING_APPROVER2:2, PENDING_APPROVER3:3, APPROVED:4 };
+  // an approver's badge for a ฝ่าย, derived from the ฝ่าย's real status vs the approver's own step
+  function approverStepStatus(u, dept){
+    if (!u || !u.step) return null;
+    const ord = STEP_ORDER[deptStatusOf(dept)] ?? 0;
+    if (ord === u.step) return 'wait';   // exactly my turn
+    if (ord > u.step)   return 'done';   // passed my step (incl APPROVED)
+    return null;                          // not yet my turn (DRAFT / earlier step) → not in my queue
+  }
+  // admin identity = ADMIN_EMAILS overlay (ADR-0004), NOT a separate account. A person can be
+  // approver/submitter AND admin. The admin hat is active only when "โหมด Admin" is on (overlay
+  // admins) — pure admins (role 'admin', incl jakkaritw) have no base role so are always active.
+  function isAdminUser(u){ return u.role === 'admin' || u.admin === true; }
+  function adminActive(){
+    const u = currentUser();
+    if (!isAdminUser(u)) return false;
+    if (u.role === 'admin') return true;
+    return adminMode;
+  }
+  // can the current user EDIT the Pending cells of the locked ฝ่าย? (ADR-0013 edit-lock × role)
+  function canEditPending(){
+    const u = currentUser();
+    if (u.superTest) return true;                       // jakkaritw test
+    if (adminActive()) return true;                     // admin hat — edit any CC any status (incl APPROVED)
+    if (u.role === 'approver') return false;            // approver hat = review only → read-only
+    const st = deptStatusOf(selectedDept);              // submitter: only DRAFT / REJECTED
+    return st === 'DRAFT' || st === 'REJECTED';         // PENDING_* / APPROVED → locked
+  }
+  // fill-scope = ฝ่ายที่ user เป็นผู้กรอก. '__ALL__' = jakkaritw super-test (เห็นทุกปุ่ม, only jakkaritw).
+  function fillDeptsOf(u){
+    if (u.superTest) return '__ALL__';                 // jakkaritw test — submit ทุกฝ่าย
+    if (adminActive())                                 // admin hat active: submit เฉพาะ...
+      return postDeadline ? '__ALL__'                  //   หลัง deadline → จัดการเองทุกฝ่าย
+                          : [...ORPHAN_DEPTS];          //   เปิดรอบ → เฉพาะ orphan ฝ่าย
+    if (u.fillDepts) return u.fillDepts;
+    if (u.costCenters) return [...new Set(u.costCenters
+      .map(c => (costCenters.find(x => x.code === c) || {}).department).filter(Boolean))];
+    return [];                                         // approver1_only → ไม่กรอก
+  }
+  function userCostCenters(u){
+    if (u.costCenters) return u.costCenters;
+    // approver sees their approval queue (faiStatus) ∪ their own fill ฝ่าย (fillDepts)
+    const depts = new Set([...approverDepts(u), ...(u.fillDepts || [])]);
+    if (!depts.size) return [];
+    return costCenters.filter(c => depts.has(c.department)).map(c => c.code);
+  }
+  function visibleByRole(list){
+    const u = currentUser();
+    if (adminActive()) return list;
+    const ccs = userCostCenters(u);
+    return list.filter(t => ccs.includes(t.costCenter));
+  }
+  function switchUser(key){
+    if (!USERS[key]) return;
+    currentUserKey = key;
+    selectedDept = null; faiOnlyWait = true; adminMode = false; postDeadline = false;
+    try { localStorage.setItem('cm.user', key); } catch(e){}
+    renderUserBar();
+    renderTable();
+  }
+  function renderUserBar(){
+    // V3 layout: avatar/identity | สายงาน › ฝ่าย(n) › Cost Centers(n) | switcher
+    // counts sit INLINE next to the concept they count, in hierarchy order.
+    const u = currentUser();
+    const isAdmin = adminActive();
+    const emailLocal = (u.email || '').split('@')[0];
+    const initials = (isAdmin ? (u.name||'AD') : emailLocal).replace(/[()@._-]/g,' ').trim().slice(0,2);
+    const chev = '<svg class="v3-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const opts = Object.entries(USERS).map(([k,v]) => {
+      const lbl = v.role==='admin' ? 'Admin · '+v.name
+                : v.role==='approver' ? `อนุมัติ · ${v.name} (${v.tier})`
+                : v.email;
+      return `<option value="${k}" ${k===currentUserKey?'selected':''}>${lbl}</option>`;
+    }).join('');
+
+    let nameText, flow, scopeNote;
+    if (isAdmin){
+      nameText  = u.name || u.email;
+      flow      = `<span class="v3-allnote">เห็นข้อมูลทั้งหมด · ทุก Cost Center</span>`;
+      scopeNote = '';
+    } else {
+      nameText = (u.role === 'approver') ? u.name : emailLocal;
+      const codes = userCostCenters(u);
+      const lookup = code => costCenters.find(c => c.code === code) || {};
+      const glCount = new Set(transactions.filter(t => codes.includes(t.costCenter)).map(t => t.glCode)).size;
+      const divisions = [...new Set(codes.map(c => lookup(c).division).filter(Boolean))];   // สายงาน
+      const depts     = [...new Set(codes.map(c => lookup(c).department).filter(Boolean))]; // ฝ่าย
+      const deptChips = depts.map(n => `<span class="user-chip cc"><span class="v">${n}</span></span>`).join('');
+      flow =
+        `<div class="v3-seg">
+           <span class="meta-tag">สายงาน</span>
+           <span class="v3-division">${divisions.join(' · ') || u.email}</span>
+         </div>` +
+        (depts.length ? chev +
+        `<div class="v3-seg">
+           <span class="v3-label-wrap"><span class="meta-tag">ฝ่าย</span><span class="v3-count">${depts.length}</span></span>
+           <div class="v3-depts">${deptChips}</div>
+         </div>` : '') +
+        (codes.length ? chev +
+        `<div class="v3-metrics">
+           <span class="v3-cc-pill"><span class="n">${codes.length}</span><span class="t">Cost Centers</span></span>
+           <span class="v3-gl-pill"><span class="n">${glCount}</span><span class="t">GL Codes</span></span>
+         </div>` : '');
+      scopeNote = (u.role === 'approver')
+        ? `<span class="scope-note">ผู้อนุมัติ (${u.tier}) · เห็นฝ่ายในคิวอนุมัติ</span>`
+        : `<span class="scope-note">เห็นเฉพาะ Cost Center ของตน</span>`;
+    }
+
+    const roleLabel = isAdmin ? 'ADMIN' : (u.role === 'approver' ? 'APPROVER' : 'USER');
+    const roleClass = isAdmin ? 'admin' : 'user';
+    document.getElementById('userBar').innerHTML =
+      `<div class="v3-id">
+        <div class="user-avatar ${isAdmin?'admin':''}">${initials}</div>
+        <div class="v3-id-text">
+          <span class="v3-name">${nameText}</span>
+          <span class="v3-email">${u.email || ''}</span>
+          <span class="role-badge ${roleClass}">${roleLabel}</span>
+        </div>
+      </div>
+      <div class="v3-flow">${flow}</div>
+      <div class="v3-switch">
+        <div class="v3-scope">
+          ${scopeNote}
+          <label class="switch-label">เข้าสู่ระบบเป็น</label>
+        </div>
+        <select class="user-select" onchange="switchUser(this.value)">${opts}</select>
+      </div>`;
+  }
+
+  /* ════════════════════════════════════════════
+     HELPERS
+     ════════════════════════════════════════════ */
+  const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const CURRENT_MONTH_INDEX = 4;   /* May — demo standing month */
+  const monthCellCls = (i) => `month-cell${i === CURRENT_MONTH_INDEX ? ' now' : ''}`;
+
+  function applyCurrentMonthHeader(){
+    document.querySelectorAll('.data-table thead th.month-col').forEach((th, i) => {
+      th.classList.toggle('now', i === CURRENT_MONTH_INDEX);
+      const label = th.querySelector('.th-label');
+      if (label) label.textContent = MONTHS_EN[i];
+    });
+  }
+
+  const isSpecialGL = (group) => specialGLGroups.hasOwnProperty(group);
+  const fmt = (n) => (n || n === 0) ? Number(n).toLocaleString() : '';
+  const fmtCell = (n) => (n === 0 || n == null) ? '<span class="zero">—</span>' : fmt(n);
+
+  function calculatePendingSum(txn){
+    if (!txn.pendingDetails || !txn.pendingDetails.length) return txn.pending;
+    const sum = new Array(12).fill(0);
+    txn.pendingDetails.forEach(d => d.months.forEach((v,i) => sum[i] += (v||0)));
+    return sum;
+  }
+
+  function sumArr(a){ return a.reduce((s,v) => s + (v||0), 0); }
+
+  /* ════════════════════════════════════════════
+     RENDER
+     ════════════════════════════════════════════ */
+  function renderSummary(){
+    const yr = document.getElementById('yearFilter').value;
+    const filtered = visibleByRole(transactions).filter(t => {
+      const cc = costCenters.find(c => c.code === t.costCenter) || {};
+      return (yr === 'all' || String(t.year) === yr) && (!selectedDept || cc.department === selectedDept);
+    });
+    let approved = 0, pending = 0, specialCount = 0;
+    filtered.forEach(t => {
+      approved += sumArr(t.approved);
+      pending  += sumArr(calculatePendingSum(t));
+      const gl = glCodes.find(g => g.code === t.glCode);
+      if (gl && isSpecialGL(gl.group)) specialCount++;
+    });
+    const m = (n) => (n/1_000_000).toFixed(2);
+    const summaryEl = document.getElementById('summary');
+    if(!summaryEl) return;
+    summaryEl.innerHTML = `
+      <span class="summary-chip"><span class="lbl">Txns</span><span class="v">${filtered.length}</span></span>
+      <span class="summary-chip special"><span class="lbl">Special GL</span><span class="v">${specialCount}</span></span>
+      <span class="summary-chip approved"><span class="lbl">Approved</span><span class="v">฿${m(approved)}M</span></span>
+      <span class="summary-chip pending"><span class="lbl">Pending</span><span class="v">฿${m(pending)}M</span></span>
+    `;
+  }
+
+  // ฝ่าย-picker — replaces the old สายงาน divisionFilter. Locks the page to one (ฝ่าย, year) =
+  // the approval unit (ADR-0008). Lists the ฝ่าย the current user may act on, grouped by สายงาน;
+  // approvers get a รออนุมัติ/อนุมัติแล้ว badge per ฝ่าย + the "เฉพาะที่รออนุมัติ" toggle.
+  function buildFaiPicker(){
+    const u = currentUser();
+    const isApprover = u.role === 'approver' && !adminActive();
+    const seen = new Map(); // dept -> {div, dept, status, nCC(Set), total}
+    visibleByRole(transactions).forEach(t => {
+      const cc = costCenters.find(c => c.code === t.costCenter) || {};
+      if (!cc.department) return;
+      if (!seen.has(cc.department)){
+        seen.set(cc.department, { div: cc.division || '—', dept: cc.department,
+          status: isApprover ? approverStepStatus(u, cc.department) : null, nCC:new Set(), total:0 });
+      }
+      const rec = seen.get(cc.department);
+      rec.nCC.add(t.costCenter);
+      rec.total += sumArr(calculatePendingSum(t));
+    });
+    _faiData = [...seen.values()].map(r => ({ ...r, nCC:r.nCC.size }))
+      .sort((a,b) => a.div.localeCompare(b.div,'th') || a.dept.localeCompare(b.dept,'th'));
+
+    document.getElementById('faipToggleWrap').style.display = isApprover ? '' : 'none';
+
+    // default / re-validate the locked ฝ่าย against the current scope
+    const valid = _faiData.some(d => d.dept === selectedDept);
+    if (!valid){
+      const firstWait = _faiData.find(d => d.status === 'wait');
+      selectedDept = (isApprover && firstWait) ? firstWait.dept : (_faiData[0] ? _faiData[0].dept : null);
+    }
+    updateFaiTrigger();
+    renderFaiList();
+  }
+  function updateFaiTrigger(){
+    const cur = _faiData.find(d => d.dept === selectedDept);
+    const curEl = document.getElementById('faipCur'), pp = document.getElementById('faipPP');
+    if (!cur){ curEl.innerHTML = '— เลือกฝ่าย —'; pp.classList.add('faip-hidden'); return; }
+    curEl.innerHTML = `<span class="d">${cur.div}</span>${cur.dept}`;
+    if (cur.status){ pp.className = 'pp ' + (cur.status==='wait'?'wait':'done'); pp.textContent = cur.status==='wait'?'รออนุมัติ':'อนุมัติแล้ว'; pp.classList.remove('faip-hidden'); }
+    else { pp.classList.add('faip-hidden'); }
+  }
+  function renderFaiList(){
+    const isApprover = currentUser().role === 'approver' && !adminActive();
+    const q = (document.getElementById('faipSearch').value || '').trim().toLowerCase();
+    const list = document.getElementById('faipList');
+    document.getElementById('faipWaitN').textContent = isApprover ? '(' + _faiData.filter(d => d.status === 'wait').length + ')' : '';
+    let html = '', lastDiv = null, shown = 0;
+    _faiData.forEach(d => {
+      if (isApprover && faiOnlyWait && d.status !== 'wait') return;
+      if (q && !(d.dept.toLowerCase().includes(q) || d.div.toLowerCase().includes(q))) return;
+      if (d.div !== lastDiv){ html += `<div class="faip-grp">${d.div}</div>`; lastDiv = d.div; }
+      const badge = d.status ? `<span class="pp ${d.status==='wait'?'wait':'done'}">${d.status==='wait'?'รออนุมัติ':'อนุมัติแล้ว'}</span>` : '';
+      html += `<div class="faip-opt ${d.status && d.status!=='wait'?'muted':''} ${d.dept===selectedDept?'sel':''}" onclick="pickDept('${d.dept.replace(/'/g,"\\'")}')">
+        <div class="nm"><div class="t">${d.dept}</div><div class="m">${d.nCC} CC · งบขอ ${fmt(d.total)} ฿</div></div>${badge}</div>`;
+      shown++;
+    });
+    if (!shown) html = `<div class="faip-empty">${(isApprover && faiOnlyWait) ? 'ไม่มีฝ่ายที่รออนุมัติแล้ว 🎉' : 'ไม่พบฝ่าย'}</div>`;
+    list.innerHTML = html;
+  }
+  function toggleFaiPanel(){
+    const p = document.getElementById('faiPicker');
+    const open = !p.classList.contains('open');
+    p.classList.toggle('open', open);
+    document.getElementById('faipTrig').classList.toggle('open', open);
+    if (open) renderFaiList();
+  }
+  function pickDept(dept){
+    selectedDept = dept;
+    const p = document.getElementById('faiPicker');
+    p.classList.remove('open'); document.getElementById('faipTrig').classList.remove('open');
+    updateFaiTrigger();
+    renderTable();
+  }
+  function onFaiToggle(){ faiOnlyWait = document.getElementById('faipOnlyWait').checked; renderFaiList(); }
+  document.addEventListener('click', e => {
+    const p = document.getElementById('faiPicker');
+    if (p && !p.contains(e.target)){ p.classList.remove('open'); document.getElementById('faipTrig').classList.remove('open'); }
+  });
+
+  // Action bar — buttons swap by the selected ฝ่าย (the approval unit). Submit = own fill-ฝ่าย;
+  // Approve/Reject = a ฝ่าย pending my approval. jakkaritw super-test sees all. (ADR-0008 unit = ฝ่าย.)
+  function updateActionBar(){
+    const bar = document.getElementById('actionBar'); if (!bar) return;
+    const u = currentUser();
+    const isAdmin = adminActive();
+    const fd = fillDeptsOf(u);
+    const inFillScope = fd === '__ALL__' || (selectedDept && Array.isArray(fd) && fd.includes(selectedDept));
+    const st = selectedDept ? deptStatusOf(selectedDept) : null;
+    // Submit shows only when in fill-scope AND the ฝ่าย is still editable (DRAFT/REJECTED) — admin/test override
+    const submittable = isAdmin || u.superTest || st === 'DRAFT' || st === 'REJECTED';
+    const canSubmit = inFillScope && submittable;
+    // Approve/Reject = approver hat only, and only when the ฝ่าย is exactly at MY step
+    const apprStatus = (!isAdmin && u.role === 'approver') ? approverStepStatus(u, selectedDept) : null;
+    const canApprove = apprStatus === 'wait';
+    const isOrphan   = selectedDept && ORPHAN_DEPTS.has(selectedDept);
+    const dl = document.getElementById('deadlineToggleWrap'); if (dl) dl.style.display = isAdmin ? '' : 'none';
+    // "โหมด Admin" toggle — shown for overlay admins (admin flag + a base role); pure admins are always-on (no toggle)
+    const am = document.getElementById('adminModeWrap');
+    if (am){ am.style.display = (isAdminUser(u) && u.role !== 'admin') ? '' : 'none';
+             document.getElementById('adminModeChk').checked = adminMode; }
+    document.getElementById('submitBtn').style.display  = canSubmit  ? '' : 'none';
+    document.getElementById('approveBtn').style.display = canApprove ? '' : 'none';
+    document.getElementById('rejectBtn').style.display  = canApprove ? '' : 'none';
+    let note;
+    if (u.superTest)                  note = 'โหมดทดสอบ (jakkaritw) — Submit ได้ทุกฝ่าย';
+    else if (isAdmin && postDeadline) note = 'หลัง deadline · admin จัดการเอง — Submit = APPROVED ตรงๆ (ADMIN_OVERRIDE)';
+    else if (isAdmin && isOrphan)     note = 'ฝ่าย orphan — admin Submit = APPROVED ตรงๆ';
+    else if (isAdmin)                 note = 'admin แก้ Pending ได้ · Submit ไม่ได้ (ก่อน deadline · ฝ่ายมีผู้กรอกเอง)';
+    else if (canApprove)              note = `รออนุมัติ (${u.tier}) · ตรวจแล้วกด อนุมัติ / ตีกลับ ทั้งฝ่าย`;
+    else if (apprStatus === 'done')   note = 'ฝ่ายนี้ผ่านขั้นของคุณแล้ว';
+    else if (canSubmit)               note = '';
+    else if (inFillScope && st && st.indexOf('PENDING') === 0) note = `ส่งแล้ว · ${st} · แก้ไม่ได้ (รออนุมัติ)`;
+    else if (inFillScope && st === 'APPROVED') note = 'อนุมัติแล้ว · แก้ไม่ได้ (แก้ผ่าน admin)';
+    else                              note = 'อ่านอย่างเดียว';
+    document.getElementById('actStatus').textContent = note;
+    bar.style.display = (canSubmit || canApprove || isAdmin || inFillScope) ? '' : 'none';
+  }
+  function onDeadlineToggle(){ postDeadline = document.getElementById('postDeadlineChk').checked; renderTable(); }
+  function onAdminModeToggle(){
+    adminMode = document.getElementById('adminModeChk').checked;
+    if (!adminMode){ postDeadline = false; const c = document.getElementById('postDeadlineChk'); if (c) c.checked = false; }
+    selectedDept = null;   // scope changes between hats → re-pick
+    renderUserBar();       // role label flips approver ↔ admin
+    renderTable();
+  }
+  function approverApprove(){
+    const dept = selectedDept, st = deptStatusOf(dept);
+    const next = { PENDING_APPROVER1:'PENDING_APPROVER2', PENDING_APPROVER2:'PENDING_APPROVER3', PENDING_APPROVER3:'APPROVED' }[st] || 'APPROVED';
+    DEPT_STATUS[dept] = next;
+    showNotice('อนุมัติแล้ว', `อนุมัติทั้งฝ่าย “${dept}” → สถานะ ${next}` + (next === 'APPROVED' ? ' (อนุมัติสุดท้าย)' : ' — ส่งต่อขั้นถัดไป'));
+    renderTable();
+  }
+  function approverReject(){
+    const dept = selectedDept;
+    const r = prompt(`ตีกลับทั้งฝ่าย “${dept}” (ทุก CC) → แจ้งผู้ส่งล่าสุด\nเหตุผล (จำเป็น):`, 'ตีกลับ โปรดตรวจสอบ');
+    if (!r) return;
+    DEPT_STATUS[dept] = 'REJECTED';
+    showNotice('ตีกลับแล้ว', `ฝ่าย “${dept}” → REJECTED · แจ้งผู้ส่ง: ${r}`);
+    renderTable();
+  }
+
+  function colFilterVal(id){
+    const el = document.getElementById(id);
+    return el ? (el.value || '').trim().toLowerCase() : '';
+  }
+  function colFilterMatch(q, hay){
+    return !q || String(hay || '').toLowerCase().includes(q);
+  }
+
+  function renderTable(){
+    const tbody = document.getElementById('tableBody');
+    const yrLbl = document.getElementById('monthYearLabel');
+    if (yrLbl){
+      const yv = document.getElementById('yearFilter').value;
+      yrLbl.textContent = yv === 'all' ? 'All years' : yv;
+    }
+    buildFaiPicker();
+    const search = (document.getElementById('globalSearch') || {}).value?.toLowerCase() || '';
+    const yr = document.getElementById('yearFilter').value;
+    // Year-in-legend (§1c): standing year Y → SAP(Y), Approved(Y), Pending(Y+1).
+    const standY = parseInt(yr, 10);
+    if (!isNaN(standY)) {
+      document.getElementById('legendYrSap').textContent = standY;
+      document.getElementById('legendYrApproved').textContent = standY;
+      document.getElementById('legendYrPending').textContent = standY + 1;
+    }
+    // division filter = admin only (non-admin already CC-scoped); admin always has a specific สายงาน selected
+    const isAdmin = adminActive();
+    const pendEditable = canEditPending();   // edit-lock for Pending cells (ADR-0013 × role)
+    // Approved board_budget zone (Export/Import) is admin-only → hide entirely for normal users
+    const az = document.querySelector('.admin-zone');
+    if (az) az.style.display = isAdmin ? '' : 'none';
+    if (isAdmin){
+      const fyr = parseInt(document.getElementById('yearFilter').value, 10);
+      const fxd = document.getElementById('fxDisplay');
+      if (fxd) fxd.textContent = isNaN(fyr) ? '—' : (FX_RATES[fyr] != null ? Number(FX_RATES[fyr]).toFixed(2) : '—');
+      const yl = document.getElementById('fxYearLbl'); if (yl) yl.textContent = isNaN(fyr) ? '—' : fyr;
+    }
+    updateActionBar();
+
+    const cf = {
+      status: colFilterVal('colFilterStatus'),
+      cc: colFilterVal('colFilterCC'),
+      gl: colFilterVal('colFilterGL'),
+      glName: colFilterVal('colFilterGLName'),
+      glGroup: colFilterVal('colFilterGLGroup'),
+      remark: colFilterVal('colFilterRemark'),
+      clevel: colFilterVal('colFilterCLevel'),
+      division: colFilterVal('colFilterDivision'),
+      dept: colFilterVal('colFilterDept'),
+    };
+
+    const filtered = visibleByRole(transactions).filter(txn => {
+      const cc = costCenters.find(c => c.code === txn.costCenter) || {};
+      const gl = glCodes.find(g => g.code === txn.glCode) || {};
+      const s = [txn.costCenter, gl.group, txn.glCode, gl.name, txn.remark, cc.clevel, cc.division, cc.department].join(' ').toLowerCase();
+      const matchYear = yr === 'all' || String(txn.year) === yr;
+      const matchDept = !selectedDept || cc.department === selectedDept;
+      const statusHay = `sap approved pending ใช้จริง งบ รออนุมัติ ${txn.year} ${txn.year + 1}`;
+      const matchCols =
+        colFilterMatch(cf.status, statusHay) &&
+        colFilterMatch(cf.cc, [txn.costCenter, cc.name, cc.department, cc.division].join(' ')) &&
+        colFilterMatch(cf.gl, [txn.glCode, gl.name, gl.group].join(' ')) &&
+        colFilterMatch(cf.glName, gl.name) &&
+        colFilterMatch(cf.glGroup, gl.group) &&
+        colFilterMatch(cf.remark, txn.remark) &&
+        colFilterMatch(cf.clevel, cc.clevel) &&
+        colFilterMatch(cf.division, cc.division) &&
+        colFilterMatch(cf.dept, cc.department);
+      return (!search || s.includes(search)) && matchYear && matchDept && matchCols;
+    });
+
+    // R2 — main table sorted by GL group, then GL code (ADR/data-model §4b)
+    filtered.sort((a, b) => {
+      const ga = (glCodes.find(g => g.code === a.glCode) || {}).group || '';
+      const gb = (glCodes.find(g => g.code === b.glCode) || {}).group || '';
+      return ga.localeCompare(gb, 'th') || String(a.glCode).localeCompare(String(b.glCode));
+    });
+
+    let html = '';
+    filtered.forEach((txn, idx) => {
+      const cc = costCenters.find(c => c.code === txn.costCenter) || {};
+      const gl = glCodes.find(g => g.code === txn.glCode) || {};
+      const isSpec = isSpecialGL(gl.group);
+      const pendingSum = isSpec ? calculatePendingSum(txn) : txn.pending;
+
+      // Shared cells (rowspan)
+      const sharedCells = `
+        <td class="shared frz frz-1" rowspan="3" style="text-align:center;background:var(--surface)"><div class="idx-cell">${idx + 1}</div></td>
+      `;
+
+      // ── Row 1 · SAP (read-only) ──
+      html += `<tr class="txn-row first" data-status="sap" data-txn-id="${txn.id}">`;
+      html += sharedCells;
+      // Cost Center dropdown
+      html += `<td rowspan="3" class="shared frz frz-2">
+        <div class="dropdown-cell" id="cc_${txn.id}">
+          <input type="text" class="dropdown-input" value="${txn.costCenter}" readonly
+                 onclick="openDropdown('cc_${txn.id}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDropdown('cc_${txn.id}')}">
+          <div class="dropdown-list">
+            ${costCenters.map(c => `<div class="dropdown-option" data-search="${(c.code + ' ' + c.name + ' ' + c.department + ' ' + c.division).toLowerCase()}" onclick="selectCostCenter(${txn.id},'${c.code}')">
+              <div class="code">${c.code}</div><div class="name">${c.name}</div></div>`).join('')}
+          </div>
+        </div>
+      </td>`;
+      // GL Code dropdown
+      html += `<td rowspan="3" class="shared frz frz-3">
+        <div class="dropdown-cell" id="gl_${txn.id}">
+          <input type="text" class="dropdown-input" value="${txn.glCode}" readonly
+                 onclick="openDropdown('gl_${txn.id}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDropdown('gl_${txn.id}')}">
+          <div class="dropdown-list">
+            ${glCodes.map(g => `<div class="dropdown-option" data-search="${(g.code + ' ' + g.name + ' ' + g.group).toLowerCase()}" onclick="selectGLCode(${txn.id},'${g.code}')">
+              <div class="code">${g.code}</div><div class="name">${g.name}</div></div>`).join('')}
+          </div>
+        </div>
+        <div class="auto-cell" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11.5px;line-height:1.5;color:var(--ink-3);margin-top:6px;white-space:normal">${gl.name || '—'}${gl.side ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}" style="margin-left:0">${SIDE_LABELS[gl.side].short}</span>` : ''}</div>
+      </td>`;
+      // GL Group — solid color chip per special group (cell itself plain)
+      html += `<td rowspan="3" class="shared" style="vertical-align:top">
+        <div class="auto-cell ${isSpec ? 'special-gl-group ' + groupChipClass(gl.group) : ''}">${gl.group || '—'}</div>
+      </td>`;
+      // Remark (editable)
+      html += `<td rowspan="3" class="shared" style="vertical-align:top">
+        <input type="text" class="text-input" value="${txn.remark || ''}" onchange="updateRemark(${txn.id}, this.value)">
+      </td>`;
+      html += `<td><div class="status-cell sap">SAP · ใช้จริง (${+txn.year})</div></td>`;
+      // Months: SAP read-only
+      txn.sap.forEach((v, i) => {
+        html += `<td class="${monthCellCls(i)}"><span class="month-value sap">${fmtCell(v)}</span></td>`;
+      });
+      html += `<td rowspan="3" class="shared action-cell">
+        <button class="action-btn" onclick="removeTransaction(${txn.id})" title="Remove transaction">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </td>`;
+      html += `</tr>`;
+
+      // ── Row 2 · Approved (read-only — board_budget, set via Import CSV ทั้งปีเท่านั้น) ──
+      html += `<tr class="txn-row" data-status="approved" data-txn-id="${txn.id}">`;
+      html += `<td><div class="status-cell approved">Approved · งบ (${+txn.year})</div></td>`;
+      txn.approved.forEach((v, i) => {
+        html += `<td class="${monthCellCls(i)}"><span class="month-value approved-ro">${fmtCell(v)}</span></td>`;
+      });
+      html += `</tr>`;
+
+      // ── Row 3 · Pending ──
+      html += `<tr class="txn-row last ${isSpec ? 'special' : ''}" data-status="pending" data-txn-id="${txn.id}">`;
+      const lockHint = pendEditable ? '' :
+        ` <span class="badge" title="แก้ไม่ได้ในสถานะนี้">🔒 ${currentUser().role === 'approver' && !adminActive() ? 'ตรวจอย่างเดียว' : deptStatusOf(selectedDept)}</span>`;
+      const pendingStatusCell = `<div class="status-cell pending">Pending · รออนุมัติ (${+txn.year + 1})${lockHint}</div>`;
+      if (isSpec) {
+        // Detail button now lives under the Jan cell instead of its own column
+        const detailBtn = pendEditable
+          ? `<button class="btn-detail" style="margin-top:6px;width:100%;font-size:10px;padding:5px 6px;white-space:normal;line-height:1.3" onclick="openDetailModal(${txn.id})">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+               ใส่รายละเอียดงบทำการ
+             </button>`
+          : `<button class="btn-detail" style="opacity:.55;margin-top:6px;width:100%;font-size:10px;padding:5px 6px;white-space:normal;line-height:1.3" onclick="openDetailModal(${txn.id})" title="อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้">
+               🔒 ดูรายละเอียด
+             </button>`;
+        html += `<td>${pendingStatusCell}${detailBtn}</td>`;
+        // Months read-only sum
+        pendingSum.forEach((v, i) => {
+          html += `<td class="${monthCellCls(i)}"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
+        });
+      } else if (pendEditable) {
+        html += `<td>${pendingStatusCell}</td>`;
+        // Normal GL · editable
+        txn.pending.forEach((v,i) => {
+          html += `<td class="${monthCellCls(i)}">
+            <input type="text" class="month-value pending-input" value="${v || ''}" data-i="${i}"
+                   onchange="updateMonth(${txn.id},'pending',${i}, this.value)"
+                   oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+          </td>`;
+        });
+      } else {
+        html += `<td>${pendingStatusCell}</td>`;
+        // Normal GL · LOCKED (read-only per ADR-0013 × role) — show value, no input
+        txn.pending.forEach((v, i) => {
+          html += `<td class="${monthCellCls(i)}"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
+        });
+      }
+      html += `</tr>`;
+    });
+
+    if (!filtered.length) {
+      html = `<tr><td colspan="23" style="padding:60px;text-align:center;color:var(--ink-3);font-size:14px">
+        <div style="font-family:var(--serif);font-size:24px;color:var(--ink-2);margin-bottom:8px">No transactions match.</div>
+        <div>Try clearing the search or column filters.</div>
+      </td></tr>`;
+    }
+    tbody.innerHTML = html;
+    renderSummary();
+    applyFreeze();
+  }
+
+  /* Freeze left identity columns — read real header widths → set --frz* left offsets.
+     Survives auto table-layout + column resize. Called after render, on resize, after col-resize. */
+  function applyFreeze(){
+    const ths = document.querySelectorAll('.data-table thead th.frz');
+    if (ths.length < 3) return;
+    const root = document.documentElement.style;
+    let left = 0;
+    ['--frz1','--frz2','--frz3'].forEach((v, i) => {
+      root.setProperty(v, left + 'px');
+      left += ths[i].getBoundingClientRect().width;
+    });
+  }
+  window.addEventListener('resize', applyFreeze);
+
+  /* ════════════════════════════════════════════
+     DROPDOWNS  — portal pattern (body-level)
+     Appends a single floating panel to <body> so it escapes
+     overflow:auto + position:sticky ancestors (Chrome quirk).
+     ════════════════════════════════════════════ */
+  let _ddSrcId = null;
+  function _ddPortal(){
+    let p = document.getElementById('__ddPortal__');
+    if (!p){
+      p = document.createElement('div');
+      p.id = '__ddPortal__';
+      p.className = 'dropdown-list';
+      document.body.appendChild(p);
+      document.addEventListener('mousedown', e => {
+        if (!p.contains(e.target)){
+          const src = _ddSrcId && document.getElementById(_ddSrcId);
+          if (!src || !src.contains(e.target)) _ddClose();
+        }
+      }, true);
+    }
+    return p;
+  }
+  function _ddPosition(id){
+    const cell = document.getElementById(id);
+    if (!cell) return;
+    const inp = cell.querySelector('.dropdown-input');
+    const r = (inp || cell).getBoundingClientRect();
+    const w = Math.max(r.width, 260);
+    const p = _ddPortal();
+    p.style.left  = r.left + 'px';
+    p.style.width = w + 'px';
+    p.style.top   = (r.bottom + 4) + 'px';
+    requestAnimationFrame(() => {
+      const ph = p.offsetHeight;
+      if (r.bottom + 4 + ph > window.innerHeight)
+        p.style.top = Math.max(4, r.top - ph - 4) + 'px';
+      const pl = parseFloat(p.style.left);
+      if (pl + w > window.innerWidth)
+        p.style.left = Math.max(0, window.innerWidth - w - 8) + 'px';
+    });
+  }
+  function _ddClose(){
+    const p = document.getElementById('__ddPortal__');
+    if (p) p.style.display = 'none';
+    _ddSrcId = null;
+  }
+  function _ddPlaceholder(id){
+    return id.startsWith('gl_')
+      ? 'ค้นหา GL code, ชื่อ GL, group…'
+      : 'ค้นหา cost center, ชื่อฝ่าย…';
+  }
+  function openDropdown(id){
+    const cell = document.getElementById(id);
+    if (!cell) return;
+    const src = cell.querySelector('.dropdown-list');
+    const p = _ddPortal();
+    const opts = src ? src.innerHTML : '';
+    p.innerHTML = `
+      <div class="dropdown-head">
+        <input type="text" class="dropdown-search" placeholder="${_ddPlaceholder(id)}"
+               oninput="filterDropdown('${id}', this.value)"
+               onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+      </div>
+      <div class="dropdown-options">${opts}</div>
+      <div class="dropdown-empty">ไม่พบรายการที่ตรงกับคำค้น</div>`;
+    p.style.display = 'flex';
+    _ddSrcId = id;
+    _ddPosition(id);
+    const search = p.querySelector('.dropdown-search');
+    if (search) { search.value = ''; search.focus(); }
+    filterDropdown(id, '');
+  }
+  function closeDropdown(id){ if (_ddSrcId === id) _ddClose(); }
+  function filterDropdown(id, query){
+    if (_ddSrcId !== id) openDropdown(id);
+    const q = (query || '').trim().toLowerCase();
+    const p = _ddPortal();
+    let visible = 0;
+    p.querySelectorAll('.dropdown-option').forEach(opt => {
+      const hay = opt.dataset.search || opt.textContent.toLowerCase();
+      const show = !q || hay.includes(q);
+      opt.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const empty = p.querySelector('.dropdown-empty');
+    if (empty) empty.style.display = visible ? 'none' : 'block';
+    _ddPosition(id);
+  }
+
+  function selectCostCenter(txnId, code){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) { t.costCenter = code; _ddClose(); renderTable(); }
+  }
+  function selectGLCode(txnId, code){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) {
+      t.glCode = code;
+      const gl = glCodes.find(g => g.code === code);
+      if (gl && isSpecialGL(gl.group) && (!t.pendingDetails || !t.pendingDetails.length)){
+        t.pendingDetails = [];
+      }
+      _ddClose();
+      renderTable();
+    }
+  }
+  function updateRemark(txnId, v){
+    const t = transactions.find(x => x.id === txnId);
+    if (t) t.remark = v;
+  }
+  function updateMonth(txnId, kind, i, v){
+    const t = transactions.find(x => x.id === txnId);
+    if (!t) return;
+    const n = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
+    t[kind][i] = n;
+    renderSummary();
+  }
+
+  /* ════════════════════════════════════════════
+     TRANSACTIONS
+     ════════════════════════════════════════════ */
+  function addNewTransaction(){
+    transactions.unshift({
+      id: transactionIdCounter++,
+      costCenter: currentUser().role === 'user' ? (userCostCenters(currentUser())[0] || costCenters[0].code) : costCenters[0].code,
+      glCode: glCodes[0].code,
+      remark: '',
+      year: +document.getElementById('yearFilter').value === 'all' ? 2026 : (+document.getElementById('yearFilter').value || 2026),
+      sap: new Array(12).fill(0),
+      approved: new Array(12).fill(0),
+      pending: new Array(12).fill(0),
+      pendingDetails: []
+    });
+    renderTable();
+    document.querySelector('.table-wrap').scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function removeTransaction(txnId){
+    if (!confirm('Remove this transaction?')) return;
+    transactions = transactions.filter(t => t.id !== txnId);
+    renderTable();
+  }
+
+  /* ════════════════════════════════════════════
+     DETAIL MODAL
+     ════════════════════════════════════════════ */
+  function openDetailModal(txnId){
+    currentEditingTxnId = txnId;
+    detailReadonly = !canEditPending();   // lock subform when the ฝ่าย is locked (submitted/approved/approver-view)
+    const txn = transactions.find(t => t.id === txnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+
+    /* Travelling Expense → Trip Manager (shared across all 8 GLs for same CC+Year) */
+    if (gl && gl.group === 'Travelling Expense'){
+      openTripModal(txn.costCenter, txn.year);
+      return;
+    }
+
+    document.getElementById('detailModalTitle').innerHTML = `รายละเอียด <em>${gl.expType || gl.group}</em>${detailReadonly ? ' 🔒' : ''}`;
+    document.getElementById('detailModalSubtitle').textContent = `${txn.costCenter} · ${gl.code} · ${gl.name}` + (detailReadonly ? ' · อ่านอย่างเดียว (แก้ไม่ได้)' : '');
+    // footer: hide add/save when read-only; "ยกเลิก" → "ปิด"
+    document.getElementById('detailAddBtn').style.display  = detailReadonly ? 'none' : '';
+    document.getElementById('detailSaveBtn').style.display = detailReadonly ? 'none' : '';
+    document.getElementById('detailCloseBtn').textContent  = detailReadonly ? 'ปิด' : 'ยกเลิก';
+
+    if (!txn.pendingDetails) txn.pendingDetails = [];
+    renderDetailTable();
+    document.getElementById('detailModal').classList.add('open');
+  }
+  function closeDetailModal(){
+    document.getElementById('detailModal').classList.remove('open');
+    currentEditingTxnId = null;
+  }
+  function renderDetailTable(){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+    /* Travelling Expense is handled by Trip Manager — not this modal */
+    if (gl && gl.group === 'Travelling Expense') { return; }
+    const cols = detailColumns(gl.group, gl.code);
+    const ro = detailReadonly, dis = ro ? ' disabled' : '';
+
+    let html = `<table class="detail-table">
+      <thead><tr>
+        <th class="num-col" style="width:50px">#</th>
+        ${cols.map(c => `<th class="special-col">${c.key}</th>`).join('')}
+        ${MONTHS_EN.map(m => `<th class="month-col">${m}</th>`).join('')}
+        <th class="month-col" style="background:color-mix(in oklab,var(--accent) 10%, var(--paper-2));color:var(--accent)">รวม</th>
+        <th style="width:50px"></th>
+      </tr></thead><tbody>`;
+
+    txn.pendingDetails.forEach((d, idx) => {
+      const total = sumArr(d.months);
+      html += `<tr>
+        <td class="num-col"><div class="idx-cell">${idx + 1}</div></td>
+        ${cols.map(c => {
+          if (c.kind === 'grey') return `<td class="special-col-cell"><div class="cell-disabled" title="ไม่ใช้กับ GL นี้">—</div></td>`;
+          const cur = (d[c.key] != null ? String(d[c.key]) : '');
+          if (c.kind === 'select'){
+            const opts = `<option value="">— เลือก —</option>` + c.options.map(o => `<option ${o===cur?'selected':''}>${o}</option>`).join('');
+            return `<td class="special-col-cell"><select class="detail-input detail-select"${dis} onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)">${opts}</select></td>`;
+          }
+          return `<td class="special-col-cell"><input class="detail-input"${dis} value="${cur.replace(/"/g,'&quot;')}" onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)"></td>`;
+        }).join('')}
+        ${d.months.map((v,i) => `<td class="month-cell"><input class="detail-input month-input"${dis} value="${v || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateDetailMonth(${d.id},${i}, this.value)"></td>`).join('')}
+        <td class="month-cell"><span class="month-value pending-readonly" id="rowTotal_${d.id}">${fmtCell(total)}</span></td>
+        <td>${ro ? '' : `<button class="action-btn" onclick="removeDetailRow(${d.id})" title="Remove">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>`}</td>
+      </tr>`;
+    });
+
+    // Total row
+    const colSum = new Array(12).fill(0);
+    txn.pendingDetails.forEach(d => d.months.forEach((v,i) => colSum[i] += (v||0)));
+    const grand = sumArr(colSum);
+    html += `<tr class="total-row">
+      <td class="num-col label" colspan="${1 + cols.length}">Monthly total</td>
+      ${colSum.map(v => `<td class="month-cell"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`).join('')}
+      <td class="month-cell grand">${grand.toLocaleString()}</td>
+      <td></td>
+    </tr></tbody></table>`;
+
+    document.getElementById('detailModalBody').innerHTML = html;
+    document.getElementById('detailModalFootInfo').innerHTML = `Rows: <b>${txn.pendingDetails.length}</b> · Year total: <b>฿${grand.toLocaleString()}</b>`;
+  }
+  function updateDetailField(detailId, key, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn.pendingDetails.find(x => x.id === detailId);
+    if (d) d[key] = v;
+  }
+  function updateDetailMonth(detailId, i, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn.pendingDetails.find(x => x.id === detailId);
+    if (!d) return;
+    d.months[i] = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
+    renderDetailTable();
+  }
+  function addDetailRow(){
+    if (detailReadonly) return;
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    if (!txn) return;
+    const gl = glCodes.find(g => g.code === txn.glCode);
+    if (gl && gl.group === 'Travelling Expense'){
+      txn.pendingDetails.push({
+        id: detailIdCounter++,
+        'Destination Country':'', 'Traveler Name':'', 'Position':'',
+        'Project':'', 'Purpose of Travel':'', 'Total Days':0,
+        'Travel Months':[],
+        months: new Array(12).fill(0)
+      });
+      renderDetailTable();
+      return;
+    }
+    const cols = detailColumns(gl.group, gl.code);
+    const row = { id: detailIdCounter++, months: new Array(12).fill(0) };
+    cols.forEach(c => row[c.key] = '');
+    txn.pendingDetails.push(row);
+    renderDetailTable();
+  }
+  function removeDetailRow(detailId){
+    if (detailReadonly) return;
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    txn.pendingDetails = txn.pendingDetails.filter(d => d.id !== detailId);
+    renderDetailTable();
+  }
+
+  /* ── Travelling Expense: per-traveler cards + per-diem auto-calc ── */
+  function travelPerMonth(d){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const scope = destScope(d['Destination Country']);
+    const { rate, currency } = perDiemRate(d['Position'], scope);
+    const days = parseInt(d['Total Days'], 10) || 0;
+    const fx = currency === 'USD' ? fxRate(txn ? txn.year : 2025) : 1;
+    const total = days * rate * fx;
+    const sel = d['Travel Months'] || [];
+    return sel.length ? Math.round(total / sel.length) : 0;
+  }
+  function recalcTravelRow(d){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const gl = txn ? glCodes.find(g => g.code === txn.glCode) : null;
+    const expType = (gl && gl.expType) ? gl.expType : PER_DIEM_TYPE;
+    const sel = d['Travel Months'] || [];
+    if (expType === PER_DIEM_TYPE){
+      const pm = travelPerMonth(d);
+      d.months = MONTHS_EN.map((_, i) => sel.includes(i) ? pm : 0);
+    } else {
+      // Manual types: keep entered values but lock (zero) months that aren't selected
+      d.months = (d.months || new Array(12).fill(0)).map((v, i) => sel.includes(i) ? (v || 0) : 0);
+    }
+  }
+  function tEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+  function travelTextField(d, key, ph){
+    return `<label class="tf"><span class="tf-l">${key}</span>
+      <input class="tf-i" value="${tEsc(d[key])}" placeholder="${ph}" onchange="updateTravelField(${d.id},'${key}',this.value)"></label>`;
+  }
+  function renderTravelDetail(txn){
+    const gl = glCodes.find(g => g.code === txn.glCode) || {};
+    const expType = gl.expType || PER_DIEM_TYPE;
+    const isPerDiemGL = expType === PER_DIEM_TYPE;
+    const sideInfo = gl.side ? SIDE_LABELS[gl.side] : null;
+    const fxYr = fxRate(txn.year);
+    const body = document.getElementById('detailModalBody');
+
+    let html = `<div class="travel-detail">`;
+
+    // Context bar — every row in this modal posts to THIS one GL only
+    html += `<div class="travel-glbar">
+        <span class="travel-glcode">${gl.code || ''}</span>
+        <span class="travel-gltype">${expType}</span>
+        ${sideInfo ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}">${sideInfo.full}</span>` : ''}
+        <span class="travel-glnote">ทุกรายการในหน้านี้ลงที่ GL นี้เท่านั้น · คนละประเภท/คนละฝั่งต้องแยก GL (แยกแถว)</span>
+      </div>`;
+
+    if (isPerDiemGL){
+      html += `<div class="travel-note">
+        <b>เบี้ยเลี้ยง</b> คำนวณอัตโนมัติตาม <b>ตำแหน่ง × ปลายทาง</b> — 3 กลุ่ม: ในประเทศ (฿/วัน) ·
+        ต่างประเทศ-อาเซียน ($/วัน) · ต่างประเทศ-อื่นๆ ($/วัน) แล้ว × อัตราแลกเปลี่ยน (${fxYr} ฿/USD · FY${txn.year})
+        เฉลี่ยเท่ากันในเดือนที่เลือก · ตำแหน่งดึงอัตโนมัติจากชื่อผู้เดินทาง (SAP)</div>`;
+    } else {
+      html += `<div class="travel-note">
+        กรอกจำนวนเงิน <b>${expType}</b> เฉพาะเดือนที่เลือกเดินทาง — เดือนที่ไม่เลือกจะถูกล็อก (พื้นที่สีเทา)</div>`;
+    }
+
+    if (!txn.pendingDetails.length){
+      html += `<div class="travel-empty">ยังไม่มีรายการเดินทาง — กด “เพิ่มรายการ” เพื่อเริ่ม</div>`;
+    }
+
+    txn.pendingDetails.forEach((d, idx) => {
+      const sel = d['Travel Months'] || [];
+      const days = parseInt(d['Total Days'], 10) || 0;
+      const scope = destScope(d['Destination Country']);
+      const { rate, na, currency } = perDiemRate(d['Position'], scope);
+      const fx = currency === 'USD' ? fxYr : 1;
+      const perDiemTotal = days * rate * fx;
+      const perMonth = sel.length ? Math.round(perDiemTotal / sel.length) : 0;
+      const rowTotal = sumArr(d.months);
+      const rateText = currency === 'USD' ? `$${rate}` : `฿${rate}`;
+
+      // Traveler dropdown (SAP master) → auto Position · Position dropdown shows 3-group rates · Destination dropdown groups by scope
+      const travelerOpts = `<option value="">— เลือกผู้เดินทาง (SAP) —</option>` +
+        EMPLOYEES.map(e => `<option value="${tEsc(e.name)}" ${d['Traveler Name']===e.name?'selected':''}>${tEsc(e.name)}</option>`).join('');
+      const posLabelVal = d['Position'] || '— เลือกผู้เดินทางก่อน —';
+      const destOpts = `<option value="">— เลือกปลายทาง —</option>`
+        + `<optgroup label="ในประเทศ (THB)"><option value="${DOMESTIC_DEST}" ${d['Destination Country']===DOMESTIC_DEST?'selected':''}>${DOMESTIC_DEST}</option></optgroup>`
+        + `<optgroup label="ต่างประเทศ · อาเซียน (USD)">` + ASIAN_COUNTRIES.map(c => `<option value="${c}" ${d['Destination Country']===c?'selected':''}>${c}</option>`).join('') + `</optgroup>`
+        + `<optgroup label="ต่างประเทศ · อื่นๆ (USD)">` + OTHER_COUNTRIES.map(c => `<option value="${c}" ${d['Destination Country']===c?'selected':''}>${c}</option>`).join('') + `</optgroup>`;
+
+      let monthsHint;
+      if (isPerDiemGL){
+        if (na){
+          monthsHint = `ตำแหน่งนี้ไม่มีอัตราเบี้ยเลี้ยง${SCOPE_LABEL[scope]}`;
+        } else if (currency === 'USD'){
+          monthsHint = `เบี้ยเลี้ยง${SCOPE_LABEL[scope]} ${days} วัน × $${rate} × ${fxYr} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${perMonth.toLocaleString()}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        } else {
+          monthsHint = `เบี้ยเลี้ยง${SCOPE_LABEL[scope]} ${days} วัน × ฿${rate} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${perMonth.toLocaleString()}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        }
+      } else {
+        monthsHint = `กรอกจำนวนเงินในเดือนที่เลือก`;
+      }
+
+      const monthsHtml = MONTHS_EN.map((m, i) => {
+        const on = sel.includes(i);
+        const val = d.months[i] || 0;
+        let valCell;
+        if (!on){
+          valCell = `<div class="tm-val locked" onclick="toggleTravelMonth(${d.id},${i})" title="คลิกเพื่อเลือกเดือนนี้">—</div>`;
+        } else if (isPerDiemGL){
+          valCell = `<div class="tm-val auto" title="คำนวณอัตโนมัติ">${val ? val.toLocaleString() : '0'}</div>`;
+        } else {
+          valCell = `<input class="tm-val input" value="${val || ''}" inputmode="numeric" placeholder="0"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateTravelMonth(${d.id},${i},this.value)">`;
+        }
+        return `<div class="tm-cell ${on?'on':'off'}">
+          <button class="tm-toggle" onclick="toggleTravelMonth(${d.id},${i})">${m}</button>
+          ${valCell}
+        </div>`;
+      }).join('');
+
+      const posLabel = isPerDiemGL ? 'Position · auto จากชื่อ' : 'Position';
+
+      html += `<div class="travel-card">
+        <div class="travel-card-head">
+          <span class="travel-idx">${String(idx+1).padStart(2,'0')}</span>
+          <span class="travel-traveler">${tEsc(d['Traveler Name']) || 'ผู้เดินทางใหม่'}</span>
+          <span class="travel-route">${tEsc(d['Destination Country']) || '—'}</span>
+          <span class="travel-type-chip ${isPerDiemGL?'auto':''}">${expType}${isPerDiemGL?' (อัตโนมัติ)':''}</span>
+          ${isPerDiemGL && d['Position'] && d['Destination Country'] ? `<span class="travel-rate-chip">${SCOPE_LABEL[scope]} · ${na?'ไม่มีอัตรา':rateText+'/วัน'}</span>` : ''}
+          <span class="travel-total">฿${rowTotal.toLocaleString()}</span>
+          <button class="action-btn" onclick="removeDetailRow(${d.id})" title="ลบรายการ">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
+        <div class="travel-fields">
+          <label class="tf"><span class="tf-l">Traveler Name · SAP</span>
+            <select class="tf-i" onchange="updateTravelField(${d.id},'Traveler Name',this.value)">${travelerOpts}</select></label>
+          <label class="tf"><span class="tf-l">${posLabel}</span>
+            <div class="tf-i tf-readonly" title="กำหนดอัตโนมัติจากชื่อผู้เดินทาง (SAP) — แก้ไขไม่ได้">${posLabelVal}</div></label>
+          <label class="tf"><span class="tf-l">Destination · ปลายทาง</span>
+            <select class="tf-i" onchange="updateTravelField(${d.id},'Destination Country',this.value)">${destOpts}</select></label>
+          ${travelTextField(d,'Project','ชื่อโครงการ')}
+          ${travelTextField(d,'Purpose of Travel','วัตถุประสงค์การเดินทาง')}
+          <label class="tf"><span class="tf-l">Total Days / year · รวมทั้งปี</span>
+            <input class="tf-i" value="${d['Total Days']||''}" inputmode="numeric" placeholder="0"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateTravelField(${d.id},'Total Days',this.value)"></label>
+        </div>
+        <div class="travel-months-label">
+          <span class="tm-head">Travel Month — คลิกเลือกเดือนที่เดินทาง</span>
+          <span class="tm-calc">${monthsHint}</span>
+        </div>
+        <div class="travel-months">${monthsHtml}</div>
+      </div>`;
+    });
+
+    html += `</div>`;
+    body.innerHTML = html;
+
+    const grand = txn.pendingDetails.reduce((s,d) => s + sumArr(d.months), 0);
+    document.getElementById('detailModalFootInfo').innerHTML =
+      `Travelers: <b>${txn.pendingDetails.length}</b> · Year total: <b>฿${grand.toLocaleString()}</b>`;
+  }
+  function updateTravelField(id, key, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    d[key] = (key === 'Total Days') ? (parseInt(v,10) || 0) : v;
+    if (key === 'Traveler Name'){
+      const pos = lookupPosition(v);   // default Position lookup จาก SAP employee master
+      if (pos) d['Position'] = pos;
+    }
+    recalcTravelRow(d);
+    renderDetailTable();
+  }
+  function toggleTravelMonth(id, i){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    if (!d['Travel Months']) d['Travel Months'] = [];
+    const at = d['Travel Months'].indexOf(i);
+    if (at === -1) d['Travel Months'].push(i);
+    else { d['Travel Months'].splice(at, 1); d.months[i] = 0; }
+    d['Travel Months'].sort((a,b) => a - b);
+    recalcTravelRow(d);
+    renderDetailTable();
+  }
+  function updateTravelMonth(id, i, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn && txn.pendingDetails.find(x => x.id === id);
+    if (!d) return;
+    d.months[i] = parseInt(String(v).replace(/[^0-9]/g,''), 10) || 0;
+    renderDetailTable();
+  }
+  function saveDetailData(){
+    if (detailReadonly) { closeDetailModal(); return; }
+    closeDetailModal();
+    renderTable();
+    showNotice('บันทึกสำเร็จ', 'บันทึกรายละเอียดงบทำการเรียบร้อยแล้ว — ค่ารายเดือนของแถว Pending จะอัปเดตจากผลรวมในรายละเอียด');
+  }
+
+  /* ════════════════════════════════════════════
+     TRIP MANAGER — Trip-centric entry for Travelling Expense
+     1 ทริป = กรอกครั้งเดียว ระบบลง GL ให้อัตโนมัติทั้ง 4 ประเภท
+     ════════════════════════════════════════════ */
+
+  /* tripStore: keyed by `${costCenter}|${year}` — shared across all 8 Travelling Expense GLs */
+  const tripStore = {};
+  let tripIdCounter = 100;
+  let currentTripKey = null;  /* costCenter|year */
+
+  /* Expense type definitions — order matches card display */
+  const TRIP_EXP_TYPES = [
+    { key:'เบี้ยเลี้ยง',            label:'เบี้ยเลี้ยง Per Diem',          auto:true,  hasDetail:false, glSuffix:'010' },
+    { key:'ค่าพาหนะเดินทาง',        label:'ค่าพาหนะเดินทาง Transportation', auto:false, hasDetail:false, glSuffix:'020' },
+    { key:'ค่าที่พัก',              label:'ค่าที่พัก Accommodation',        auto:false, hasDetail:false, glSuffix:'030' },
+    { key:'ค่าใช้จ่ายเดินทางอื่น',  label:'ค่าใช้จ่ายเดินทางอื่น Other',   auto:false, hasDetail:true,  glSuffix:'999' }
+  ];
+
+  function tripGlCode(side, suffix){
+    /* side = 'COST'→prefix 5 · 'SGA'→prefix 6 */
+    const p = side === 'COST' ? '5' : '6';
+    return `${p}210400${suffix}`;
+  }
+
+  function tripStoreKey(costCenter, year){ return `${costCenter}|${year}`; }
+
+  function getTrips(costCenter, year){
+    const k = tripStoreKey(costCenter, year);
+    if (!tripStore[k]) tripStore[k] = [];
+    return tripStore[k];
+  }
+
+  /* Demo seed: 1 pre-seeded trip (นิภาพร → Japan, 5 days, ก.พ.+มี.ค., SGA, trans 40000, accom 30000) */
+  function seedDemoTrip(){
+    /* inject into the first CC/year that has Travelling Expense txns */
+    const travelTxn = transactions.find(t => {
+      const gl = glCodes.find(g => g.code === t.glCode);
+      return gl && gl.group === 'Travelling Expense';
+    });
+    if (!travelTxn) return;
+    const k = tripStoreKey(travelTxn.costCenter, travelTxn.year);
+    if (tripStore[k] && tripStore[k].length) return;
+    const TRAVELER = 'สุชัญญา ยุปา';
+    const pos = lookupPosition(TRAVELER);
+    const scope = destScope('Japan');
+    const { rate, currency } = perDiemRate(pos, scope);
+    const fx = currency === 'USD' ? fxRate(travelTxn.year) : 1;
+    const perDiemTotal = 5 * rate * fx;
+    const perMonth = Math.round(perDiemTotal / 2);
+    tripStore[k] = [{
+      id: tripIdCounter++,
+      year: travelTxn.year,
+      traveler: TRAVELER,
+      position: pos,
+      destination: 'Japan',
+      project: 'Cloud Platform Vendor Visit',
+      purpose: 'ดูงานและเจรจาผู้ให้บริการระบบคลาวด์',
+      days: 5,
+      side: 'SGA',
+      selectedMonths: [1, 2],  /* ก.พ. = index 1, มี.ค. = index 2 */
+      expenses: {
+        'เบี้ยเลี้ยง':           { total: perDiemTotal, months: new Array(12).fill(0), detail:'' },
+        'ค่าพาหนะเดินทาง':       { total: 40000,        months: new Array(12).fill(0), detail:'' },
+        'ค่าที่พัก':             { total: 30000,        months: new Array(12).fill(0), detail:'' },
+        'ค่าใช้จ่ายเดินทางอื่น': { total: 0,            months: new Array(12).fill(0), detail:'' }
+      }
+    }];
+    /* auto-calc months for seed */
+    const seedTrip = tripStore[k][0];
+    recalcTripExpenses(seedTrip);
+    /* reflect seed trip into the matching travelling GL rows (so main page shows the amounts) */
+    TRIP_EXP_TYPES.forEach(et => {
+      const glCode = tripGlCode(seedTrip.side, et.glSuffix);
+      const txn = transactions.find(t => t.costCenter === travelTxn.costCenter && t.glCode === glCode && t.year === travelTxn.year);
+      const exp = seedTrip.expenses[et.key];
+      if (txn && exp) txn.pending = exp.months.slice();
+    });
+  }
+
+  function recalcTripExpenses(trip){
+    const sel = trip.selectedMonths || [];
+    const scope = destScope(trip.destination);
+    const { rate, currency } = perDiemRate(trip.position, scope);
+    const fx = currency === 'USD' ? fxRate(trip.year || 2026) : 1;
+    const perDiemTotal = (trip.days || 0) * rate * fx;
+
+    TRIP_EXP_TYPES.forEach(et => {
+      const exp = trip.expenses[et.key] || { total:0, months: new Array(12).fill(0), detail:'' };
+      trip.expenses[et.key] = exp;
+      if (et.auto){
+        exp.total = perDiemTotal;
+        const pm = sel.length ? Math.round(perDiemTotal / sel.length) : 0;
+        exp.months = new Array(12).fill(0).map((_, i) => sel.includes(i) ? pm : 0);
+      } else {
+        /* split total evenly across selected months (auto-split); user can override per-month */
+        const pm = sel.length ? Math.round(exp.total / sel.length) : 0;
+        /* only auto-distribute if months are all zero (virgin) or re-deriving from total change */
+        const hasOverride = exp._monthsManual;
+        if (!hasOverride){
+          exp.months = new Array(12).fill(0).map((_, i) => sel.includes(i) ? pm : 0);
+        } else {
+          /* lock out deselected months, keep selected */
+          exp.months = exp.months.map((v, i) => sel.includes(i) ? (v || 0) : 0);
+        }
+      }
+    });
+  }
+
+  function tripGrandTotal(trip){
+    return TRIP_EXP_TYPES.reduce((s, et) => {
+      const exp = trip.expenses[et.key];
+      return s + (exp ? exp.months.reduce((a,v) => a + (v||0), 0) : 0);
+    }, 0);
+  }
+
+  /* Open Trip Manager when any Travelling Expense GL row is clicked */
+  let tripReadonly = false;   // Trip Manager locked (view-only) when the ฝ่าย is locked (ADR-0013)
+  function openTripModal(costCenter, year){
+    currentTripKey = tripStoreKey(costCenter, year);
+    tripReadonly = !canEditPending();
+    document.getElementById('tripModalSubtitle').textContent = `${costCenter} · FY${year} · ทริปทั้งหมดรวมกัน 4 ประเภทค่าใช้จ่าย` + (tripReadonly ? ' · 🔒 อ่านอย่างเดียว (แก้ไม่ได้)' : '');
+    document.getElementById('tripAddBtn').style.display  = tripReadonly ? 'none' : '';
+    document.getElementById('tripSaveBtn').style.display = tripReadonly ? 'none' : '';
+    document.getElementById('tripCloseBtn').textContent  = tripReadonly ? 'ปิด' : 'ยกเลิก';
+    renderTripModal();
+    document.getElementById('tripModal').classList.add('open');
+  }
+  function closeTripModal(){
+    document.getElementById('tripModal').classList.remove('open');
+    currentTripKey = null;
+  }
+
+  function addTrip(){
+    if (tripReadonly) return;
+    if (!currentTripKey) return;
+    const [costCenter, yearStr] = currentTripKey.split('|');
+    const year = +yearStr;
+    const trips = getTrips(costCenter, year);
+    trips.push({
+      id: tripIdCounter++,
+      year: year,
+      traveler: '', position: '', destination: '', project: '', purpose: '',
+      days: 0, side: 'SGA',
+      selectedMonths: [],
+      expenses: {
+        'เบี้ยเลี้ยง':           { total:0, months:new Array(12).fill(0), detail:'' },
+        'ค่าพาหนะเดินทาง':       { total:0, months:new Array(12).fill(0), detail:'' },
+        'ค่าที่พัก':             { total:0, months:new Array(12).fill(0), detail:'' },
+        'ค่าใช้จ่ายเดินทางอื่น': { total:0, months:new Array(12).fill(0), detail:'' }
+      }
+    });
+    renderTripModal();
+  }
+
+  function removeTrip(tripId){
+    if (!currentTripKey) return;
+    const [costCenter, yearStr] = currentTripKey.split('|');
+    const k = currentTripKey;
+    tripStore[k] = (tripStore[k]||[]).filter(t => t.id !== tripId);
+    renderTripModal();
+  }
+
+  function updateTripField(tripId, field, value){
+    const trip = getTripById(tripId);
+    if (!trip) return;
+    trip[field] = field === 'days' ? (parseInt(value,10)||0) : value;
+    if (field === 'traveler'){
+      const pos = lookupPosition(value);
+      if (pos) trip.position = pos;
+    }
+    recalcTripExpenses(trip);
+    renderTripModal();
+  }
+
+  function toggleTripMonth(tripId, monthIdx){
+    const trip = getTripById(tripId);
+    if (!trip) return;
+    const at = trip.selectedMonths.indexOf(monthIdx);
+    if (at === -1) trip.selectedMonths.push(monthIdx);
+    else { trip.selectedMonths.splice(at,1); }
+    trip.selectedMonths.sort((a,b) => a-b);
+    /* reset manual overrides on month toggle so re-split triggers */
+    TRIP_EXP_TYPES.forEach(et => { if (trip.expenses[et.key]) trip.expenses[et.key]._monthsManual = false; });
+    recalcTripExpenses(trip);
+    renderTripModal();
+  }
+
+  function updateTripExpTotal(tripId, expKey, value){
+    const trip = getTripById(tripId);
+    if (!trip) return;
+    trip.expenses[expKey].total = parseInt(String(value).replace(/[^0-9]/g,''),10)||0;
+    trip.expenses[expKey]._monthsManual = false;  /* reset so we re-split */
+    recalcTripExpenses(trip);
+    renderTripModal();
+  }
+
+  function updateTripExpMonth(tripId, expKey, monthIdx, value){
+    const trip = getTripById(tripId);
+    if (!trip) return;
+    trip.expenses[expKey].months[monthIdx] = parseInt(String(value).replace(/[^0-9]/g,''),10)||0;
+    trip.expenses[expKey]._monthsManual = true;  /* manual override — stop auto-split */
+    /* update total to reflect actual sum */
+    trip.expenses[expKey].total = trip.expenses[expKey].months.reduce((s,v) => s+(v||0),0);
+    renderTripModal();
+  }
+
+  function updateTripExpDetail(tripId, expKey, value){
+    const trip = getTripById(tripId);
+    if (!trip) return;
+    trip.expenses[expKey].detail = value;
+  }
+
+  function getTripById(tripId){
+    if (!currentTripKey) return null;
+    const trips = tripStore[currentTripKey] || [];
+    return trips.find(t => t.id === tripId) || null;
+  }
+
+  /* Distribute a CC+year's trips → matching GL txn rows (per side × expType). Reused by save + recompute. */
+  function distributeTrips(costCenter, year){
+    const trips = tripStore[tripStoreKey(costCenter, year)] || [];
+    const agg = {};
+    TRIP_EXP_TYPES.forEach(et => ['COST','SGA'].forEach(side => { agg[`${side}|${et.key}`] = new Array(12).fill(0); }));
+    trips.forEach(trip => {
+      TRIP_EXP_TYPES.forEach(et => {
+        const exp = trip.expenses[et.key];
+        if (!exp) return;
+        exp.months.forEach((v,i) => { agg[`${trip.side}|${et.key}`][i] += (v||0); });
+      });
+    });
+    TRIP_EXP_TYPES.forEach(et => {
+      ['COST','SGA'].forEach(side => {
+        const glCode = tripGlCode(side, et.glSuffix);
+        const months = agg[`${side}|${et.key}`];
+        let txn = transactions.find(t => t.costCenter === costCenter && t.glCode === glCode && t.year === year);
+        if (!txn){
+          if (!months.some(v => v > 0)) return;  /* no amounts → no row needed */
+          txn = { id: Math.max(0, ...transactions.map(t => t.id)) + 1,
+                  costCenter, glCode, remark: `Travelling Expense — ${et.label}`, year,
+                  sap: new Array(12).fill(0), approved: new Array(12).fill(0),
+                  pending: new Array(12).fill(0), pendingDetails: [] };
+          transactions.push(txn);
+        }
+        txn.pending = months.slice();
+        txn.pendingDetails = [];  /* cleared — managed by tripStore now */
+      });
+    });
+  }
+  /* Recompute-on-read (ADR-0015): re-derive EVERY trip's per-diem at the CURRENT Master FX,
+     then re-post into the GL rows. Per-diem (auto) tracks FX; manual types are preserved. */
+  function recomputeTravelling(){
+    Object.keys(tripStore).forEach(key => {
+      const [cc, yr] = key.split('|');
+      (tripStore[key] || []).forEach(recalcTripExpenses);   // per-diem ← current FX
+      distributeTrips(cc, +yr);
+    });
+  }
+  /* Master FX is owned by Module 09 (master-currency.html) — single source via localStorage.
+     OPEX is READ-ONLY: it reads the rate and recomputes per-diem (recompute-on-read, ADR-0015). */
+  const FX_STORE_KEY = 'cm.masterFX';
+  function loadMasterFX(){
+    try { const m = JSON.parse(localStorage.getItem(FX_STORE_KEY) || 'null');
+          if (m) Object.keys(m).forEach(y => { FX_RATES[+y] = +m[y]; }); } catch(e){}
+  }
+  function onMasterFXChanged(){ loadMasterFX(); recomputeTravelling(); renderTable(); }
+  // realtime sync: when Module 09 edits the rate (another tab), this fires → per-diem re-prices
+  window.addEventListener('storage', e => { if (e.key === FX_STORE_KEY) onMasterFXChanged(); });
+  /* On Save: distribute the current CC+year's trips → GL rows */
+  function saveTripData(){
+    if (tripReadonly) { closeTripModal(); return; }
+    if (!currentTripKey) return;
+    const [costCenter, yearStr] = currentTripKey.split('|');
+    const year = +yearStr;
+    const trips = tripStore[currentTripKey] || [];
+    distributeTrips(costCenter, year);
+    closeTripModal();
+    renderTable();
+    showNotice('บันทึก & ลงบัญชี', `ระบบลงยอดเข้า GL ทั้ง 4 ประเภทเรียบร้อยแล้ว — ${trips.length} ทริป / ${costCenter} / FY${year}`);
+  }
+
+  function renderTripModal(){
+    if (!currentTripKey) return;
+    const [costCenter, yearStr] = currentTripKey.split('|');
+    const year = +yearStr;
+    const trips = getTrips(costCenter, year);
+    const fxYr = fxRate(year);
+    const body = document.getElementById('tripModalBody');
+
+    let html = `<div class="trip-manager-note">
+      <b>1 ทริป = กรอกครั้งเดียว</b> — ระบบลง GL ให้อัตโนมัติทั้ง 4 ประเภทค่าใช้จ่าย
+      <div class="tip-steps">
+        <div class="tip-step"><span class="trip-step-num">A</span>ข้อมูลทริป: ผู้เดินทาง → ปลายทาง → วัน → ฝั่งบัญชี → เดือน</div>
+        <div class="tip-step"><span class="trip-step-num">B</span>ค่าใช้จ่าย: เบี้ยเลี้ยงคำนวณให้ · พาหนะ/ที่พัก/อื่น กรอกยอดรวม แล้วแบ่งเท่ากัน</div>
+        <div class="tip-step"><span class="trip-step-num">C</span>กด <b>บันทึก &amp; ลงบัญชี</b> ระบบอัปเดต GL ทั้ง 8 GL ให้เอง</div>
+      </div>
+    </div>`;
+
+    if (!trips.length){
+      html += `<div class="trip-empty">ยังไม่มีทริป — กด "เพิ่มทริป" เพื่อเริ่ม</div>`;
+    }
+
+    trips.forEach((trip, idx) => {
+      const sel = trip.selectedMonths || [];
+      const scope = destScope(trip.destination);
+      const { rate, currency, na } = (() => {
+        const r = perDiemRate(trip.position, scope);
+        return { ...r, na: (r.rate === 0 && !trip.position) };
+      })();
+      const fx = currency === 'USD' ? fxYr : 1;
+      const perDiemTotal = (trip.days||0) * rate * fx;
+      const grand = tripGrandTotal(trip);
+
+      const sideIsSet = (trip.side === 'COST' || trip.side === 'SGA');
+      const sideLabel = sideIsSet ? SIDE_LABELS[trip.side].full : '— เลือกฝั่ง —';
+
+      /* Traveler opts */
+      const travelerOpts = `<option value="">— เลือกผู้เดินทาง —</option>`
+        + EMPLOYEES.map(e => `<option value="${tEsc(e.name)}" ${trip.traveler===e.name?'selected':''}>${tEsc(e.name)}</option>`).join('');
+      /* Destination opts */
+      const destOpts = `<option value="">— เลือกปลายทาง —</option>`
+        + `<optgroup label="ในประเทศ (THB)"><option value="${DOMESTIC_DEST}" ${trip.destination===DOMESTIC_DEST?'selected':''}>${DOMESTIC_DEST}</option></optgroup>`
+        + `<optgroup label="ต่างประเทศ · อาเซียน (USD)">${ASIAN_COUNTRIES.map(c => `<option value="${tEsc(c)}" ${trip.destination===c?'selected':''}>${tEsc(c)}</option>`).join('')}</optgroup>`
+        + `<optgroup label="ต่างประเทศ · อื่นๆ (USD)">${OTHER_COUNTRIES.map(c => `<option value="${tEsc(c)}" ${trip.destination===c?'selected':''}>${tEsc(c)}</option>`).join('')}</optgroup>`;
+
+      /* Month toggle chips (trip-level) */
+      const monthChips = MONTHS_EN.map((m, i) => {
+        const on = sel.includes(i);
+        return `<div class="trip-month-cell">
+          <button class="tm-toggle ${on?'on':''}" onclick="toggleTripMonth(${trip.id},${i})">${m}</button>
+        </div>`;
+      }).join('');
+
+      /* Per-diem hint text */
+      let pdHint = '';
+      if (trip.position && trip.destination){
+        const r = POSITION_PER_DIEM[trip.position];
+        const rawRate = r ? r[scope] : null;
+        if (rawRate == null){
+          pdHint = `ตำแหน่งนี้ไม่มีอัตราเบี้ยเลี้ยง${SCOPE_LABEL[scope]}`;
+        } else if (currency === 'USD'){
+          pdHint = `${trip.days||0} วัน × $${rawRate} × ${fxYr} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${sel.length?Math.round(perDiemTotal/sel.length).toLocaleString():0}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        } else {
+          pdHint = `${trip.days||0} วัน × ฿${rawRate} = ฿${perDiemTotal.toLocaleString()}`
+            + (sel.length ? ` ÷ ${sel.length} เดือน = <b>฿${sel.length?Math.round(perDiemTotal/sel.length).toLocaleString():0}/เดือน</b>` : ` · ยังไม่ได้เลือกเดือน`);
+        }
+      } else {
+        pdHint = 'เลือกผู้เดินทางและปลายทางก่อน';
+      }
+
+      /* Build expense type table with monthly breakdown in a sub-row */
+      let expHtml = `<table class="trip-exp-table">
+        <thead><tr>
+          <th style="min-width:180px">ประเภทค่าใช้จ่าย</th>
+          <th>GL</th>
+          <th style="min-width:130px">ยอดรวม/ทริป (฿)</th>
+          ${MONTHS_EN.map(m => `<th style="min-width:56px">${m}</th>`).join('')}
+        </tr></thead><tbody>`;
+
+      TRIP_EXP_TYPES.forEach(et => {
+        const exp = trip.expenses[et.key] || { total:0, months:new Array(12).fill(0), detail:'' };
+        const glCode = sideIsSet ? tripGlCode(trip.side, et.glSuffix) : `?${et.glSuffix}`;
+        const totalVal = et.auto ? perDiemTotal : (exp.total || 0);
+        const totalDisp = et.auto
+          ? `<input class="exp-total-input auto-calc" value="${totalVal ? totalVal.toLocaleString() : '0'}" readonly>`
+          : `<input class="exp-total-input" value="${exp.total||''}" inputmode="numeric" placeholder="0"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+              onchange="updateTripExpTotal(${trip.id},'${et.key}',this.value)">`;
+
+        expHtml += `<tr>
+          <td><span class="exp-type-name">${et.label}</span>${et.auto?'<br><span class="exp-hint">'+pdHint+'</span>':''}</td>
+          <td><span class="exp-gl-chip">${tEsc(glCode)}</span></td>
+          <td>${totalDisp}</td>
+          ${MONTHS_EN.map((m, i) => {
+            const on = sel.includes(i);
+            const v = exp.months[i] || 0;
+            if (!on) return `<td><div class="trip-month-val-locked">—</div></td>`;
+            if (et.auto) return `<td><div class="trip-month-val-auto">${v ? v.toLocaleString() : '0'}</div></td>`;
+            return `<td><input class="trip-month-val-input" value="${v||''}" inputmode="numeric" placeholder="0"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+              onchange="updateTripExpMonth(${trip.id},'${et.key}',${i},this.value)"></td>`;
+          }).join('')}
+        </tr>`;
+
+        if (et.hasDetail){
+          expHtml += `<tr class="trip-exp-month-row">
+            <td colspan="3" style="padding-bottom:8px!important">
+              <label class="tf" style="flex-direction:row;align-items:center;gap:8px">
+                <span class="tf-l" style="white-space:nowrap">รายละเอียด</span>
+                <input class="exp-detail-input" value="${tEsc(exp.detail||'')}" placeholder="ระบุรายละเอียด เช่น ค่าวีซ่า / ประกัน"
+                  onchange="updateTripExpDetail(${trip.id},'${et.key}',this.value)">
+              </label>
+            </td>
+            <td colspan="${MONTHS_EN.length}"></td>
+          </tr>`;
+        }
+      });
+
+      expHtml += `</tbody></table>`;
+
+      html += `<div class="trip-card">
+        <div class="travel-card-head trip-card-head">
+          <span class="travel-idx">${String(idx+1).padStart(2,'0')}</span>
+          <span class="travel-traveler">${tEsc(trip.traveler)||'ผู้เดินทางใหม่'}</span>
+          <span class="travel-route">${tEsc(trip.destination)||'—'}</span>
+          ${trip.days ? `<span class="travel-type-chip">${trip.days} วัน</span>` : ''}
+          ${sideIsSet ? `<span class="side-chip ${trip.side==='COST'?'cost':'sga'}">${SIDE_LABELS[trip.side].short}</span>` : ''}
+          <span class="travel-total">฿${grand.toLocaleString()}</span>
+          <button class="action-btn" onclick="removeTrip(${trip.id})" title="ลบทริป">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
+        <div class="trip-card-body">
+          <div>
+            <div class="trip-section-label"><b>A</b> — ข้อมูลทริป (กรอกครั้งเดียว)</div>
+            <div class="trip-field-grid" style="margin-top:10px">
+              <label class="tf"><span class="tf-l">Traveler Name · SAP</span>
+                <select class="tf-i" onchange="updateTripField(${trip.id},'traveler',this.value)">${travelerOpts}</select></label>
+              <label class="tf"><span class="tf-l">Position · อัตโนมัติ</span>
+                <div class="tf-i tf-readonly">${tEsc(trip.position)||'— เลือกผู้เดินทางก่อน —'}</div></label>
+              <label class="tf"><span class="tf-l">Destination · ปลายทาง</span>
+                <select class="tf-i" onchange="updateTripField(${trip.id},'destination',this.value)">${destOpts}</select></label>
+              <label class="tf"><span class="tf-l">Project · โครงการ</span>
+                <input class="tf-i" value="${tEsc(trip.project)}" placeholder="ชื่อโครงการ"
+                  onchange="updateTripField(${trip.id},'project',this.value)"></label>
+              <label class="tf"><span class="tf-l">Purpose · วัตถุประสงค์</span>
+                <input class="tf-i" value="${tEsc(trip.purpose)}" placeholder="วัตถุประสงค์การเดินทาง"
+                  onchange="updateTripField(${trip.id},'purpose',this.value)"></label>
+              <label class="tf"><span class="tf-l">Total Days / year</span>
+                <input class="tf-i" value="${trip.days||''}" inputmode="numeric" placeholder="0"
+                  oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                  onchange="updateTripField(${trip.id},'days',this.value)"></label>
+              <label class="tf"><span class="tf-l">ฝั่งบัญชี</span>
+                <div class="side-toggle-wrap">
+                  <button class="side-toggle-btn ${trip.side==='COST'?'active cost':''}" onclick="updateTripField(${trip.id},'side','COST')">5 · ผลิต/ต้นทุน</button>
+                  <button class="side-toggle-btn ${trip.side==='SGA'?'active sga':''}" onclick="updateTripField(${trip.id},'side','SGA')">6 · SG&amp;A</button>
+                </div></label>
+            </div>
+          </div>
+          <div>
+            <div class="trip-section-label" style="margin-bottom:8px">
+              <b>เดือนที่เดินทาง</b> — คลิกเพื่อเลือก (ทุกประเภทค่าใช้จ่ายใช้เดือนชุดเดียวกัน)
+            </div>
+            <div class="trip-months-grid">${monthChips}</div>
+          </div>
+          <div>
+            <div class="trip-section-label" style="margin-bottom:8px">
+              <b>B</b> — ค่าใช้จ่าย 4 ประเภท · FX: ${fxYr} ฿/USD (FY${year})
+            </div>
+            ${expHtml}
+          </div>
+        </div>
+      </div>`;
+    });
+
+    // read-only lock: wrap in a disabled fieldset → every input/select/button inside is disabled
+    body.innerHTML = tripReadonly
+      ? `<fieldset disabled style="border:0;margin:0;padding:0;min-width:0">${html}</fieldset>`
+      : html;
+
+    /* Posting summary footer */
+    const agg = {};
+    TRIP_EXP_TYPES.forEach(et => { ['COST','SGA'].forEach(side => { agg[`${side}|${et.key}`] = 0; }); });
+    trips.forEach(trip => {
+      TRIP_EXP_TYPES.forEach(et => {
+        const exp = trip.expenses[et.key];
+        if (exp) agg[`${trip.side}|${et.key}`] += exp.months.reduce((s,v) => s+(v||0), 0);
+      });
+    });
+    const grandTotal = Object.values(agg).reduce((s,v) => s+v, 0);
+    const chips = TRIP_EXP_TYPES.flatMap(et => ['COST','SGA'].map(side => {
+      const v = agg[`${side}|${et.key}`];
+      const glCode = tripGlCode(side, et.glSuffix);
+      return `<span class="trip-post-chip ${v===0?'zero':''}">${tEsc(glCode)} ฿${v.toLocaleString()}</span>`;
+    })).join('');
+    document.getElementById('tripModalFootInfo').innerHTML =
+      `<div class="trip-posting-summary">ลงบัญชี → ${chips}<span class="trip-grand-total">รวม ฿${grandTotal.toLocaleString()}</span></div>`;
+  }
+
+  /* ════════════════════════════════════════════
+     NOTICE MODAL
+     ════════════════════════════════════════════ */
+  function showNotice(title, body){
+    document.getElementById('noticeTitle').textContent = title;
+    document.getElementById('noticeBody').textContent = body;
+    document.getElementById('noticeModal').classList.add('open');
+  }
+  function closeNotice(){
+    document.getElementById('noticeModal').classList.remove('open');
+  }
+
+  /* ════════════════════════════════════════════
+     ATTACH FILES — per ฝ่าย × ปี → SharePoint
+     Mockup: in-memory store; real app uploads via Graph to <root>/<ฝ่าย>/<ปี>/.
+     ════════════════════════════════════════════ */
+  // SharePoint root — รอ Budget dept กำหนด (Jakkaritw จะสร้างเอง). placeholder จนกว่าจะได้ path จริง.
+  const SP_ROOT = '[SharePoint root · รอกำหนด]';
+  const ATTACH_ALLOWED = ['pdf','xlsx','xls','png','jpg','jpeg'];
+  // store keyed `${dept}|${year}` → [{name,size,by,at}]
+  const attachStore = {
+    'Quicklime Production (PBB)|2026': [
+      { name:'หนังสืออนุมัติงบ-2026.pdf', size:245760, by:'jakkaritw', at:'2026-06-10' },
+      { name:'ประมาณการค่าซ่อมเตา.xlsx',   size:51200,  by:'paiboon',   at:'2026-06-11' }
+    ]
+  };
+  // current attach context — follows the main-page filters (ฝ่าย + ปี); no in-modal picker
+  let curAttachDept = '', curAttachYear = '';
+  function attachKey(){ return curAttachDept + '|' + curAttachYear; }
+  function extOf(name){ const m = (name||'').toLowerCase().match(/\.([a-z0-9]+)$/); return m ? m[1] : ''; }
+  function extClass(e){ if (e==='pdf') return 'pdf'; if (e==='xls'||e==='xlsx') return 'xls'; return 'img'; }
+  function fmtBytes(b){ return b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(0)+' KB' : (b/1048576).toFixed(1)+' MB'; }
+  // departments (ฝ่าย) in current main-page view — the page is locked to one ฝ่าย (selectedDept)
+  function attachScopeDepts(){
+    if (selectedDept) return [selectedDept];
+    const seen = [];
+    visibleByRole(transactions).forEach(t => {
+      const cc = costCenters.find(c => c.code === t.costCenter) || {};
+      if (cc.department && !seen.includes(cc.department)) seen.push(cc.department);
+    });
+    return seen;
+  }
+  function openAttachModal(){
+    // ฝ่าย + ปี ล้อตามตัวกรองหน้าหลัก (read-only) — ไม่มี picker ใน modal
+    const depts = attachScopeDepts();
+    curAttachDept = depts[0] || '';
+    const curYr = document.getElementById('yearFilter').value;
+    curAttachYear = ['2024','2025','2026'].includes(curYr) ? curYr : '2026';
+    document.getElementById('attachDeptLbl').textContent = curAttachDept || '— ไม่มีฝ่ายในสิทธิ์ —';
+    document.getElementById('attachYearLbl').textContent = 'FY ' + curAttachYear;
+    renderAttachDest();
+    renderAttachList();
+    document.getElementById('attachModal').classList.add('open');
+  }
+  function closeAttachModal(){ document.getElementById('attachModal').classList.remove('open'); }
+  function renderAttachDest(){
+    const dept = curAttachDept || '—';
+    document.getElementById('attachDest').innerHTML =
+      `ปลายทาง: <span class="root-todo">${SP_ROOT}</span> / <b>${dept}</b> / <b>${curAttachYear}</b> /`;
+  }
+  function onAttachPick(input){
+    if (!curAttachDept){ showNotice('แนบไฟล์ไม่ได้', 'ไม่มีฝ่ายในสิทธิ์ของคุณสำหรับแนบไฟล์'); input.value=''; return; }
+    const key = attachKey();
+    if (!attachStore[key]) attachStore[key] = [];
+    const rejected = [];
+    [...input.files].forEach(f => {
+      const e = extOf(f.name);
+      if (!ATTACH_ALLOWED.includes(e)){ rejected.push(f.name); return; }
+      attachStore[key].push({
+        name: f.name, size: f.size,
+        by: (currentUser().email || 'admin').split('@')[0],
+        at: new Date().toISOString().slice(0,10)
+      });
+    });
+    input.value = '';
+    renderAttachList();
+    if (rejected.length) showNotice('บางไฟล์ถูกปฏิเสธ', `รองรับเฉพาะ PDF/XLSX/XLS/PNG/JPG — ข้าม: ${rejected.join(', ')}`);
+  }
+  function removeAttach(idx){
+    const key = attachKey();
+    if (attachStore[key]){ attachStore[key].splice(idx,1); renderAttachList(); }
+  }
+  function renderAttachList(){
+    const key = attachKey();
+    const files = attachStore[key] || [];
+    const tbl = document.getElementById('attachTable');
+    if (!files.length){
+      tbl.innerHTML = `<tr><td><div class="attach-empty">ยังไม่มีไฟล์ในโฟลเดอร์นี้ — เลือกไฟล์เพื่อแนบ</div></td></tr>`;
+    } else {
+      let h = `<thead><tr><th>ไฟล์</th><th>ขนาด</th><th>ผู้แนบ</th><th>วันที่</th><th></th></tr></thead><tbody>`;
+      files.forEach((f, i) => {
+        const e = extOf(f.name);
+        h += `<tr>
+          <td class="fname"><span class="attach-ext ${extClass(e)}">${e.toUpperCase()}</span>${f.name}</td>
+          <td>${fmtBytes(f.size)}</td>
+          <td>${f.by}</td>
+          <td>${f.at}</td>
+          <td style="text-align:right"><button class="attach-del" onclick="removeAttach(${i})" title="ลบไฟล์">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button></td>
+        </tr>`;
+      });
+      h += `</tbody>`;
+      tbl.innerHTML = h;
+    }
+    document.getElementById('attachFootInfo').innerHTML = `ไฟล์ในโฟลเดอร์: <b>${files.length}</b>`;
+  }
+
+  /* ════════════════════════════════════════════
+     SUBMIT TO DATABASE (mock)
+     ════════════════════════════════════════════ */
+  function submitToDB(){
+    const btn = document.getElementById('submitBtn');
+    const hint = document.getElementById('submitHint');
+    const label = btn.querySelector('span');
+    btn.classList.add('is-loading');
+    btn.querySelector('svg').outerHTML = '<span class="spinner"></span>';
+    label.textContent = 'Sending…';
+    hint.textContent = 'Submitting all transactions to budget.chememan.co.th/api/opex';
+
+    const u = currentUser();
+    const dept = selectedDept || '(ทุกฝ่ายที่เห็น)';
+    hint.textContent = `Submitting ฝ่าย ${dept} …`;
+    const yr = document.getElementById('yearFilter').value;
+    // submit = the locked ฝ่าย only (approval unit = ฝ่าย, ADR-0008)
+    const rows = visibleByRole(transactions).filter(t => {
+      const cc = costCenters.find(c => c.code === t.costCenter) || {};
+      return (yr === 'all' || String(t.year) === yr) && (!selectedDept || cc.department === selectedDept);
+    });
+    const adminDirect = adminActive();   // admin Submit (orphan / post-deadline) → APPROVED ตรงๆ (ADR-0012)
+    setTimeout(() => {
+      btn.classList.remove('is-loading');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg><span>Submit to Database</span>';
+      const t = new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+      if (adminDirect){
+        if (selectedDept) DEPT_STATUS[selectedDept] = 'APPROVED';
+        hint.textContent = `ADMIN_OVERRIDE ${t} · ฝ่าย ${dept} · ${rows.length} รายการ → APPROVED`;
+        showNotice('บันทึก + APPROVED ตรงๆ', `ฝ่าย “${dept}” (${rows.length} รายการ) บันทึกและอนุมัติทันที — ไม่ผ่าน approval chain (admin · log ADMIN_OVERRIDE).`);
+      } else {
+        if (selectedDept) DEPT_STATUS[selectedDept] = 'PENDING_APPROVER1';   // enter chain → submitter locked
+        hint.textContent = `Last submitted ${t} · ฝ่าย ${dept} · ${rows.length} รายการ`;
+        showNotice('ส่งเข้าอนุมัติแล้ว', `ส่งงบฝ่าย “${dept}” → PENDING_APPROVER1 · ผู้กรอกแก้ไม่ได้แล้ว (ปลดล็อกเมื่อโดนตีกลับ).`);
+      }
+      renderTable();   // re-render → edit-lock + button state reflect new status immediately
+    }, 900);
+  }
+
+  /* ════════════════════════════════════════════
+     COLUMN RESIZE
+     ════════════════════════════════════════════ */
+  const COL_KEY = 'cm.0002.colwidths.v2'; // bumped: column set/order changed (GL Name merged, C Level/Division/Department dropped, Status moved)
+  function loadColWidths(){
+    try { return JSON.parse(localStorage.getItem(COL_KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function saveColWidth(idx, w){
+    const all = loadColWidths();
+    all[idx] = w;
+    try { localStorage.setItem(COL_KEY, JSON.stringify(all)); } catch(e){}
+  }
+  function resetColWidths(){
+    try { localStorage.removeItem(COL_KEY); } catch(e){}
+    document.querySelectorAll('.data-table thead th').forEach(th => {
+      th.style.width = '';
+      th.style.minWidth = th.dataset.originalMinWidth || '';
+    });
+  }
+  function initColumnResize(){
+    const ths = document.querySelectorAll('.data-table thead tr.col-filter-row th');
+    const saved = loadColWidths();
+    ths.forEach((th, idx) => {
+      if (!th.dataset.originalMinWidth) th.dataset.originalMinWidth = th.style.minWidth || '';
+      if (idx === ths.length - 1) return;
+      if (saved[idx]) { th.style.width = saved[idx] + 'px'; th.style.minWidth = saved[idx] + 'px'; }
+      if (th.querySelector('.col-resize')) return;
+      const handle = document.createElement('div');
+      handle.className = 'col-resize';
+      handle.title = 'Drag to resize · double-click to reset';
+      th.appendChild(handle);
+      let startX = 0, startW = 0, dragging = false;
+      const onDown = (e) => {
+        dragging = true;
+        startX = e.touches ? e.touches[0].pageX : e.pageX;
+        startW = th.offsetWidth;
+        handle.classList.add('is-dragging');
+        document.body.classList.add('col-dragging');
+        e.preventDefault(); e.stopPropagation();
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        const x = e.touches ? e.touches[0].pageX : e.pageX;
+        const w = Math.max(60, Math.min(800, startW + (x - startX)));
+        th.style.width = w + 'px';
+        th.style.minWidth = w + 'px';
+        applyFreeze();   // keep frozen-column left offsets correct while dragging
+      };
+      const onUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('is-dragging');
+        document.body.classList.remove('col-dragging');
+        saveColWidth(idx, th.offsetWidth);
+        applyFreeze();
+      };
+      handle.addEventListener('mousedown', onDown);
+      handle.addEventListener('touchstart', onDown, { passive: false });
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchend', onUp);
+      handle.addEventListener('dblclick', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        th.style.width = '';
+        th.style.minWidth = th.dataset.originalMinWidth || '';
+        const all = loadColWidths(); delete all[idx];
+        try { localStorage.setItem(COL_KEY, JSON.stringify(all)); } catch(e){}
+      });
+    });
+  }
+
+  (function init(){
+    let savedTheme = 'light', savedPreset = 'northstar', savedIntensity = 100;
+    try {
+      savedTheme = localStorage.getItem('cm22.theme') || 'light';
+      savedPreset = localStorage.getItem('cm22.preset') || 'northstar';
+      savedIntensity = +(localStorage.getItem('cm22.intensity') || 100);
+    } catch(e){}
+    document.getElementById('intensitySlider').value = savedIntensity;
+    document.getElementById('intensityVal').textContent = savedIntensity + '%';
+    setTheme(savedTheme);
+    applyPreset(savedPreset);
+    let savedUser = 'suchanya';
+    try { savedUser = localStorage.getItem('cm.user') || 'suchanya'; } catch(e){}
+    if (USERS[savedUser]) currentUserKey = savedUser;
+    renderUserBar();
+    loadMasterFX();          // pull Master FX from Module 09 (localStorage single source) if present
+    seedDemoTrip();
+    recomputeTravelling();   // per-diem reflects current Master FX on load (ADR-0015)
+    renderTable();
+    applyCurrentMonthHeader();
+    initColumnResize();
+  })();
+</script>
+</body>
+</html>
