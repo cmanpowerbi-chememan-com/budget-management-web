@@ -8,9 +8,10 @@ lookup sheet** — the *why* of any behavior lives in the ADRs and is linked, no
 - **Special-GL detail editors** (the six groups that open "+ ใส่รายละเอียดงบทำการ"): full
   dropdown/column spec in `docs/13Template Special/_dropdown_summary.md`.
 - **Source of truth for column shapes:** `01requirement_detail.xlsx` and the master files
-  under `02docs/` and `docs/13Template Special/`. Canonical mockups:
-  `design/mockups/0002claude design/0002.1budget-export.html` (main page + special-GL
-  subforms), `design/mockups/0012-main-table-demo.html` (full grouped main table).
+  under `02docs/` and `docs/13Template Special/`. Canonical mockup:
+  `design/mockups/0002claude design/0002.2budget-export.html` (main page + special-GL
+  subforms — sole surviving mockup; 0002.1 and the standalone `0012-main-table-demo.html`
+  were removed, superseded by this file).
 
 ---
 

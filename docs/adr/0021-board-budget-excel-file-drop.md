@@ -44,9 +44,16 @@ filename.
   the SQL DB keeps that join local and read-your-writes-fresh. Writing 1–3×/year is
   trivial for OLTP. The raw file on SharePoint is the audit copy; the SQL DB
   auto-mirrors to OneLake for Phase-2 analytics anyway.
-- The mockup's admin **CSV import/export buttons are removed** from the main-app
-  scope. (The 21-column CSV layout in earlier docs was the enriched EXPORT format;
-  if an export is still wanted later it is a separate read-path feature.)
+- The mockup's admin **CSV import/export buttons are removed** (applied to
+  `0002.2budget-export.html` 2026-07-12, replacing an in-app read-only note).
+  - **IMPORT** is replaced by the SharePoint file drop above — users upload the
+    yearly `.xlsx` to library **`Budgeting and Management`**, folder
+    **`approved budget`** (library confirmed by the user 2026-07-12), never via the app.
+  - **EXPORT** (`exportApprovedCSV`, the 21-column enriched format) is **DELETED,
+    not deferred** — no consumer was identified (the ไฟล์รวม Data consolidation is
+    produced OFFLINE by the Budget dept, spec §1c/§1d), so it is removed as a dead
+    surface rather than re-homed. If an export is ever needed it is a fresh
+    read-path feature with its own justification.
 - **Sync trigger: OPEN.** A Graph change-notification webhook was rejected as
   over-engineering for a file that changes 1–3×/year (public callback endpoint +
   subscription renewal to babysit). Decide between an admin **"Sync now" button** and
@@ -63,5 +70,9 @@ filename.
 - The inspected workbook is a 13-row / 3-CC **test artifact**: the structure is
   confirmed, production scale is not. Validate performance assumptions when the real
   file arrives.
-- The mockup and sign-off doc 01 still show import/export buttons — update at the
-  next spec revision so stakeholders aren't signing off a dead control.
+- Mockup `0002.2budget-export.html` updated 2026-07-12: import/export buttons removed,
+  read-only "Approved comes from SharePoint" note added, and the ADR-0014 admin-mode
+  toggle (accidentally dropped with the v2.2 nav-bar rewrite) restored in the page-head.
+  **Sign-off doc 01 still renders the old import/export buttons** — regenerate via
+  `requirement_spec/.../signoff_spec/_build/build_main_web_app_spec.py` before the next
+  sign-off round so stakeholders aren't approving dead controls.

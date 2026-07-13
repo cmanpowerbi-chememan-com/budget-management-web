@@ -34,7 +34,7 @@ subforms, RLS, deadline behaviour.
 | Part | Status |
 |------|--------|
 | **Master-tables module** (`03-edit-master-table/`) | **Deployed** — Azure Static Web App (frontend) + integrated Azure Functions (Python backend) |
-| **Main budget app** (submit / approve) | **Not built yet** — exists as the wired mockup `design/mockups/0002claude design/0002.1budget-export.html`; planned as React + Vite frontend + FastAPI backend |
+| **Main budget app** (submit / approve) | **Not built yet** — exists as the wired mockup `design/mockups/0002claude design/0002.2budget-export.html`; planned as React + Vite frontend + FastAPI backend |
 | **Dashboard** | Phase 2 — not started |
 
 ```
@@ -85,7 +85,7 @@ Email: backend → Microsoft Graph sendMail (SP cman-fabric-write, Mail.Send)
   02backend/    Azure Functions REST API (function_app.py + auth.py + db.py + modules/)
   03sql/ · 05deploy/ · tests/           schema · deploy config · pytest (run from tests/backend)
 design/mockups/0002claude design/
-  0002.1budget-export.html              ← WIRED prototype of the main budget app — source for sign-off specs
+  0002.2budget-export.html              ← WIRED prototype of the main budget app — source for sign-off specs
 requirement_spec/1_software_dev/1.1_frontend/signoff_spec/
   *.docx + _build/build_*.py + assets/  ← user sign-off specs (modules) + generators + screenshots
 docs/adr/                               ← architecture decision records (0001–0017)

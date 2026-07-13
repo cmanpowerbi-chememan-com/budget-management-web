@@ -6,51 +6,51 @@
 <title>OPEX Data Management — Chememan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* ─── Theme tokens (Ocean 60% by default; same system as 0001index) ─── */
+  /* ─── Theme tokens — Northstar editorial system (warm paper · charcoal ink · rust accent) ─── */
   :root{
-    --c-forest:#00522C;
-    --c-mint:#1FA378;
-    --c-gold:#C9963D;
-    --c-blue:#3C60A5;
-    --accent: var(--c-forest);
-    --accent-2: var(--c-mint);
-    --accent-3: var(--c-gold);
+    --c-forest:#B24222;
+    --c-mint:#4A5E80;
+    --c-gold:#A8763A;
+    --c-blue:#4A5E80;
+    --accent: #B24222;
+    --accent-2: #4A5E80;
+    --accent-3: #A8763A;
 
-    --ink:#0B1A12;
-    --ink-2:#3F4D45;
-    --ink-3:#7A867E;
-    --paper:#F7F5EF;
-    --paper-2:#EFEBE1;
-    --surface:#FFFFFF;
-    --line:rgba(11,26,18,0.10);
-    --line-2:rgba(11,26,18,0.06);
+    --ink:#1C1A16;
+    --ink-2:#4A463D;
+    --ink-3:#86806F;
+    --paper:#F2EEE5;
+    --paper-2:#EAE4D7;
+    --surface:#FBF9F3;
+    --line:rgba(28,26,22,0.14);
+    --line-2:rgba(28,26,22,0.07);
 
-    --status-sap: #1FA378;
-    --status-approved: #3C60A5;
+    --status-sap: #5E7A50;
+    --status-approved: #4A5E80;
     --status-pending: var(--ink);
-    --special-bg: #FFF6D4;
-    --special-edge: #E8C75E;
+    --special-bg: #F0E7D3;
+    --special-edge: #C9A24B;
 
-    --serif:'Instrument Serif', Georgia, serif;
-    --sans:'IBM Plex Sans','IBM Plex Sans Thai',-apple-system,system-ui,sans-serif;
+    --serif:'Newsreader', Georgia, serif;
+    --sans:'Archivo','IBM Plex Sans Thai',-apple-system,system-ui,sans-serif;
     --mono:'IBM Plex Mono', ui-monospace, monospace;
   }
   [data-theme="dark"]{
-    --ink:#FFFFFF;
-    --ink-2:#C2CEC7;
-    --ink-3:#7A8780;
-    --paper:#0B1A12;
-    --paper-2:#0F2218;
-    --surface:#142A1F;
-    --line:rgba(255,255,255,0.10);
-    --line-2:rgba(255,255,255,0.06);
-    --special-bg:#2D2008;
+    --ink:#F2EEE5;
+    --ink-2:#C6C0B2;
+    --ink-3:#8B857A;
+    --paper:#1C1A16;
+    --paper-2:#242019;
+    --surface:#2A251E;
+    --line:rgba(242,238,229,0.12);
+    --line-2:rgba(242,238,229,0.07);
+    --special-bg:#33280F;
     --special-edge:#5C4915;
-    --status-sap:#37D6A2;
-    --status-approved:#7AA0E0;
-    --status-pending:#FFFFFF;
+    --status-sap:#8FA97E;
+    --status-approved:#8098C0;
+    --status-pending:#F2EEE5;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
@@ -464,30 +464,34 @@
   }
   .user-select:hover{border-color:var(--ink)}
 
-  /* ─── User bar · V3 layout (count-badge hierarchy: สายงาน › ฝ่าย(n) › Cost Centers(n)) ─── */
-  .user-bar.v3{gap:0;row-gap:11px}
-  .v3 .v3-id{display:flex;align-items:center;gap:11px;flex-shrink:0;padding-right:16px;margin-right:18px;border-right:1px solid var(--line-2)}
-  .v3 .v3-id-text{display:flex;flex-direction:column;gap:4px;min-width:0}
-  .v3 .v3-name{font-weight:700;font-size:13.5px;letter-spacing:-0.01em;color:var(--ink);line-height:1}
+  /* ─── User bar · V4 layout (flex-based; count-badge hierarchy: สายงาน › ฝ่าย(n) › Cost Centers(n) / GL Codes(n)) ─── */
+  .user-bar.v3{gap:0;row-gap:14px}
+  .v3 .v3-id{display:flex;align-items:center;gap:11px;flex-shrink:0;padding-right:18px;margin-right:20px;border-right:1px solid var(--line-2)}
+  .v3 .v3-id-text{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .v3 .v3-name{font-weight:700;font-size:13.5px;letter-spacing:-0.01em;color:var(--ink);line-height:1.2}
+  .v3 .v3-email{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.01em;line-height:1}
   .v3 .role-badge.user, .v3 .role-badge.admin{align-self:flex-start;padding:2px 7px}
-  .v3 .v3-flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:0 1 auto;min-width:340px}
+  .v3 .v3-flow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
   .v3 .v3-seg{display:flex;align-items:center;gap:8px;min-width:0}
   .v3 .v3-arrow{color:var(--ink-3);opacity:0.45;flex-shrink:0}
-  .v3 .v3-division{font-family:var(--serif);font-size:22px;line-height:1;color:var(--accent);letter-spacing:-0.01em;white-space:nowrap}
+  .v3 .v3-division{font-family:var(--serif);font-size:20px;line-height:1;color:var(--accent);letter-spacing:-0.01em;white-space:nowrap}
   .v3 .v3-label-wrap{display:inline-flex;align-items:center;gap:5px;flex-shrink:0}
   .v3 .v3-count{font-family:var(--mono);font-size:9.5px;font-weight:800;line-height:1;color:var(--accent-2);background:color-mix(in oklab,var(--accent-2) 15%, transparent);border:1px solid color-mix(in oklab,var(--accent-2) 42%, var(--line));border-radius:999px;min-width:17px;height:17px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
   .v3 .v3-depts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
   .v3 .user-chip.cc{display:inline-flex;align-items:center;flex-direction:row;gap:0;padding:4px 10px;border-radius:7px;border:1px solid color-mix(in oklab,var(--accent-2) 30%, var(--line));background:color-mix(in oklab,var(--accent-2) 6%, var(--surface))}
   .v3 .user-chip.cc .v{font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
-  .v3 .v3-cc-pill{display:inline-flex;align-items:baseline;gap:6px;flex-shrink:0;padding:5px 13px;border-radius:999px;background:var(--accent);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10)}
-  .v3 .v3-cc-pill .n{font-family:var(--mono);font-size:13px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
-  .v3 .v3-cc-pill .t{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;opacity:0.86}
+  .v3 .v3-metrics{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .v3 .v3-cc-pill,.v3 .v3-gl-pill{display:inline-flex;align-items:baseline;gap:6px;flex-shrink:0;padding:5px 13px;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.10);white-space:nowrap}
+  .v3 .v3-cc-pill{background:var(--accent);color:#fff}
+  .v3 .v3-gl-pill{background:var(--accent-2);color:#fff}
+  .v3 .v3-cc-pill .n,.v3 .v3-gl-pill .n{font-family:var(--mono);font-size:13px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .v3 .v3-cc-pill .t,.v3 .v3-gl-pill .t{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;opacity:0.86}
   .v3 .v3-allnote{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:0.01em}
-  .v3 .v3-switch{display:flex;align-items:center;gap:12px;margin-left:auto;padding-left:18px;flex:0 0 auto}
-  .v3 .v3-scope{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right}
-  .v3 .v3-scope .scope-note{line-height:1}
-  .v3 .v3-scope .switch-label{line-height:1}
-  .v3 .user-select{padding:8px 30px 8px 12px}
+  .v3 .v3-switch{display:flex;align-items:center;gap:12px;margin-left:auto;padding-left:20px;border-left:1px solid var(--line-2);flex-shrink:0}
+  .v3 .v3-scope{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right;flex-shrink:0}
+  .v3 .v3-scope .scope-note{line-height:1.3;white-space:nowrap}
+  .v3 .v3-scope .switch-label{line-height:1;white-space:nowrap}
+  .v3 .user-select{padding:8px 30px 8px 12px;min-width:180px;flex-shrink:0}
 
   /* Summary chips */
   .summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
@@ -562,22 +566,43 @@
   }
   .table-wrap{overflow:auto;max-height:calc(100vh - 380px);min-height:480px}
   .data-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:1850px}
-  /* ─── Freeze left identity columns (# · Status · Cost Center · GL Code) ───
+  /* ─── Freeze left identity columns (# · Cost Center · GL Code) ───
      left offsets set by applyFreeze() (JS) from real widths → survives auto-layout + col-resize */
-  :root{ --frz1:0px; --frz2:0px; --frz3:0px; --frz4:0px; }
+  :root{ --frz1:0px; --frz2:0px; --frz3:0px; }
   .data-table th.frz, .data-table td.frz{ position:sticky; z-index:5; background:var(--surface); }
   .data-table thead th.frz{ z-index:16; background:var(--paper-2); }   /* corner: above sticky-top thead (z10) + sticky-left body (z5) */
   .data-table .frz-1{ left:var(--frz1); }
   .data-table .frz-2{ left:var(--frz2); }
-  .data-table .frz-3{ left:var(--frz3); }
-  .data-table .frz-4{ left:var(--frz4); box-shadow: 6px 0 8px -6px rgba(0,0,0,0.28); }  /* edge shadow = scroll cue */
+  .data-table .frz-3{ left:var(--frz3); box-shadow: 6px 0 8px -6px rgba(0,0,0,0.28); }  /* edge shadow = scroll cue */
+  .data-table thead tr.group-head-row th{
+    position:sticky; top:0; z-index:11;
+    height:22px; padding:5px 10px; text-align:center;
+    font-family:var(--mono); font-size:9.5px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--ink-3); background:var(--paper-2);
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  .data-table thead tr.group-head-row th.frz{ text-align:left; z-index:17; }
+  .data-table thead tr.col-filter-row th{ top:31px; }
   .data-table thead th{
     background:var(--paper-2);font-weight:600;color:var(--ink-2);
     font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;
-    padding:11px 10px;text-align:left;white-space:nowrap;
+    padding:8px 10px 10px;text-align:left;white-space:nowrap;
     position:sticky;top:0;z-index:10;
     border-bottom:1px solid var(--line);
+    vertical-align:bottom;
   }
+  .data-table thead th .th-label{display:block;line-height:1.2}
+  .col-filter{
+    display:block;width:100%;margin-top:6px;padding:5px 7px;
+    border:1px solid var(--line);border-radius:5px;font-size:11px;
+    background:var(--surface);color:var(--ink);outline:none;
+    font-weight:400;text-transform:none;letter-spacing:normal;
+    min-width:0;
+  }
+  .col-filter:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent)}
+  .col-filter::placeholder{color:var(--ink-3);font-size:10.5px}
+  .col-filter-spacer{height:27px;margin-top:6px}
   /* Column resize handle */
   .col-resize{
     position:absolute; top:0; bottom:0; right:-3px; width:7px;
@@ -595,25 +620,31 @@
   body.col-dragging *{ cursor:col-resize !important }
   .data-table thead th.month-col,
   .data-table thead th.action-col{text-align:right}
-  .data-table thead th.month-col.now{color:var(--accent);position:relative}
-  .data-table thead th.month-col.now::after{content:'';position:absolute;left:50%;bottom:-1px;transform:translateX(-50%);width:20px;height:2px;background:var(--accent);border-radius:2px}
+  .data-table thead th.month-col .th-label{
+    font-size:14px;font-weight:700;letter-spacing:0.02em;text-transform:none;
+  }
+  .data-table thead th.month-col.now{color:var(--accent);background:color-mix(in oklab,var(--accent) 8%,var(--paper-2))}
+  .data-table thead th.month-col.now .th-label{display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.2}
+  .data-table thead th.month-col.now .th-label::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--c-gold);box-shadow:0 0 0 2px color-mix(in oklab,var(--c-gold) 25%,transparent);flex-shrink:0}
+  .data-table thead th.month-col.now .th-label::after{content:'';width:20px;height:2px;background:var(--accent);border-radius:2px;flex-shrink:0}
+  .data-table td.month-cell.now{background:color-mix(in oklab,var(--accent) 5%,transparent)}
   .data-table thead th.idx-col{width:48px;text-align:center}
   /* GL Group column matches other columns now — the chip inside does the talking */
 
   .data-table td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle;font-variant-numeric:tabular-nums}
+  .data-table td.frz-2,.data-table td.frz-3{vertical-align:top}
   .data-table tr.txn-row.first td{border-top:2px solid var(--line)}
   .data-table tr.txn-row.last td{border-bottom:2px solid var(--line)}
 
   /* Status indicator (first column) */
   .status-cell{
-    display:flex;align-items:center;gap:8px;font-family:var(--mono);
+    display:flex;align-items:center;gap:8px;font-family:var(--mono);white-space:nowrap;
     font-size:10.5px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
     color:var(--ink-3);
   }
   .status-cell.sap{color:var(--status-sap)}
   .status-cell.approved{color:var(--status-approved)}
   .status-cell.pending{color:var(--status-pending)}
-  .status-bar{width:3px;height:18px;border-radius:2px;flex-shrink:0;background:currentColor}
 
   .idx-cell{
     font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink-3);
@@ -696,12 +727,27 @@
   }
   .dropdown-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent)}
   .dropdown-list{
-    position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:260px;
+    position:fixed;min-width:260px;
     background:var(--surface);border:1px solid var(--line);border-radius:8px;
     box-shadow:0 16px 32px -10px rgba(11,26,18,0.18);
-    max-height:240px;overflow-y:auto;display:none;z-index:50;padding:4px;
+    max-height:280px;overflow:hidden;display:none;z-index:9999;
+    flex-direction:column;
   }
   .dropdown-cell.open .dropdown-list{display:block}
+  .dropdown-head{
+    padding:8px;border-bottom:1px solid var(--line);background:var(--paper-2);flex-shrink:0;
+  }
+  .dropdown-search{
+    width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 10px;
+    font-size:12px;background:var(--surface);color:var(--ink);outline:none;
+    font-family:var(--sans);
+  }
+  .dropdown-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent)}
+  .dropdown-search::placeholder{color:var(--ink-3)}
+  .dropdown-options{overflow-y:auto;max-height:220px;padding:4px;flex:1}
+  .dropdown-empty{padding:16px 10px;text-align:center;color:var(--ink-3);font-size:11.5px;font-family:var(--mono);display:none}
+  .dropdown-input[readonly]{cursor:pointer;background:var(--paper)}
+  .dropdown-input[readonly]:focus{cursor:text}
   .dropdown-option{
     padding:7px 10px;border-radius:5px;font-size:12px;cursor:pointer;
     transition:all 120ms;color:var(--ink);
@@ -1225,79 +1271,92 @@
   #adminModeWrap .faip-sw::after{ width:21px;height:21px;top:2px;left:2px }
   #adminModeWrap input:checked + .faip-sw{ background:var(--accent) }
   #adminModeWrap input:checked + .faip-sw::after{ transform:translateX(19px) }
+
+  /* ═══════════════════════════════════════════════════════════
+     NORTHSTAR EDITORIAL OVERRIDES (v2.2)
+     Flatten ornamental "glassy" chrome → flat Swiss surfaces.
+     ═══════════════════════════════════════════════════════════ */
+  .btn-export::before,.btn-export::after,
+  .btn-import::before,.btn-import::after,
+  .btn-add::before,.btn-add::after,
+  .btn-attach::before,.btn-attach::after,
+  .btn-detail::before,.btn-detail::after,
+  .btn-submit::before,.btn-submit::after,
+  .btn-approve::before,.btn-approve::after,
+  .btn-reject::before,.btn-reject::after{ display:none !important; animation:none !important }
+
+  .btn-export,.btn-import,.btn-add,.btn-attach,.btn-submit,.btn-approve,.btn-reject,.btn-detail{
+    border-radius:3px !important;
+    box-shadow:none !important;
+    border:1px solid transparent !important;
+    background:var(--ink) !important;
+    background-size:auto !important;
+    color:var(--paper) !important;
+    text-shadow:none !important;
+    font-weight:600 !important;
+    animation:none !important;
+    transition:background .3s ease,transform .3s ease,color .3s ease !important;
+  }
+  .btn-export:hover,.btn-import:hover,.btn-add:hover,.btn-attach:hover,
+  .btn-submit:hover,.btn-approve:hover,.btn-reject:hover,.btn-detail:hover{
+    background:var(--accent) !important;
+    color:#fff !important;
+    transform:translateY(-1px) !important;
+    box-shadow:none !important;
+    border-color:transparent !important;
+  }
+  .btn-add,.btn-submit{ background:var(--accent) !important; color:#fff !important }
+  .btn-add:hover,.btn-submit:hover{ background:#8F3216 !important }
+  .btn-export,.btn-import,.btn-approve{ background:var(--status-sap) !important; color:#fff !important }
+  .btn-attach{ background:var(--accent-2) !important; color:#fff !important }
+  .btn-reject{ background:#A8443A !important; color:#fff !important }
+  .btn-detail{ background:var(--ink) !important; color:var(--paper) !important }
+
+  .user-bar,.toolbar,.table-panel{ border-radius:4px !important }
+  .year-select,.user-select,.search-box,.col-filter,.text-input,
+  .dropdown-input,.dropdown-list,.month-value,.modal{ border-radius:3px !important }
+  .summary-chip,.v3-cc-pill,.v3-gl-pill,.user-chip.cc{ border-radius:3px !important }
+  .user-avatar{ border-radius:4px !important; background:var(--accent-2) !important }
+  .user-avatar.admin{ background:var(--accent) !important }
+
+  .glassy,.glassy em{
+    background:none !important;
+    -webkit-background-clip:border-box !important;
+    background-clip:border-box !important;
+    -webkit-text-fill-color:currentColor !important;
+    color:var(--accent) !important;
+    filter:none !important;
+    text-shadow:none !important;
+  }
+  .glassy em{ font-style:italic;color:var(--ink) !important }
 </style>
 </head>
 <body>
 
-<!-- ─── NAV ─── -->
-<nav class="nav" data-screen-label="Nav">
-  <div class="nav-inner">
-    <a href="0001index.html" class="nav-logo">
-      <span class="nav-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V8l8-5 8 5v11"/><path d="M9 19v-7h6v7"/></svg>
-      </span>
-      <span class="nav-logo-text">
-        <span class="name">Chememan</span>
-        <span class="sub">Budget Management</span>
-      </span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="0001index.html">Home</a></li>
-      <li><a href="#" class="active">Export Template</a></li>
-    </ul>
-    <div class="nav-actions">
-      <label class="faip-toggle" id="adminModeWrap" style="display:none;margin-right:6px" title="สลับหมวก: ปกติ (user/approver) ↔ โหมด Admin (sees-all, แก้ทุก CC, import) — ADR-0004">
-        <input type="checkbox" id="adminModeChk" onchange="onAdminModeToggle()"><span class="faip-sw"></span>🛡️ โหมด Admin
-      </label>
-      <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-      </button>
-      <button class="icon-btn" onclick="toggleTweaks()" title="Theme tweaks" aria-label="Theme tweaks">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      </button>
-      <a href="0001index.html" class="btn-back">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        <span>Back to home</span>
-      </a>
-    </div>
-  </div>
-</nav>
-
 <!-- ─── PAGE BODY ─── -->
 <main class="wrap">
   <header class="page-head" data-screen-label="Page header">
-    <div class="breadcrumb">
-      <a href="0001index.html">Home</a>
-      <span class="sep">/</span>
-      <span>Budget Planning</span>
-      <span class="sep">/</span>
-      <span style="color:var(--ink-2)">OPEX Data Management</span>
-    </div>
+    
 
     <!-- Logged-in user context — admin sees all · user scoped to their cost center -->
     <section class="user-bar v3" id="userBar" data-screen-label="Logged-in user"></section>
 
     <div class="page-title-row">
       <div>
-        <div class="page-eyebrow">Module 02 · Data Entry</div>
-        <h1 class="page-title glassy">OPEX <em>data management.</em></h1>
-        <p class="page-subtitle">จัดการข้อมูลงบประมาณทำการรายเดือน — ใช้จริง (SAP), งบที่อนุมัติแล้ว, และงบที่รอพิจารณา ต่อ Cost Centre / GL Code / ปีงบประมาณ</p>
+        <h1 class="page-title glassy">OPEX <em>Management.</em></h1>
       </div>
-      <div class="summary" id="summary"></div>
+      <label class="faip-toggle" id="adminModeWrap" style="display:none" title="สลับหมวก: ปกติ (user/approver) ↔ โหมด Admin (sees-all, แก้ทุก CC) — ADR-0004">
+        <input type="checkbox" id="adminModeChk" onchange="onAdminModeToggle()"><span class="faip-sw"></span>🛡️ โหมด Admin
+      </label>
     </div>
   </header>
 
   <!-- Toolbar -->
   <div class="toolbar" data-screen-label="Toolbar">
-    <div class="search-box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="globalSearch" placeholder="ค้นหา cost center, GL code, GL name, remark…" oninput="renderTable()" />
-    </div>
     <select class="year-select" id="yearFilter" onchange="renderTable()">
-      <option value="2024">FY 2024</option>
-      <option value="2025">FY 2025</option>
-      <option value="2026" selected>FY 2026</option>
+      <option value="2024">Year 2024</option>
+      <option value="2025">Year 2025</option>
+      <option value="2026" selected>Year 2026</option>
     </select>
     <!-- ฝ่าย-picker — locks main page to one (ฝ่าย, year) = the approval unit (ADR-0008).
          Grouped by สายงาน. Approver sees รออนุมัติ badge + "เฉพาะที่รออนุมัติ" toggle.
@@ -1351,22 +1410,14 @@
     <div class="admin-zone-head">
       <svg class="admin-zone-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span class="admin-zone-title">งบอนุมัติ (Approved) · Admin</span>
-      <span class="admin-zone-note">⚠ ทั้งปี / ทั้งบริษัท ตามไฟล์ CSV — <b>ไม่ขึ้นกับตัวกรองปี / ฝ่าย</b> ที่เลือกดู</span>
+      <span class="admin-zone-note">⚠ ทั้งปี / ทั้งบริษัท ตามไฟล์ Excel — <b>ไม่ขึ้นกับตัวกรองปี / ฝ่าย</b> ที่เลือกดู</span>
       <span style="margin-left:auto;display:inline-flex;align-items:center;gap:10px">
         <span class="admin-zone-note" title="แก้ที่ Master Currency (Module 09) เท่านั้น · OPEX โชว์ค่านี้ + คิดเบี้ยเลี้ยงตามค่านี้ (recompute-on-read, ADR-0015)">💱 Master FX (USD→THB · FY<span id="fxYearLbl">2025</span>): <b id="fxDisplay" style="color:var(--status-approved);font-family:var(--mono);font-size:14px">—</b> <span style="color:var(--ink-3)">(read-only)</span></span>
         <a href="../../../03-edit-master-table/master-tables/01frontend/master-currency.html" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--status-approved);text-decoration:underline">แก้ที่ Master Currency ↗</a>
       </span>
     </div>
     <div class="admin-zone-actions">
-      <button class="btn btn-import" onclick="document.getElementById('importInput').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-        Import Approved Budget
-      </button>
-      <button class="btn btn-export" onclick="exportApprovedCSV()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        Export Approved Budget
-      </button>
-      <input id="importInput" type="file" class="hidden-file" accept=".csv" onchange="importCSV(this)" />
+      <span class="admin-zone-note">📄 งบอนุมัติ (Approved) มาจากไฟล์ Excel รายปีที่วางใน SharePoint › <b>Budgeting and Management</b> › <b>approved budget</b> — เว็บอ่านอย่างเดียว แก้ไม่ได้</span>
     </div>
   </div>
 
@@ -1375,30 +1426,47 @@
     <div class="table-wrap">
       <table class="data-table">
         <thead>
-          <tr>
-            <th class="idx-col frz frz-1">#</th>
-            <th class="frz frz-2" style="min-width:96px">Status</th>
-            <th class="frz frz-3" style="min-width:140px">Cost Center</th>
-            <th class="frz frz-4" style="min-width:140px">GL Code</th>
-            <th style="min-width:160px">GL Name</th>
-            <th style="min-width:160px">GL Group</th>
-            <th style="min-width:140px">Remark</th>
-            <th style="min-width:80px">C Level</th>
-            <th style="min-width:110px">Division</th>
-            <th style="min-width:120px">Department</th>
-            <th class="month-col">ม.ค.</th>
-            <th class="month-col">ก.พ.</th>
-            <th class="month-col">มี.ค.</th>
-            <th class="month-col">เม.ย.</th>
-            <th class="month-col now">พ.ค.</th>
-            <th class="month-col">มิ.ย.</th>
-            <th class="month-col">ก.ค.</th>
-            <th class="month-col">ส.ค.</th>
-            <th class="month-col">ก.ย.</th>
-            <th class="month-col">ต.ค.</th>
-            <th class="month-col">พ.ย.</th>
-            <th class="month-col">ธ.ค.</th>
-            <th class="action-col" style="min-width:60px"></th>
+          <tr class="group-head-row">
+            <th colspan="3" style="position:sticky;left:var(--frz1);z-index:17;background:var(--paper-2)"></th>
+            <th colspan="3"></th>
+            <th colspan="12" id="monthYearLabel" style="font-size:14px;font-weight:800;letter-spacing:0.03em;color:var(--ink)">Year</th>
+            <th colspan="1"></th>
+          </tr>
+          <tr class="col-filter-row">
+            <th class="idx-col frz frz-1"><span class="th-label">#</span><div class="col-filter-spacer"></div></th>
+            <th class="frz frz-2" style="min-width:140px">
+              <span class="th-label">Cost Center</span>
+              <input type="text" class="col-filter" id="colFilterCC" placeholder="ค้นหา CC…" oninput="renderTable()">
+            </th>
+            <th class="frz frz-3" style="min-width:140px">
+              <span class="th-label">GL Code</span>
+              <input type="text" class="col-filter" id="colFilterGL" placeholder="ค้นหา GL…" oninput="renderTable()">
+            </th>
+            <th style="min-width:160px">
+              <span class="th-label">GL Group</span>
+              <input type="text" class="col-filter" id="colFilterGLGroup" placeholder="ค้นหา group…" oninput="renderTable()">
+            </th>
+            <th style="min-width:140px">
+              <span class="th-label">Remark</span>
+              <input type="text" class="col-filter" id="colFilterRemark" placeholder="ค้นหา remark…" oninput="renderTable()">
+            </th>
+            <th style="min-width:168px">
+              <span class="th-label">Status</span>
+              <input type="text" class="col-filter" id="colFilterStatus" placeholder="SAP, งบ, รอ…" oninput="renderTable()">
+            </th>
+            <th class="month-col"><span class="th-label">Jan</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Feb</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Mar</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Apr</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">May</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Jun</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Jul</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Aug</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Sep</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Oct</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Nov</span><div class="col-filter-spacer"></div></th>
+            <th class="month-col"><span class="th-label">Dec</span><div class="col-filter-spacer"></div></th>
+            <th class="action-col" style="min-width:60px"><span class="th-label"></span><div class="col-filter-spacer"></div></th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -1406,16 +1474,13 @@
     </div>
   </div>
 
-  <p style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:18px;padding:0 4px;letter-spacing:0.02em">
-    Note: SAP (ใช้จริง) และ Approved (งบอนุมัติ) เป็น read-only — Approved แก้ได้ทาง Import CSV ทั้งปีเท่านั้น (board_budget).
-    แก้ได้เฉพาะ Pending (งบรออนุมัติ). Special GL (สีตามกลุ่ม) กรอกผ่าน modal.
-  </p>
+  
 
   <!-- Action bar — buttons swap by selected ฝ่าย: Submit (own ฝ่าย) / Approve+Reject (ฝ่ายที่อนุมัติ).
        jakkaritw = super-test → all buttons. Built in updateActionBar(). -->
   <div class="submit-row" id="actionBar">
     <span class="act-status" id="actStatus"></span>
-    <span class="hint" id="submitHint">All changes saved locally · ready to send to database</span>
+    <span class="hint" id="submitHint"></span>
     <button class="btn-reject" id="rejectBtn" onclick="approverReject()" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
       <span>ตีกลับทั้งฝ่าย</span>
@@ -1587,28 +1652,29 @@
     sunset:   { name:'Sunset',    forest:'#7B2D26', mint:'#E07B4C', gold:'#F2B752' },
     midnight: { name:'Midnight',  forest:'#1B244B', mint:'#5B73D9', gold:'#A88AE6' },
     nature:   { name:'Nature',    forest:'#2D5016', mint:'#7BA428', gold:'#B8A04A' },
-    royal:    { name:'Royal',     forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' }
+    royal:    { name:'Royal',     forest:'#3D1F6E', mint:'#9B6DD9', gold:'#D6B16A' },
+    northstar:{ name:'Northstar', forest:'#B24222', mint:'#4A5E80', gold:'#A8763A' }
   };
-  let activePreset = 'ocean';
+  let activePreset = 'northstar';
   let activeTheme  = 'light';
-  let intensity    = 60;
+  let intensity    = 100;
 
   function toggleTheme(){ setTheme(activeTheme === 'light' ? 'dark' : 'light'); }
   function setTheme(t){
     activeTheme = t;
     document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem('cm.theme', t); } catch(e){}
+    try { localStorage.setItem('cm22.theme', t); } catch(e){}
   }
   function applyPreset(name){
     activePreset = name;
     document.querySelectorAll('.tw-preset').forEach(el => el.classList.toggle('on', el.dataset.preset === name));
     applyColorsWithIntensity();
-    try { localStorage.setItem('cm.preset', name); } catch(e){}
+    try { localStorage.setItem('cm22.preset', name); } catch(e){}
   }
   function applyColorsWithIntensity(){
     intensity = +document.getElementById('intensitySlider').value;
     document.getElementById('intensityVal').textContent = intensity + '%';
-    try { localStorage.setItem('cm.intensity', String(intensity)); } catch(e){}
+    try { localStorage.setItem('cm22.intensity', String(intensity)); } catch(e){}
     const p = PRESETS[activePreset];
     const adjust = (hex, factor) => {
       const h = hex.replace('#','');
@@ -1623,11 +1689,11 @@
     document.documentElement.style.setProperty('--accent-3', adjust(p.gold,   f));
   }
   function resetTheme(){
-    activePreset = 'ocean';
-    document.getElementById('intensitySlider').value = 60;
+    activePreset = 'northstar';
+    document.getElementById('intensitySlider').value = 100;
     setTheme('light');
-    applyPreset('ocean');
-    try { localStorage.removeItem('cm.theme'); localStorage.removeItem('cm.preset'); localStorage.removeItem('cm.intensity'); } catch(e){}
+    applyPreset('northstar');
+    try { localStorage.removeItem('cm22.theme'); localStorage.removeItem('cm22.preset'); localStorage.removeItem('cm22.intensity'); } catch(e){}
   }
   function toggleTweaks(){ document.getElementById('tweaksBackdrop').classList.toggle('open'); }
   (function buildPresets(){
@@ -1814,58 +1880,58 @@
 
   let transactions = [
     // ── Solution Delivery (10IT012000) — L3 สุชัญญา fills · L2 อาทิตย์ approves ──
-    { id:1, costCenter:'10IT012000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน IT', year:2025,
+    { id:1, costCenter:'10IT012000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน IT', year:2026,
       sap:     [12000,0,15000,0,18000,0,0,0,0,0,0,0],
       approved:[15000,15000,15000,15000,15000,15000,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,20000,20000,0,0,0],
       pendingDetails:[] },
-    { id:2, costCenter:'10IT012000', glCode:'5211100080', remark:'ซ่อมคอมพิวเตอร์ / Notebook', year:2025,
+    { id:2, costCenter:'10IT012000', glCode:'5211100080', remark:'ซ่อมคอมพิวเตอร์ / Notebook', year:2026,
       sap:     [0,8000,0,0,12000,0,0,0,0,0,0,0],
       approved:[10000,10000,10000,10000,10000,10000,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:3, costCenter:'10IT012000', glCode:'6211100110', remark:'License ซอฟต์แวร์ประจำปี', year:2025,
+    { id:3, costCenter:'10IT012000', glCode:'6211100110', remark:'License ซอฟต์แวร์ประจำปี', year:2026,
       sap:     [120000,0,0,0,0,0,0,0,0,0,0,0],
       approved:[120000,0,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:4, costCenter:'10IT012000', glCode:'6210600020', remark:'วงจรสื่อสาร / Internet', year:2025,
+    { id:4, costCenter:'10IT012000', glCode:'6210600020', remark:'วงจรสื่อสาร / Internet', year:2026,
       sap:     [9000,9000,9000,9000,9000,0,0,0,0,0,0,0],
       approved:[9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:5, costCenter:'10IT012000', glCode:'6210700030', remark:'ที่ปรึกษาระบบ / กฎหมายไอที', year:2025,
+    { id:5, costCenter:'10IT012000', glCode:'6210700030', remark:'ที่ปรึกษาระบบ / กฎหมายไอที', year:2026,
       sap:     [0,0,50000,0,0,0,0,0,0,0,0,0],
       approved:[0,0,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:6, costCenter:'10IT012000', glCode:'6210100150', remark:'อบรม Cloud / Security', year:2025,
+    { id:6, costCenter:'10IT012000', glCode:'6210100150', remark:'อบรม Cloud / Security', year:2026,
       sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
       approved:[0,0,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
     // ── Travelling Expense (SGA side · 6xxx) — Solution Delivery · Trip Manager (เบี้ยเลี้ยง auto + 3 manual) ──
-    { id:10, costCenter:'10IT012000', glCode:'6210400010', remark:'เบี้ยเลี้ยงเดินทาง', year:2025,
+    { id:10, costCenter:'10IT012000', glCode:'6210400010', remark:'เบี้ยเลี้ยงเดินทาง', year:2026,
       sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
-    { id:11, costCenter:'10IT012000', glCode:'6210400020', remark:'ค่าพาหนะเดินทาง', year:2025,
+    { id:11, costCenter:'10IT012000', glCode:'6210400020', remark:'ค่าพาหนะเดินทาง', year:2026,
       sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
-    { id:12, costCenter:'10IT012000', glCode:'6210400030', remark:'ค่าที่พัก', year:2025,
+    { id:12, costCenter:'10IT012000', glCode:'6210400030', remark:'ค่าที่พัก', year:2026,
       sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
-    { id:13, costCenter:'10IT012000', glCode:'6210400999', remark:'ค่าใช้จ่ายเดินทางอื่น', year:2025,
+    { id:13, costCenter:'10IT012000', glCode:'6210400999', remark:'ค่าใช้จ่ายเดินทางอื่น', year:2026,
       sap:[0,0,0,0,0,0,0,0,0,0,0,0], approved:[0,0,0,0,0,0,0,0,0,0,0,0], pending:[0,0,0,0,0,0,0,0,0,0,0,0], pendingDetails:[] },
     // ── Budgeting and Management Accounting (10AC020000) — นิภาพร / วราพร own budget ──
-    { id:7, costCenter:'10AC020000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน (งบฝ่าย)', year:2025,
+    { id:7, costCenter:'10AC020000', glCode:'6211800030', remark:'อุปกรณ์สำนักงาน (งบฝ่าย)', year:2026,
       sap:     [5000,5000,6000,0,0,0,0,0,0,0,0,0],
       approved:[6000,6000,6000,6000,6000,6000,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
-    { id:8, costCenter:'10AC020000', glCode:'6211900030', remark:'เลี้ยงรับรองผู้สอบบัญชี', year:2025,
+    { id:8, costCenter:'10AC020000', glCode:'6211900030', remark:'เลี้ยงรับรองผู้สอบบัญชี', year:2026,
       sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
       approved:[0,0,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
       pendingDetails:[] },
     // ── General (orphan 10GE000000) — admin fills + submits → APPROVED directly ──
-    { id:9, costCenter:'10GE000000', glCode:'6211800030', remark:'งบกลาง (orphan — admin fills)', year:2025,
+    { id:9, costCenter:'10GE000000', glCode:'6211800030', remark:'งบกลาง (orphan — admin fills)', year:2026,
       sap:     [8000,8000,0,0,0,0,0,0,0,0,0,0],
       approved:[10000,10000,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
@@ -1997,6 +2063,7 @@
       nameText = (u.role === 'approver') ? u.name : emailLocal;
       const codes = userCostCenters(u);
       const lookup = code => costCenters.find(c => c.code === code) || {};
+      const glCount = new Set(transactions.filter(t => codes.includes(t.costCenter)).map(t => t.glCode)).size;
       const divisions = [...new Set(codes.map(c => lookup(c).division).filter(Boolean))];   // สายงาน
       const depts     = [...new Set(codes.map(c => lookup(c).department).filter(Boolean))]; // ฝ่าย
       const deptChips = depts.map(n => `<span class="user-chip cc"><span class="v">${n}</span></span>`).join('');
@@ -2011,7 +2078,10 @@
            <div class="v3-depts">${deptChips}</div>
          </div>` : '') +
         (codes.length ? chev +
-        `<span class="v3-cc-pill"><span class="n">${codes.length}</span><span class="t">Cost Centers</span></span>` : '');
+        `<div class="v3-metrics">
+           <span class="v3-cc-pill"><span class="n">${codes.length}</span><span class="t">Cost Centers</span></span>
+           <span class="v3-gl-pill"><span class="n">${glCount}</span><span class="t">GL Codes</span></span>
+         </div>` : '');
       scopeNote = (u.role === 'approver')
         ? `<span class="scope-note">ผู้อนุมัติ (${u.tier}) · เห็นฝ่ายในคิวอนุมัติ</span>`
         : `<span class="scope-note">เห็นเฉพาะ Cost Center ของตน</span>`;
@@ -2024,6 +2094,7 @@
         <div class="user-avatar ${isAdmin?'admin':''}">${initials}</div>
         <div class="v3-id-text">
           <span class="v3-name">${nameText}</span>
+          <span class="v3-email">${u.email || ''}</span>
           <span class="role-badge ${roleClass}">${roleLabel}</span>
         </div>
       </div>
@@ -2040,8 +2111,17 @@
   /* ════════════════════════════════════════════
      HELPERS
      ════════════════════════════════════════════ */
-  const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  const CURRENT_MONTH_INDEX = 4;
+  const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const CURRENT_MONTH_INDEX = 4;   /* May — demo standing month */
+  const monthCellCls = (i) => `month-cell${i === CURRENT_MONTH_INDEX ? ' now' : ''}`;
+
+  function applyCurrentMonthHeader(){
+    document.querySelectorAll('.data-table thead th.month-col').forEach((th, i) => {
+      th.classList.toggle('now', i === CURRENT_MONTH_INDEX);
+      const label = th.querySelector('.th-label');
+      if (label) label.textContent = MONTHS_EN[i];
+    });
+  }
 
   const isSpecialGL = (group) => specialGLGroups.hasOwnProperty(group);
   const fmt = (n) => (n || n === 0) ? Number(n).toLocaleString() : '';
@@ -2073,7 +2153,9 @@
       if (gl && isSpecialGL(gl.group)) specialCount++;
     });
     const m = (n) => (n/1_000_000).toFixed(2);
-    document.getElementById('summary').innerHTML = `
+    const summaryEl = document.getElementById('summary');
+    if(!summaryEl) return;
+    summaryEl.innerHTML = `
       <span class="summary-chip"><span class="lbl">Txns</span><span class="v">${filtered.length}</span></span>
       <span class="summary-chip special"><span class="lbl">Special GL</span><span class="v">${specialCount}</span></span>
       <span class="summary-chip approved"><span class="lbl">Approved</span><span class="v">฿${m(approved)}M</span></span>
@@ -2190,7 +2272,7 @@
     else if (isAdmin)                 note = 'admin แก้ Pending ได้ · Submit ไม่ได้ (ก่อน deadline · ฝ่ายมีผู้กรอกเอง)';
     else if (canApprove)              note = `รออนุมัติ (${u.tier}) · ตรวจแล้วกด อนุมัติ / ตีกลับ ทั้งฝ่าย`;
     else if (apprStatus === 'done')   note = 'ฝ่ายนี้ผ่านขั้นของคุณแล้ว';
-    else if (canSubmit)               note = `ฝ่ายของคุณ (${st}) · กรอกแล้วกด Submit เข้าสู่การอนุมัติ`;
+    else if (canSubmit)               note = '';
     else if (inFillScope && st && st.indexOf('PENDING') === 0) note = `ส่งแล้ว · ${st} · แก้ไม่ได้ (รออนุมัติ)`;
     else if (inFillScope && st === 'APPROVED') note = 'อนุมัติแล้ว · แก้ไม่ได้ (แก้ผ่าน admin)';
     else                              note = 'อ่านอย่างเดียว';
@@ -2221,10 +2303,23 @@
     renderTable();
   }
 
+  function colFilterVal(id){
+    const el = document.getElementById(id);
+    return el ? (el.value || '').trim().toLowerCase() : '';
+  }
+  function colFilterMatch(q, hay){
+    return !q || String(hay || '').toLowerCase().includes(q);
+  }
+
   function renderTable(){
     const tbody = document.getElementById('tableBody');
+    const yrLbl = document.getElementById('monthYearLabel');
+    if (yrLbl){
+      const yv = document.getElementById('yearFilter').value;
+      yrLbl.textContent = yv === 'all' ? 'All years' : yv;
+    }
     buildFaiPicker();
-    const search = document.getElementById('globalSearch').value.toLowerCase();
+    const search = (document.getElementById('globalSearch') || {}).value?.toLowerCase() || '';
     const yr = document.getElementById('yearFilter').value;
     // Year-in-legend (§1c): standing year Y → SAP(Y), Approved(Y), Pending(Y+1).
     const standY = parseInt(yr, 10);
@@ -2247,13 +2342,36 @@
     }
     updateActionBar();
 
+    const cf = {
+      status: colFilterVal('colFilterStatus'),
+      cc: colFilterVal('colFilterCC'),
+      gl: colFilterVal('colFilterGL'),
+      glName: colFilterVal('colFilterGLName'),
+      glGroup: colFilterVal('colFilterGLGroup'),
+      remark: colFilterVal('colFilterRemark'),
+      clevel: colFilterVal('colFilterCLevel'),
+      division: colFilterVal('colFilterDivision'),
+      dept: colFilterVal('colFilterDept'),
+    };
+
     const filtered = visibleByRole(transactions).filter(txn => {
       const cc = costCenters.find(c => c.code === txn.costCenter) || {};
       const gl = glCodes.find(g => g.code === txn.glCode) || {};
       const s = [txn.costCenter, gl.group, txn.glCode, gl.name, txn.remark, cc.clevel, cc.division, cc.department].join(' ').toLowerCase();
       const matchYear = yr === 'all' || String(txn.year) === yr;
       const matchDept = !selectedDept || cc.department === selectedDept;
-      return (!search || s.includes(search)) && matchYear && matchDept;
+      const statusHay = `sap approved pending ใช้จริง งบ รออนุมัติ ${txn.year} ${txn.year + 1}`;
+      const matchCols =
+        colFilterMatch(cf.status, statusHay) &&
+        colFilterMatch(cf.cc, [txn.costCenter, cc.name, cc.department, cc.division].join(' ')) &&
+        colFilterMatch(cf.gl, [txn.glCode, gl.name, gl.group].join(' ')) &&
+        colFilterMatch(cf.glName, gl.name) &&
+        colFilterMatch(cf.glGroup, gl.group) &&
+        colFilterMatch(cf.remark, txn.remark) &&
+        colFilterMatch(cf.clevel, cc.clevel) &&
+        colFilterMatch(cf.division, cc.division) &&
+        colFilterMatch(cf.dept, cc.department);
+      return (!search || s.includes(search)) && matchYear && matchDept && matchCols;
     });
 
     // R2 — main table sorted by GL group, then GL code (ADR/data-model §4b)
@@ -2278,52 +2396,43 @@
       // ── Row 1 · SAP (read-only) ──
       html += `<tr class="txn-row first" data-status="sap" data-txn-id="${txn.id}">`;
       html += sharedCells;
-      html += `<td class="frz frz-2"><div class="status-cell sap"><span class="status-bar"></span>SAP · ใช้จริง (${+txn.year})</div></td>`;
       // Cost Center dropdown
-      html += `<td rowspan="3" class="shared frz frz-3">
+      html += `<td rowspan="3" class="shared frz frz-2">
         <div class="dropdown-cell" id="cc_${txn.id}">
-          <input type="text" class="dropdown-input" value="${txn.costCenter}"
-                 onfocus="openDropdown('cc_${txn.id}')"
-                 oninput="filterDropdown('cc_${txn.id}', this.value)"
-                 onblur="setTimeout(() => closeDropdown('cc_${txn.id}'), 200)">
+          <input type="text" class="dropdown-input" value="${txn.costCenter}" readonly
+                 onclick="openDropdown('cc_${txn.id}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDropdown('cc_${txn.id}')}">
           <div class="dropdown-list">
-            ${costCenters.map(c => `<div class="dropdown-option" onclick="selectCostCenter(${txn.id},'${c.code}')">
+            ${costCenters.map(c => `<div class="dropdown-option" data-search="${(c.code + ' ' + c.name + ' ' + c.department + ' ' + c.division).toLowerCase()}" onclick="selectCostCenter(${txn.id},'${c.code}')">
               <div class="code">${c.code}</div><div class="name">${c.name}</div></div>`).join('')}
           </div>
         </div>
       </td>`;
       // GL Code dropdown
-      html += `<td rowspan="3" class="shared frz frz-4">
+      html += `<td rowspan="3" class="shared frz frz-3">
         <div class="dropdown-cell" id="gl_${txn.id}">
-          <input type="text" class="dropdown-input" value="${txn.glCode}"
-                 onfocus="openDropdown('gl_${txn.id}')"
-                 oninput="filterDropdown('gl_${txn.id}', this.value)"
-                 onblur="setTimeout(() => closeDropdown('gl_${txn.id}'), 200)">
+          <input type="text" class="dropdown-input" value="${txn.glCode}" readonly
+                 onclick="openDropdown('gl_${txn.id}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDropdown('gl_${txn.id}')}">
           <div class="dropdown-list">
-            ${glCodes.map(g => `<div class="dropdown-option" onclick="selectGLCode(${txn.id},'${g.code}')">
+            ${glCodes.map(g => `<div class="dropdown-option" data-search="${(g.code + ' ' + g.name + ' ' + g.group).toLowerCase()}" onclick="selectGLCode(${txn.id},'${g.code}')">
               <div class="code">${g.code}</div><div class="name">${g.name}</div></div>`).join('')}
           </div>
         </div>
+        <div class="auto-cell" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11.5px;line-height:1.5;color:var(--ink-3);margin-top:6px;white-space:normal">${gl.name || '—'}${gl.side ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}" style="margin-left:0">${SIDE_LABELS[gl.side].short}</span>` : ''}</div>
       </td>`;
-      // GL Name (auto) + side chip (5 ผลิต / 6 SG&A) for Travelling Expense GLs
-      const sideChip = gl.side ? `<span class="side-chip ${gl.side==='COST'?'cost':'sga'}">${SIDE_LABELS[gl.side].short}</span>` : '';
-      html += `<td rowspan="3" class="shared"><div class="auto-cell">${gl.name || '—'}${sideChip}</div></td>`;
       // GL Group — solid color chip per special group (cell itself plain)
-      html += `<td rowspan="3" class="shared">
+      html += `<td rowspan="3" class="shared" style="vertical-align:top">
         <div class="auto-cell ${isSpec ? 'special-gl-group ' + groupChipClass(gl.group) : ''}">${gl.group || '—'}</div>
       </td>`;
       // Remark (editable)
-      html += `<td rowspan="3" class="shared">
+      html += `<td rowspan="3" class="shared" style="vertical-align:top">
         <input type="text" class="text-input" value="${txn.remark || ''}" onchange="updateRemark(${txn.id}, this.value)">
       </td>`;
-      // C Level / Division / Department (auto)
-      html += `<td rowspan="3" class="shared"><div class="auto-cell">${cc.clevel || '—'}</div></td>`;
-      html += `<td rowspan="3" class="shared"><div class="auto-cell">${cc.division || '—'}</div></td>`;
-      // Department: for Special GL, the pending row needs a button — span only first 2 rows
-      html += `<td rowspan="${isSpec ? '2' : '3'}" class="shared"><div class="auto-cell">${cc.department || '—'}</div></td>`;
+      html += `<td><div class="status-cell sap">SAP · ใช้จริง (${+txn.year})</div></td>`;
       // Months: SAP read-only
-      txn.sap.forEach(v => {
-        html += `<td class="month-cell"><span class="month-value sap">${fmtCell(v)}</span></td>`;
+      txn.sap.forEach((v, i) => {
+        html += `<td class="${monthCellCls(i)}"><span class="month-value sap">${fmtCell(v)}</span></td>`;
       });
       html += `<td rowspan="3" class="shared action-cell">
         <button class="action-btn" onclick="removeTransaction(${txn.id})" title="Remove transaction">
@@ -2334,9 +2443,9 @@
 
       // ── Row 2 · Approved (read-only — board_budget, set via Import CSV ทั้งปีเท่านั้น) ──
       html += `<tr class="txn-row" data-status="approved" data-txn-id="${txn.id}">`;
-      html += `<td class="frz frz-2"><div class="status-cell approved"><span class="status-bar"></span>Approved · งบ (${+txn.year})</div></td>`;
-      txn.approved.forEach(v => {
-        html += `<td class="month-cell"><span class="month-value approved-ro">${fmtCell(v)}</span></td>`;
+      html += `<td><div class="status-cell approved">Approved · งบ (${+txn.year})</div></td>`;
+      txn.approved.forEach((v, i) => {
+        html += `<td class="${monthCellCls(i)}"><span class="month-value approved-ro">${fmtCell(v)}</span></td>`;
       });
       html += `</tr>`;
 
@@ -2344,36 +2453,37 @@
       html += `<tr class="txn-row last ${isSpec ? 'special' : ''}" data-status="pending" data-txn-id="${txn.id}">`;
       const lockHint = pendEditable ? '' :
         ` <span class="badge" title="แก้ไม่ได้ในสถานะนี้">🔒 ${currentUser().role === 'approver' && !adminActive() ? 'ตรวจอย่างเดียว' : deptStatusOf(selectedDept)}</span>`;
-      html += `<td class="frz frz-2"><div class="status-cell pending"><span class="status-bar"></span>Pending · รออนุมัติ (${+txn.year + 1})${lockHint}</div></td>`;
+      const pendingStatusCell = `<div class="status-cell pending">Pending · รออนุมัติ (${+txn.year + 1})${lockHint}</div>`;
       if (isSpec) {
-        // Department col is taken by the detail button — editable opens subform; locked = view-only
-        html += `<td class="shared" style="text-align:right">
-          ${pendEditable
-            ? `<button class="btn-detail" onclick="openDetailModal(${txn.id})">
-                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                 ใส่รายละเอียดงบทำการ
-               </button>`
-            : `<button class="btn-detail" style="opacity:.55" onclick="openDetailModal(${txn.id})" title="อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้">
-                 🔒 ดูรายละเอียด
-               </button>`}
-        </td>`;
+        // Detail button now lives under the Jan cell instead of its own column
+        const detailBtn = pendEditable
+          ? `<button class="btn-detail" style="margin-top:6px;width:100%;font-size:10px;padding:5px 6px;white-space:normal;line-height:1.3" onclick="openDetailModal(${txn.id})">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+               ใส่รายละเอียดงบทำการ
+             </button>`
+          : `<button class="btn-detail" style="opacity:.55;margin-top:6px;width:100%;font-size:10px;padding:5px 6px;white-space:normal;line-height:1.3" onclick="openDetailModal(${txn.id})" title="อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้">
+               🔒 ดูรายละเอียด
+             </button>`;
+        html += `<td>${pendingStatusCell}${detailBtn}</td>`;
         // Months read-only sum
-        pendingSum.forEach(v => {
-          html += `<td class="month-cell"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
+        pendingSum.forEach((v, i) => {
+          html += `<td class="${monthCellCls(i)}"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
         });
       } else if (pendEditable) {
+        html += `<td>${pendingStatusCell}</td>`;
         // Normal GL · editable
         txn.pending.forEach((v,i) => {
-          html += `<td class="month-cell">
+          html += `<td class="${monthCellCls(i)}">
             <input type="text" class="month-value pending-input" value="${v || ''}" data-i="${i}"
                    onchange="updateMonth(${txn.id},'pending',${i}, this.value)"
                    oninput="this.value=this.value.replace(/[^0-9]/g,'')">
           </td>`;
         });
       } else {
+        html += `<td>${pendingStatusCell}</td>`;
         // Normal GL · LOCKED (read-only per ADR-0013 × role) — show value, no input
-        txn.pending.forEach(v => {
-          html += `<td class="month-cell"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
+        txn.pending.forEach((v, i) => {
+          html += `<td class="${monthCellCls(i)}"><span class="month-value pending-readonly">${fmtCell(v)}</span></td>`;
         });
       }
       html += `</tr>`;
@@ -2382,7 +2492,7 @@
     if (!filtered.length) {
       html = `<tr><td colspan="23" style="padding:60px;text-align:center;color:var(--ink-3);font-size:14px">
         <div style="font-family:var(--serif);font-size:24px;color:var(--ink-2);margin-bottom:8px">No transactions match.</div>
-        <div>Try clearing the search or changing the year filter.</div>
+        <div>Try clearing the search or column filters.</div>
       </td></tr>`;
     }
     tbody.innerHTML = html;
@@ -2394,10 +2504,10 @@
      Survives auto table-layout + column resize. Called after render, on resize, after col-resize. */
   function applyFreeze(){
     const ths = document.querySelectorAll('.data-table thead th.frz');
-    if (ths.length < 4) return;
+    if (ths.length < 3) return;
     const root = document.documentElement.style;
     let left = 0;
-    ['--frz1','--frz2','--frz3','--frz4'].forEach((v, i) => {
+    ['--frz1','--frz2','--frz3'].forEach((v, i) => {
       root.setProperty(v, left + 'px');
       left += ths[i].getBoundingClientRect().width;
     });
@@ -2405,22 +2515,97 @@
   window.addEventListener('resize', applyFreeze);
 
   /* ════════════════════════════════════════════
-     DROPDOWNS
+     DROPDOWNS  — portal pattern (body-level)
+     Appends a single floating panel to <body> so it escapes
+     overflow:auto + position:sticky ancestors (Chrome quirk).
      ════════════════════════════════════════════ */
-  function openDropdown(id){ document.getElementById(id).classList.add('open'); }
-  function closeDropdown(id){ document.getElementById(id).classList.remove('open'); }
-  function filterDropdown(id, query){
+  let _ddSrcId = null;
+  function _ddPortal(){
+    let p = document.getElementById('__ddPortal__');
+    if (!p){
+      p = document.createElement('div');
+      p.id = '__ddPortal__';
+      p.className = 'dropdown-list';
+      document.body.appendChild(p);
+      document.addEventListener('mousedown', e => {
+        if (!p.contains(e.target)){
+          const src = _ddSrcId && document.getElementById(_ddSrcId);
+          if (!src || !src.contains(e.target)) _ddClose();
+        }
+      }, true);
+    }
+    return p;
+  }
+  function _ddPosition(id){
     const cell = document.getElementById(id);
-    cell.classList.add('open');
-    const q = (query || '').toLowerCase();
-    cell.querySelectorAll('.dropdown-option').forEach(opt => {
-      opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+    if (!cell) return;
+    const inp = cell.querySelector('.dropdown-input');
+    const r = (inp || cell).getBoundingClientRect();
+    const w = Math.max(r.width, 260);
+    const p = _ddPortal();
+    p.style.left  = r.left + 'px';
+    p.style.width = w + 'px';
+    p.style.top   = (r.bottom + 4) + 'px';
+    requestAnimationFrame(() => {
+      const ph = p.offsetHeight;
+      if (r.bottom + 4 + ph > window.innerHeight)
+        p.style.top = Math.max(4, r.top - ph - 4) + 'px';
+      const pl = parseFloat(p.style.left);
+      if (pl + w > window.innerWidth)
+        p.style.left = Math.max(0, window.innerWidth - w - 8) + 'px';
     });
+  }
+  function _ddClose(){
+    const p = document.getElementById('__ddPortal__');
+    if (p) p.style.display = 'none';
+    _ddSrcId = null;
+  }
+  function _ddPlaceholder(id){
+    return id.startsWith('gl_')
+      ? 'ค้นหา GL code, ชื่อ GL, group…'
+      : 'ค้นหา cost center, ชื่อฝ่าย…';
+  }
+  function openDropdown(id){
+    const cell = document.getElementById(id);
+    if (!cell) return;
+    const src = cell.querySelector('.dropdown-list');
+    const p = _ddPortal();
+    const opts = src ? src.innerHTML : '';
+    p.innerHTML = `
+      <div class="dropdown-head">
+        <input type="text" class="dropdown-search" placeholder="${_ddPlaceholder(id)}"
+               oninput="filterDropdown('${id}', this.value)"
+               onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+      </div>
+      <div class="dropdown-options">${opts}</div>
+      <div class="dropdown-empty">ไม่พบรายการที่ตรงกับคำค้น</div>`;
+    p.style.display = 'flex';
+    _ddSrcId = id;
+    _ddPosition(id);
+    const search = p.querySelector('.dropdown-search');
+    if (search) { search.value = ''; search.focus(); }
+    filterDropdown(id, '');
+  }
+  function closeDropdown(id){ if (_ddSrcId === id) _ddClose(); }
+  function filterDropdown(id, query){
+    if (_ddSrcId !== id) openDropdown(id);
+    const q = (query || '').trim().toLowerCase();
+    const p = _ddPortal();
+    let visible = 0;
+    p.querySelectorAll('.dropdown-option').forEach(opt => {
+      const hay = opt.dataset.search || opt.textContent.toLowerCase();
+      const show = !q || hay.includes(q);
+      opt.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const empty = p.querySelector('.dropdown-empty');
+    if (empty) empty.style.display = visible ? 'none' : 'block';
+    _ddPosition(id);
   }
 
   function selectCostCenter(txnId, code){
     const t = transactions.find(x => x.id === txnId);
-    if (t) { t.costCenter = code; renderTable(); }
+    if (t) { t.costCenter = code; _ddClose(); renderTable(); }
   }
   function selectGLCode(txnId, code){
     const t = transactions.find(x => x.id === txnId);
@@ -2430,6 +2615,7 @@
       if (gl && isSpecialGL(gl.group) && (!t.pendingDetails || !t.pendingDetails.length)){
         t.pendingDetails = [];
       }
+      _ddClose();
       renderTable();
     }
   }
@@ -2454,7 +2640,7 @@
       costCenter: currentUser().role === 'user' ? (userCostCenters(currentUser())[0] || costCenters[0].code) : costCenters[0].code,
       glCode: glCodes[0].code,
       remark: '',
-      year: +document.getElementById('yearFilter').value === 'all' ? 2025 : (+document.getElementById('yearFilter').value || 2025),
+      year: +document.getElementById('yearFilter').value === 'all' ? 2026 : (+document.getElementById('yearFilter').value || 2026),
       sap: new Array(12).fill(0),
       approved: new Array(12).fill(0),
       pending: new Array(12).fill(0),
@@ -2513,7 +2699,7 @@
       <thead><tr>
         <th class="num-col" style="width:50px">#</th>
         ${cols.map(c => `<th class="special-col">${c.key}</th>`).join('')}
-        ${MONTHS_TH.map(m => `<th class="month-col">${m}</th>`).join('')}
+        ${MONTHS_EN.map(m => `<th class="month-col">${m}</th>`).join('')}
         <th class="month-col" style="background:color-mix(in oklab,var(--accent) 10%, var(--paper-2));color:var(--accent)">รวม</th>
         <th style="width:50px"></th>
       </tr></thead><tbody>`;
@@ -2612,7 +2798,7 @@
     const sel = d['Travel Months'] || [];
     if (expType === PER_DIEM_TYPE){
       const pm = travelPerMonth(d);
-      d.months = MONTHS_TH.map((_, i) => sel.includes(i) ? pm : 0);
+      d.months = MONTHS_EN.map((_, i) => sel.includes(i) ? pm : 0);
     } else {
       // Manual types: keep entered values but lock (zero) months that aren't selected
       d.months = (d.months || new Array(12).fill(0)).map((v, i) => sel.includes(i) ? (v || 0) : 0);
@@ -2690,7 +2876,7 @@
         monthsHint = `กรอกจำนวนเงินในเดือนที่เลือก`;
       }
 
-      const monthsHtml = MONTHS_TH.map((m, i) => {
+      const monthsHtml = MONTHS_EN.map((m, i) => {
         const on = sel.includes(i);
         const val = d.months[i] || 0;
         let valCell;
@@ -3113,7 +3299,7 @@
         + `<optgroup label="ต่างประเทศ · อื่นๆ (USD)">${OTHER_COUNTRIES.map(c => `<option value="${tEsc(c)}" ${trip.destination===c?'selected':''}>${tEsc(c)}</option>`).join('')}</optgroup>`;
 
       /* Month toggle chips (trip-level) */
-      const monthChips = MONTHS_TH.map((m, i) => {
+      const monthChips = MONTHS_EN.map((m, i) => {
         const on = sel.includes(i);
         return `<div class="trip-month-cell">
           <button class="tm-toggle ${on?'on':''}" onclick="toggleTripMonth(${trip.id},${i})">${m}</button>
@@ -3144,7 +3330,7 @@
           <th style="min-width:180px">ประเภทค่าใช้จ่าย</th>
           <th>GL</th>
           <th style="min-width:130px">ยอดรวม/ทริป (฿)</th>
-          ${MONTHS_TH.map(m => `<th style="min-width:56px">${m}</th>`).join('')}
+          ${MONTHS_EN.map(m => `<th style="min-width:56px">${m}</th>`).join('')}
         </tr></thead><tbody>`;
 
       TRIP_EXP_TYPES.forEach(et => {
@@ -3161,7 +3347,7 @@
           <td><span class="exp-type-name">${et.label}</span>${et.auto?'<br><span class="exp-hint">'+pdHint+'</span>':''}</td>
           <td><span class="exp-gl-chip">${tEsc(glCode)}</span></td>
           <td>${totalDisp}</td>
-          ${MONTHS_TH.map((m, i) => {
+          ${MONTHS_EN.map((m, i) => {
             const on = sel.includes(i);
             const v = exp.months[i] || 0;
             if (!on) return `<td><div class="trip-month-val-locked">—</div></td>`;
@@ -3181,7 +3367,7 @@
                   onchange="updateTripExpDetail(${trip.id},'${et.key}',this.value)">
               </label>
             </td>
-            <td colspan="${MONTHS_TH.length}"></td>
+            <td colspan="${MONTHS_EN.length}"></td>
           </tr>`;
         }
       });
@@ -3376,64 +3562,6 @@
   }
 
   /* ════════════════════════════════════════════
-     CSV IMPORT / EXPORT
-     ════════════════════════════════════════════ */
-  function exportApprovedCSV(){
-    const headers = ['cost_center','gl_code','gl_name','gl_group','remark','c_level','division','department','jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec','year'];
-    const rows = [headers.join(',')];
-    const yr = document.getElementById('yearFilter').value;
-    visibleByRole(transactions).filter(t => yr === 'all' || String(t.year) === yr).forEach(t => {
-      const cc = costCenters.find(c => c.code === t.costCenter) || {};
-      const gl = glCodes.find(g => g.code === t.glCode) || {};
-      const esc = (v) => {
-        const s = String(v ?? '');
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
-      };
-      const row = [
-        t.costCenter, t.glCode, gl.name, gl.group, t.remark,
-        cc.clevel, cc.division, cc.department,
-        ...t.approved, t.year
-      ].map(esc);
-      rows.push(row.join(','));
-    });
-    const blob = new Blob(['\uFEFF' + rows.join('\n')], { type:'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `approved_budget_${yr === 'all' ? 'all' : yr}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 500);
-    showNotice('Export สำเร็จ', `ส่งออกไฟล์ approved_budget_${yr === 'all' ? 'all' : yr}.csv เรียบร้อยแล้ว — ${rows.length - 1} transactions`);
-  }
-  function importCSV(input){
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = String(e.target.result).replace(/^\uFEFF/, '');
-      const lines = text.split(/\r?\n/).filter(Boolean);
-      if (lines.length < 2) { showNotice('Import ไม่สำเร็จ','ไฟล์ CSV ไม่มีข้อมูล'); return; }
-      const rows = lines.slice(1);
-      let imported = 0;
-      rows.forEach(line => {
-        const cells = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
-        if (!cells[0]) return;
-        const t = transactions.find(x => x.costCenter === cells[0] && x.glCode === cells[1]);
-        if (t) {
-          t.remark = cells[4] || t.remark;
-          for (let i = 0; i < 12; i++){
-            t.approved[i] = parseInt(cells[8 + i], 10) || 0;
-          }
-          imported++;
-        }
-      });
-      renderTable();
-      input.value = '';
-      showNotice('Import สำเร็จ', `อัปเดตข้อมูล Approved สำหรับ ${imported} transactions เรียบร้อยแล้ว`);
-    };
-    reader.readAsText(file, 'utf-8');
-  }
-
-  /* ════════════════════════════════════════════
      SUBMIT TO DATABASE (mock)
      ════════════════════════════════════════════ */
   function submitToDB(){
@@ -3475,7 +3603,7 @@
   /* ════════════════════════════════════════════
      COLUMN RESIZE
      ════════════════════════════════════════════ */
-  const COL_KEY = 'cm.0002.colwidths';
+  const COL_KEY = 'cm.0002.colwidths.v2'; // bumped: column set/order changed (GL Name merged, C Level/Division/Department dropped, Status moved)
   function loadColWidths(){
     try { return JSON.parse(localStorage.getItem(COL_KEY) || '{}'); } catch(e){ return {}; }
   }
@@ -3492,7 +3620,7 @@
     });
   }
   function initColumnResize(){
-    const ths = document.querySelectorAll('.data-table thead th');
+    const ths = document.querySelectorAll('.data-table thead tr.col-filter-row th');
     const saved = loadColWidths();
     ths.forEach((th, idx) => {
       if (!th.dataset.originalMinWidth) th.dataset.originalMinWidth = th.style.minWidth || '';
@@ -3545,11 +3673,11 @@
   }
 
   (function init(){
-    let savedTheme = 'light', savedPreset = 'ocean', savedIntensity = 60;
+    let savedTheme = 'light', savedPreset = 'northstar', savedIntensity = 100;
     try {
-      savedTheme = localStorage.getItem('cm.theme') || 'light';
-      savedPreset = localStorage.getItem('cm.preset') || 'ocean';
-      savedIntensity = +(localStorage.getItem('cm.intensity') || 60);
+      savedTheme = localStorage.getItem('cm22.theme') || 'light';
+      savedPreset = localStorage.getItem('cm22.preset') || 'northstar';
+      savedIntensity = +(localStorage.getItem('cm22.intensity') || 100);
     } catch(e){}
     document.getElementById('intensitySlider').value = savedIntensity;
     document.getElementById('intensityVal').textContent = savedIntensity + '%';
@@ -3563,6 +3691,7 @@
     seedDemoTrip();
     recomputeTravelling();   // per-diem reflects current Master FX on load (ADR-0015)
     renderTable();
+    applyCurrentMonthHeader();
     initColumnResize();
   })();
 </script>

@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-12T01:38:48+0700",
+  "updated": "2026-07-13T14:23:35+0700",
   "tasks": [
+    {
+      "id": "mockup-0002.2-admin-reconcile",
+      "state": "done",
+      "created": "2026-07-13T14:00:12+0700",
+      "updated": "2026-07-13T14:23:35+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "DONE + user-confirmed screenshot 2026-07-12. 05-software-developer applied 3 edits to 0002.2: (1) restored admin-mode toggle in page-head (ADR-0014 regression fix; toggle shows for dual-role admins only, jakkaritw pure-admin always-on by design), (2) removed Import Approved button+importCSV()+file input, added read-only SharePoint note, (3) deleted Export Approved button+exportApprovedCSV() 21-col. Bonus: 'CSV'->'Excel' wording fix. Verify headless Playwright 5/5 PASS (toggle wired+flips adminMode+overlay CC count increases; import/export gone; 0 console errors). Diff +5/-69, mockup only. ADR-0021 updated (export=deleted, library 'Budgeting and Management' confirmed). Follow-up open: regenerate signoff doc 01 (still shows old buttons); doc-sweep gold_sap_gl_trans in project-context/data-platform-map/data-sources.",
+      "human": "-"
+    },
     {
       "id": "approver-primary-manager-rule",
       "state": "done",

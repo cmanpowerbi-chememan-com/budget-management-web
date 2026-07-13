@@ -103,7 +103,7 @@ Current real layout:
   02backend/                           ← Azure Functions REST API for master tables
   03sql/ · 05deploy/ · tests/          ← schema · deploy config · pytest
 design/mockups/0002claude design/
-  0002.1budget-export.html             ← WIRED prototype of the main budget app (submit/approve) — source for sign-off specs
+  0002.2budget-export.html             ← WIRED prototype of the main budget app (submit/approve) — source for sign-off specs (sole surviving mockup; 0002.1 + scratch txt removed 2026-07-12)
 requirement_spec/1_software_dev/1.1_frontend/signoff_spec/
   *.docx + _build/build_*.py + assets/ ← user sign-off specs (8 modules) + generators + screenshots
 docs/adr/                              ← 17 ADRs (architecture decisions)
@@ -116,7 +116,7 @@ fabric/                                ← PySpark scripts — copy into Fabric 
 graphify-out/                          ← knowledge-graph; graph.json/GRAPH_REPORT.md/graph.html tracked in git, rebuilt nightly via GitHub Actions (graphify-nightly.yml); cache/ and converted/ gitignored
 ```
 
-> **React + FastAPI main app: NOT yet built.** The budget submit/approve/dashboard app exists only as the wired mockup `0002.1budget-export.html`. Next phase scaffolds `frontend/` (React+Vite) + `backend/` (FastAPI). Auth = Entra ID Easy Auth + RLS layer (ADR-0004); old Streamlit MSAL flow archived with the scaffold.
+> **React + FastAPI main app: NOT yet built.** The budget submit/approve/dashboard app exists only as the wired mockup `0002.2budget-export.html`. Next phase scaffolds `frontend/` (React+Vite) + `backend/` (FastAPI). Auth = Entra ID Easy Auth + RLS layer (ADR-0004); old Streamlit MSAL flow archived with the scaffold.
 
 ### Fabric Notebook scripts
 `fabric/` scripts use `spark` (Fabric built-in) and `abfss://` paths — they **do not run locally**. Copy into a Fabric Notebook cell and attach the `lakehouse` Lakehouse.
