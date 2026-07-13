@@ -29,11 +29,30 @@ Two options were grilled 2026-07-11:
 
 - **Read-through (A).** No copy of SAP actuals is stored in Fabric SQL DB or the app
   Lakehouse. `fact_gl_trans` in the DW is the single source of truth.
-- **Aggregation is pushed to the DW side**: the backend queries
-  `GROUP BY cost_center, gl_account, fiscal_year, <month>` +
-  `SUM(<THB amount>)` so only display-grain rows (not 233k+ raw postings) cross the
-  wire. Exact column names on `fact_gl_trans` are **verified at build time**, not
-  assumed from this ADR.
+- **Aggregation is pushed to the DW side** (columns + filters VERIFIED 2026-07-13/14
+  against live data AND the DW mapping spec `Gold-Transaction` sheet):
+  `SELECT cost_center, gl_account_number, fiscal_year, period_month,
+  SUM(company_curr_amount) … GROUP BY the first four` — display-grain, not 23.7M raw rows.
+  - `company_curr_amount` is **already correctly signed** (debit `S`=+ / credit `H`=−) —
+    **do NOT apply any sign flip** (the old `data-sources.md` "flip on H" rule was for a
+    different manual export; double-flipping corrupts ~97% of rows).
+  - **Mandatory WHERE filters (never-cut financial correctness):** `company_code='1000'`
+    (CMAN-TH / THB only), `doc_type<>'CO'` (CO postings double-count the FI side — 19% of
+    rows, 2.15M carry cost_center), excluded CCs `10SC012000, CMRY01, CMKK01, CMPB01,
+    MNLB00..04`, `assignment_number<>'TFRS16'`, `fiscal_year=@year`. `doc_status='U'`
+    (19%) has NO documented rule — confirm with the business before including/excluding.
+    None of these are applied at the DW build stage — they are 100% the app's responsibility.
+  - **`company_code='1000'` is TRIPLY load-bearing:** `fact_gl_trans` is a UNION of 3 blocks
+    with DIFFERENT sign conventions — the SAP-native block (companies 1000/2000) keeps SAP's
+    signed value, but the HLL (9001) and GMAN (4000) manual-entry blocks apply `× -1 if 'S'`
+    (opposite). Filtering to `1000` gives THB-only **+** no cross-company double-count **+** a
+    single consistent sign, all in one predicate. Removing/loosening it corrupts totals — never do so.
+  - `period_month` is DW-derived (`format(posting_date,'MM')`, zero-padded) — used as-is.
+  - Reversal pairs (`reversing_flag`/`reversed_flag`/`true_reversal_flag`) net to exactly
+    zero when summed — **no reversal filter needed**.
+- **Table identity risk:** the live `gold.fact_gl_trans` is an older pre-"CORRECTION 3" build
+  the DW dev-repo no longer tracks (it plans to rename gold → `sap_gl_trans`, currently
+  dormant). Confirm the refresh owner/job with the DW team before prod dependence.
 - **The FastAPI backend merges** that aggregate with `budget.pending_budget` /
   `budget.board_budget` on `(cost_center, gl_account, fiscal_year)` in app code —
   the same split-connection pattern the deployed master-tables backend already uses
