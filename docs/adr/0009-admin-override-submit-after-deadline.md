@@ -1,7 +1,9 @@
 # 9. Admin fill/submit scope and override-submit after the deadline
 
 Date: 2026-06-10
-Status: Accepted
+Status: Superseded by ADR-0012 (admin Submit → APPROVED is the override mechanism) and amended by
+ADR-0019 (an empty-Filler CC has NO admin fallback — it stays unfilled, removing this ADR's
+orphan-ฝ่าย→admin routing). Kept for history.
 Builds on: ADR-0006 (approval routing/snapshot/escalation), ADR-0008 (approval unit = ฝ่าย),
 project-context "Phase-1 scope & deadline" (the deadline lock)
 

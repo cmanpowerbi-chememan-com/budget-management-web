@@ -1,7 +1,9 @@
 # 11. FX-rate snapshot on budget, subform auto-recompute, budget→Gold flow
 
 Date: 2026-06-12
-Status: Accepted
+Status: Superseded (FX part) by ADR-0015 — FX is recompute-on-read, NOT a stored snapshot
+(`fx_rate_used` dropped). The budget→Gold flow parts (only APPROVED flows to `gold_budget`) are
+Phase-2 (dashboard), informational only. Kept for history.
 Extends: ADR-0003 (budget data model), ADR-0005 (special-GL detail + trip linkage),
 ADR-0006 (approval routing)
 
