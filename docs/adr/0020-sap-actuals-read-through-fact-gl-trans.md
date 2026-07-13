@@ -38,10 +38,14 @@ Two options were grilled 2026-07-11:
     different manual export; double-flipping corrupts ~97% of rows).
   - **Mandatory WHERE filters (never-cut financial correctness):** `company_code='1000'`
     (CMAN-TH / THB only), `doc_type<>'CO'` (CO postings double-count the FI side — 19% of
-    rows, 2.15M carry cost_center), excluded CCs `10SC012000, CMRY01, CMKK01, CMPB01,
-    MNLB00..04`, `assignment_number<>'TFRS16'`, `fiscal_year=@year`. `doc_status='U'`
-    (19%) has NO documented rule — confirm with the business before including/excluding.
-    None of these are applied at the DW build stage — they are 100% the app's responsibility.
+    rows, 2.15M carry cost_center), excluded CCs `CMRY01, CMKK01, CMPB01, MNLB00..04`
+    (**10SC012000 is KEPT** — user 2026-07-14, removed from the exclusion list), `assignment_number
+    <>'TFRS16'`, `fiscal_year=@year`. **No `doc_status` filter** — resolved 2026-07-14: only two
+    values exist (`NULL` = the real actuals, net −981k THB; `'U'` = 4.55M rows that net to
+    **exactly 0.00 THB at every grain**, so including or excluding them never moves a SUM). `'U'`
+    is ~98% `doc_type='CO'` (already excluded) plus reversal pairs — likely statistical/CO/MM memo
+    postings; ask DW for the definitive SAP meaning but it has zero total impact. None of these
+    filters are applied at the DW build stage — they are 100% the app's responsibility.
   - **`company_code='1000'` is TRIPLY load-bearing:** `fact_gl_trans` is a UNION of 3 blocks
     with DIFFERENT sign conventions — the SAP-native block (companies 1000/2000) keeps SAP's
     signed value, but the HLL (9001) and GMAN (4000) manual-entry blocks apply `× -1 if 'S'`
