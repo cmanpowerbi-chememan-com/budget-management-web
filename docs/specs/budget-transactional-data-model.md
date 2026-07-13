@@ -142,6 +142,13 @@ visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LE
   lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager, where "direct
   manager" = the managerempcode of the Filler's **PRIMARY position row only** — resolved
   2026-07-12, same rule as ADR-0006 approver1; see ADR-0019) then joins SAP by cost_center.
+- **Scope-role UX (confirmed 2026-07-14, follows from ADR-0019 + ADR-0016):** `Fill` = can EDIT
+  those CCs; `See`-only (a Filler's manager who is not themselves a Filler) = **view read-only**,
+  no edit; `approver`-only (in a chain but Fills nothing) = sees the `รออนุมัติ` queue + Approve/
+  Reject inline (ADR-0016), no Fill buttons; a user with **no scope at all** (not a Filler, not a
+  Filler's manager, not an approver) → an **empty state** with the message "คุณไม่มีงบให้กรอกหรืออนุมัติ
+  คุณสามารถดูข้อมูลได้ที่ Dashboard" (a message, NOT an error). Implication: the Phase-2 **Dashboard
+  has broader access** than this budget-entry app — even no-scope users may view it.
 - Display "query" = 3-source union on `(cost_center, gl_account)`, filtered by the RLS CC set,
   computed in TWO steps (resolved 2026-07-12): (1) **inside Fabric SQL DB** — `board_budget`
   (fy=Y) joined with `pending_budget` (fy=Y+1) on `(cost_center, gl_account)` in ONE query (both
