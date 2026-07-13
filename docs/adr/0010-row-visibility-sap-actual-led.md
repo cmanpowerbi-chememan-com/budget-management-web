@@ -5,6 +5,12 @@ Status: Accepted
 Amended by: ADR-0020 (actuals source = DW `cman_dw_wh_gold.gold.fact_gl_trans`
 read-through, not `gold_sap_gl_trans` in the app Lakehouse; the 3-source union rule
 itself is unchanged)
+Resolved 2026-07-12 (grill): the 3 layers carry DIFFERENT fiscal years (SAP=Y,
+Approved=Y, Pending=Y+1), so the visible-row union key is `(cost_center, gl_account)`,
+NOT the `(cc, gl, year)` triple. Approved-Y is a REFERENCE column beside the planned
+Pending-Y+1; the requested-vs-granted comparison (Pending-Y+1 vs Approved-Y+1) is a
+Phase-2 dashboard, not this table. Merge = board+pending joined inside Fabric SQL DB,
+SAP merged cross-store in FastAPI (only 1 of 3 layers crosses stores).
 
 ## Context
 

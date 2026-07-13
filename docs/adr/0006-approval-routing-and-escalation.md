@@ -50,8 +50,15 @@ what happens when an approver is invalid, and what happens when one just sits on
   PENDING_APPROVER3 / APPROVED / REJECTED` (the spec's `PENDING_L1/2/3` are the same
   states — use the neutral names consistently; ADR-0003). Who each approver is + skip
   logic live in backend routing, not the schema.
-- **Reject** → status resets to `PENDING_APPROVER1`; submitter edits and resubmits, which
-  re-runs the chain from the top (and re-snapshots).
+- **Reject** (at ANY step — approver1/2/3) → status = `REJECTED` (editable like `DRAFT`,
+  bounced all the way back to the filler; NEVER a partial resume at the rejecting step). The
+  submitter edits and **resubmits**, which then sets status → `PENDING_APPROVER1` and re-runs
+  the WHOLE chain from the top (re-snapshotting approver1 = the submitter's current Primary-row
+  manager). *(Reconciled 2026-07-12: the earlier "resets to PENDING_APPROVER1" wording conflated
+  the reject-target with the resubmit-target and contradicted the state table below —
+  `PENDING_APPROVER1` is LOCKED/uneditable, so reject cannot land there. Reject lands on the
+  editable `REJECTED` state; only resubmit re-enters `PENDING_APPROVER1`. Confirmed by user: a
+  reject at any layer always restarts the full chain, no resume.)*
 
 ### State machine & edit-lock (grilling 2026-06-07)
 

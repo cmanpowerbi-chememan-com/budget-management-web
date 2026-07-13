@@ -9,17 +9,20 @@
 - [ ] after green several days → delete Azure SQL server `cman-budget-mngt-web-sql` + GitHub secrets `DB_*` + `.env` `DB_*`
 
 ## Real build (next) — sequence grilled 2026-07-11/12 (see memory project_nextstep_design_decisions)
-- [ ] **build sync `cc dept.xlsx` → Fabric** (single gating dependency: CC→ฝ่าย feeds approval unit AND CC→Filler feeds RLS; Filler = UNION across duplicate CC rows)
+- [ ] **build sync `cc dept.xlsx` → Fabric** (single gating dependency: CC→ฝ่าย feeds approval unit AND CC→Filler feeds RLS; Filler = UNION across duplicate CC rows). Validation-on-ingest: (a) WARN per Filler email not found in the unfiltered employee source; (b) WARN if a ฝ่าย has non-uniform Filler sets across its CCs (currently 0 — invariant that keeps whole-ฝ่าย Submit safe per ADR-0008); skip blank-Filler CC rows individually (ADR-0019)
 - [ ] **DDL `budget.*` 7 tables on Fabric SQL DB** from the reconciled spec (approval_status/log keyed (department, fiscal_year))
 - [ ] **board_budget SharePoint-drop sync** (ADR-0021: `approved_budget_<year>.xlsx`, sheet `sheet1`, cols A–N, year from filename strict; trigger open: Sync-now button vs daily poll)
 - [ ] scaffold frontend/ (React+Vite) + backend/ (FastAPI) — main budget app (mockup **0002.2** = source; 0002.1 superseded)
   - RLS must resolve via the Cost Center↔Filler map (ADR-0019), NOT the orgcode chain (ADR-0001/0007 superseded) — read this before coding auth/RLS
   - SAP actuals = read-through DW `cman_dw_wh_gold.gold.fact_gl_trans` ws 302668d3 (ADR-0020): DW-side GROUP BY → FastAPI merge; verify SP Viewer grant + exact col names at build
+  - main-table read path (grill 2026-07-12): visible-row union key = `(cost_center, gl_account)` (layers carry different years: SAP=Y, Approved=Y, Pending=Y+1); Approved-Y = reference only; board+pending join inside Fabric SQL DB, SAP merged cross-store in FastAPI; requested-vs-granted = Phase-2 dashboard
+  - approval engine (grill 2026-07-12, ADR-0006/0008): `approval_status` keyed (ฝ่าย, fiscal_year) with frozen approver1/2/3 empcodes + last_submitter_empcode snapshotted at Submit; reject at ANY step → REJECTED (editable) → resubmit restarts whole chain at PENDING_APPROVER1; **all 3 automations are Phase-1**: (A) reject→email via Graph sendMail, (B) auto-submit DRAFT ฝ่าย at deadline, (C) 30-day auto-escalate → needs 2 scheduled jobs (GitHub Actions cron like sync_employees, or Azure Function timer)
 - [ ] test env → prod folder (TBC)
 - [ ] follow-up doc sweep: `.claude/project-context.md` + `docs/reference/data-platform-map.md`/`data-sources.md` still say `gold_sap_gl_trans`; mockup 0002.2 + signoff doc 01 still show the dropped CSV import/export buttons
 
 ## Master-tables → Excel migration (ADR-0018/0019, grilled 2026-07-11)
-- [ ] design + build the Excel(SharePoint)→Fabric sync job (`cman-dw-ws` / `modern_lh_cman_dw`) — cadence, validation-on-ingest, skip-blank-Filler-row tolerance (02-data-modeler + 04-data-engineer)
+- [ ] design + build the Excel(SharePoint)→Fabric sync job (`cman-dw-ws` / `modern_lh_cman_dw`) — cadence, validation-on-ingest, skip-blank-Filler-row tolerance (02-data-modeler + 04-data-engineer). Land against the DW project's existing "SharePoint CSV" master lane (19.dw_jakkaritw ADR-0020, `cc-dept` already queued) — but that lane reads CSV only + has no per-cell Excel reader / no cross-row aggregation, so 2 gaps to fill: (a) Excel reader, (b) UNION-Filler aggregation
+- [ ] **master_currency = Excel on SharePoint** (ADR-0018 dataset #4, file `อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx`, cols `year | average rate usdthb` → `fiscal_year`/`usd_thb`; admin-maintained, values change freely). Sync must: coerce rate text→number (don't trust Excel cell type), validate year=4-digit-int & rate>0 (WARN/skip bad rows), and the app FAILS LOUD if the planning year's rate row is missing (never a silent 35.00 fallback). Supersedes ADR-0015's cfg_master/Module-09 web-edit plan
 - [ ] once sync is live and proven: decommission `03-edit-master-table/master-tables/01frontend/{gl-group,orgcode-costcenter,hide-document}.html` + their backend modules
 - [ ] open question carried from ADR-0019: does the direct-manager See-scope lookup need Primary+Acting posstatus (like the old orgcode lookup did)?
 

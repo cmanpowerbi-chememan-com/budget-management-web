@@ -121,8 +121,12 @@ while users plan the next year (2027).
    → Comparing Pending 2027 vs Approved 2027 is meaningful: requested vs granted.
 
 **Row visibility — which `(CC, GL, year)` rows appear (FINAL 2026-06-12, ADR-0010):**
-Not every GL is shown — the visible row set for a `(cost_center, fiscal_year)` is the **union of
-three sources**, joined on the `(cost_center, gl_account, fiscal_year)` triple:
+Not every GL is shown — the visible row set for a `cost_center` is the **union of three
+sources**, joined on **`(cost_center, gl_account)`** — NOT the year (resolved 2026-07-12): the
+three layers deliberately carry DIFFERENT fiscal years (SAP=Y, Approved=Y, Pending=Y+1), so the
+union key drops the year. Y = the standing/current year (2026); **Approved-Y is a REFERENCE
+column** beside the Pending-Y+1 the user is planning — the "requested vs granted" comparison
+(Pending-Y+1 vs Approved-Y+1) is a **Phase-2 dashboard** view, NOT this table:
 
 ```
 visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LEADER / most common starting set)
@@ -138,10 +142,14 @@ visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LE
   lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager, where "direct
   manager" = the managerempcode of the Filler's **PRIMARY position row only** — resolved
   2026-07-12, same rule as ADR-0006 approver1; see ADR-0019) then joins SAP by cost_center.
-- Display "query" = 3-source union on the triple, filtered by the RLS CC set — computed as a
-  **merge in FastAPI** (ADR-0020): the SAP side is fetched pre-aggregated from the DW, the
-  budget side from Fabric SQL DB; the two stores cannot be joined in one SQL query. No new
-  table/column. Adding a Special-GL row routes it into its subform / Trip Manager (see §4a/§4b).
+- Display "query" = 3-source union on `(cost_center, gl_account)`, filtered by the RLS CC set,
+  computed in TWO steps (resolved 2026-07-12): (1) **inside Fabric SQL DB** — `board_budget`
+  (fy=Y) joined with `pending_budget` (fy=Y+1) on `(cost_center, gl_account)` in ONE query (both
+  layers are same-store); (2) **cross-store merge in FastAPI** (ADR-0020) — the SAP side,
+  pre-aggregated from the DW `fact_gl_trans` (fy=Y), merged onto that result by
+  `(cost_center, gl_account)`, since Fabric SQL DB and the DW warehouse cannot be joined in one
+  SQL statement. So only ONE of the three layers crosses stores. No new table/column. Adding a
+  Special-GL row routes it into its subform / Trip Manager (see §4a/§4b).
 
 ### 1d. Template 2 "งบประมาณกำหนดเอง" (FINAL — confirmed 2026-06-12)
 
@@ -372,7 +380,7 @@ Table budget.pending_budget_detail {
   m01 .. m12    decimal(18,2) [not null, default: 0]   // 12 separate cols m01..m12
   total_year    decimal(18,2) [not null, default: 0]
   meta_json     nvarchar(max)                   // group-specific fields as JSON; see Q1
-  is_auto_calc  bit           [not null, default: 0]   // 1 = per-diem auto-calc line, read-only
+  is_auto_calc  bit           [not null, default: 0]   // 1 = per-diem auto-calc: m01..m12 DERIVED ON READ (not persisted) from budget_trip + FX — see §4 is_auto_calc; read-only
   _user         nvarchar(150) [not null]
   _updated_at   datetime2     [not null]
 
@@ -565,7 +573,7 @@ Ref: budget.approval_log.department           > budget.approval_status.departmen
 | template (pending_budget) | No (default USER) | — | USER / ADMIN | USER = Template 1.1 door (full chain); ADMIN = Template 2 door (Budget dept, submit = APPROVED instantly, no confirm; logged as ADMIN_SUBMIT). See §1d. Set at row creation by which form wrote it; never edited by users. |
 | special-GL cell vs detail | — | — | cell = SUM of detail lines | For a special gl_group, pending_budget.mNN MUST equal SUM of pending_budget_detail.mNN for that (cc, gl, year). App recomputes the aggregate whenever a detail line changes. |
 | meta_json (detail) | Yes | — | valid JSON; keys per group | Group-specific fields (Entertainment type+detail — see §4a; Lease 4 cols; Training course+Method; PR/Professional free text). Validate against the group allowed dropdown options (e.g. Lease place in BK/TK/KK/PB/RY) at app layer. |
-| is_auto_calc per-diem line | No | — | 0/1 | When 1, the 12 month amounts are recomputed = days x rate(position, country_group) x FX, split evenly across travel_months; LAST selected month absorbs rounding remainder so the 12-month sum equals the exact total (DECIMAL 18,2). Read-only in UI. |
+| is_auto_calc per-diem line | No | — | 0/1 | When 1, the 12 month amounts are **DERIVED ON READ, NOT persisted** (confirmed 2026-07-12, ADR-0015 recompute-on-read): computed = days × rate(position, country_group) × FX(current `master_currency_rate` for the fiscal_year), split evenly across travel_months, with the **LAST selected month absorbing the rounding remainder** so the 12-month sum equals the exact total (DECIMAL 18,2) — a **never-cut financial rule, must be unit-tested** (the mockup's round-every-month is a bug: 10000/3 → 9999). Only the `budget_trip` inputs are stored; the per-diem line's m01..m12 are computed at query time, so editing a year's Master FX re-prices ALL that year's per-diem (incl. APPROVED) instantly, no re-approval. **Reconcile consequence:** an APPROVED total is NOT frozen for FX-derived per-diem — any control-number / SUM-parity check must compare both sides at the SAME FX, not treat APPROVED as immutable. A missing `master_currency_rate` year must **FAIL LOUD**, never a silent fallback rate (mockup's silent 35.00 is a bug). Read-only in UI. |
 | country_group (trip) | No | — | 1 / 2 / 3 | 1 domestic (no FX, THB rate; C-level rate may be 0), 2 Asian (USD x FX), 3 Other (USD x FX). Derived from destination via country master. |
 | travel_months (trip) | No | — | comma list of 01..12 | Month-lock: manual travel detail lines editable ONLY in these months; other months greyed. |
 | approval_status PK (ฝ่าย, year) | No | Yes (PK) | — | One approval unit per ฝ่าย × year (ADR-0008; 114 ฝ่าย / 210 CC verified 2026-07-11). A CC resolves to its ฝ่าย via the CC↔Filler map. Re-submit REPLACES the record (last-submitter-wins); submitter_empcode = latest submitter; chain re-routes to their managerempcode. |
@@ -647,9 +655,13 @@ the other groups, Travelling does NOT swap a `meta_json` dropdown by GL. It is m
 | ค่าที่พัก · Accommodation | `5210400030` | `6210400030` | manual / month |
 | ค่าใช้จ่ายเดินทางอื่น · Other | `5210400999` | `6210400999` | manual / month |
 
-- **Side (5 vs 6)** = which GL the line posts to (cost vs SG&A). In the Trip Manager UI it is one
-  toggle per trip; in storage it is simply the `gl_account` chosen for each line — NO `side`
-  column on `budget_trip`.
+- **Side (5 vs 6)** = cost (5xxx) vs SG&A (6xxx). **CONFIRMED 2026-07-12: one side per trip — a
+  trip is always a single nature, never a mix of COST and SG&A lines.** The Trip Manager UI sets
+  the side ONCE per trip (one toggle); every line of that trip posts to that side's 4 GLs (of the
+  8). Enforce the invariant that all detail lines of a `trip_id` share one side — recommend a
+  `budget_trip.side` column (`COST`|`SGA`) to make it explicit and reject a mixed trip at save;
+  the per-line `gl_account` still encodes type+side but is constrained to the trip's side.
+  (ADR-0005's per-line-side flexibility is intentionally NOT used — mixed-side trips do not exist.)
 - **Per-diem** (`is_auto_calc=1`): amount = `days × rate(position, country_group) × FX`, split
   evenly across `travel_months` (last month absorbs rounding). Rate from the per-diem matrix
   (Position × group); `country_group` 1 domestic THB (no FX) / 2 asian USD / 3 other USD; FX from

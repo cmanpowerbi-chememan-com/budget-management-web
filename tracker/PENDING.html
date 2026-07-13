@@ -37,8 +37,8 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 13 July 2026 2:23 PM &bull; rendered: 13 July 2026 2:23 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (15)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 14</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 13 July 2026 9:16 PM &bull; rendered: 13 July 2026 9:16 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (17)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 16</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
@@ -58,6 +58,34 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#perdiem-master-inspect</span>
+        <span class="dt">13 July 2026 9:16 PM</span>
+      </div>
+      <div class="id">perdiem-master-inspect</div>
+      <div class="who"><span class="tag agent">🤖 04-data-engineer</span><span class="tag skill">🧩 04-etl-patterns</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don&#x27;t assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>Per-diem rate master inspected; rates match mockup, but country-group mapping missing from source (mockup-only).</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#spec-a-v2</span>
+        <span class="dt">13 July 2026 3:15 PM &rarr; 13 July 2026 4:32 PM</span>
+      </div>
+      <div class="id">spec-a-v2</div>
+      <div class="who"><span class="tag agent">🤖 01-sa-doc-writer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K&#x27;laddawan pending user approval.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>แก้เอกสาร Spec A เป็น V2.0 โฟกัส 3 ส่วนหลักของหน้าจอ</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#mockup-0002.2-admin-reconcile</span>
         <span class="dt">13 July 2026 2:00 PM &rarr; 13 July 2026 2:23 PM</span>
       </div>

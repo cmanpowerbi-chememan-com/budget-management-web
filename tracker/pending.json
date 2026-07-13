@@ -1,8 +1,36 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-13T14:23:35+0700",
+  "updated": "2026-07-13T21:16:53+0700",
   "tasks": [
+    {
+      "id": "perdiem-master-inspect",
+      "state": "done",
+      "created": "2026-07-13T21:16:20+0700",
+      "updated": "2026-07-13T21:16:53+0700",
+      "agent": "04-data-engineer",
+      "skills": [
+        "04-etl-patterns"
+      ],
+      "files": [
+        {
+          "path": "design/mockups/0002claude design/0002.2budget-export.html"
+        }
+      ],
+      "ai": "Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don't assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates.",
+      "human": "Per-diem rate master inspected; rates match mockup, but country-group mapping missing from source (mockup-only)."
+    },
+    {
+      "id": "spec-a-v2",
+      "state": "done",
+      "created": "2026-07-13T15:15:12+0700",
+      "updated": "2026-07-13T16:32:01+0700",
+      "agent": "01-sa-doc-writer",
+      "skills": [],
+      "files": [],
+      "ai": "Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K'laddawan pending user approval.",
+      "human": "แก้เอกสาร Spec A เป็น V2.0 โฟกัส 3 ส่วนหลักของหน้าจอ"
+    },
     {
       "id": "mockup-0002.2-admin-reconcile",
       "state": "done",

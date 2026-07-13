@@ -51,10 +51,17 @@ Key facts that drove the flip:
   change is a deliberate Master-Currency edit (logged on `cfg_master`).
 - Contrast with ADR-0013 (admin edits one APPROVED budget deliberately): that is a per-budget
   manual edit; this is the FX-derived per-diem tracking a single shared config. They coexist.
-- **Single editor = the Master Currency page (Module 09), `cfg_master.master_currency_rate`.**
-  The rate is edited in ONE place only; the OPEX page shows it **read-only** (with a link to
-  Module 09) and recomputes per-diem from it. Avoids two editors for one value (decided
-  2026-06-14 "option A"). In the mockup the two static pages share the rate via a `cm.masterFX`
+- **Single editor of the rate — UPDATED 2026-07-13: the Master Currency Excel on SharePoint**
+  (`อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx`, library `Budgeting and Management`, site CMANDWPRD =
+  ADR-0018 dataset #4), synced to Fabric — **NOT the Module-09 web page / `cfg_master.master_currency_rate`**
+  (that plan is superseded; Module 09 was a never-wired mockup, ADR-0018). The **recompute-on-read
+  decision below is UNCHANGED** — only the rate's storage+edit home moved to SharePoint Excel.
+  The rate is still edited in ONE place; the OPEX page shows it read-only and recomputes per-diem
+  from it (one editor for one value). Sync must coerce the rate text→number (don't trust Excel cell
+  type) and the app must **FAIL LOUD on a missing planning-year row** — never a silent fallback rate.
+  Note: the per-diem RATE MATRIX (Position × group) is a separate SharePoint master too
+  (`ค่าเบี่ยเลี้ยง.xlsx`), plus a country→group file (`country.xlsx`, default-to-other) — per-diem
+  = days × rate(position, group) × FX(year), all three inputs admin-maintained on SharePoint. In the mockup the two static pages share the rate via a `cm.masterFX`
   localStorage key: Module 09 writes it (on seed + edit + delete); OPEX reads it on load and
   on the `storage` event → re-derives every trip's per-diem and the per-diem GL rows live
   (realtime when both tabs are open). OPEX has no FX input.

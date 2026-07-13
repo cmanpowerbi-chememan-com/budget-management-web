@@ -19,8 +19,15 @@ at a fraction of the build/maintenance cost.
 
 ## Decision
 
-- All 6 admin-maintained master datasets are edited **exclusively via Excel
-  workbooks on SharePoint** (site `CMANDWPRD`) — no web UI for any of them:
+- All admin-maintained master datasets are edited **exclusively via Excel
+  workbooks on SharePoint** (site `CMANDWPRD`, **library `Budgeting and Management`** — confirmed
+  2026-07-13; the `approved budget/` subfolder is the separate ADR-0021 board_budget lane) — no
+  web UI for any of them. **Originally 6; grown to 8 by 2026-07-13**: added (7) per-diem rate
+  matrix `ค่าเบี่ยเลี้ยง.xlsx` (Position × domestic/asian/other — the real source of the mockup's
+  hardcoded `POSITION_PER_DIEM`) and (8) country→per-diem-group `country.xlsx` (lists domestic +
+  "asian" tier only; **default-to-other** for everything else). All files are `.xlsx` (zero CSV) —
+  the DW "SharePoint CSV" sync lane (19.dw_jakkaritw ADR-0020) must add an Excel reader for every
+  one. Original 6 in the table below:
 
   | # | Dataset | SharePoint file |
   |---|---------|------------------|
