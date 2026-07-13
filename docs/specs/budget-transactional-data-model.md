@@ -480,13 +480,37 @@ Table dbo.mas_employee_data {
 
 // CC↔Filler map — synced from cc dept.xlsx (ADR-0018/0019) into the DW's Fabric SQL DB, next to
 // employee_master (ADR-0022); the app READS it there (OLTP). All reference masters live here.
-Table dbo.cc_filler_map {  // [fabric_sql_database].[dbo] in workspace cman-dw-ws
-  cost_center   nvarchar   // "Cost Ctr"; UNION Filler emails across duplicate CC rows
-  description   nvarchar
-  c_level       nvarchar
+Table dbo.cc_filler_map {  // [fabric_sql_database].[dbo] in cman-dw-ws — EXPLODED grain (1 row per cost_center × filler_email)
+  cost_center   nvarchar
+  filler_email  nvarchar   // the sync UNIONs dup-CC rows then SPLITS the comma-list into one row per email; the Excel keeps the human-friendly comma-string — explosion happens at sync ONLY, Excel unchanged
+  department    nvarchar   // ฝ่าย → approval unit (ADR-0008); repeats per filler row (tiny, denormalised — DISTINCT gives the CC's one ฝ่าย)
   division      nvarchar   // สายงาน
-  department    nvarchar   // ฝ่าย → approval unit key (ADR-0008)
-  filler_emails nvarchar   // คนกรอกข้อมูล — ≥1 comma-separated email → Fill-scope (ADR-0019)
+  c_level       nvarchar
+  description   nvarchar
+  indexes {
+    (cost_center, filler_email) [pk]
+    (filler_email)              [name: ix_ccf_email]   // RLS fill-scope: WHERE filler_email = @login
+  }
+}
+
+// per-diem rate matrix — from ค่าเบี่ยเลี้ยง.xlsx (dedupe the 5× C-Level rows at sync)
+Table dbo.per_diem_rate {
+  position      nvarchar      [pk]   // 12 job levels
+  rate_domestic decimal(18,2)        // THB/day; 0/blank = ฿0 (no hide sentinel)
+  rate_asian    decimal(18,2)        // USD/day (country_group 'asian')
+  rate_other    decimal(18,2)        // USD/day (country_group 'other')
+}
+
+// country → per-diem group — from country.xlsx; DEFAULT-TO-OTHER (only domestic + asian listed)
+Table dbo.country_group {
+  country nvarchar [pk]
+  grp     nvarchar          // 'domestic' | 'asian' — any country NOT in this table = 'other' (sync maps the Thai labels ในประเทศ/ต่างประเทศ-อาเซียน → codes)
+}
+
+// yearly avg USD→THB — from อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx (cast text→decimal at sync; app FAILS LOUD if the planning-year row is missing, ADR-0015)
+Table dbo.master_currency_rate {
+  fiscal_year int           [pk]
+  usd_thb     decimal(18,4)
 }
 
 Table cfg_master.orgcode_costcenter_map {
