@@ -40,6 +40,18 @@ visibility logic, so approval can live there directly.
 - Consistent with ADR-0014: when an overlay admin is in **base (approver) mode**, the ฝ่าย-picker shows their
   own ฝ่าย + the `รออนุมัติ` queue with Approve/Reject; in **admin mode** Approve/Reject is hidden
   (administering ≠ approving).
+- **Approvers reach the right page via an email DEEP-LINK** (resolved 2026-07-14): every
+  approval-loop email — the approver1/2/3 turn-notify, the reject notice to the submitter, and
+  the pre-deadline reminder to Fillers — carries a link
+  `https://budget.chememan.com/?dept=<url-encoded ฝ่าย>&year=<fiscal_year>` that opens the main
+  page **pre-filtered to that `(ฝ่าย, fiscal_year)`**, so the recipient lands exactly where they
+  must act (0 navigation). The ฝ่าย name is URL-encoded (Thai / spaces / even `/` → `%2F`). The
+  reminder link targets the ACTIVE planning year only (past years are never reminded).
+- **The deep-link is CONVENIENCE-ONLY, never a bearer token** (grounded in ADR-0004): clicking it
+  only navigates; whether the recipient can SEE the ฝ่าย or press Approve/Reject is still decided
+  server-side by Entra login + RLS + the current-approver-step check (ADR-0006). Forwarding the
+  email grants no one access — a non-approver who clicks logs in as themselves and sees no Approve
+  button; clicking after the step is already actioned shows the current state with no button (graceful).
 
 ## Consequences
 
