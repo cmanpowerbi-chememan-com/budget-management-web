@@ -89,7 +89,7 @@ while users plan the next year (2027).
 |---|---|---|---|
 | 🟢 SAP · ใช้จริง (actuals) | DW `cman_dw_wh_gold.gold.fact_gl_trans` (R/O read-through, ADR-0020) | current year (2026) | auto from SAP — never entered |
 | 🔵 Approved · งบอนุมัติ | `budget.board_budget` | current year (2026), full Jan–Dec | **yearly Excel file dropped on SharePoint → synced whole-year (ADR-0021) — web entry disabled** |
-| ⚫ Pending · งบรออนุมัติ | `budget.pending_budget` (+detail/trip) | planning year (2027) | user types per cell + special-GL subforms |
+| ⚫ Pending · งบรออนุมัติ | `budget.pending_budget` (+detail/trip) | planning year (2027) | user types per cell + special-GL subforms — **starts BLANK** (resolved 2026-07-14: no prior-year pre-fill in Phase 1; a new app has no Pending-2026 source to copy from. Revisit copy-from-prior-year in later cycles once real prior-year data exists) |
 
 `board_budget` hard rules (confirmed; ingest path updated 2026-07-12, ADR-0021):
 - **Read-only in the web UI** — no cell-level or month-level editing, ever. The mockup's

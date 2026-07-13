@@ -50,6 +50,20 @@ what happens when an approver is invalid, and what happens when one just sits on
   PENDING_APPROVER3 / APPROVED / REJECTED` (the spec's `PENDING_L1/2/3` are the same
   states — use the neutral names consistently; ADR-0003). Who each approver is + skip
   logic live in backend routing, not the schema.
+- **Self-review / duplicate-in-chain rule = SELF-SKIP + DEDUP** (resolved 2026-07-14, grilled
+  against real data): resolve the raw chain `[approver1 = submitter's Primary-row managerempcode,
+  Nipaporn (101032), Waraporn (100427)]`, then (1) DROP any step whose approver = the submitter
+  (nobody approves their own budget) and (2) DEDUP a repeated approver (keep the earliest step).
+  The survivors are the actual chain. Real cases (Nipaporn & Waraporn jointly Fill 5 ฝ่าย, and
+  Nipaporn's Primary-row manager IS Waraporn):
+  - **Nipaporn submits her own ฝ่าย** → raw `[Waraporn, Nipaporn(self), Waraporn(dup)]` →
+    **`[Waraporn]`** (she is both Nipaporn's manager and the Budget Manager, so one review covers both).
+  - **Waraporn submits her own ฝ่าย** → raw `[Piyada (101218, her manager), Nipaporn, Waraporn(self)]`
+    → **`[Piyada, Nipaporn]`** (Nipaporn's step is a budget-dept review, not a hierarchy sign-off —
+    a subordinate reviewing the boss's budget is acceptable; Piyada is the hierarchy approver).
+  - A normal submitter (not Nipaporn/Waraporn) → no collision → full `[manager, Nipaporn, Waraporn]`.
+  Also covers a C-level whose own managerempcode is themselves (self-skip drops that step). If
+  self-skip + dedup empties the chain entirely, fall back to Nipaporn (never auto-APPROVE with no review).
 - **Reject** (at ANY step — approver1/2/3) → status = `REJECTED` (editable like `DRAFT`,
   bounced all the way back to the filler; NEVER a partial resume at the rejecting step). The
   submitter edits and **resubmits**, which then sets status → `PENDING_APPROVER1` and re-runs
