@@ -541,7 +541,7 @@ Ref: budget.approval_log.department           > budget.approval_status.departmen
 
 | Table | Index | Rationale |
 |---|---|---|
-| pending_budget | PK (cost_center, gl_account, fiscal_year) | Row identity; UPSERT target (last-write-wins) |
+| pending_budget | PK (cost_center, gl_account, fiscal_year) | Row identity; UPSERT target with **row-grain optimistic lock** (`_updated_at` check) — see §4 / §5 Q7 |
 | pending_budget | (cost_center, fiscal_year, gl_account) | Primary access pattern: load one CC budget for a year |
 | pending_budget | (fiscal_year, status) | Year-wide status rollups |
 | pending_budget | (gl_account, fiscal_year) | GL-centric reporting / cross-CC GL totals |
@@ -562,7 +562,7 @@ Ref: budget.approval_log.department           > budget.approval_status.departmen
 
 | Column / rule | Null? | Unique? | Range / domain | Cleaning / enforcement rule |
 |---|---|---|---|---|
-| pending_budget PK (cc, gl, year) | No | Yes (PK) | — | Last-write-wins on conflict (UPSERT). One CC = one budget set; no empcode in key. |
+| pending_budget PK (cc, gl, year) | No | Yes (PK) | — | **Row-grain optimistic lock** (confirmed 2026-07-13): on save, check the row's `_updated_at` vs the client's loaded value — if changed, reject with "row edited by someone else, reload" (that row only, not the page). **NOT last-write-wins** — multi-Filler is common (73% of CCs / 64% of ฝ่าย have ≥2 Fillers), so silent overwrite would lose real data. Conflicts stay rare in practice because two Fillers of a CC usually edit DIFFERENT GL rows (different rows = no conflict). One CC = one budget set; no empcode in key. |
 | board_budget PK (cc, gl, year) | No | Yes (PK) | — | Replace-by-Year in one transaction: DELETE WHERE fiscal_year=X then bulk INSERT; rollback on any failure. File row identity = (cost_center, gl_code); fiscal_year = from the FILENAME (strict `approved_budget_(\d{4})\.xlsx`, else reject — ADR-0021). **Web UI read-only — cell/month editing disabled; only path to change data is replacing the year's Excel on SharePoint + re-sync (see §1c).** |
 | cost_center (all owned tables) | No | — | Must exist in gold_sap_m_cost_center AND not excluded | Validate by EXISTENCE in master, never by length (short codes PBAW01 exist). Excluded CCs: CMRY01, CMKK01, CMPB01, MNLB00..04, 10SC012000 — reject for budget entry. |
 | gl_account | No | — | Must exist in sap_gl_code_ref.code | Validate by existence; numeric string. |
@@ -702,10 +702,15 @@ follows the active filter: **SharePoint folder `<ฝ่าย>/<ปี>`** — e
     uploads in `approval_log` (an `UPLOAD` action row is possible without a new table).
 - App-layer rules: allowed extensions pdf/xlsx/xls/png/jpg; folder auto-created on first upload
   (`<ฝ่าย>/<ปี>`); user must have the ฝ่าย in fill-scope to upload.
-- **PENDING root path:** Jakkaritw will create the SharePoint root folder himself and provide
-  the path (2026-06-12). Until then the upload feature has no destination — fill in here when
-  received. (The weekly-update path `General/05 Data Analytics/03 Project/6.Budgeting and
-  Management` is the project tracker, NOT this root.)
+- **Root path RESOLVED 2026-07-13:** attachments land in SharePoint `CMANDWPRD` → library
+  `Budgeting and Management` → folder **`เอกสาร ฝ่าย`** → `<ฝ่าย>/<ปี>/`. The ฝ่าย subfolders
+  (names = the distinct `ฝ่าย` column of `cc dept.xlsx`) were pre-created — **113 of 114 done**;
+  the `<ปี>` level is auto-created on first upload. Same SP `cman-fabric-write`
+  (Sites.ReadWrite.All) for upload + list. **ฝ่าย→folder name = deterministic sanitize** (confirmed
+  2026-07-13): replace any SharePoint-illegal char `\ / : * ? " < > |` with `-`, keep the rest.
+  Only one ฝ่าย needed it — `Global Demand/supply Planning` → folder `Global Demand-supply Planning`
+  (all 114 folders now exist). The app resolves a ฝ่าย's folder by applying the SAME sanitize
+  function — no per-ฝ่าย alias table.
 
 ### R2 — Main table sorted by GL group
 
@@ -765,8 +770,11 @@ ADR-0019), GL list = all 137 (Tier-1 "used before" sort applies).
 > - **Q6** → **create `cfg_master.master_currency_rate` now** (fiscal_year PK,
 >   avg_rate_usdthb) + seed FY2026 = 34.20. It is the table behind the module-09 admin
 >   maintain page; the page (UI) comes later. No stub.
-> - **Q7** → **optimistic lock** (check `_updated_at` on save), upgraded from
->   last-write-wins. No per-GL ownership split.
+> - **Q7** → **optimistic lock at the (cc, gl, year) ROW grain** (check `_updated_at` on
+>   save), upgraded from last-write-wins. **Re-confirmed 2026-07-13** against real data:
+>   multi-Filler is common (73% of CCs / 64% of ฝ่าย have ≥2 Fillers) so last-write-wins would
+>   silently lose data; row-grain keeps real conflicts rare (Fillers usually edit different GL
+>   rows). No per-GL ownership split. (Supersedes the 2026-06-27 "do-nothing / last-write-wins" call.)
 
 ### Original open questions (for reference)
 
