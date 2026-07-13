@@ -288,7 +288,7 @@ erDiagram
     submission_deadline {
         int fiscal_year PK
         date deadline_date
-        int reminder_days
+        date reminder_date
         nvarchar control_user "_user"
         datetime2 control_updated_at "_updated_at"
     }
@@ -453,8 +453,8 @@ Table budget.approval_log {
 
 Table budget.submission_deadline {
   fiscal_year   int          [pk]
-  deadline_date date         [not null]   // after this date user Pending locked; admin override allowed
-  reminder_days int          [not null, default: 7]   // send reminder N days before deadline_date
+  deadline_date date         [not null]   // = DATE(closing_year, closing_month, closing_date) from the Excel master; after this date user Pending is locked (admin override allowed)
+  reminder_date date         [not null]   // = DATE(closing_year, closing_month, reminder_day) — SAME month/year as the deadline, day = admin-set reminder_day (e.g. 15); the reminder email fires on this date
   _user         nvarchar(150)[not null]
   _updated_at   datetime2    [not null]
 }
@@ -579,7 +579,7 @@ Ref: budget.approval_log.department           > budget.approval_status.departmen
 | approval_status PK (ฝ่าย, year) | No | Yes (PK) | — | One approval unit per ฝ่าย × year (ADR-0008; 114 ฝ่าย / 210 CC verified 2026-07-11). A CC resolves to its ฝ่าย via the CC↔Filler map. Re-submit REPLACES the record (last-submitter-wins); submitter_empcode = latest submitter; chain re-routes to their managerempcode. |
 | status flow | No | — | DRAFT to PENDING_APPROVER1 to PENDING_APPROVER2 to PENDING_APPROVER3 to APPROVED; any stage to REJECTED | managerempcode chain (Submitter -> managerempcode -> Nipaporn -> Waraporn), NOT the dead VP/division flow. Special-case skips handled in app routing, not schema. |
 | approval_log | append-only | — | — | INSERT only; never UPDATE/DELETE. Captures every SUBMIT/APPROVE/REJECT/ADMIN_OVERRIDE with before/after status. |
-| submission_deadline | No | Yes (fiscal_year PK) | one row per year | After deadline_date: lock user Pending (pending_budget) writes; admin override allowed; board_budget import NOT locked. |
+| submission_deadline | No | Yes (fiscal_year PK) | one row per year | Source = SharePoint `วันปิดรับข้อมูลงบประมาณ.xlsx` (5 cols: `fiscal year, closing date, closing month, closing year, reminder_day` — all TEXT, sync casts to int). Derive `deadline_date = DATE(closing_year, closing_month, closing_date)` and `reminder_date = DATE(closing_year, closing_month, reminder_day)` — the reminder reuses the deadline's month+year, day from `reminder_day` (confirmed 2026-07-13). Validate `reminder_day < closing_date`. After deadline_date: lock user Pending (pending_budget) writes; admin override allowed; board_budget import NOT locked. Auto-submit/reminder automation uses ONLY the current planning year's row (past-year rows may be placeholder). |
 | _user / _updated_at (control) | No | — | — | Set on every write — audit without a separate audit table. |
 | Email match (auth/RLS join) | — | — | — | Match mas_employee_data.email case-insensitively (LOWER()); use company email col, not pemail. |
 
