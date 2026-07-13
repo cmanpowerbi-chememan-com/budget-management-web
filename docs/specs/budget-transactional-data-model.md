@@ -41,7 +41,7 @@ column ideas only — `user_division_map` and the division-keyed `approval_statu
 | Table | Schema / connection | Real columns used | Owner / refresh |
 |---|---|---|---|
 | `mas_employee_data` | `dbo` (Fabric SQL DB) | email, empcode, orgcode, managerempcode, division, department, joblevelnameen, fullnameth | Synced daily from C-POP HR (setup/sync_employees.py); pre-filtered (Active, no Gritsman/Vietnam/L5) |
-| CC↔Filler map (from `cc dept.xlsx`) | landing per ADR-0018 (`cman-dw-ws`/`modern_lh_cman_dw`); runtime read location TBD at sync build | Cost Ctr, Description, C Level, สายงาน, **ฝ่าย** (→ approval unit), **คนกรอกข้อมูล** = Filler emails (→ RLS See/Fill, ADR-0019) | Admin-edited Excel on SharePoint `CMANDWPRD`; sync UNBUILT |
+| CC↔Filler map (from `cc dept.xlsx`) → **`[fabric_sql_database].[dbo].cc_filler_map`** (DW `cman-dw-ws`, OLTP, next to `employee_master` — ADR-0022; the app reads it there) | Cost Ctr, Description, C Level, สายงาน, **ฝ่าย** (→ approval unit), **คนกรอกข้อมูล** = Filler emails (→ RLS See/Fill, ADR-0019) | Admin-edited Excel on SharePoint `CMANDWPRD` → synced to the DW SQL DB; sync UNBUILT |
 | `orgcode_costcenter_map` | `cfg_master` (Fabric SQL DB) | orgcode, cost_center (many-to-many; id surrogate PK, UNIQUE(orgcode,cost_center)) — **NO LONGER read for RLS (ADR-0019)**; kept as its own admin dataset | Admin-edited (module 0007) |
 | `gl_group_mapping` | `cfg_master` (Fabric SQL DB) | gl_code (PK), group_id -> gl_group_dim.group_name | Admin-edited (master-tables) |
 | `gl_group_dim` | `cfg_master` (Fabric SQL DB) | group_id (PK), group_name (18 groups) | Admin-edited |
@@ -478,8 +478,9 @@ Table dbo.mas_employee_data {
   fullnameth     nvarchar
 }
 
-// CC↔Filler map — synced from cc dept.xlsx (ADR-0018/0019); exact target table name set at sync build
-Table ext.cc_filler_map {
+// CC↔Filler map — synced from cc dept.xlsx (ADR-0018/0019) into the DW's Fabric SQL DB, next to
+// employee_master (ADR-0022); the app READS it there (OLTP). All reference masters live here.
+Table dbo.cc_filler_map {  // [fabric_sql_database].[dbo] in workspace cman-dw-ws
   cost_center   nvarchar   // "Cost Ctr"; UNION Filler emails across duplicate CC rows
   description   nvarchar
   c_level       nvarchar
