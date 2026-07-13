@@ -704,8 +704,9 @@ follows the active filter: **SharePoint folder `<ฝ่าย>/<ปี>`** — e
   (`<ฝ่าย>/<ปี>`); user must have the ฝ่าย in fill-scope to upload.
 - **Root path RESOLVED 2026-07-13:** attachments land in SharePoint `CMANDWPRD` → library
   `Budgeting and Management` → folder **`เอกสาร ฝ่าย`** → `<ฝ่าย>/<ปี>/`. The ฝ่าย subfolders
-  (names = the distinct `ฝ่าย` column of `cc dept.xlsx`) were pre-created — **113 of 114 done**;
-  the `<ปี>` level is auto-created on first upload. Same SP `cman-fabric-write`
+  (names = the distinct `ฝ่าย` column of `cc dept.xlsx`) were pre-created — **all 114 done**; the
+  `<ปี>` level (`2026`, `2027`) is ALSO pre-created under each ฝ่าย, so upload lands directly in
+  `<ฝ่าย>/<ปี>/` (no create-on-upload; add a new year folder when a new planning year begins). Same SP `cman-fabric-write`
   (Sites.ReadWrite.All) for upload + list. **ฝ่าย→folder name = deterministic sanitize** (confirmed
   2026-07-13): replace any SharePoint-illegal char `\ / : * ? " < > |` with `-`, keep the rest.
   Only one ฝ่าย needed it — `Global Demand/supply Planning` → folder `Global Demand-supply Planning`
