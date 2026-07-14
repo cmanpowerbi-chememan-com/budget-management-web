@@ -43,9 +43,18 @@ class Settings(BaseSettings):
     entra_client_secret: str | None = None
     entra_tenant_id: str | None = None
 
+    # Admin allowlist overlay (ADR-0012/0014) — comma-separated emails, e.g.
+    # "jakkaritw@chememan.com,nipapornt@chememan.com". Checked BEFORE any
+    # scope membership; grants is_admin regardless of Fill/See scope.
+    admin_emails: str = ""
+
     @property
     def is_local(self) -> bool:
         return self.app_env.strip().lower() == "local"
+
+    @property
+    def admin_emails_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
 
 @lru_cache

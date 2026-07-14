@@ -1,0 +1,75 @@
+"""Unit tests for GET /scope — DB always mocked, no live connection."""
+from unittest.mock import MagicMock, patch
+
+from app.auth import get_current_user_email
+from app.main import app
+from app.rls import Scope
+
+
+def _mock_conn(fill_rows: list[tuple], manager_add_rows: list[tuple]) -> MagicMock:
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [fill_rows, manager_add_rows]
+    conn = MagicMock()
+    conn.cursor.return_value = cursor
+    return conn
+
+
+def test_scope_returns_fill_and_see_for_authenticated_user(client):
+    app.dependency_overrides[get_current_user_email] = lambda: "filler@chememan.com"
+    mock_conn = _mock_conn(fill_rows=[("10CA013000",)], manager_add_rows=[])
+    with patch("app.routers.scope.get_fabric_conn") as mock_get_conn:
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
+        response = client.get("/scope")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["email"] == "filler@chememan.com"
+    assert body["fill_cost_centers"] == ["10CA013000"]
+    assert body["see_cost_centers"] == ["10CA013000"]
+    assert body["role"] == "filler"
+    assert body["is_admin"] is False
+
+
+def test_scope_401_without_auth_header_in_production_mode(client):
+    response = client.get("/scope")
+    assert response.status_code == 401
+
+
+def test_scope_passes_admin_view_enabled_query_param_through_to_resolve_scope(client):
+    app.dependency_overrides[get_current_user_email] = lambda: "admin@chememan.com"
+    with patch("app.routers.scope.get_fabric_conn") as mock_get_conn, patch(
+        "app.routers.scope.resolve_scope"
+    ) as mock_resolve:
+        mock_get_conn.return_value.__enter__.return_value = MagicMock()
+        mock_resolve.return_value = Scope(
+            email="admin@chememan.com",
+            is_admin=True,
+            role="admin",
+            fill_cost_centers=[],
+            see_cost_centers=[],
+        )
+        response = client.get("/scope?admin_view_enabled=true")
+
+    assert response.status_code == 200
+    _, kwargs = mock_resolve.call_args
+    assert kwargs["admin_view_enabled"] is True
+
+
+def test_scope_admin_view_enabled_defaults_to_false(client):
+    app.dependency_overrides[get_current_user_email] = lambda: "user@chememan.com"
+    with patch("app.routers.scope.get_fabric_conn") as mock_get_conn, patch(
+        "app.routers.scope.resolve_scope"
+    ) as mock_resolve:
+        mock_get_conn.return_value.__enter__.return_value = MagicMock()
+        mock_resolve.return_value = Scope(
+            email="user@chememan.com",
+            is_admin=False,
+            role="none",
+            fill_cost_centers=[],
+            see_cost_centers=[],
+        )
+        response = client.get("/scope")
+
+    assert response.status_code == 200
+    _, kwargs = mock_resolve.call_args
+    assert kwargs["admin_view_enabled"] is False

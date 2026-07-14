@@ -33,6 +33,16 @@ def test_dev_auth_email_defaults_to_none():
     assert settings.dev_auth_email is None
 
 
+def test_admin_emails_defaults_to_empty_set():
+    settings = Settings(_env_file=None)
+    assert settings.admin_emails_set == set()
+
+
+def test_admin_emails_parses_comma_separated_lowercased_and_trimmed():
+    settings = Settings(_env_file=None, admin_emails=" Jakkaritw@Chememan.com, nipapornt@chememan.com ,,")
+    assert settings.admin_emails_set == {"jakkaritw@chememan.com", "nipapornt@chememan.com"}
+
+
 def test_get_settings_reads_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("FABRIC_SQL_SERVER", "example.database.fabric.microsoft.com")
