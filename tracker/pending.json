@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T00:36:51+0700",
+  "updated": "2026-07-15T01:04:50+0700",
   "tasks": [
+    {
+      "id": "a2-backend-foundation",
+      "state": "done",
+      "created": "2026-07-15T01:04:50+0700",
+      "updated": "2026-07-15T01:04:50+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "A2 increment-1 backend foundation (05-dev, TDD): FastAPI backend/ — config(fail-closed APP_ENV=production, env_file anchored abs), Easy Auth email extraction (x-ms-client-principal-name + DEV override local-only), 2 conn factories (fabric_sql_database + gold warehouse; SP cman-fabric-write; ODBC17; lazy/context-managed), GET /health(+deep) /me, 25 pyodbc-mocked unit tests PASS. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS, no blockers. REQUIRED before deploy: Container Apps Easy Auth=require-auth (header spoof guard). Non-block suggestions: conn pool(A4/A5), GOLD_SQL_* doc-sync, structured logging. NO RLS/read/write yet (A3+). env re-point still pending. NOT committed->now committing. NOT deployed.",
+      "human": "A2 backend scaffold+auth เสร็จ; gate 06+07+08 APPROVE; 25 tests ผ่าน; ยังไม่ deploy"
+    },
     {
       "id": "db-consolidation-single-fabric-sql",
       "state": "done",
