@@ -37,7 +37,7 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 14 July 2026 11:44 PM &bull; rendered: 14 July 2026 11:44 PM</div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 12:36 AM &bull; rendered: 15 July 2026 12:36 AM</div>
   <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (19)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 18</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
@@ -59,11 +59,11 @@
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#db-consolidation-single-fabric-sql</span>
-        <span class="dt">14 July 2026 11:44 PM</span>
+        <span class="dt">14 July 2026 11:44 PM &rarr; 15 July 2026 12:36 AM</span>
       </div>
       <div class="id">db-consolidation-single-fabric-sql</div>
       
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>Consolidated 2-DB split into 1 Fabric SQL DB &#x27;fabric_sql_database&#x27; (DW ws adeb7108): budget.*=5 transactional, dbo.*=synced masters+board+deadline+employee. DB1 budget_management_web(036a3270) RETIRED; env re-point needed (not applied). ADR-0023 created; DDL db/ddl/budget_transactional_tables.sql targets budget schema (NOT run); docs reconciled to one-DB two-schema. Read path board+pending+cc_filler=local cross-schema JOIN, only SAP cross-store. BLOCKED-on: jakkaritw run DDL, verify 5 tables in budget schema.</code></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DDL EXECUTED 2026-07-15 on fabric_sql_database (Fabric SQL editor, clean run no-error) — 5 budget.* tables LIVE: pending_budget, pending_budget_detail, budget_trip, approval_status, approval_log + 9 indexes. dbo holds synced masters. Employee source=dbo.v_employee_budget_01 (verified A=0,C=0). NEXT: env re-point (at A2) + A2 backend scaffold.</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>รวมเหลือ DB เดียว fabric_sql_database: budget schema=5 ตาราง transactional, dbo=masters; DB1 เลิกใช้; รอ jakkaritw รัน DDL</span></div>
       
     </div>

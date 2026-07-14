@@ -127,7 +127,7 @@ CREATE TABLE budget.budget_trip (
     [trip_id]           BIGINT         NOT NULL IDENTITY(1,1),
     [cost_center]       NVARCHAR(20)   NOT NULL,
     [fiscal_year]       INT            NOT NULL,
-    [traveler_empcode]  NVARCHAR(20)   NULL,   -- FK to mas_employee_data.empcode (app-validated)
+    [traveler_empcode]  NVARCHAR(20)   NULL,   -- FK to dbo.v_employee_primary.employee_code (app-validated; VIEW, full 612-row roster)
     [traveler_name]     NVARCHAR(200)  NOT NULL,   -- fullnameth snapshot
     [position]          NVARCHAR(150)  NULL,   -- joblevel snapshot; drives per-diem rate
     [destination]       NVARCHAR(200)  NULL,
