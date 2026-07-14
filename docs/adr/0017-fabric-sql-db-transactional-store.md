@@ -4,6 +4,8 @@ Date: 2026-06-14
 Status: Accepted
 Revises the transactional-store choice (Azure SQL Database) recorded in early `CLAUDE.md` prose and assumed by ADR-0003 (budget data model). The medallion/lakehouse decisions stand — only the **OLTP store** changes from Azure SQL to Fabric SQL DB.
 
+Amended 2026-07-14 by ADR-0023: the app DB is now `fabric_sql_database` (DW ws `cman-dw-ws`) with `budget.*` transactional + `dbo.*` synced in ONE database; DB1 `budget_management_web` retired.
+
 ## Context
 
 The project originally split storage: **Azure SQL Database** (`cman-budget-mngt-web-sql` / `budget-mngt-web-db`) for transactional CRUD (master tables, `mas_employee_data`), and **Microsoft Fabric Lakehouse** (workspace `budget_management_web`) for analytical actuals (Bronze→Silver→Gold).

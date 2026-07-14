@@ -6,6 +6,8 @@ Amends: ADR-0018 (the masters LAND in the DW's Fabric SQL **Database** `dbo` —
 that already holds `employee_master` — NOT the Lakehouse `modern_lh_cman_dw`). Resolves the
 "runtime read location TBD" left open in `docs/specs/budget-transactional-data-model.md`.
 
+Amended 2026-07-14 by ADR-0023: the app DB is now `fabric_sql_database` (DW ws `cman-dw-ws`) with `budget.*` transactional + `dbo.*` synced in ONE database; DB1 `budget_management_web` retired.
+
 ## Context
 
 All 8 admin masters are edited as Excel on SharePoint (ADR-0018) and synced to Fabric. Two
@@ -26,11 +28,11 @@ things were open: WHERE they land, and where the app READS them at runtime — R
   colocated with `employee_master`. Each SharePoint Excel → one `dbo.*` snake_case table:
   `dbo.cc_filler_map`, `dbo.per_diem_rate`, `dbo.country_group`, `dbo.master_currency_rate`,
   `dbo.gl_group`, `dbo.hide_document`, `dbo.orgcode_cost_center` (kept but app-unused per
-  ADR-0019), plus the closing-date feeding `budget.submission_deadline`.
+  ADR-0019), plus the closing-date feeding `dbo.submission_deadline`.
 - **The app reads ALL reference data (employee + masters) from `fabric_sql_database` (OLTP,
   fast).** Because `cc_filler_map` and the employee tables are in the SAME DB, the RLS
   resolution (Filler ∪ Filler's Primary-row manager) is ONE in-DB JOIN; only the final filter
-  against `budget.*` (the app's OWN Fabric SQL DB, `budget_management_web`) is cross-DB, merged
+  against `dbo.*` (the app's OWN Fabric SQL DB, `budget_management_web`) is cross-DB, merged
   in FastAPI — same split-connection pattern as the SAP read-through (ADR-0020).
 - **Excel on SharePoint stays the EDIT surface**; `fabric_sql_database.dbo` is the synced
   READ copy (admins never touch the DB; the sync keeps it fresh).
@@ -48,5 +50,5 @@ things were open: WHERE they land, and where the app READS them at runtime — R
 - The master sync WRITES to this SQL DB (like `NB_employee_sync`), not the DW "SharePoint CSV"
   Lakehouse lane. That lane may still land a OneLake copy for the dashboard, but the app's read
   source is the SQL DB.
-- `budget.*` transactional data stays in the app's own Fabric SQL DB; the two DBs are joined
+- `dbo.*` transactional data stays in the app's own Fabric SQL DB; the two DBs are joined
   only in FastAPI, never in one SQL statement.

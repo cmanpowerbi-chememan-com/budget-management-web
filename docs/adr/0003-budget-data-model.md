@@ -25,7 +25,7 @@ budget.
   `dbo` (read-only sync data: mas_employee_data, gold_*) and `cfg_master` (admin-edited
   config/master). Budget is high-volume transactional user data, a third category.
 - **Two tables, identical column layout**: `budget.working_budget` (UI "Pending") and
-  `budget.board_budget` (UI "Approved"). Same columns (CC, gl_account, gl_name, gl_group,
+  `dbo.board_budget` (UI "Approved"). Same columns (CC, gl_account, gl_name, gl_group,
   c_level, division, department, remark, fiscal_year, m01–m12, total_year,
   `budget_type`) so a future merge is a trivial UNION.
   - `working_budget`: has `status`, travels the approval chain.

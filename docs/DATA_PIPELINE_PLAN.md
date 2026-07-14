@@ -16,10 +16,10 @@ memory `project_sharepoint_masters_inventory`, `project_cc_dept_xlsx`, `project_
 
 ## 📦 Deliverables (the interface the APP consumes — must exist + be fresh before app RLS works)
 1. `[fabric_sql_database].[dbo].*` — 7 master tables in **DW `cman-dw-ws`** (ws adeb7108, db `fabric_sql_database-a42ef9f3`), next to `employee_master` (ADR-0022, OLTP).
-2. `budget.submission_deadline` — in the **app** Fabric SQL DB (`budget_management_web`), from the closing-date file.
-3. `budget.board_budget` — in the **app** Fabric SQL DB, from the yearly approved-budget file.
+2. `dbo.submission_deadline` — in `fabric_sql_database` (DW `cman-dw-ws`), `dbo` schema, from the closing-date file.
+3. `dbo.board_budget` — in `fabric_sql_database` (DW `cman-dw-ws`), `dbo` schema, from the yearly approved-budget file.
 4. A confirmed **SAP actuals query contract** on `gold.fact_gl_trans` (the app runs it read-through; this doc pins the columns/filters).
-5. A confirmed **employee source** (unfiltered, contains 100% of the Filler list).
+5. A confirmed **employee source** — **`dbo.v_employee_budget_01` (497 rows, filtered: Active / drop L5 / drop foreign entity)**, CONFIRMED 2026-07-15 (real-data verified) to contain 100% of the Filler list AND 100% of Filler-manager (approver1) rows.
 
 All syncs use the **`NB_employee_sync` pattern** — pyodbc → `fabric_sql_database` via SP
 `cman-fabric-write` (`ActiveDirectoryServicePrincipal`, ODBC Driver 17) — **NOT** the DW
@@ -38,9 +38,9 @@ Sites.ReadWrite.All). Cadence = **DAILY, same job/schedule as `employee_master`*
 ---
 
 ## Phase D0 — Prereqs
-**1. Confirm the two homes + access (ADR-0022).** App store = Fabric SQL DB `budget_management_web` (8fbc17b7 / 036a3270, holds `budget.*`). Reference store = DW `fabric_sql_database` in cman-dw-ws (adeb7108 / a42ef9f3, holds `employee_master` + masters); literals in `19.dw_jakkaritw/notebooks/NB_employee_sync.py:148-149`. SAP = DW gold warehouse `cman_dw_wh_gold` (302668d3), host `v5o4qez3u4cupase7cogkwvyke-2nucmmcmvaiejgjtmxgk5gewea.datawarehouse.fabric.microsoft.com`; SP access WORKS (2026-07-13). **⚠️ Confirm with the DW owner who refreshes `gold.fact_gl_trans`** — it's an older build the DW dev-repo no longer tracks (ADR-0020).
+**1. Confirm the ONE consolidated home + access (ADR-0023 — supersedes the two-home split of ADR-0022).** Single Fabric SQL store = `fabric_sql_database` in DW `cman-dw-ws` (adeb7108 / a42ef9f3): holds `employee_master` + all masters in `dbo`, and now the app's transactional `budget.*` in the SAME DB. Connection literals in `19.dw_jakkaritw/notebooks/NB_employee_sync.py:148-149`; env FABRIC_SQL_SERVER/FABRIC_SQL_DATABASE re-point here. (Old app DB `budget_management_web` 8fbc17b7 / 036a3270 is RETIRED — infra untouched, just unused.) SAP = DW gold warehouse `cman_dw_wh_gold` (302668d3), host `v5o4qez3u4cupase7cogkwvyke-2nucmmcmvaiejgjtmxgk5gewea.datawarehouse.fabric.microsoft.com`; SP access WORKS (2026-07-13). **⚠️ Confirm with the DW owner who refreshes `gold.fact_gl_trans`** — it's an older build the DW dev-repo no longer tracks (ADR-0020).
 
-**2. [GAP-fix] Confirm the employee source is truly UNFILTERED.** The app's RLS See-manager + approver1 must resolve against an object that contains **empcode 101930 (thanakorny) AND 100% of the ~100 Filler emails** in cc dept.xlsx. Verify WHICH object holds the unfiltered 649 (`employee_master_stg` per ADR-0019 build-note vs `employee_master`/`v_employee_primary` per memory — they disagree). Deliver: a named object + `v_employee_primary`-style Primary-only view that the app can join, proven to drop no Filler. (ADR-0019 build-note; `project_primary_manager_rule`.)
+**2. [RESOLVED 2026-07-15] Employee source CONFIRMED = `dbo.v_employee_budget_01`.** Real-data verification against live `dbo` in `fabric_sql_database` closes this GAP: the app's RLS See-manager + approver1 resolve against `dbo.v_employee_budget_01` (497 rows — project-built FILTERED view: Active / drop L5 / drop foreign entity, one row per person), verified to contain **100% of the Filler emails** in `cc_filler_map` (`A_fillers_missing_497 = 0`) AND **100% of Filler-manager rows** (`C_mgrs_missing_497 = 0`). approver1's empcode/name/email are denormalized on the Filler's own row (`manager_employee_code`, `manager_email`, etc.) — no secondary lookup needed. **Sync invariant (must assert on every refresh, fail-loud/alert if broken):** `A_fillers_missing_497 = 0 AND C_mgrs_missing_497 = 0`. `v_employee_primary` (612 rows, Primary-row dedup of the unfiltered 649-row `employee_master`) is kept as FALLBACK ONLY for callers needing the full roster (e.g. trip-subform traveler picker) — not for RLS/approval. (Superseded: the prior uncertainty over which object holds the unfiltered 649 and whether empcode 101930/thanakorny is dropped is now moot — verified 0 Filler subordinates report to 101930, so he is not any ฝ่าย's approver1. ADR-0019 build-note; `project_primary_manager_rule`.)
 
 ---
 
@@ -48,7 +48,7 @@ Sites.ReadWrite.All). Cadence = **DAILY, same job/schedule as `employee_master`*
 **3. Create the 7 master tables in `[fabric_sql_database].[dbo]`** (spec §3b, ADR-0022):
 - `cc_filler_map` — **EXPLODED** (1 row per cost_center × filler_email), PK (cc, filler_email), index (filler_email); + department/division/c_level/description.
 - `per_diem_rate` (position PK; rate_domestic THB, rate_asian USD, rate_other USD), `country_group` (country PK, grp), `master_currency_rate` (fiscal_year PK, usd_thb).
-- `gl_group` (gl_code → group_id **and** group_name — see item 5 GAP), `hide_document`, `orgcode_cost_center` (existing shapes; orgcode app-unused per ADR-0019).
+- `gl_group` (gl_code → group_id **and** group_name — see item 5 GAP), `hide_document`. (**`orgcode_cost_center` is app-unused per ADR-0019 and is NOT in the live `dbo` — do not create/sync it.**)
 
 **4. [GAP-fix] Home the GL-name + group-name reference.** `sap_gl_code_ref` (137 gl_code→name) and `gl_group_dim` (18 group_id→group_name) currently live in `cfg_master` (dies with the retiring master-tables module, ADR-0022) and are NOT among the 8 SharePoint files (ADR-0018). Board re-derive, pending re-derive, and the 137-GL picker all need gl_name/gl_group. **Decide + deliver:** either (a) seed them into DW `dbo.*` (`dbo.gl_account_ref`, `dbo.gl_group_dim`) from the existing `cfg_master` snapshot, or (b) add a GL-name SharePoint master file. Confirm the `dbo.gl_group` table covers gl_code→group_id, group_id→name, AND gl_code→name.
 
@@ -60,10 +60,10 @@ Sites.ReadWrite.All). Cadence = **DAILY, same job/schedule as `employee_master`*
   - **ค่าเบี่ยเลี้ยง.xlsx → `dbo.per_diem_rate`:** (note live filename tone-typo `เบี่ยง`) dedup the 5× C-Level rows; cast text→decimal; 0/blank = ฿0.
   - **country.xlsx → `dbo.country_group`:** map Thai labels (ในประเทศ/ต่างประเทศ-อาเซียน) → codes (domestic/asian); default-to-other (only those 2 groups listed).
   - **อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx → `dbo.master_currency_rate`:** cast text→decimal; validate year=4-digit & rate>0.
-  - **_m gl group / ซ่อนเอกสาร / cc orgcode → `dbo.gl_group`/`hide_document`/`orgcode_cost_center`.**
+  - **_m gl group / ซ่อนเอกสาร → `dbo.gl_group` / `dbo.hide_document`.** (`cc orgcode` → `orgcode_cost_center` is app-unused (ADR-0019) and absent from live `dbo` — NOT synced.)
   - **Validations (WARN, don't fail the file):** Filler email not in the employee source; a ฝ่าย with non-uniform Filler sets across its CCs (invariant, currently 0); skip blank-Filler CC rows individually (ADR-0019).
 
-**6. [split-fix] closing-date → `budget.submission_deadline` (app DB, NOT dbo).** From `วันปิดรับข้อมูลงบประมาณ.xlsx` (5 TEXT cols). Derive `deadline_date = DATE(closing_year, closing_month, closing_date)`, `reminder_date = DATE(closing_year, closing_month, reminder_day)`. **Validate `reminder_day < closing_date`.** One row per fiscal_year.
+**6. closing-date → `dbo.submission_deadline` (in `fabric_sql_database`, `dbo` schema).** From `วันปิดรับข้อมูลงบประมาณ.xlsx` (5 TEXT cols). Derive `deadline_date = DATE(closing_year, closing_month, closing_date)`, `reminder_date = DATE(closing_year, closing_month, reminder_day)`. **Validate `reminder_day < closing_date`.** One row per fiscal_year.
 
 **7. SAP actuals query contract on `gold.fact_gl_trans`** (the app runs this read-through; pin it here). VERIFIED 2026-07-13/14:
 ```sql
@@ -76,11 +76,11 @@ GROUP BY cost_center, gl_account_number, fiscal_year, period_month
 ```
 `company_code='1000'` is triply load-bearing (currency + double-count + sign). `period_month` is DW-derived. Reversals net to 0 (no filter). (ADR-0020)
 
-**8. board_budget → `budget.board_budget` (app DB).** From `approved budget/approved_budget_<year>.xlsx`, sheet `sheet1`, **cols A–N only** (cost_center, gl_code, jan..dec); **year from FILENAME** (strict `approved_budget_(\d{4})\.xlsx`, else reject). **Validate-all-then-Replace-by-Year** (DELETE year + bulk INSERT, one txn). Re-derive dim cols from master (gl_name/gl_group/division/dept/c_level); remark NULL. Trigger = **admin "Sync now" button + daily auto-sync**. (ADR-0021)
+**8. board_budget → `dbo.board_budget` (in `fabric_sql_database`, `dbo` schema).** From `approved budget/approved_budget_<year>.xlsx`, sheet `sheet1`, **cols A–N only** (cost_center, gl_code, jan..dec); **year from FILENAME** (strict `approved_budget_(\d{4})\.xlsx`, else reject). **Validate-all-then-Replace-by-Year** (DELETE year + bulk INSERT, one txn). Re-derive dim cols from master (gl_name/gl_group/division/dept/c_level); remark NULL. Trigger = **admin "Sync now" button + daily auto-sync**. (ADR-0021)
 
 ---
 
 ## Handoff / interface to the APP project
 - App RLS/approval **cannot function until item 5 (`dbo.cc_filler_map`) + item 2 (employee source) are live** — flag as the app's hard dependency.
-- App reads: `dbo.*` (masters+employee) via the DW connection; `budget.board_budget`/`submission_deadline` via the app connection; SAP via item-7 read-through.
+- App reads: `budget.*` (transactional) + `dbo.*` (masters + employee + board_budget + submission_deadline) from the ONE `fabric_sql_database` connection; SAP via item-7 read-through.
 - Deliver the exact object names + connection strings + the confirmed `gold.fact_gl_trans` refresh owner to the app dev.

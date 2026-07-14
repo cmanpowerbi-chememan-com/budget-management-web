@@ -2,6 +2,10 @@
 
 Date: 2026-07-11
 Status: Accepted
+**Verified 2026-07-15 on live data:** app employee source = `dbo.v_employee_budget_01` (497);
+it covers 100% of Fillers and their approver1 managers (`manager_email` denormalized on-row);
+empcode 101930 (thanakorny) has 0 Filler subordinates → the "must not be dropped" concern
+below is moot.
 Supersedes: ADR-0001 (RLS via orgcode↔CostCenter map)
 Amends: ADR-0007 — only the *derivation mechanism* for See-scope/Fill-scope is
 replaced. The See ⊇ Fill invariant, approval unit = ฝ่าย (ADR-0008), and approval

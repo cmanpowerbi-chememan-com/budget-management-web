@@ -33,11 +33,11 @@ filename.
     wrong-year failure mode; the strict name gate is load-bearing and must be
     documented for the budget officer.
   - The file carries **no** gl_name / gl_group / c_level / division / department /
-    remark / template columns — every dimension column on `budget.board_budget` is
+    remark / template columns — every dimension column on `dbo.board_budget` is
     re-derived from the masters at import (model spec §4); `remark` stays NULL.
   - **Validate ALL rows first** (CC and GL exist in masters, months numeric), then
     **Replace-by-Year** (`DELETE WHERE fiscal_year=@yr` + bulk INSERT) in ONE
-    transaction into `budget.board_budget`. Any bad row rejects the whole file.
+    transaction into `dbo.board_budget`. Any bad row rejects the whole file.
 - **Target = Fabric SQL Database, not the Lakehouse.** Decided by the READ pattern:
   board_budget is read live on every page as the blue Approved layer, joined with
   `pending_budget` on `(cost_center, gl_account, fiscal_year)` — co-locating both in

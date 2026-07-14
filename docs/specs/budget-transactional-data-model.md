@@ -1,6 +1,12 @@
 # Budget Management Web — Transactional Data Model (`budget.*`)
 
-Target: **Microsoft Fabric SQL Database**, schema namespace **`budget`**.
+Target: **Microsoft Fabric SQL Database `fabric_sql_database`** — ONE database in the DW workspace
+`cman-dw-ws` (ws id `adeb7108…`, db id `a42ef9f3…`), **TWO schemas** (canonical decision
+2026-07-14, ADR-0023): **`budget`** = the 5 transactional tables the app writes; **`dbo`** = the
+synced read-only reference already live there (`board_budget`, `submission_deadline`, all masters,
+`employee_master`). The old app DB1 `budget_management_web` (`036a3270`) is RETIRED; env
+`FABRIC_SQL_SERVER` / `FABRIC_SQL_DATABASE` re-point to `fabric_sql_database` — the same DW SQL DB
+`NB_employee_sync.py` already uses.
 Scope: the 7 transactional budget tables for the main app (submission + approval, Phase-1).
 Out of scope: dashboard (Phase 2), email-notification tables (deferred).
 
@@ -16,6 +22,10 @@ on SharePoint)**, CONTEXT.md (ubiquitous language), .claude/project-context.md
 > **Reconciled 2026-07-12** — this file originally predated ADR-0008/0018/0019/0020/0021;
 > the approval-unit key, RLS source, SAP source, and board_budget ingest path below have
 > been updated to match them.
+> **Re-reconciled 2026-07-14 (ADR-0023)** — the two-DB split (app DB1 vs DW DB2) is REVERSED:
+> ONE database `fabric_sql_database`, two schemas — `budget.*` (transactional, app-written) +
+> `dbo.*` (synced, read-only); DB1 `budget_management_web` retired. The transactional table
+> qualifiers below are `budget.*`; `board_budget`/`submission_deadline`/masters stay `dbo.*`.
 
 Supersedes `db/schema.sql` (Azure-SQL, division-based 4-level chain). That file is mined for
 column ideas only — `user_division_map` and the division-keyed `approval_status` are dropped.
@@ -24,23 +34,24 @@ column ideas only — `user_division_map` and the division-keyed `approval_statu
 
 ## 1. Source inventory
 
-### 1a. Tables this model OWNS (schema `budget`, written by the app)
+### 1a. Tables this model defines (`budget.*` app-written; `dbo.board_budget` + `dbo.submission_deadline` synced read-only)
 
 | Table | Grain (PK) | Purpose | Lifecycle |
 |---|---|---|---|
 | `budget.pending_budget` | (cost_center, gl_account, fiscal_year) | Pending budget — user-entered, wide 12-month | Travels approval chain |
-| `budget.board_budget` | (cost_center, gl_account, fiscal_year) | Approved/board budget — yearly Excel file drop on SharePoint (ADR-0021), same layout | Direct-to-table, Replace-by-Year |
+| `dbo.board_budget` | (cost_center, gl_account, fiscal_year) | Approved/board budget — yearly Excel file drop on SharePoint (ADR-0021), same layout | Direct-to-table, Replace-by-Year |
 | `budget.pending_budget_detail` | detail_id (surrogate) | Special-GL subform lines, many per GL | Sums into pending_budget cell |
 | `budget.budget_trip` | trip_id (surrogate) | Travelling trip header (shared across the 4 travel GLs) | Referenced by detail lines |
 | `budget.approval_status` | (department, fiscal_year) | Current approval state per approval unit = ฝ่าย × year (ADR-0008; all CCs of the ฝ่าย approved as one) | Replaced on re-submit (last-submitter-wins) |
 | `budget.approval_log` | log_id (surrogate) | Append-only history of every approval action | Never updated/deleted |
-| `budget.submission_deadline` | fiscal_year | Global cutoff + reminder window per year | Admin-set |
+| `dbo.submission_deadline` | fiscal_year | Global cutoff + reminder window per year | Admin-set |
 
 ### 1b. External master / reference tables this model JOINs but does NOT own (read-only here)
 
 | Table | Schema / connection | Real columns used | Owner / refresh |
 |---|---|---|---|
-| `mas_employee_data` | `dbo` (Fabric SQL DB) | email, empcode, orgcode, managerempcode, division, department, joblevelnameen, fullnameth | Synced daily from C-POP HR (setup/sync_employees.py); pre-filtered (Active, no Gritsman/Vietnam/L5) |
+| **`dbo.v_employee_budget_01`** — **VIEW (read-only), CONFIRMED sole employee source for RLS + approver1 (real-data verified 2026-07-15)** | `dbo` (Fabric SQL DB, DW `cman-dw-ws`, next to `employee_master` — ADR-0022) | `employee_code`, `email`, `full_name_th`, `job_level_name_en`, `manager_employee_code`, `manager_first_name_th`, `manager_last_name_th`, **`manager_email`**, `is_primary_row` (9 cols) | Project-built FILTERED view over `employee_master` (Active / drop L5 / drop foreign entity), **497 rows, one row per person**. Approver1's employee_code/name/email are DENORMALIZED on the Filler's own row via the `manager_*` cols — no secondary manager-row lookup needed. Coverage invariant (assert on every sync refresh): `A_fillers_missing_497=0` (every `cc_filler_map.filler_email` present) AND `C_mgrs_missing_497=0` (every Filler's Primary-row manager present) — both verified 0 on 2026-07-15 live data. |
+| **`dbo.v_employee_primary`** — **VIEW (read-only), fallback / full-roster source (NOT for RLS/approval)** | `dbo` (Fabric SQL DB, DW `cman-dw-ws`, next to `employee_master` — ADR-0022) | `employee_code`, `email`, `full_name_th`, `job_level_name_en`, `manager_employee_code`, `manager_email`, `position_status`, `org_code`, … (~68 cols total) | Primary-row dedup of the unfiltered 649-row `employee_master`, **612 rows, one row per person**. Used for the trip-subform traveler picker (`budget_trip.traveler_empcode`) because a traveler may be outside the 497-row budget filter that `v_employee_budget_01` applies. |
 | CC↔Filler map (from `cc dept.xlsx`) → **`[fabric_sql_database].[dbo].cc_filler_map`** (DW `cman-dw-ws`, OLTP, next to `employee_master` — ADR-0022; the app reads it there) | Cost Ctr, Description, C Level, สายงาน, **ฝ่าย** (→ approval unit), **คนกรอกข้อมูล** = Filler emails (→ RLS See/Fill, ADR-0019) | Admin-edited Excel on SharePoint `CMANDWPRD` → synced to the DW SQL DB; sync UNBUILT |
 | `orgcode_costcenter_map` | `cfg_master` (Fabric SQL DB) | orgcode, cost_center (many-to-many; id surrogate PK, UNIQUE(orgcode,cost_center)) — **NO LONGER read for RLS (ADR-0019)**; kept as its own admin dataset | Admin-edited (module 0007) |
 | `gl_group_mapping` | `cfg_master` (Fabric SQL DB) | gl_code (PK), group_id -> gl_group_dim.group_name | Admin-edited (master-tables) |
@@ -56,8 +67,8 @@ Notes on the externals (verified against source SQL/notebooks, do not re-discove
   `dim_gl_master` table — that name in CLAUDE.md is conceptual.
 - Cost-center master in the Lakehouse is `dbo.gold_sap_m_cost_center` (cost_center_id,
   cost_center_name) — the gold_/silver_ prefix is part of the table NAME, schema is `dbo`.
-- `master_currency_rate` does not exist yet (module 09 deferred). The per-diem auto-calc in
-  pending_budget_detail depends on it; modelled as an external read-only join, flagged in section 5.
+- `dbo.master_currency_rate` EXISTS (live in `fabric_sql_database.dbo`, confirmed 2026-07-15). The
+  per-diem auto-calc in pending_budget_detail reads it as an external read-only join (fiscal_year PK).
 - **CC↔Filler map source = `cc dept.xlsx`** (SharePoint `CMANDWPRD`, sourcedoc
   `0A67CF18-2BFB-4D99-A8A4-BF2E9EF3A000`), verified via Graph 2026-07-11: single sheet,
   columns `Cost Ctr | Description | C Level | สายงาน | ฝ่าย | คนกรอกข้อมูล`; 211 rows,
@@ -75,9 +86,23 @@ Notes on the externals (verified against source SQL/notebooks, do not re-discove
   one real case — taweesaks — decided Primary). 0 employees have two Primary rows, so the rule
   is deterministic. Fallback: Filler absent from the employee master (real case `warapornkh@`,
   likely a file typo) still Fills, but approver1 resolves via ADR-0006's invalid-approver1
-  fallback (→ Nipaporn); sync WARNS per such row. Build note: lookup source must cover ALL
-  active employees — the filtered 344-row `mas_employee_data` drops at least one real Filler
-  (thanakorny, only in the 649-row `employee_master_stg`).
+  fallback (→ Nipaporn); sync WARNS per such row.
+- **Employee source CONFIRMED (real-data verified 2026-07-15 against live `dbo` in
+  `fabric_sql_database`):** `dbo.v_employee_budget_01` (497 rows) is the sole app source for
+  RLS + approver1 — approver1's empcode/name/email sit DENORMALIZED on the Filler's own row
+  (`manager_employee_code`, `manager_first_name_th`, `manager_last_name_th`, `manager_email`),
+  so no secondary manager-row lookup is needed. Coverage invariant, must hold on every sync
+  refresh: `A_fillers_missing_497 = 0` (every `cc_filler_map.filler_email` is in the 497) AND
+  `C_mgrs_missing_497 = 0` (every Filler's Primary-row manager is in the 497) — both verified 0
+  on 2026-07-15 live data, so 497 is a sufficient sole source. **Stale note superseded:** this
+  bullet previously said the filtered 344-row legacy `mas_employee_data` name (now confirmed as
+  `v_employee_budget_01`) drops real Filler `thanakorny` (employee_code 101930), present only in
+  the unfiltered 649-row `employee_master_stg` — that concern
+  is now MOOT: verified 2026-07-15 (twice) that 101930 has **0 Filler subordinates**
+  (`E_fillers_under_101930 = 0`), so he is not anyone's approver1, and he is present in the 497
+  view anyway. Fallback only, NOT for RLS/approval: `v_employee_primary` (612 rows, Primary-row
+  dedup of unfiltered `employee_master`) for callers needing the full roster (e.g. trip-subform
+  traveler picker).
 
 ### 1c. The 3 display layers (FINAL — confirmed with user 2026-06-12)
 
@@ -88,7 +113,7 @@ while users plan the next year (2027).
 | Layer | Source | Fiscal year shown | Entry method |
 |---|---|---|---|
 | 🟢 SAP · ใช้จริง (actuals) | DW `cman_dw_wh_gold.gold.fact_gl_trans` (R/O read-through, ADR-0020) | current year (2026) | auto from SAP — never entered |
-| 🔵 Approved · งบอนุมัติ | `budget.board_budget` | current year (2026), full Jan–Dec | **yearly Excel file dropped on SharePoint → synced whole-year (ADR-0021) — web entry disabled** |
+| 🔵 Approved · งบอนุมัติ | `dbo.board_budget` | current year (2026), full Jan–Dec | **yearly Excel file dropped on SharePoint → synced whole-year (ADR-0021) — web entry disabled** |
 | ⚫ Pending · งบรออนุมัติ | `budget.pending_budget` (+detail/trip) | planning year (2027) | user types per cell + special-GL subforms — **starts BLANK** (resolved 2026-07-14: no prior-year pre-fill in Phase 1; a new app has no Pending-2026 source to copy from. Revisit copy-from-prior-year in later cycles once real prior-year data exists) |
 
 `board_budget` hard rules (confirmed; ingest path updated 2026-07-12, ADR-0021):
@@ -141,7 +166,8 @@ visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LE
   filters by the login's CC set (**CC↔Filler map, ADR-0019**: Fill = CCs whose Filler column
   lists the user's email; See = a CC's Fillers ∪ each Filler's direct manager, where "direct
   manager" = the managerempcode of the Filler's **PRIMARY position row only** — resolved
-  2026-07-12, same rule as ADR-0006 approver1; see ADR-0019) then joins SAP by cost_center.
+  2026-07-12, same rule as ADR-0006 approver1; see ADR-0019; employee source CONFIRMED
+  2026-07-15 = `dbo.v_employee_budget_01`, 497 rows — see §1b) then joins SAP by cost_center.
 - **Scope-role UX (confirmed 2026-07-14, follows from ADR-0019 + ADR-0016):** `Fill` = can EDIT
   those CCs; `See`-only (a Filler's manager who is not themselves a Filler) = **view read-only**,
   no edit; `approver`-only (in a chain but Fills nothing) = sees the `รออนุมัติ` queue + Approve/
@@ -150,12 +176,14 @@ visible(CC, year) = SAP-actual rows   (fact_gl_trans, DW read-through — the LE
   คุณสามารถดูข้อมูลได้ที่ Dashboard" (a message, NOT an error). Implication: the Phase-2 **Dashboard
   has broader access** than this budget-entry app — even no-scope users may view it.
 - Display "query" = 3-source union on `(cost_center, gl_account)`, filtered by the RLS CC set,
-  computed in TWO steps (resolved 2026-07-12): (1) **inside Fabric SQL DB** — `board_budget`
-  (fy=Y) joined with `pending_budget` (fy=Y+1) on `(cost_center, gl_account)` in ONE query (both
-  layers are same-store); (2) **cross-store merge in FastAPI** (ADR-0020) — the SAP side,
-  pre-aggregated from the DW `fact_gl_trans` (fy=Y), merged onto that result by
-  `(cost_center, gl_account)`, since Fabric SQL DB and the DW warehouse cannot be joined in one
-  SQL statement. So only ONE of the three layers crosses stores. No new table/column. Adding a
+  computed in TWO steps (resolved 2026-07-12; consolidated to ONE DB 2026-07-14, ADR-0023): (1)
+  **a LOCAL cross-schema in-DB JOIN inside `fabric_sql_database`** — `dbo.board_budget` (fy=Y)
+  joined with `budget.pending_budget` (fy=Y+1) on `(cost_center, gl_account)`, RLS-filtered via
+  `dbo.cc_filler_map`, all in ONE query (all three are in the SAME database, different schemas);
+  (2) **the ONLY cross-store merge, in FastAPI** (ADR-0020) — the SAP side, pre-aggregated from
+  the DW gold warehouse `fact_gl_trans` (fy=Y), merged onto that result by
+  `(cost_center, gl_account)`, since the Fabric SQL DB and the DW gold warehouse cannot be joined
+  in one SQL statement. So only the SAP layer crosses stores. No new table/column. Adding a
   Special-GL row routes it into its subform / Trip Manager (see §4a/§4b).
 
 ### 1d. Template 2 "งบประมาณกำหนดเอง" (FINAL — confirmed 2026-06-12)
@@ -198,8 +226,8 @@ erDiagram
     EXT_gl_group_mapping       ||..o{ pending_budget   : "gl_account to gl_group (read-only)"
     EXT_gold_sap_m_cost_center ||..o{ board_budget     : "cost_center validated (read-only)"
     EXT_sap_gl_code_ref        ||..o{ board_budget     : "gl_account to gl_name (read-only)"
-    EXT_mas_employee_data      ||..o{ approval_status  : "submitter/managerempcode chain (read-only)"
-    EXT_mas_employee_data      ||..o{ budget_trip      : "traveler to position (read-only)"
+    EXT_v_employee_budget_01   ||..o{ approval_status  : "submitter/approver1 chain via manager_employee_code (read-only, RLS+approver1 source)"
+    EXT_v_employee_primary     ||..o{ budget_trip      : "traveler lookup (read-only, full-roster fallback)"
     EXT_cc_filler_map          ||..o{ pending_budget   : "RLS see-fill scope + CC to fai map (read-only, ADR-0019)"
     EXT_cc_filler_map          ||..o{ approval_status  : "CC to fai resolves the approval unit (read-only)"
     EXT_master_currency_rate   ||..o{ pending_budget_detail : "per-diem FX by year (read-only, PLANNED)"
@@ -306,7 +334,7 @@ Cardinality summary:
 - budget_trip (1) - (0..N) pending_budget_detail — one trip is referenced by up to 4 travel-GL detail lines (per-diem + 3 manual types); trip_id is NULL for non-travel detail lines.
 - pending_budget (N) - (1) approval_status per (department, fiscal_year) — the approval unit is the ฝ่าย × year (ADR-0008); ALL GL rows of ALL CCs in one ฝ่าย share ONE approval record, joined through the CC→ฝ่าย column of the CC↔Filler map (`cc dept.xlsx`; 210 CC → 114 ฝ่าย, verified from the real file 2026-07-11).
 - approval_status (1) - (0..N) approval_log — append-only audit.
-- All EXT_* relationships are read-only joins (dotted, non-identifying); none are FK-enforced at the DB level in Fabric SQL DB (cross-schema/cross-DB) — validated at the app layer.
+- All EXT_* relationships are read-only joins (dotted, non-identifying); none are FK-enforced at the DB level in Fabric SQL DB (cross-schema `budget`↔`dbo`, or cross-store to the SAP gold warehouse) — validated at the app layer.
 
 ---
 
@@ -323,7 +351,7 @@ Full semantics live in section 4 (Data quality rules). Amounts DECIMAL(18,2) THB
 12 monthly cols m01..m12. Control cols per ADR-0003 / ADR-0005. _updated_at / _load_dttm default
 to T-SQL SYSDATETIME() at the DDL step. Index names shown unquoted for readability.
 
-### 3a. DBML — owned budget.* tables
+### 3a. DBML — owned tables (`budget.*` transactional + `dbo.board_budget` / `dbo.submission_deadline` synced)
 
 ```dbml
 Table budget.pending_budget {
@@ -352,7 +380,7 @@ Table budget.pending_budget {
 }
 
 // board_budget: IDENTICAL layout to pending_budget EXCEPT no status, control = load cols
-Table budget.board_budget {
+Table dbo.board_budget {
   cost_center   nvarchar(20)  [not null]
   gl_account    nvarchar(20)  [not null]
   fiscal_year   int           [not null]
@@ -401,7 +429,10 @@ Table budget.budget_trip {
   trip_id          bigint       [pk, increment]
   cost_center      nvarchar(20) [not null]
   fiscal_year      int          [not null]
-  traveler_empcode nvarchar(20)              // FK to mas_employee_data.empcode (app-validated)
+  traveler_empcode nvarchar(20)              // FK to dbo.v_employee_primary.employee_code (app-validated;
+                                              // VIEW, no hard DB FK) — full-roster view used, NOT
+                                              // v_employee_budget_01, because a traveler may be outside
+                                              // the 497-row budget filter
   traveler_name    nvarchar(200)[not null]   // fullnameth snapshot
   position         nvarchar(150)             // joblevel snapshot; drives per-diem rate
   destination      nvarchar(200)
@@ -458,7 +489,7 @@ Table budget.approval_log {
   }
 }
 
-Table budget.submission_deadline {
+Table dbo.submission_deadline {
   fiscal_year   int          [pk]
   deadline_date date         [not null]   // = DATE(closing_year, closing_month, closing_date) from the Excel master; after this date user Pending is locked (admin override allowed)
   reminder_date date         [not null]   // = DATE(closing_year, closing_month, reminder_day) — SAME month/year as the deadline, day = admin-set reminder_day (e.g. 15); the reminder email fires on this date
@@ -470,19 +501,40 @@ Table budget.submission_deadline {
 ### 3b. DBML — external reference tables (read-only here; verified real names/cols)
 
 Owned elsewhere. Shown so joins are unambiguous. App-layer joins only;
-NO FK enforced in Fabric SQL DB (cross-schema / cross-DB).
+NO FK enforced in Fabric SQL DB (cross-schema `budget`↔`dbo`, or cross-store to the SAP gold warehouse).
 
 ```dbml
-Table dbo.mas_employee_data {
-  email          nvarchar      // company email, mixed-case; match LOWER() both sides
-  empcode        nvarchar
-  poscode        nvarchar      // natural unique key = (empcode, poscode)
-  orgcode        nvarchar      // 7-digit org unit
-  managerempcode nvarchar      // approver1, direct manager
-  division       nvarchar
-  department     nvarchar
-  joblevelnameen nvarchar
-  fullnameth     nvarchar
+// dbo.v_employee_budget_01 — VIEW (read-only, NOT an app table). Project-built FILTERED view
+// over employee_master (Active / drop L5 / drop foreign entity), 497 rows, one row per person.
+// CONFIRMED sole source for RLS (See/Fill) + approver1 resolution (real-data verified 2026-07-15,
+// see §1b) — approver1's employee_code/name/email are DENORMALIZED on the Filler's own row via
+// the manager_* cols, so no secondary manager-row lookup is needed.
+Table dbo.v_employee_budget_01 {
+  employee_code          nvarchar   // one row per person (Primary row only); match LOWER(email) both sides
+  email                  nvarchar   // company email, mixed-case
+  full_name_th           nvarchar
+  job_level_name_en      nvarchar
+  manager_employee_code  nvarchar   // approver1, direct manager (Filler's Primary-row manager)
+  manager_first_name_th  nvarchar
+  manager_last_name_th   nvarchar
+  manager_email          nvarchar   // approver1 email — denormalized here, no secondary lookup
+  is_primary_row         bit
+}
+
+// dbo.v_employee_primary — VIEW (read-only, NOT an app table). Primary-row dedup of the
+// unfiltered 649-row employee_master, 612 rows, ~68 columns total (key/FK-relevant subset shown
+// below). Fallback / full-roster source — NOT for RLS/approval; used only for the trip-subform
+// traveler picker, since a traveler may be outside the 497-row budget filter of v_employee_budget_01.
+Table dbo.v_employee_primary {
+  employee_code          nvarchar   // ~68 cols total on the real view; only FK-relevant subset shown
+  email                  nvarchar
+  full_name_th           nvarchar
+  job_level_name_en      nvarchar
+  manager_employee_code  nvarchar
+  manager_email          nvarchar
+  position_status        nvarchar
+  org_code               nvarchar
+  // ... ~60 more columns not needed for this model's joins
 }
 
 // CC↔Filler map — synced from cc dept.xlsx (ADR-0018/0019) into the DW's Fabric SQL DB, next to
@@ -500,9 +552,12 @@ Table dbo.cc_filler_map {  // [fabric_sql_database].[dbo] in cman-dw-ws — EXPL
   }
 }
 
-// per-diem rate matrix — from ค่าเบี่ยเลี้ยง.xlsx (dedupe the 5× C-Level rows at sync)
+// per-diem rate matrix — from ค่าเบี่ยเลี้ยง.xlsx (dedupe the 5× C-Level rows at sync).
+// KEY VERIFIED 2026-07-15: position (24 rows, live) = employee.job_level_name_en VERBATIM (same
+// vocab incl. (MGR)/(Specialist) suffixes) → direct string JOIN, no mapping table. Only job level
+// with no rate = 'N/A' → fail-loud if an 'N/A' traveler is picked (never silent 0).
 Table dbo.per_diem_rate {
-  position      nvarchar      [pk]   // 12 job levels
+  position      nvarchar      [pk]   // job-level name = v_employee_*.job_level_name_en (24 levels)
   rate_domestic decimal(18,2)        // THB/day; 0/blank = ฿0 (no hide sentinel)
   rate_asian    decimal(18,2)        // USD/day (country_group 'asian')
   rate_other    decimal(18,2)        // USD/day (country_group 'other')
@@ -562,10 +617,10 @@ Table cfg_master.master_currency_rate {
 
 Ref: budget.pending_budget.cost_center        > dbo.gold_sap_m_cost_center.cost_center_id   // app-validated
 Ref: budget.pending_budget.gl_account         > cfg_master.sap_gl_code_ref.code             // app-validated
-Ref: budget.board_budget.cost_center          > dbo.gold_sap_m_cost_center.cost_center_id   // app-validated
-Ref: budget.board_budget.gl_account           > cfg_master.sap_gl_code_ref.code             // app-validated
+Ref: dbo.board_budget.cost_center          > dbo.gold_sap_m_cost_center.cost_center_id   // app-validated
+Ref: dbo.board_budget.gl_account           > cfg_master.sap_gl_code_ref.code             // app-validated
 Ref: budget.pending_budget_detail.trip_id     > budget.budget_trip.trip_id
-Ref: budget.budget_trip.traveler_empcode      > dbo.mas_employee_data.empcode               // app-validated
+Ref: budget.budget_trip.traveler_empcode      > dbo.v_employee_primary.employee_code        // app-validated (VIEW, no hard FK); full-roster view since a traveler may be outside the 497-row budget filter of v_employee_budget_01
 Ref: budget.approval_log.department           > budget.approval_status.department           // (ฝ่าย, year)
 ```
 
@@ -613,7 +668,7 @@ Ref: budget.approval_log.department           > budget.approval_status.departmen
 | approval_log | append-only | — | — | INSERT only; never UPDATE/DELETE. Captures every SUBMIT/APPROVE/REJECT/ADMIN_OVERRIDE with before/after status. |
 | submission_deadline | No | Yes (fiscal_year PK) | one row per year | Source = SharePoint `วันปิดรับข้อมูลงบประมาณ.xlsx` (5 cols: `fiscal year, closing date, closing month, closing year, reminder_day` — all TEXT, sync casts to int). Derive `deadline_date = DATE(closing_year, closing_month, closing_date)` and `reminder_date = DATE(closing_year, closing_month, reminder_day)` — the reminder reuses the deadline's month+year, day from `reminder_day` (confirmed 2026-07-13). Validate `reminder_day < closing_date`. After deadline_date — AND for ALL past fiscal years once the cycle rolls forward to the next planning year (**year rollover, confirmed 2026-07-14**): user Pending (pending_budget) writes are LOCKED = **read-only for Fillers/users**. **Admin can still edit ANY Pending freely — no approval step, status unchanged (ADR-0012 / ADR-0013) — including past-year Pending.** board_budget import NOT locked. Auto-submit/reminder automation uses ONLY the current planning year's row (past-year rows may be placeholder). **Reminder email** (fires on `reminder_date`, Phase-1): sent to the Fillers of ฝ่าย still in DRAFT (NOT yet submitted) for the planning year — one email per Filler listing THEIR still-pending ฝ่าย (a Filler spanning many ฝ่าย gets ONE grouped email; already-submitted ฝ่าย are excluded, no spam); via Graph sendMail (`send_signoff_email.py` pattern). |
 | _user / _updated_at (control) | No | — | — | Set on every write — audit without a separate audit table. |
-| Email match (auth/RLS join) | — | — | — | Match mas_employee_data.email case-insensitively (LOWER()); use company email col, not pemail. |
+| Email match (auth/RLS join) | — | — | — | Match `dbo.v_employee_budget_01.email` case-insensitively (LOWER()) — CONFIRMED source, 2026-07-15 (see §1b); use company email col, not pemail. |
 
 ---
 
@@ -695,8 +750,10 @@ the other groups, Travelling does NOT swap a `meta_json` dropdown by GL. It is m
   the per-line `gl_account` still encodes type+side but is constrained to the trip's side.
   (ADR-0005's per-line-side flexibility is intentionally NOT used — mixed-side trips do not exist.)
 - **Per-diem** (`is_auto_calc=1`): amount = `days × rate(position, country_group) × FX`, split
-  evenly across `travel_months` (last month absorbs rounding). Rate from the per-diem matrix
-  (Position × group); `country_group` 1 domestic THB (no FX) / 2 asian USD / 3 other USD; FX from
+  evenly across `travel_months` (last month absorbs rounding). Rate matched by
+  `per_diem_rate.position = traveler.job_level_name_en` (VERIFIED 2026-07-15: verbatim key, no
+  mapping table; traveler pulled from `v_employee_primary`; a `job_level_name_en='N/A'` traveler has
+  no rate → **fail-loud**, never silent 0); `country_group` 1 domestic THB (no FX) / 2 asian USD / 3 other USD; FX from
   `master_currency_rate` by fiscal_year (groups 2/3 only). See §4 DQ rows `is_auto_calc`,
   `country_group`, `travel_months`.
 - **Other 3 types:** manual amount per selected travel month; months outside `travel_months` are
@@ -848,10 +905,10 @@ ADR-0019), GL list = all 137 (Tier-1 "used before" sort applies).
    lives in app routing (NOT schema). Email-notification triggers tied to these transitions are
    deferred (no tables here).
 
-6. master_currency_rate does not exist yet (module 09 deferred). The per-diem auto-calc in
-   pending_budget_detail depends on it (fiscal_year PK, FY2026 = 34.20). Until created, per-diem
-   auto-calc cannot run for FX groups (2/3). Confirm module-09 delivery before the Travelling subform
-   is built, or stub a constant. Domestic (group 1) is unaffected.
+6. `dbo.master_currency_rate` EXISTS (live in `fabric_sql_database.dbo`, confirmed 2026-07-15;
+   fiscal_year PK, e.g. FY2026 = 34.20). The per-diem auto-calc in pending_budget_detail reads it for
+   FX groups (2/3); a missing FX year → **fail-loud** (ADR-0015), never a constant fallback. Domestic
+   (group 1) needs no FX.
 
 7. Multi-owner CC concurrency. ADR-0003 = last-write-wins at the (cc, gl, year) row and
    last-submitter-wins at approval. Two users owning the same CC can silently overwrite each other.

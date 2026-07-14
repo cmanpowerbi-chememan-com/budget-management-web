@@ -58,7 +58,7 @@ Two options were grilled 2026-07-11:
   the DW dev-repo no longer tracks (it plans to rename gold → `sap_gl_trans`, currently
   dormant). Confirm the refresh owner/job with the DW team before prod dependence.
 - **The FastAPI backend merges** that aggregate with `budget.pending_budget` /
-  `budget.board_budget` on `(cost_center, gl_account, fiscal_year)` in app code —
+  `dbo.board_budget` on `(cost_center, gl_account, fiscal_year)` in app code —
   the same split-connection pattern the deployed master-tables backend already uses
   (`get_lakehouse_conn()` separate from the transactional connection).
 - **Service-principal access**: `cman-fabric-write` needs at least Viewer on workspace

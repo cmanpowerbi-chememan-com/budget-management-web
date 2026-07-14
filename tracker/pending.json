@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-13T23:16:37+0700",
+  "updated": "2026-07-14T23:44:43+0700",
   "tasks": [
+    {
+      "id": "db-consolidation-single-fabric-sql",
+      "state": "done",
+      "created": "2026-07-14T23:44:43+0700",
+      "updated": "2026-07-14T23:44:43+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "Consolidated 2-DB split into 1 Fabric SQL DB 'fabric_sql_database' (DW ws adeb7108): budget.*=5 transactional, dbo.*=synced masters+board+deadline+employee. DB1 budget_management_web(036a3270) RETIRED; env re-point needed (not applied). ADR-0023 created; DDL db/ddl/budget_transactional_tables.sql targets budget schema (NOT run); docs reconciled to one-DB two-schema. Read path board+pending+cc_filler=local cross-schema JOIN, only SAP cross-store. BLOCKED-on: jakkaritw run DDL, verify 5 tables in budget schema.",
+      "human": "รวมเหลือ DB เดียว fabric_sql_database: budget schema=5 ตาราง transactional, dbo=masters; DB1 เลิกใช้; รอ jakkaritw รัน DDL"
+    },
     {
       "id": "gridgeist-0002-3",
       "state": "done",
