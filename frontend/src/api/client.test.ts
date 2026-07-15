@@ -90,4 +90,30 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/budget/rows')).rejects.toMatchObject({ status: 400, detail: undefined })
   })
+
+  it('maps a department_locked 403 (A10 gap close) to a specific Thai message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, { detail: 'ฝ่ายบัญชี/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked' }),
+      ),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 403,
+      message: 'ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้',
+    })
+  })
+
+  it('keeps the generic forbidden Thai message for a plain (non-department-locked) 403', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(403, { detail: 'CC1 is not in your Fill scope' })),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 403,
+      message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้',
+    })
+  })
 })

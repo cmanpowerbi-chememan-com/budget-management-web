@@ -22,6 +22,7 @@ from app.approval import (
     approve_department,
     authorize_status_view,
     get_approval_status,
+    list_departments_pending_my_approval,
     reject_department,
     resolve_submitter,
     submit_department,
@@ -106,6 +107,14 @@ class RejectBody(DepartmentYearBody):
     reason: str
 
 
+class PendingForMeResponse(BaseModel):
+    """A10 รออนุมัติ badge data source — department NAMES only (the caller is
+    by definition the frozen approver of each one, so no extra field leaks
+    anything they should not already know)."""
+
+    departments: list[str]
+
+
 def _run(action: Callable[[], _T]) -> _T:
     try:
         return action()
@@ -147,6 +156,22 @@ def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
             state = reject_department(conn, body.department, body.fiscal_year, email, body.reason)
             _notify_after_transition(conn, "reject", state)
             return state
+
+    return _run(_action)
+
+
+@router.get("/pending-for-me", response_model=PendingForMeResponse)
+def pending_for_me(fiscal_year: int = Query(...), email: str = Depends(get_current_user_email)):
+    """A10 ฝ่าย-picker รออนุมัติ badge: every department whose current
+    PENDING_* step, for `fiscal_year`, is frozen to the caller. No
+    authorization check beyond identity — a caller only ever gets back
+    departments where THEY are the frozen approver, never another
+    department's data."""
+
+    def _action():
+        with get_fabric_conn() as conn:
+            departments = list_departments_pending_my_approval(conn, fiscal_year, email)
+            return PendingForMeResponse(departments=departments)
 
     return _run(_action)
 

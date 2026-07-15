@@ -841,6 +841,28 @@ def fetch_pending_rows(conn: pyodbc.Connection, fiscal_year: int) -> list[dict]:
     return [dict(zip(_STATUS_COLUMNS, row)) for row in rows]
 
 
+def list_departments_pending_my_approval(
+    conn: pyodbc.Connection, fiscal_year: int, caller_email: str
+) -> list[str]:
+    """A10 รออนุมัติ badge data source (`GET /approval/pending-for-me`):
+    every department whose CURRENT PENDING_* step, for `fiscal_year`, is
+    frozen to `caller_email`. Reuses `fetch_pending_rows` (already built for
+    `jobs/auto_escalate.py`'s discovery pass) + `_to_state`'s `can_act`
+    computation — one extra `resolve_submitter` lookup for the caller's own
+    empcode, no new SQL shape. A caller not found in the employee view (no
+    empcode) can never be a frozen approver, so it short-circuits to an
+    empty list without even querying `approval_status`."""
+    caller_empcode, _ = resolve_submitter(conn, caller_email)
+    if caller_empcode is None:
+        return []
+    rows = fetch_pending_rows(conn, fiscal_year)
+    return [
+        row["department"]
+        for row in rows
+        if _to_state(row, row["department"], row["fiscal_year"], caller_empcode).can_act
+    ]
+
+
 def reject_department(
     conn: pyodbc.Connection, department: str, fiscal_year: int, rejecter_email: str, reason: str
 ) -> ApprovalStatusState:

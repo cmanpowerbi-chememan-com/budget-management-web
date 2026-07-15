@@ -4,10 +4,13 @@ A4 main-table read path (`GET /budget`), A5 budget write path
 approval engine (`POST /approval/submit|approve|reject`, `GET /approval/status`),
 A8 reference-data pickers (`GET /budget/gl-accounts`, `GET /scope/departments`),
 A9 subform read-only support (`GET /budget/detail`, `GET /budget/trip`).
+A10 approval UI support (`GET /approval/pending-for-me`) + SharePoint
+attachments (`GET /attachments`, `POST /attachments/upload`,
+`GET /attachments/download-url`).
 """
 from fastapi import FastAPI
 
-from app.routers import approval, budget, budget_write, health, me, reference, scope, subform
+from app.routers import approval, attachments, budget, budget_write, health, me, reference, scope, subform
 
 app = FastAPI(title="Budget Management Web API")
 
@@ -19,3 +22,4 @@ app.include_router(budget_write.router)
 app.include_router(approval.router)
 app.include_router(reference.router)
 app.include_router(subform.router)
+app.include_router(attachments.router)

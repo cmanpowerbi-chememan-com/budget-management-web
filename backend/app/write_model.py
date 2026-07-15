@@ -45,6 +45,15 @@ Design (see final report for the full rationale):
 - **Deadline lock:** every write entry point rejects non-admin writes to a
   past-deadline `fiscal_year` via the shared check in `app/deadline.py`,
   raising `past_deadline` (403).
+- **Department-approval lock (A10 gap close, ADR-0006/0008/0012/0013):** every
+  write entry point also rejects non-admin writes to a `(department,
+  fiscal_year)` that is mid-approval (`PENDING_APPROVER1/2/3`) or already
+  `APPROVED` in `budget.approval_status` — only Submit/Approve/Reject may move
+  status (ADR-0013), so a live edit while locked would silently change numbers
+  the approval already covers. Admin bypasses entirely (ADR-0012). Department
+  is resolved from the row's cost_center via `dbo.cc_filler_map` (reusing the
+  same dims already looked up for `pending_budget`/`pending_budget_detail`
+  writes where available, see `_ensure_department_not_locked`).
 """
 import json
 from datetime import datetime, timezone
@@ -54,6 +63,7 @@ from typing import Literal
 import pyodbc
 from pydantic import BaseModel, Field, field_validator
 
+from app.approval import APPROVED, PENDING_STATUSES
 from app.deadline import PastDeadlineError, is_post_deadline
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError, derive_per_diem
 from app.rls import Scope
@@ -178,6 +188,16 @@ class DataOverflowError(ValueError):
     surface as an uncaught 500 or block the rest of the batch)."""
 
 
+class DepartmentLockedError(PermissionError):
+    """A10 gap close (ADR-0006/0008/0012/0013): a non-admin tried to edit a
+    row whose `(department, fiscal_year)` is currently mid-approval
+    (`PENDING_APPROVER1/2/3` in `budget.approval_status`) or already
+    `APPROVED`. Only Submit/Approve/Reject may move approval status
+    (ADR-0013) — a live edit while locked would silently change numbers the
+    approval chain already covers. Admin bypasses this gate entirely
+    (ADR-0012: "Admin can EDIT any CC's Pending, always")."""
+
+
 # HTTP status per error code — the single source of truth the router reads
 # (per_diem's fail-loud errors are 5xx: a missing FX/rate year is an app data
 # problem, never the caller's fault, and must never look like a 4xx typo).
@@ -198,6 +218,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "conflict": 409,
     "data_overflow": 400,
     "past_deadline": 403,
+    "department_locked": 403,
     "missing_per_diem_rate": 500,
     "missing_fx_rate": 500,
 }
@@ -219,6 +240,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     RowConflictError: "conflict",
     DataOverflowError: "data_overflow",
     PastDeadlineError: "past_deadline",
+    DepartmentLockedError: "department_locked",
 }
 _CAUGHT_PER_ITEM = tuple(_ERROR_CODE_BY_EXCEPTION)  # never includes the per_diem fail-loud errors — those propagate
 
@@ -356,6 +378,77 @@ def _derive_dim_snapshot(conn: pyodbc.Connection, cost_center: str, gl_account: 
     return {"gl_name": gl_name, "gl_group": gl_group, **dims}
 
 
+# Locked once a department's approval record has left DRAFT/REJECTED for this
+# fiscal_year — mid-chain (PENDING_APPROVER1/2/3) or fully signed off
+# (APPROVED). DRAFT/REJECTED and "no row yet" (never submitted) are NOT
+# locked — matches ADR-0013's edit-rights-by-status table exactly.
+_LOCKED_APPROVAL_STATUSES: frozenset[str] = PENDING_STATUSES | {APPROVED}
+
+
+def _lookup_department_approval_status(conn: pyodbc.Connection, department: str, fiscal_year: int) -> str | None:
+    """Current `budget.approval_status.status` for `(department, fiscal_year)`,
+    or `None` if no row exists yet (nothing has ever been submitted -> not
+    locked, same "missing row" policy as `is_post_deadline`)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT status FROM budget.approval_status WHERE department = ? AND fiscal_year = ?",
+            department, fiscal_year,
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return row[0] if row else None
+
+
+_UNRESOLVED_DEPARTMENT = object()  # sentinel: "caller has no pre-resolved department" (NOT the same as `None`,
+# which means "already looked up and there genuinely is none" — using `None`
+# as the default here would make the two cases indistinguishable and cause a
+# redundant re-query of `dbo.cc_filler_map` whenever a cost_center's
+# department is legitimately unresolved).
+
+
+def _ensure_department_not_locked(
+    conn: pyodbc.Connection, cost_center: str, fiscal_year: int, scope: Scope, *, department: str | None = _UNRESOLVED_DEPARTMENT,
+) -> None:
+    """A10 gap close (ADR-0006/0008/0012/0013): once a department's budget is
+    mid-approval or already APPROVED, a non-admin must not be able to edit any
+    of that department's cells out from under the approvers or after sign-off
+    — only Submit/Approve/Reject may move status (ADR-0013), so a live edit
+    while locked would silently change numbers the approval already covers.
+
+    Admin bypasses this gate entirely, checked FIRST so no lookup runs at all
+    for admin (ADR-0012: "Admin can EDIT any CC's Pending, always"; ADR-0013:
+    admin editing an APPROVED department stays APPROVED, no re-review).
+
+    `department` may be passed pre-resolved — `_save_one_pending_row`/
+    `_save_one_detail_line` already call `_derive_dim_snapshot` for this same
+    cost_center, so reusing its `dims["department"]` (even when that value is
+    `None`) avoids a redundant `dbo.cc_filler_map` round trip. When omitted
+    entirely, this resolves it itself via `_lookup_cc_dims` (trip save/delete
+    and detail-line delete have no dims computed yet at this point in their
+    flow).
+
+    Unknown CC->department mapping (`department` resolves to `None`): treated
+    as "not locked" rather than inventing a new failure mode. This cannot
+    currently be reached by a non-admin — their Fill scope is itself derived
+    from `dbo.cc_filler_map`, so any cost_center they may address already has
+    a department row — but is flagged here as the chosen fail-open behavior
+    for that edge, mirroring `is_post_deadline`'s own "missing row is OPEN"
+    policy elsewhere in this module."""
+    if scope.is_admin:
+        return
+    if department is _UNRESOLVED_DEPARTMENT:
+        department = _lookup_cc_dims(conn, cost_center)["department"]
+    if department is None:
+        return
+    status = _lookup_department_approval_status(conn, department, fiscal_year)
+    if status in _LOCKED_APPROVAL_STATUSES:
+        raise DepartmentLockedError(
+            f"{department}/{fiscal_year} is {status} — mid-approval or approved, editing is locked"
+        )
+
+
 def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
     """Process each item of a batch independently: known business exceptions
     become a failed result (never abort the batch); anything else propagates.
@@ -463,6 +556,7 @@ def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_em
     total_year = sum(months)  # D6: already-quantized Decimals — exact, no extra rounding needed
     now = _now()
 
+    _ensure_department_not_locked(conn, row.cost_center, row.fiscal_year, scope, department=dims["department"])
     _ensure_not_post_deadline(conn, row.fiscal_year, scope)
 
     cursor = conn.cursor()
@@ -799,6 +893,7 @@ def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_e
     now = _now()
     meta_json_str = json.dumps(cleaned_meta, ensure_ascii=False) if cleaned_meta else None
 
+    _ensure_department_not_locked(conn, line.cost_center, line.fiscal_year, scope, department=dims["department"])
     _ensure_not_post_deadline(conn, line.fiscal_year, scope)
 
     cursor = conn.cursor()
@@ -1099,7 +1194,9 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
 
     # Checked once, right before the FIRST write of this function — covers
     # create, update, AND the side-flip path below (all reached only after
-    # this point), so a blocked past-deadline trip never touches the DB.
+    # this point), so a blocked past-deadline/locked-department trip never
+    # touches the DB.
+    _ensure_department_not_locked(conn, trip.cost_center, trip.fiscal_year, scope)
     _ensure_not_post_deadline(conn, trip.fiscal_year, scope)
 
     cursor = conn.cursor()
@@ -1256,6 +1353,7 @@ def _delete_one_detail_line(
 
     _ensure_not_excluded(cost_center)
     _ensure_write_scope(cost_center, scope, conn)
+    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
     _ensure_not_post_deadline(conn, fiscal_year, scope)
 
     cursor = conn.cursor()
@@ -1318,6 +1416,7 @@ def _delete_one_trip(
 
     _ensure_not_excluded(cost_center)
     _ensure_write_scope(cost_center, scope, conn)
+    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
     _ensure_not_post_deadline(conn, fiscal_year, scope)
 
     cursor = conn.cursor()

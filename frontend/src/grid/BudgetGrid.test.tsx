@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
 import { ApiError } from '../api/client'
+import * as approvalApi from '../api/approval'
 import * as budgetApi from '../api/budget'
 import * as subformApi from '../api/subform'
 import { BudgetGrid } from './BudgetGrid'
@@ -10,6 +11,7 @@ import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
 
 vi.mock('../api/budget')
 vi.mock('../api/subform')
+vi.mock('../api/approval')
 
 function makeRow(cc: string, gl: string, overrides: Partial<BudgetRow> = {}): BudgetRow {
   return makeRowFromOverrides({ cost_center: cc, gl_account: gl, editable: true, ...overrides })
@@ -33,8 +35,16 @@ const DEPARTMENTS = [
 ]
 
 describe('BudgetGrid', () => {
+  beforeEach(() => {
+    // A10 รออนุมัติ badge — called unconditionally on every mount/year
+    // change, so every test needs a default (most tests are not testing
+    // the badge itself and just need this to resolve quietly).
+    vi.mocked(approvalApi.fetchPendingForMe).mockResolvedValue({ departments: [] })
+  })
+
   afterEach(() => {
     vi.resetAllMocks()
+    window.sessionStorage.clear() // admin-mode-toggle tests persist here (A10)
   })
 
   it('loads and renders all 3 layers for a fetched row', async () => {
@@ -128,6 +138,13 @@ describe('BudgetGrid', () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
     vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2029, status: 'DRAFT',
+      submitter_empcode: null, submitter_email: null, submitted_at: null,
+      approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+      reject_reason: null, rejected_by_empcode: null, updated_at: null,
+      current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+    })
 
     render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: 'Solution Delivery', year: 2029 }} />)
 
@@ -195,5 +212,70 @@ describe('BudgetGrid', () => {
 
     expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
     expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
+  })
+
+  it('shows the no-scope empty state and never calls the budget/departments endpoints (A10 scope-role UX)', async () => {
+    const NONE_SCOPE: ScopeState = { role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [], loading: false, error: null }
+
+    render(<BudgetGrid scope={NONE_SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    expect(await screen.findByTestId('no-scope-empty-state')).toHaveTextContent('ดูข้อมูลได้ที่ Dashboard')
+    expect(budgetApi.fetchDepartments).not.toHaveBeenCalled()
+    expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalled()
+  })
+
+  it('shows the รออนุมัติ badge on the ฝ่าย picker when the caller is the current approver for it', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(approvalApi.fetchPendingForMe).mockResolvedValue({ departments: ['Solution Delivery'] })
+
+    render(<BudgetGrid scope={{ ...SCOPE, role: 'see_only', fillCostCenters: [] }} initialFilter={{ dept: 'Solution Delivery', year: null }} />)
+
+    await waitFor(() => expect(screen.getByTestId('dept-picker-pending-badge')).toBeInTheDocument())
+  })
+
+  it('a dual-role admin gets an admin-mode toggle that switches admin_view_enabled', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: null, year: null }} />)
+
+    const toggle = await screen.findByTestId('admin-mode-checkbox')
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenLastCalledWith(false))
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenLastCalledWith(true))
+    await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenLastCalledWith(expect.objectContaining({ adminViewEnabled: true })))
+  })
+
+  it('resets the selected ฝ่าย to null when the admin-mode toggle switches (ADR-0014)', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: 'Solution Delivery', year: null }} />)
+
+    const toggle = await screen.findByTestId('admin-mode-checkbox')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeInTheDocument())
+  })
+
+  it('a non-admin, non-dual-role user never sees the admin-mode toggle', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
+    expect(screen.queryByTestId('admin-mode-checkbox')).not.toBeInTheDocument()
   })
 })

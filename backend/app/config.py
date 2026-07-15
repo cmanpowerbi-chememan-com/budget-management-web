@@ -68,6 +68,20 @@ class Settings(BaseSettings):
     # is the intended production domain, not a live URL today.
     app_base_url: str = _DEFAULT_APP_BASE_URL
 
+    # A10 attachments (R1, docs/specs/budget-transactional-data-model.md §4b) —
+    # SharePoint site/library/root-folder for `เอกสาร ฝ่าย/<ฝ่าย>/<year>/`.
+    # These are NOT a guess: site `CMANDWPRD` / library `Budgeting and
+    # Management` / folder `เอกสาร ฝ่าย` were confirmed 2026-07-13 (spec §4b,
+    # ADR-0018) — the same site/library the 8 admin-master Excel syncs use.
+    # Kept as overridable settings (never hardcoded in attachments.py) so a
+    # wrong value can be corrected via env without a code change; a blank
+    # override still fails loud via AttachmentsNotConfiguredError rather than
+    # silently guessing a location (see app/attachments.py).
+    attachments_site_hostname: str = "chememan.sharepoint.com"
+    attachments_site_name: str = "CMANDWPRD"
+    attachments_library_name: str = "Budgeting and Management"
+    attachments_root_folder: str = "เอกสาร ฝ่าย"
+
     @property
     def is_local(self) -> bool:
         return self.app_env.strip().lower() == "local"

@@ -48,4 +48,43 @@ describe('DeptPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
     expect(screen.getByText(/ไม่พบฝ่าย/)).toBeInTheDocument()
   })
+
+  it('shows a รออนุมัติ badge on the trigger when the selected department is pending the caller\'s approval', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected="Solution Delivery"
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+      />,
+    )
+    expect(screen.getByTestId('dept-picker-pending-badge')).toBeInTheDocument()
+  })
+
+  it('does not show the badge when the selected department is not pending', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected="Solution Delivery"
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Budgeting and Management Accounting'])}
+      />,
+    )
+    expect(screen.queryByTestId('dept-picker-pending-badge')).not.toBeInTheDocument()
+  })
+
+  it('shows a รออนุมัติ badge next to each pending department in the list', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected={null}
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const row = screen.getByText('Solution Delivery').closest('button')
+    expect(row).not.toBeNull()
+    expect(row!.textContent).toContain('รออนุมัติ')
+  })
 })

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AdminModeToggle } from '../admin/AdminModeToggle'
+import { useAdminViewToggle } from '../admin/useAdminViewToggle'
+import { fetchPendingForMe } from '../api/approval'
 import { ApiError } from '../api/client'
 import { fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
+import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
+import { ApprovalActionBar } from '../approval/ApprovalActionBar'
+import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
 import { DetailSubform } from '../subform/DetailSubform'
@@ -50,21 +56,43 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // button (GridTable). `null` = none open.
   const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string } | null>(null)
   const [tripManagerOpenFor, setTripManagerOpenFor] = useState<string | null>(null) // cost_center, or null
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false)
+  const [pendingApprovalDepartments, setPendingApprovalDepartments] = useState<Set<string>>(new Set())
 
   // Pure admins (ADR-0014: no base actor role, so no toggle — always
-  // admin-wide) vs dual-role overlay admins (toggle deferred to A10, so
-  // they stay scoped like a normal user in A8). See final report for the
-  // full rationale.
+  // admin-wide). Dual-role admins (is_admin AND some Fill/See scope, e.g.
+  // Nipaporn/Waraporn) get an explicit "โหมด Admin" toggle, default OFF
+  // (A10) — the ONE state this component threads everywhere admin-wide vs
+  // personal scope matters (read, picker, approve/reject visibility).
   const isPureAdmin = scope.isAdmin && scope.fillCostCenters.length === 0 && scope.seeCostCenters.length === 0
+  const isDualRoleAdmin = scope.isAdmin && !isPureAdmin
+  const [adminModeOn, setAdminModeOn] = useAdminViewToggle()
+  const adminViewEnabled = isPureAdmin || (isDualRoleAdmin && adminModeOn)
 
-  // Reference data (GL master + department hierarchy) loads once. The
-  // deep-link ฝ่าย (ADR-0016) is only applied once, the first time the
-  // real hierarchy arrives — it must be validated against the caller's
-  // ACTUAL scope, never taken on faith (convenience-only, never a bearer
-  // of access).
+  // No-scope empty state (A10 scope-role UX): a caller with no admin, no
+  // Fill, and no See has nothing to do on this page — show a friendly Thai
+  // message instead of an empty toolbar/grid. `see_only` (e.g. a manager
+  // who is nobody's Filler but may still be an approver) keeps the full
+  // page, per the brief.
+  const hasNoScope = scope.role === 'none'
+
+  function handleAdminModeToggle(next: boolean) {
+    setAdminModeOn(next)
+    // ADR-0014: switching hats resets the locked ฝ่าย — scope differs
+    // between "my ฝ่าย" and "every ฝ่าย".
+    setDepartment(null)
+  }
+
+  // Reference data (GL master + department hierarchy) loads once, then
+  // again whenever the admin hat toggles (admin-wide vs personal scope
+  // changes the department list itself). The deep-link ฝ่าย (ADR-0016) is
+  // only applied once, the first time the real hierarchy arrives — it must
+  // be validated against the caller's ACTUAL scope, never taken on faith
+  // (convenience-only, never a bearer of access).
   useEffect(() => {
+    if (hasNoScope) return
     fetchGlAccounts().then(setGlRef).catch(() => setGlRef([]))
-    fetchDepartments(isPureAdmin)
+    fetchDepartments(adminViewEnabled)
       .then((data) => {
         setDepartments(data)
         if (!deptResolved) {
@@ -74,13 +102,32 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       })
       .catch(() => setDepartments([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [adminViewEnabled, hasNoScope])
+
+  // A10 รออนุมัติ badge (ADR-0016): departments where the caller is the
+  // current approver, refetched whenever the planning year changes and
+  // after any submit/approve/reject action (ApprovalActionBar's onChanged).
+  async function loadPendingApprovals() {
+    if (hasNoScope) return
+    try {
+      const result = await fetchPendingForMe(year)
+      setPendingApprovalDepartments(new Set(result.departments))
+    } catch {
+      setPendingApprovalDepartments(new Set()) // never blocks the page — badge just stays empty
+    }
+  }
+
+  useEffect(() => {
+    loadPendingApprovals()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, hasNoScope])
 
   async function loadGrid() {
+    if (hasNoScope) return
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchBudgetGrid({ year, department: department ?? undefined, adminViewEnabled: isPureAdmin })
+      const data = await fetchBudgetGrid({ year, department: department ?? undefined, adminViewEnabled })
       setRows(data)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
@@ -93,12 +140,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   useEffect(() => {
     loadGrid()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, department])
+  }, [year, department, adminViewEnabled])
 
   const fillCostCenters = useMemo(
     () => (isPureAdmin ? [...new Set(departments.map((d) => d.cost_center))] : scope.fillCostCenters),
     [isPureAdmin, departments, scope.fillCostCenters],
   )
+
+  const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
+  const selectedDeptCostCenterCount = department !== null ? costCentersOfDepartment(departments, department).length : 0
+  const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
 
   async function handleCommitMonth(row: BudgetRow, month: MonthKey, value: number) {
     const key = rowKey(row.cost_center, row.gl_account)
@@ -180,18 +231,46 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  if (hasNoScope) {
+    return (
+      <div className="budget-grid">
+        <div className="grid-empty" data-testid="no-scope-empty-state">
+          คุณไม่มีสิทธิ์กรอกงบประมาณ — ดูข้อมูลได้ที่ Dashboard
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="budget-grid">
       <div className="grid-toolbar">
         <YearPicker year={year} onChange={setYear} />
-        <DeptPicker rows={departments} selected={department} onSelect={setDepartment} />
+        <DeptPicker rows={departments} selected={department} onSelect={setDepartment} pendingApprovalDepartments={pendingApprovalDepartments} />
         <AddTransactionForm
           fillCostCenters={fillCostCenters}
           glRef={glRef}
           existingRows={rows}
           onAdd={handleAddTransaction}
         />
+        {department && (
+          <button type="button" className="btn btn-attach" onClick={() => setAttachmentsOpen(true)}>
+            แนบไฟล์
+          </button>
+        )}
+        {isDualRoleAdmin && <AdminModeToggle enabled={adminModeOn} onChange={handleAdminModeToggle} />}
       </div>
+
+      {department && (
+        <ApprovalActionBar
+          department={department}
+          fiscalYear={year}
+          isFillerOfDept={isFillerOfSelectedDept}
+          adminViewEnabled={adminViewEnabled}
+          rowCount={rows.length}
+          costCenterCount={selectedDeptCostCenterCount}
+          onChanged={loadPendingApprovals}
+        />
+      )}
 
       {error && (
         <div className="grid-error" role="alert">
@@ -228,6 +307,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
       {tripManagerOpenFor && (
         <TripManager costCenter={tripManagerOpenFor} fiscalYear={year} onClose={() => setTripManagerOpenFor(null)} onSaved={loadGrid} />
+      )}
+
+      {attachmentsOpen && department && (
+        <AttachmentsModal
+          department={department}
+          fiscalYear={year}
+          canUpload={canUploadAttachments}
+          onClose={() => setAttachmentsOpen(false)}
+        />
       )}
     </div>
   )

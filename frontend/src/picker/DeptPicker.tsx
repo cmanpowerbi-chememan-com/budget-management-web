@@ -6,14 +6,21 @@ export interface DeptPickerProps {
   rows: DepartmentRow[]
   selected: string | null
   onSelect: (department: string) => void
+  /** A10 รออนุมัติ badge (ADR-0016) — departments where the CALLER is the
+   * current approver, from `GET /approval/pending-for-me`. Optional: absent
+   * (or empty) simply shows no badges, never an error. */
+  pendingApprovalDepartments?: Set<string>
 }
 
 /** ฝ่าย picker — สายงาน › ฝ่าย (count) › Cost Center (count) hierarchy,
  * locking the main grid to one (ฝ่าย, year) = the approval unit
  * (ADR-0008/0019). Mirrors the mockup's `.faip` component: a trigger
  * button opens a searchable panel grouped by division, each department row
- * showing its CC count. */
-export function DeptPicker({ rows, selected, onSelect }: DeptPickerProps) {
+ * showing its CC count; a department the caller must approve right now
+ * gets a "รออนุมัติ" pill (A10). */
+export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartments }: DeptPickerProps) {
+  const pending = pendingApprovalDepartments ?? new Set<string>()
+  const selectedIsPending = selected !== null && pending.has(selected)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const divisions = useMemo(() => buildDeptHierarchy(rows), [rows])
@@ -33,6 +40,11 @@ export function DeptPicker({ rows, selected, onSelect }: DeptPickerProps) {
         aria-expanded={open}
       >
         {selected ?? '— เลือกฝ่าย —'}
+        {selectedIsPending && (
+          <span className="pp wait" data-testid="dept-picker-pending-badge">
+            รออนุมัติ
+          </span>
+        )}
       </button>
       {open && (
         <div className="dept-picker-panel">
@@ -61,6 +73,7 @@ export function DeptPicker({ rows, selected, onSelect }: DeptPickerProps) {
                       onClick={() => pick(dept.department)}
                     >
                       <span className="dept-picker-name">{dept.department}</span>
+                      {pending.has(dept.department) && <span className="pp wait">รออนุมัติ</span>}
                       <span className="dept-picker-cc-count">{dept.costCenters.length} CC</span>
                     </button>
                   ))}

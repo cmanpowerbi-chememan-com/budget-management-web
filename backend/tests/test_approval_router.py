@@ -311,6 +311,50 @@ def test_reject_notifies_the_last_submitter(client):
     assert mock_notify.call_args.kwargs["reason"] == "bad numbers"
 
 
+def test_pending_for_me_401_without_auth(client):
+    response = client.get("/approval/pending-for-me", params={"fiscal_year": FY})
+    assert response.status_code == 401
+
+
+def test_pending_for_me_returns_department_list(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.list_departments_pending_my_approval", return_value=[DEPT, "Warehouse PB"]
+    ) as mock_list:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-for-me", params={"fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json() == {"departments": [DEPT, "Warehouse PB"]}
+    assert mock_list.call_args.args[1] == FY
+    assert mock_list.call_args.args[2] == "manager@chememan.com"
+
+
+def test_pending_for_me_empty_list_when_caller_is_not_a_current_approver(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.list_departments_pending_my_approval", return_value=[]
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-for-me", params={"fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json() == {"departments": []}
+
+
+def test_pending_for_me_db_failure_maps_to_502(client):
+    import pyodbc
+
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.list_departments_pending_my_approval", side_effect=pyodbc.Error("boom")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-for-me", params={"fiscal_year": FY})
+
+    assert response.status_code == 502
+
+
 def test_submit_mid_chain_admin_overwrite_maps_to_409(client):
     """B2 gate fix: the new fail-closed guard's error must map to 409, same
     as the other approval-conflict cases."""

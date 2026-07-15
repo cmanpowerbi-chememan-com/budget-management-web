@@ -226,6 +226,47 @@ export interface TripListItem {
   per_diem_error: string | null
 }
 
+/** `GET/POST /approval/*` state (`app.approval.ApprovalStatusState`) — one
+ * `(department, fiscal_year)` approval record. `status=DRAFT` with every
+ * other field `null` means "never submitted" (no DB row yet), not a 404. */
+export interface ApprovalStatusState {
+  department: string
+  fiscal_year: number
+  status: 'DRAFT' | 'PENDING_APPROVER1' | 'PENDING_APPROVER2' | 'PENDING_APPROVER3' | 'APPROVED' | 'REJECTED'
+  submitter_empcode: string | null
+  submitter_email: string | null
+  submitted_at: string | null
+  approver1_empcode: string | null
+  approver1_actioned_at: string | null
+  approver2_actioned_at: string | null
+  approver3_actioned_at: string | null
+  reject_reason: string | null
+  rejected_by_empcode: string | null
+  updated_at: string | null
+  current_position: 1 | 2 | 3 | null
+  current_approver_empcode: string | null
+  can_act: boolean
+  notification_warning: string | null
+}
+
+/** `GET /approval/pending-for-me` (`routers/approval.PendingForMeResponse`)
+ * — the รออนุมัติ badge data source: departments where the CALLER is the
+ * frozen current approver, for one fiscal_year. */
+export interface PendingForMeResponse {
+  departments: string[]
+}
+
+/** `GET/POST /attachments*` (`routers/attachments.py`) — SharePoint file
+ * metadata, no local DB row (the folder path is the index, spec R1). */
+export interface AttachmentInfo {
+  item_id: string
+  name: string
+  size: number
+  created_by: string | null
+  created_at: string | null
+  web_url: string | null
+}
+
 /** `PUT /budget/rows` success response (`write_model.PendingRowState`). */
 export interface PendingRowState {
   cost_center: string

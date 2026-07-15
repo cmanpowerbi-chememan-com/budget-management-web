@@ -20,7 +20,10 @@ export class ApiError extends Error {
    * backend never returns a machine error *code* over the wire (only an
    * HTTP status + a human detail string), so callers must not assume a
    * fixed set of `detail` values; an unrecognised one is just displayed
-   * as-is (never a crash). `undefined` when the body was empty/unparsable. */
+   * as-is (never a crash). `undefined` when the body was empty/unparsable.
+   * ONE recognised exception (A10 gap close): a 403 whose `detail` carries
+   * `write_model.DepartmentLockedError`'s stable marker phrase gets a more
+   * specific Thai `message` — see `messageForStatus` below. */
   readonly detail?: string
 
   constructor(status: number, message: string, detail?: string) {
@@ -43,8 +46,20 @@ function defaultOnUnauthorized(): void {
   window.location.href = buildLoginRedirectUrl(window.location.href)
 }
 
-function messageForStatus(status: number): string {
-  if (status === 403) return 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้'
+/** Stable marker substring inside `write_model.DepartmentLockedError`'s
+ * message (`"<dept>/<year> is <status> — mid-approval or approved, editing
+ * is locked"`, A10 gap close) — the ONE `detail` pattern this client
+ * special-cases, since a plain Fill-scope 403 shares the same HTTP status
+ * but needs a different Thai message. */
+const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
+
+function messageForStatus(status: number, detail?: string): string {
+  if (status === 403) {
+    if (detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER)) {
+      return 'ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้'
+    }
+    return 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้'
+  }
   if (status === 409) return 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง'
   if (status === 400) return 'คำขอไม่ถูกต้อง'
   if (status >= 500) return 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'
@@ -95,7 +110,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (!response.ok) {
     const detail = await tryReadDetail(response)
-    throw new ApiError(response.status, messageForStatus(response.status), detail)
+    throw new ApiError(response.status, messageForStatus(response.status, detail), detail)
   }
 
   return (await response.json()) as T

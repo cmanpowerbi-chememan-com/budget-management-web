@@ -9,7 +9,11 @@ Covers the never-cut rules (BUILD_PLAN A5 / task brief):
 - trip side never crosses COST/SGA
 - missing FX / missing per-diem rate fail loud (propagate, never silently 0)
 - editing never touches budget.approval_status / pending_budget.status
+  (except the A10 gap-close read-only *lock check* below — never a write)
 - total_year stays in sync with SUM(months); parent cell == SUM(detail)
+- A10 gap close: non-admin writes are rejected while the row's department is
+  mid-approval (PENDING_APPROVER1/2/3) or APPROVED; admin always bypasses;
+  DRAFT/REJECTED/no-row are not locked
 """
 import itertools
 from datetime import date, datetime, timezone
@@ -19,9 +23,11 @@ import pyodbc
 import pytest
 from pydantic import ValidationError
 
+from app.approval import APPROVED, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3, REJECTED
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError
 from app.rls import Scope
 from app.write_model import (
+    DepartmentLockedError,
     DetailLineInput,
     ExcludedCostCenterError,
     ForbiddenScopeError,
@@ -162,7 +168,7 @@ def test_special_gl_cell_cannot_be_edited_directly():
 def test_new_row_insert_succeeds_and_total_year_is_sum_of_months():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     scope = _scope()
     row = _row(m01=100, m02=200, expected_updated_at=None)
     results = save_pending_rows(conn, [row], "filler@chememan.com", scope)
@@ -184,8 +190,8 @@ def test_insert_conflict_when_row_already_exists_concurrently():
     never a silent overwrite."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
-    cursor.execute.side_effect = [None, None, None, pyodbc.IntegrityError("23000", "PK violation")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
+    cursor.execute.side_effect = [None, None, None, None, pyodbc.IntegrityError("23000", "PK violation")]
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=None)], "filler@chememan.com", scope)
     assert results[0].error == "conflict"
@@ -195,7 +201,7 @@ def test_insert_conflict_when_row_already_exists_concurrently():
 def test_stale_optimistic_lock_returns_conflict_and_does_not_write():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     cursor.rowcount = 0  # WHERE _updated_at = ? matched nothing -> stale
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -206,7 +212,7 @@ def test_stale_optimistic_lock_returns_conflict_and_does_not_write():
 def test_update_succeeds_when_lock_matches():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     cursor.rowcount = 1
     scope = _scope()
     results = save_pending_rows(conn, [_row(m01=50, expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -223,8 +229,8 @@ def test_two_rows_in_one_batch_succeed_and_fail_independently():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None,  # row A dims + deadline (open)
-        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"), None,  # row B dims + deadline (open)
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None,  # row A dims + lock + deadline (open)
+        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"), None, None,  # row B dims + lock + deadline (open)
     ]
     cursor.rowcount = 0  # only consumed by row B's UPDATE (row A does a plain INSERT)
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
@@ -246,7 +252,7 @@ def test_pending_row_month_amounts_are_quantized_and_total_year_matches_sum():
     to 200.00 (each individually rounds to 100.00)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     scope = _scope()
     row = _row(m01=100.005, m02=100.005, expected_updated_at=None)
     results = save_pending_rows(conn, [row], "filler@chememan.com", scope)
@@ -263,6 +269,7 @@ def test_detail_line_month_amounts_are_quantized_and_total_year_matches_sum():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
     ]
     scope = _scope()
@@ -284,14 +291,16 @@ def test_data_overflow_pyodbc_error_becomes_per_item_400_not_500_and_batch_conti
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None,  # row A dims + deadline (open)
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None,  # row B dims + deadline (open)
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None,  # row A dims + lock + deadline (open)
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None,  # row B dims + lock + deadline (open)
     ]
     cursor.execute.side_effect = [
         None, None,  # row A dims lookups
+        None,  # row A department-lock check
         None,  # row A deadline check
         pyodbc.DataError("22001", "string or binary data would be truncated"),  # row A INSERT overflow
         None, None,  # row B dims lookups
+        None,  # row B department-lock check
         None,  # row B deadline check
         None,  # row B INSERT succeeds
     ]
@@ -324,7 +333,7 @@ def test_stale_lock_conflict_triggers_rollback():
     the next item's work on the same shared connection."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     cursor.rowcount = 0
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -343,6 +352,7 @@ def test_pending_row_rejected_when_deadline_has_passed_no_db_write():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # dims
+        None,  # department-lock check -> no approval_status row, not locked
         (date(2020, 1, 1),),  # dbo.submission_deadline -> already passed
     ]
     scope = _scope()
@@ -372,7 +382,7 @@ def test_pending_row_missing_deadline_row_is_treated_as_open():
     fiscal_year -> the cycle is OPEN, never silently locked."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
     scope = _scope()
     results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
     assert results[0].ok is True
@@ -384,8 +394,8 @@ def test_two_rows_different_fiscal_years_one_past_deadline_blocks_independently(
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), (date(2020, 1, 1),),  # row A: past deadline
-        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"), None,                  # row B: no deadline row
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, (date(2020, 1, 1),),  # row A: not locked, past deadline
+        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"), None, None,                  # row B: not locked, no deadline row
     ]
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
     row_a = _row(cost_center="CC1", gl_account="GLA", fiscal_year=2020, m01=10, expected_updated_at=None)
@@ -451,6 +461,7 @@ def test_entertainment_detail_line_insert_succeeds():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
     ]
     scope = _scope()
@@ -516,6 +527,7 @@ def test_trip_side_match_succeeds_and_recomputes_parent_cell():
     cursor.fetchone.side_effect = [
         ("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA"),  # dims
         ("CC1", "COST", 2027),                                 # trip row: cost_center, side, fiscal_year
+        None,                                                   # department-lock check -> not locked
         None,                                                   # deadline check -> no row, open
     ]
     scope = _scope()
@@ -534,6 +546,7 @@ def test_detail_line_stale_lock_conflict():
     cursor.fetchone.side_effect = [
         ("CC1", "5211900030", 2027),  # owner lookup (D3/D4 IDOR fix) — matches the payload, in-scope
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
     ]
     cursor.rowcount = 0
@@ -605,6 +618,7 @@ def test_detail_line_commit_happens_after_parent_cell_recompute_not_before():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
     ]
     scope = _scope()
@@ -656,6 +670,7 @@ def test_parent_cell_insert_pk_collision_becomes_conflict_not_500():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,                                                                    # department-lock check -> not locked
         None,                                                                    # deadline check -> no row, open
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
@@ -663,6 +678,7 @@ def test_parent_cell_insert_pk_collision_becomes_conflict_not_500():
     cursor.rowcount = 0  # parent row does not exist yet -> UPDATE matches nothing
     cursor.execute.side_effect = [
         None, None,          # gl_group + cc_dims lookups
+        None,                 # department-lock check
         None,                 # deadline check
         None,                 # detail line INSERT
         None,                 # parent UPDATE (rowcount==0 -> falls to INSERT)
@@ -687,6 +703,7 @@ def test_parent_cell_insert_pk_collision_retry_succeeds():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,                                                                    # department-lock check -> not locked
         None,                                                                    # deadline check -> no row, open
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
@@ -696,13 +713,14 @@ def test_parent_cell_insert_pk_collision_retry_succeeds():
 
     def _execute_side_effect(sql, *params):
         call_count["n"] += 1
-        # Call order: gl-lookup(1), cc-dims(2), deadline-check(3), detail-INSERT(4),
-        # parent atomic UPDATE(5), SUM-recompute-select(6), parent INSERT/collision(7), retry UPDATE(8).
-        if call_count["n"] == 5:
+        # Call order: gl-lookup(1), cc-dims(2), department-lock-check(3),
+        # deadline-check(4), detail-INSERT(5), parent atomic UPDATE(6),
+        # SUM-recompute-select(7), parent INSERT/collision(8), retry UPDATE(9).
+        if call_count["n"] == 6:
             cursor.rowcount = 0  # first atomic UPDATE (D5) matches nothing -> falls to INSERT
-        elif call_count["n"] == 7:
-            raise pyodbc.IntegrityError("23000", "PK violation")  # concurrent INSERT collision
         elif call_count["n"] == 8:
+            raise pyodbc.IntegrityError("23000", "PK violation")  # concurrent INSERT collision
+        elif call_count["n"] == 9:
             cursor.rowcount = 1  # retry of the atomic UPDATE now matches the winner's row -> succeeds
         return None
 
@@ -756,6 +774,7 @@ def test_detail_line_rejected_when_deadline_has_passed_no_db_write():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        None,  # department-lock check -> no approval_status row, not locked
         (date(2020, 1, 1),),  # dbo.submission_deadline -> already passed
     ]
     scope = _scope()
@@ -922,6 +941,8 @@ def test_save_trip_succeeds_for_a_traveler_whose_rate_is_zero_not_missing():
     cursor.fetchone.side_effect = [
         ("Somchai", "Director"),  # traveler lookup
         (0, None, None),           # per_diem_rate ROW EXISTS, rate_domestic=0.00 (not missing)
+        ("deptA", "divA", "clA"),   # cc_dims lookup for department-lock check
+        None,                       # department-lock check -> no approval_status row, not locked
         None,                       # deadline check -> no row, open
         None,                       # existing trip-detail lookup -> none, will INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
@@ -954,6 +975,8 @@ def test_trip_create_succeeds_and_derives_per_diem_matching_the_formula():
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"),                        # traveler lookup
         (500, None, None),                               # per_diem_rate (domestic=500)
+        ("deptA", "divA", "clA"),                         # cc_dims lookup for department-lock check
+        None,                                             # department-lock check -> no approval_status row, not locked
         None,                                             # deadline check -> no row, open
         None,                                             # existing trip-detail lookup -> none, will INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),        # dims for the per-diem GL
@@ -977,6 +1000,8 @@ def test_trip_side_selects_the_matching_perdiem_gl():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"), (500, None, None),
+        ("deptA", "divA", "clA"),  # cc_dims lookup for department-lock check
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
         None,  # existing trip-detail lookup -> none, will INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
@@ -996,6 +1021,8 @@ def test_trip_update_stale_lock_conflict():
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"), (500, None, None),
         ("CC1", "COST", 2027),  # old-trip lookup (captures old side before the stale UPDATE fails)
+        ("deptA", "divA", "clA"),  # cc_dims lookup for department-lock check
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
     ]
     cursor.rowcount = 0
@@ -1018,6 +1045,8 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"), (500, None, None),
         ("CC1", "COST", 2027),  # old-trip lookup — side unchanged (COST->COST), no GL flip
+        ("deptA", "divA", "clA"),  # cc_dims lookup for department-lock check
+        None,  # department-lock check -> no approval_status row, not locked
         None,  # deadline check -> no row, open
         (99,),  # an existing per-diem detail line already exists (detail_id=99) — its OLD amount is never read
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
@@ -1049,18 +1078,20 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
     conn = MagicMock()
     cursor = conn.cursor.return_value
 
-    # The first 4 fetchone() calls are one-off (traveler/rate/old-trip/
-    # existing-per-diem-line lookups); every call after that is a
-    # gl_group-then-cc_dims pair for whichever GL is being recomputed next
-    # (D5's atomic recompute never issues a SELECT of its own when the
-    # parent row already exists — cursor.rowcount=1 below — so only the
-    # dims lookups remain to mock).
+    # The first 6 fetchone() calls are one-off (traveler/rate/old-trip/
+    # department-lock cc_dims+status/deadline/existing-per-diem-line lookups);
+    # every call after that is a gl_group-then-cc_dims pair for whichever GL
+    # is being recomputed next (D5's atomic recompute never issues a SELECT
+    # of its own when the parent row already exists — cursor.rowcount=1
+    # below — so only the dims lookups remain to mock).
     one_off = iter([
         ("Somchai", "Manager"),    # 1 traveler lookup
         (500, None, None),          # 2 per_diem_rate (domestic=500)
         ("CC1", "COST", 2027),       # 3 OLD trip lookup -> old side was COST
-        None,                         # 4 deadline check -> no row, open
-        None,                         # 5 existing per-diem line under NEW (SGA) gl -> none, INSERT
+        ("deptA", "divA", "clA"),     # 4 cc_dims lookup for department-lock check
+        None,                         # 5 department-lock check -> no approval_status row, not locked
+        None,                         # 6 deadline check -> no row, open
+        None,                         # 7 existing per-diem line under NEW (SGA) gl -> none, INSERT
     ])
     dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
 
@@ -1118,6 +1149,8 @@ def test_trip_create_rejected_when_deadline_has_passed_no_db_write():
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"),        # traveler lookup
         (500, None, None),              # per_diem_rate (domestic=500)
+        ("deptA", "divA", "clA"),        # cc_dims lookup for department-lock check
+        None,                            # department-lock check -> no approval_status row, not locked
         (date(2020, 1, 1),),             # dbo.submission_deadline -> already passed
     ]
     scope = _scope()
@@ -1139,6 +1172,8 @@ def test_trip_update_rejected_when_deadline_has_passed_no_db_write_and_no_side_f
         ("Somchai", "Manager"),          # traveler lookup
         (500, None, None),                # per_diem_rate (domestic=500)
         ("CC1", "COST", 2027),             # old-trip lookup (side would-be COST)
+        ("deptA", "divA", "clA"),           # cc_dims lookup for department-lock check
+        None,                               # department-lock check -> no approval_status row, not locked
         (date(2020, 1, 1),),                # dbo.submission_deadline -> already passed
     ]
     scope = _scope()
@@ -1184,6 +1219,8 @@ def test_delete_detail_line_stale_token_is_conflict_no_write():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("CC1", "5211900030", 2027),  # owner lookup
+        ("deptA", "divA", "clA"),      # cc_dims lookup for department-lock check
+        None,                          # department-lock check -> no approval_status row, not locked
         None,                          # deadline check -> no row, open
     ]
     cursor.rowcount = 0  # DELETE matches nothing -> stale token
@@ -1199,6 +1236,8 @@ def test_delete_detail_line_rejected_when_deadline_has_passed_no_db_write():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("CC1", "5211900030", 2027),   # owner lookup
+        ("deptA", "divA", "clA"),       # cc_dims lookup for department-lock check
+        None,                           # department-lock check -> no approval_status row, not locked
         (date(2020, 1, 1),),            # dbo.submission_deadline -> already passed
     ]
     scope = _scope()
@@ -1234,6 +1273,8 @@ def test_delete_detail_line_commit_happens_after_delete_and_recompute():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("CC1", "5211900030", 2027),                                          # owner lookup
+        ("deptA", "divA", "clA"),                                              # cc_dims for department-lock check
+        None,                                                                  # department-lock check -> not locked
         None,                                                                  # deadline check -> open
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims for recompute
     ]
@@ -1289,7 +1330,9 @@ def test_delete_detail_line_deleting_last_line_zeroes_parent_row_not_removed():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("CC1", "5211900030", 2027),
-        None,
+        ("deptA", "divA", "clA"),  # cc_dims for department-lock check
+        None,  # department-lock check -> not locked
+        None,  # deadline check -> open
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),
     ]
     cursor.rowcount = 1  # parent row already exists -> atomic UPDATE matches it directly, zeroing it
@@ -1306,8 +1349,10 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     one_off = iter([
-        ("CC1", "COST", 2027),  # trip lookup
-        None,                    # deadline check -> open
+        ("CC1", "COST", 2027),      # trip lookup
+        ("deptA", "divA", "clA"),    # cc_dims lookup for department-lock check
+        None,                         # department-lock check -> not locked
+        None,                         # deadline check -> open
     ])
     dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
 
@@ -1361,7 +1406,9 @@ def test_delete_trip_forbidden_when_actual_cc_outside_caller_scope():
 def test_delete_trip_stale_token_is_conflict_no_lines_removed():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("CC1", "COST", 2027), None]  # trip lookup, deadline open
+    cursor.fetchone.side_effect = [
+        ("CC1", "COST", 2027), ("deptA", "divA", "clA"), None, None,
+    ]  # trip lookup, cc_dims for lock, lock check (not locked), deadline open
     cursor.rowcount = 0  # trip DELETE matches nothing -> stale
     scope = _scope()
     result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
@@ -1375,7 +1422,9 @@ def test_delete_trip_stale_token_is_conflict_no_lines_removed():
 def test_delete_trip_rejected_when_deadline_has_passed_no_db_write():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("CC1", "COST", 2027), (date(2020, 1, 1),)]  # trip lookup, deadline passed
+    cursor.fetchone.side_effect = [
+        ("CC1", "COST", 2027), ("deptA", "divA", "clA"), None, (date(2020, 1, 1),),
+    ]  # trip lookup, cc_dims for lock, lock check (not locked), deadline passed
     scope = _scope()
     result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
     assert result.ok is False
@@ -1393,3 +1442,233 @@ def test_delete_trip_not_found_is_conflict_not_500():
     result = delete_trip(conn, 999, STALE, "filler@chememan.com", scope)
     assert result.ok is False
     assert result.error == "conflict"
+
+
+# ---------------------------------------------------------------------------
+# A10 gap close — department-approval lock (ADR-0006/0008/0012/0013)
+#
+# budget.approval_status is keyed (department, fiscal_year). Non-admin writes
+# must be rejected while status is PENDING_APPROVER1/2/3 or APPROVED (only
+# Submit/Approve/Reject may move status, ADR-0013). Admin always bypasses
+# (ADR-0012). DRAFT/REJECTED/no-row = not locked — already proven implicitly
+# by every "happy path" test above (the lock-check fetchone there mocks
+# `None` = no approval_status row = not locked).
+# ---------------------------------------------------------------------------
+
+LOCKED_STATUSES = [PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3, APPROVED]
+
+
+def test_lookup_department_approval_status_query_shape():
+    from app.write_model import _lookup_department_approval_status
+
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = (PENDING_APPROVER2,)
+    status = _lookup_department_approval_status(conn, "deptA", 2027)
+    assert status == PENDING_APPROVER2
+    sql_text = cursor.execute.call_args.args[0]
+    assert "budget.approval_status" in sql_text
+    assert "department = ?" in sql_text
+    assert "fiscal_year = ?" in sql_text
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_pending_row_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # dims
+        (locked_status,),  # approval_status row -> locked
+    ]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any(
+        "INSERT INTO budget.pending_budget" in s or "UPDATE budget.pending_budget" in s for s in executed_sql
+    )
+
+
+def test_pending_row_allowed_when_department_status_is_rejected():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (REJECTED,),  # approval_status row -> REJECTED is edit-like DRAFT, not locked
+        None,  # deadline check -> open
+    ]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
+    assert results[0].ok is True
+
+
+def test_pending_row_admin_bypasses_department_lock_and_never_queries_it():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [(1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    scope = _admin_scope()
+    results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
+    assert results[0].ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("approval_status" in s for s in executed_sql)
+
+
+def test_two_pending_rows_one_department_locked_blocks_independently():
+    """Batch semantics: one row's department_locked error must never block
+    another row targeting a different, open department (never-cut)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), (APPROVED,),  # row A: locked
+        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"), None, None,   # row B: not locked, open
+    ]
+    scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
+    row_a = _row(cost_center="CC1", gl_account="GLA", m01=10, expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", m01=20, expected_updated_at=None)
+    results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "department_locked"
+    assert results[1].ok is True
+
+
+def test_pending_row_unknown_department_mapping_is_not_locked():
+    """Unknown CC->department mapping (department resolves to None): treated
+    as 'not locked' rather than inventing a new failure mode. Cannot
+    currently be reached by a non-admin in practice (their Fill scope is
+    itself derived from dbo.cc_filler_map, so any cost_center they may
+    address already has a department) — this locks in the chosen fail-open
+    behavior for that edge (mirrors is_post_deadline's own missing-row-is-
+    OPEN policy elsewhere in this module)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), None,  # dims: cc_dims lookup -> no row, department unresolved
+        None,  # deadline check -> open (department=None short-circuits the lock check with NO extra query)
+    ]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("approval_status" in s for s in executed_sql), (
+        "department already known to be unresolved (None) — must not re-query dbo.cc_filler_map"
+    )
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_detail_line_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        (locked_status,),  # approval_status row -> locked
+    ]
+    scope = _scope()
+    results = save_detail_lines(conn, [_detail(m01=1000)], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "department_locked"
+    conn.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_trip_create_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"),        # traveler lookup
+        (500, None, None),              # per_diem_rate (domestic=500)
+        ("deptA", "divA", "clA"),        # cc_dims lookup for department-lock check
+        (locked_status,),                # approval_status row -> locked
+    ]
+    scope = _scope()
+    results = save_trip(conn, [_trip(days=10, country_group=1)], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("INSERT INTO budget.budget_trip" in s for s in executed_sql)
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_trip_update_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"),
+        (500, None, None),
+        ("CC1", "COST", 2027),            # old-trip lookup
+        ("deptA", "divA", "clA"),          # cc_dims lookup for department-lock check
+        (locked_status,),                  # approval_status row -> locked
+    ]
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=1, side="SGA", days=10, country_group=1, expected_updated_at=STALE)],
+        "filler@chememan.com", scope,
+    )
+    assert results[0].ok is False
+    assert results[0].error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any(s.strip().startswith("UPDATE budget.budget_trip") for s in executed_sql)
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_delete_detail_line_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),      # owner lookup
+        ("deptA", "divA", "clA"),          # cc_dims lookup for department-lock check
+        (locked_status,),                  # approval_status row -> locked
+    ]
+    scope = _scope()
+    result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget_detail" in s for s in executed_sql)
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_delete_trip_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "COST", 2027),            # trip lookup
+        ("deptA", "divA", "clA"),          # cc_dims lookup for department-lock check
+        (locked_status,),                  # approval_status row -> locked
+    ]
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.budget_trip" in s for s in executed_sql)
+
+
+def test_delete_trip_admin_bypasses_department_lock_and_never_queries_it():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    one_off = iter([
+        ("ANY-CC", "COST", 2027),  # trip lookup
+        (1,),                       # admin CC-existence check (_ensure_write_scope's admin branch)
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    scope = _admin_scope()
+    result = delete_trip(conn, 7, STALE, "admin@chememan.com", scope)
+    assert result.ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("approval_status" in s for s in executed_sql)
+    assert not any("submission_deadline" in s for s in executed_sql)

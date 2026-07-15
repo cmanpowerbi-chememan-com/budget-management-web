@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T18:40:03+0700",
+  "updated": "2026-07-15T20:23:47+0700",
   "tasks": [
+    {
+      "id": "a10-approval-ui",
+      "state": "done",
+      "created": "2026-07-15T18:40:36+0700",
+      "updated": "2026-07-15T20:23:47+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "GATE FINAL: APPROVE. FIX1 verified: single entry validate_upload -> sanitized name, quote(safe='') = no raw colon possible (test-locked), reserved names case-insensitive, 404 unknown dept incl admin, 413 pre-read. FIX2 verified: all 5 write/delete entry points gated before deadline check, admin zero-extra-queries (assert_not_called), 4 extended mocks sampled = not weakened, live 2093 value-unchanged proof. Gate re-ran: 483 mocked + 39 + 2 live, sentinels 0 @2093-2099, FE 254 + build, audit 0. Notes: FE lock-message matches error substring (brittle-but-acceptable, no error-code convention exists); unknown-CC fail-open judged unreachable by non-admin. A10 COMPLETE. Committed.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a9-subforms-trip",
       "state": "done",

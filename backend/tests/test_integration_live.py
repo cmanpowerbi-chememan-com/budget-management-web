@@ -586,6 +586,254 @@ def test_write_path_admin_bypasses_past_deadline_write_live() -> None:
 
 
 # ---------------------------------------------------------------------------
+# A10 gap close — department-approval lock on the write path (ADR-0006/0008/
+# 0012/0013): once a `(department, fiscal_year)` is mid-approval
+# (PENDING_APPROVER1/2/3) or APPROVED, a non-admin write/delete to ANY of
+# that department's cells must be rejected (department_locked, 403); admin
+# always bypasses. Proves the fix against the REAL database using the real
+# `submit_department` state machine (not a hand-crafted approval_status row).
+#
+# Uses its OWN sentinel fiscal_year (2093 — 2094/2095/2096/2097/2099 already
+# used elsewhere in this file) because this is the ONLY test section allowed
+# to write `budget.approval_status`/`approval_log`, strictly keyed to
+# fiscal_year=2093 for the discovered real department, cleaned up below.
+# ---------------------------------------------------------------------------
+
+DEPARTMENT_LOCK_SENTINEL_YEAR = 2093
+
+
+def _cleanup_department_lock_sentinel(conn: pyodbc.Connection, department: str) -> None:
+    """Delete every DEPARTMENT_LOCK_SENTINEL_YEAR row this section may have
+    written: the transactional tables (by fiscal_year) plus
+    budget.approval_status/approval_log (by department + fiscal_year, since
+    approval_status has no cost_center column) — then verify 0 remain."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.pending_budget_detail WHERE fiscal_year = ?", DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.pending_budget WHERE fiscal_year = ?", DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.approval_log WHERE department = ? AND fiscal_year = ?",
+            department, DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.approval_status WHERE department = ? AND fiscal_year = ?",
+            department, DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.pending_budget_detail WHERE fiscal_year = ?", DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        detail_left = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year = ?", DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        pending_left = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.approval_log WHERE department = ? AND fiscal_year = ?",
+            department, DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        log_left = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.approval_status WHERE department = ? AND fiscal_year = ?",
+            department, DEPARTMENT_LOCK_SENTINEL_YEAR,
+        )
+        status_left = cursor.fetchone()[0]
+    finally:
+        cursor.close()
+
+    assert detail_left == 0, (
+        f"cleanup left {detail_left} budget.pending_budget_detail rows at fiscal_year={DEPARTMENT_LOCK_SENTINEL_YEAR}"
+    )
+    assert pending_left == 0, (
+        f"cleanup left {pending_left} budget.pending_budget rows at fiscal_year={DEPARTMENT_LOCK_SENTINEL_YEAR}"
+    )
+    assert log_left == 0, (
+        f"cleanup left {log_left} budget.approval_log rows for department={department!r} "
+        f"fiscal_year={DEPARTMENT_LOCK_SENTINEL_YEAR}"
+    )
+    assert status_left == 0, (
+        f"cleanup left {status_left} budget.approval_status rows for department={department!r} "
+        f"fiscal_year={DEPARTMENT_LOCK_SENTINEL_YEAR}"
+    )
+
+
+def _discover_department_for_cc(conn: pyodbc.Connection, cost_center: str) -> str:
+    department = fetch_cc_dims(conn, [cost_center]).get(cost_center, {}).get("department")
+    assert department, f"{cost_center} has no resolvable department in dbo.cc_filler_map"
+    return department
+
+
+@pytest.mark.integration
+def test_write_path_rejects_non_admin_edit_while_department_locked_live(discovered: tuple[str, str, str]) -> None:
+    """(a) create a pending row -> submit the department (real chain
+    machinery, sentinel fiscal_year) -> a non-admin's edit to that SAME cell
+    must be rejected (department_locked, 403) with the value UNCHANGED in
+    the DB."""
+    cost_center, filler_email, _ = discovered
+    department: str | None = None
+
+    try:
+        with get_fabric_conn() as conn:
+            gl_account = _discover_non_special_gl(conn)
+            scope = resolve_scope(filler_email, conn)
+            department = _discover_department_for_cc(conn, cost_center)
+
+            create_results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEPARTMENT_LOCK_SENTINEL_YEAR, m01=111,
+                )],
+                user_email=filler_email, scope=scope,
+            )
+            assert create_results[0].ok, f"setup write failed: {create_results[0].detail}"
+            expected_updated_at = create_results[0].row.updated_at
+
+            submit_state = submit_department(conn, department, DEPARTMENT_LOCK_SENTINEL_YEAR, filler_email, scope)
+            assert submit_state.status in (PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3), (
+                f"expected a PENDING_* status after submit, got {submit_state.status}"
+            )
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            edit_results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEPARTMENT_LOCK_SENTINEL_YEAR, m01=999,
+                    expected_updated_at=expected_updated_at,
+                )],
+                user_email=filler_email, scope=scope,
+            )
+        assert edit_results[0].ok is False
+        assert edit_results[0].error == "department_locked"
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01 FROM budget.pending_budget WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, DEPARTMENT_LOCK_SENTINEL_YEAR,
+                )
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+        assert row is not None, "the setup row must still exist"
+        assert float(row[0]) == 111.0, "the blocked edit must not have changed the stored value"
+    finally:
+        if department:
+            with get_fabric_conn() as cleanup_conn:
+                _cleanup_department_lock_sentinel(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_write_path_admin_bypasses_department_lock_live(discovered: tuple[str, str, str]) -> None:
+    """(b) the SAME mid-approval department -> admin's edit must succeed
+    (ADR-0012/0013: admin can edit any CC's Pending, always)."""
+    cost_center, filler_email, _ = discovered
+    admin_email = "jakkaritw@chememan.com"
+    department: str | None = None
+
+    try:
+        with get_fabric_conn() as conn:
+            gl_account = _discover_non_special_gl(conn)
+            scope = resolve_scope(filler_email, conn)
+            department = _discover_department_for_cc(conn, cost_center)
+
+            create_results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEPARTMENT_LOCK_SENTINEL_YEAR, m01=111,
+                )],
+                user_email=filler_email, scope=scope,
+            )
+            assert create_results[0].ok, f"setup write failed: {create_results[0].detail}"
+            expected_updated_at = create_results[0].row.updated_at
+
+            submit_state = submit_department(conn, department, DEPARTMENT_LOCK_SENTINEL_YEAR, filler_email, scope)
+            assert submit_state.status in (PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3)
+
+        with get_fabric_conn() as conn:
+            admin_scope = resolve_scope(admin_email, conn)
+            assert admin_scope.is_admin, f"{admin_email} expected to be admin (ADMIN_EMAILS)"
+            admin_results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEPARTMENT_LOCK_SENTINEL_YEAR, m01=222,
+                    expected_updated_at=expected_updated_at,
+                )],
+                user_email=admin_email, scope=admin_scope,
+            )
+        assert admin_results[0].ok, (
+            f"admin write should succeed on a locked department, got error={admin_results[0].error}"
+        )
+        assert admin_results[0].row.m01 == 222
+    finally:
+        if department:
+            with get_fabric_conn() as cleanup_conn:
+                _cleanup_department_lock_sentinel(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_delete_detail_line_rejected_while_department_locked_live(discovered: tuple[str, str, str]) -> None:
+    """(c) delete blocked the same way: a non-admin's delete of a special-GL
+    detail line must also be rejected once the department is mid-approval."""
+    cost_center, filler_email, entertainment_gl = discovered
+    department: str | None = None
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            department = _discover_department_for_cc(conn, cost_center)
+
+            create_results = save_detail_lines(
+                conn,
+                [DetailLineInput(
+                    cost_center=cost_center, gl_account=entertainment_gl,
+                    fiscal_year=DEPARTMENT_LOCK_SENTINEL_YEAR, line_label="A10 department-lock test",
+                    meta_json={"ประเภทการรับรอง": "Customer"}, m01=500,
+                )],
+                filler_email, scope,
+            )
+            assert create_results[0].ok, f"setup detail-line write failed: {create_results[0].detail}"
+            detail_id = create_results[0].line.detail_id
+            expected_updated_at = create_results[0].line.updated_at
+
+            submit_state = submit_department(conn, department, DEPARTMENT_LOCK_SENTINEL_YEAR, filler_email, scope)
+            assert submit_state.status in (PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3)
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            delete_result = delete_detail_line(conn, detail_id, expected_updated_at, filler_email, scope)
+        assert delete_result.ok is False
+        assert delete_result.error == "department_locked"
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE detail_id = ?", detail_id)
+                still_there = cursor.fetchone()[0]
+            finally:
+                cursor.close()
+        assert still_there == 1, "the blocked delete must not have removed the detail line"
+    finally:
+        if department:
+            with get_fabric_conn() as cleanup_conn:
+                _cleanup_department_lock_sentinel(cleanup_conn, department)
+
+
+# ---------------------------------------------------------------------------
 # A4 read path + SAP read-through — added 2026-07-16, first-ever live run.
 # ---------------------------------------------------------------------------
 
@@ -1574,6 +1822,70 @@ def test_status_forbidden_for_department_outside_callers_scope_live() -> None:
         assert response.status_code == 403, response.text
     finally:
         fastapi_app.dependency_overrides.pop(get_current_user_email, None)
+
+
+# ---------------------------------------------------------------------------
+# A10 GET /approval/pending-for-me — รออนุมัติ badge data source, live.
+# Sentinel fiscal_year=2094 (2095/2096/2097/2099 already used by other
+# sections in this file) -- writes ONE budget.approval_status row via a real
+# submit_department call, cleaned up via the same `_cleanup_approval` helper
+# the rest of the A6 live section already uses.
+# ---------------------------------------------------------------------------
+
+PENDING_FOR_ME_FISCAL_YEAR = 2094
+
+
+@pytest.mark.integration
+def test_pending_for_me_lists_a_department_at_the_managers_current_step_live() -> None:
+    """Submit a real filler's department -> approver1 (their real manager) is
+    frozen on the row -> `GET /approval/pending-for-me` called AS that
+    manager must list the department; called as an unrelated filler must not."""
+    from app.approval import list_departments_pending_my_approval
+
+    with get_fabric_conn() as conn:
+        department, filler_email, manager_email = _discover_full_chain_filler(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            state = submit_department(conn, department, PENDING_FOR_ME_FISCAL_YEAR, filler_email, scope)
+        assert state.status == PENDING_APPROVER1
+
+        with get_fabric_conn() as conn:
+            manager_pending = list_departments_pending_my_approval(conn, PENDING_FOR_ME_FISCAL_YEAR, manager_email)
+            filler_pending = list_departments_pending_my_approval(conn, PENDING_FOR_ME_FISCAL_YEAR, filler_email)
+
+        assert department in manager_pending
+        assert department not in filler_pending  # the submitter is never their own approver (self-skip)
+    finally:
+        with get_fabric_conn() as conn:
+            _cleanup_approval(conn, department, PENDING_FOR_ME_FISCAL_YEAR)
+
+
+@pytest.mark.integration
+def test_pending_for_me_router_end_to_end_live() -> None:
+    """Same scenario through the real FastAPI route (not just the function),
+    proving the router wiring + auth dependency against the live DB."""
+    with get_fabric_conn() as conn:
+        department, filler_email, manager_email = _discover_full_chain_filler(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            submit_department(conn, department, PENDING_FOR_ME_FISCAL_YEAR, filler_email, scope)
+
+        fastapi_app.dependency_overrides[get_current_user_email] = lambda: manager_email
+        try:
+            with TestClient(fastapi_app) as client:
+                response = client.get("/approval/pending-for-me", params={"fiscal_year": PENDING_FOR_ME_FISCAL_YEAR})
+        finally:
+            fastapi_app.dependency_overrides.pop(get_current_user_email, None)
+
+        assert response.status_code == 200, response.text
+        assert department in response.json()["departments"]
+    finally:
+        with get_fabric_conn() as conn:
+            _cleanup_approval(conn, department, PENDING_FOR_ME_FISCAL_YEAR)
 
 
 # ---------------------------------------------------------------------------

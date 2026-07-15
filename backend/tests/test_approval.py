@@ -45,6 +45,7 @@ from app.approval import (
     fetch_pending_rows,
     get_approval_status,
     is_step_stale,
+    list_departments_pending_my_approval,
     reject_department,
     resolve_chain,
     submit_department,
@@ -938,3 +939,58 @@ def test_fetch_pending_rows_returns_keyed_dicts_for_the_given_year():
     query = cursor.execute.call_args.args[0]
     assert "budget.approval_status" in query
     assert "IN (?, ?, ?)" in query
+
+
+# ---------------------------------------------------------------------------
+# list_departments_pending_my_approval — A10 รออนุมัติ badge data source
+# ---------------------------------------------------------------------------
+
+def test_pending_for_me_returns_departments_where_caller_is_current_approver():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    # resolve_submitter(caller) -> empcode "200" (matches approver1_empcode below)
+    cursor.fetchone.return_value = ("200", None)
+    cursor.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200"),
+    ]
+
+    result = list_departments_pending_my_approval(conn, FY, "manager@chememan.com")
+
+    assert result == [DEPT]
+
+
+def test_pending_for_me_excludes_departments_not_at_callers_step():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = ("200", None)
+    cursor.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER2, approver1_empcode="200"),  # caller was approver1, already passed
+    ]
+
+    result = list_departments_pending_my_approval(conn, FY, "manager@chememan.com")
+
+    assert result == []
+
+
+def test_pending_for_me_empty_when_caller_not_in_employee_view():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = None  # resolve_submitter -> (None, None)
+
+    result = list_departments_pending_my_approval(conn, FY, "outsider@chememan.com")
+
+    assert result == []
+    cursor.fetchall.assert_not_called()  # short-circuits before fetch_pending_rows even queries
+
+
+def test_pending_for_me_matches_nipaporn_on_position_2_regardless_of_approver1():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = (NIPAPORN_EMPCODE, None)
+    cursor.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER2, approver1_empcode="999999"),  # some other manager
+    ]
+
+    result = list_departments_pending_my_approval(conn, FY, "nipapornt@chememan.com")
+
+    assert result == [DEPT]

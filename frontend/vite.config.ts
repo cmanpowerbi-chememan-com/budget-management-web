@@ -16,6 +16,7 @@ export default defineConfig({
       '/scope': BACKEND_DEV_SERVER,
       '/budget': BACKEND_DEV_SERVER,
       '/approval': BACKEND_DEV_SERVER,
+      '/attachments': BACKEND_DEV_SERVER,
     },
   },
   test: {

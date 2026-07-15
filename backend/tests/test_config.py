@@ -72,6 +72,17 @@ def test_local_with_placeholder_base_url_does_not_warn(caplog):
     assert not any("app_base_url" in record.message for record in caplog.records)
 
 
+def test_attachments_settings_default_to_the_confirmed_sharepoint_location():
+    """A10 (R1, spec §4b) — the site/library/root-folder are confirmed values
+    (2026-07-13), not a guess, so they ship as real defaults; still
+    overridable via env for ops to correct without a code change."""
+    settings = Settings(_env_file=None)
+    assert settings.attachments_site_hostname == "chememan.sharepoint.com"
+    assert settings.attachments_site_name == "CMANDWPRD"
+    assert settings.attachments_library_name == "Budgeting and Management"
+    assert settings.attachments_root_folder == "เอกสาร ฝ่าย"
+
+
 def test_get_settings_reads_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("FABRIC_SQL_SERVER", "example.database.fabric.microsoft.com")
