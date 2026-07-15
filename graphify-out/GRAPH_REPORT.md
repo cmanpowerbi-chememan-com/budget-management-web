@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-13)
+# Graph Report - .  (2026-07-14)
 
 ## Corpus Check
 - 155 files · ~183,564 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `25bd1332`
+- Built from commit: `7936f8e3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -92,7 +92,7 @@
 - `HttpResponse` --uses--> `AuthError`  [INFERRED]
   03-edit-master-table/master-tables/02backend/modules/gl_group/reference_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
 - `HttpRequest` --uses--> `AuthError`  [INFERRED]
-  03-edit-master-table/master-tables/02backend/modules/hide_document/validate_docs_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
+  03-edit-master-table/master-tables/02backend/modules/hide_document/list_handler.py → 03-edit-master-table/master-tables/02backend/auth.py
 
 ## Import Cycles
 - None detected.
@@ -193,11 +193,11 @@ Nodes (9): HttpRequest, HttpResponse, main(), Standalone test for validate_docs_
 
 ### Community 23 - "Community 23"
 Cohesion: 0.22
-Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/orgcode-costcenter/list
+Nodes (8): _allowed_emails(), authenticate(), SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
 
 ### Community 24 - "Community 24"
 Cohesion: 0.24
-Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/hide-document/list  Returns all (doc_num, fiscal_year, fiscal_mo
+Nodes (6): AuthError, HttpRequest, HttpResponse, TestDeleteHandler, handle(), GET /api/master/orgcode-costcenter/list
 
 ### Community 25 - "Community 25"
 Cohesion: 0.29
