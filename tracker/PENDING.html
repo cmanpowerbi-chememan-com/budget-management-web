@@ -37,8 +37,8 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 7:28 AM &bull; rendered: 15 July 2026 7:28 AM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (22)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 21</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 8:46 AM &bull; rendered: 15 July 2026 8:46 AM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (23)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 22</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
@@ -58,6 +58,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a5-write-path</span>
+        <span class="dt">15 July 2026 8:46 AM</span>
+      </div>
+      <div class="id">a5-write-path</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A5 budget write (05-dev, TDD): per_diem.py derive_per_diem days*rate(job_level_name_en,country_group)*FX, Decimal, LAST month absorbs remainder (sum==exact total; mockup round-every-month=BUG), missing FX/rate/&#x27;N/A&#x27; -&gt; raise never 35.00 fallback. write_model.py save_pending_rows/save_detail_lines/save_trip: row-grain optimistic lock (atomic UPDATE WHERE _updated_at + rowcount -&gt; 409 no clobber no TOCTOU), total_year in sync, parent==SUM(detail), dim re-derive, Pending BLANK, approval_status untouched (ADR-0013), ONE side/trip + side-flip cleans old-GL line + recomputes old parent, excluded-CC + fill-scope + CC-existence on ALL write paths (admin bypasses fill-scope only ADR-0012). special_gl.py GL-conditional meta (Entertainment, Lease&amp;Rental; other 3 free-form per spec 4a). routers/budget_write.py PUT /budget/rows /budget/detail, POST|PUT /budget/trip. 165/165. GATE 3 ROUNDS: R1 REQUEST-CHANGES 4 MUST-FIX (parent-cell recompute NEVER committed-&gt;silent data loss 5 special-GL groups w/ 200 OK; PK-collision race 502 not 409; travel line w/o trip_id bypassed side-check; trip side-flip ghost amount). R2 verified + found 5th (detail path missing excluded-CC check -&gt; would break SAP control-number reconcile). R3 delta APPROVE no regression. LESSON: mock-only unit tests missed the commit-ordering bug; ordering asserted via conn.mock_calls now. PENDING: env re-point-&gt;fabric_sql_database for live integration test. A6 approval next.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>A5 write path (pending+detail+trip+per-diem) เสร็จ; gate 3 รอบ เจอบั๊กจริง 5 ตัว แก้ครบ; 165 tests ผ่าน; รอ env re-point เพื่อ live verify</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a4-read-path</span>
         <span class="dt">15 July 2026 7:28 AM</span>
       </div>

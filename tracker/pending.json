@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T07:28:50+0700",
+  "updated": "2026-07-15T08:46:37+0700",
   "tasks": [
+    {
+      "id": "a5-write-path",
+      "state": "done",
+      "created": "2026-07-15T08:46:37+0700",
+      "updated": "2026-07-15T08:46:37+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "A5 budget write (05-dev, TDD): per_diem.py derive_per_diem days*rate(job_level_name_en,country_group)*FX, Decimal, LAST month absorbs remainder (sum==exact total; mockup round-every-month=BUG), missing FX/rate/'N/A' -> raise never 35.00 fallback. write_model.py save_pending_rows/save_detail_lines/save_trip: row-grain optimistic lock (atomic UPDATE WHERE _updated_at + rowcount -> 409 no clobber no TOCTOU), total_year in sync, parent==SUM(detail), dim re-derive, Pending BLANK, approval_status untouched (ADR-0013), ONE side/trip + side-flip cleans old-GL line + recomputes old parent, excluded-CC + fill-scope + CC-existence on ALL write paths (admin bypasses fill-scope only ADR-0012). special_gl.py GL-conditional meta (Entertainment, Lease&Rental; other 3 free-form per spec 4a). routers/budget_write.py PUT /budget/rows /budget/detail, POST|PUT /budget/trip. 165/165. GATE 3 ROUNDS: R1 REQUEST-CHANGES 4 MUST-FIX (parent-cell recompute NEVER committed->silent data loss 5 special-GL groups w/ 200 OK; PK-collision race 502 not 409; travel line w/o trip_id bypassed side-check; trip side-flip ghost amount). R2 verified + found 5th (detail path missing excluded-CC check -> would break SAP control-number reconcile). R3 delta APPROVE no regression. LESSON: mock-only unit tests missed the commit-ordering bug; ordering asserted via conn.mock_calls now. PENDING: env re-point->fabric_sql_database for live integration test. A6 approval next.",
+      "human": "A5 write path (pending+detail+trip+per-diem) เสร็จ; gate 3 รอบ เจอบั๊กจริง 5 ตัว แก้ครบ; 165 tests ผ่าน; รอ env re-point เพื่อ live verify"
+    },
     {
       "id": "a4-read-path",
       "state": "done",
