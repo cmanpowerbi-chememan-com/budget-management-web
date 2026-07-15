@@ -1,0 +1,51 @@
+/* ─── Design tokens — ported from the canonical mockup
+   (design/mockups/0002claude design/0002.3budget-export.html)
+   so A8-A10 inherit the same palette/type/radius/dark-light theme.
+   Do NOT rename or add tokens speculatively — extend only when A8+
+   actually needs a new one. ─── */
+:root {
+  --c-forest: #b24222;
+  --c-mint: #4a5e80;
+  --c-gold: #a8763a;
+  --c-blue: #4a5e80;
+  --accent: #b24222;
+  --accent-2: #4a5e80;
+  --accent-3: #a8763a;
+
+  --ink: #1c1a16;
+  --ink-2: #4a463d;
+  --ink-3: #86806f;
+  --paper: #f2eee5;
+  --paper-2: #eae4d7;
+  --surface: #fbf9f3;
+  --line: rgba(28, 26, 22, 0.14);
+  --line-2: rgba(28, 26, 22, 0.07);
+
+  --status-sap: #5e7a50;
+  --status-approved: #4a5e80;
+  --status-pending: var(--ink);
+  --special-bg: #f0e7d3;
+  --special-edge: #c9a24b;
+
+  --serif: 'Newsreader', Georgia, serif;
+  --sans: 'Archivo', 'IBM Plex Sans Thai', -apple-system, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --r: 6px;
+}
+
+[data-theme='dark'] {
+  --ink: #f2eee5;
+  --ink-2: #c6c0b2;
+  --ink-3: #8b857a;
+  --paper: #1c1a16;
+  --paper-2: #242019;
+  --surface: #2a251e;
+  --line: rgba(242, 238, 229, 0.12);
+  --line-2: rgba(242, 238, 229, 0.07);
+  --special-bg: #33280f;
+  --special-edge: #5c4915;
+  --status-sap: #8fa97e;
+  --status-approved: #8098c0;
+  --status-pending: #f2eee5;
+}

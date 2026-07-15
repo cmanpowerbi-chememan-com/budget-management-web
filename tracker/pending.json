@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T14:20:08+0700",
+  "updated": "2026-07-15T15:07:14+0700",
   "tasks": [
+    {
+      "id": "a7-frontend-scaffold",
+      "state": "done",
+      "created": "2026-07-15T14:30:19+0700",
+      "updated": "2026-07-15T15:07:14+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "GATE FINAL: APPROVE. strict:true both tsconfigs verified (build still 0 type errors); 4 boundary tests + dynamic-year test verified; gate re-ran npm test 28/28 + build green itself; git tracking clean (no node_modules/dist, nothing outside frontend/+plan.md). A7 COMPLETE: React+Vite+TS scaffold, Easy Auth /me+/scope hooks, deep-link ?dept&year parser (server-side authz unchanged), mockup-0002.3 design tokens, shell. Committing.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a6-approval-engine",
       "state": "done",
