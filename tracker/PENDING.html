@@ -37,8 +37,8 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 1:38 AM &bull; rendered: 15 July 2026 1:38 AM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (21)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 20</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 7:28 AM &bull; rendered: 15 July 2026 7:28 AM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (22)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 21</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
@@ -58,6 +58,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a4-read-path</span>
+        <span class="dt">15 July 2026 7:28 AM</span>
+      </div>
+      <div class="id">a4-read-path</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A4 main-table read path (05-dev, TDD): app/sap.py fetch_sap_actuals VERBATIM ADR-0020 query on gold.fact_gl_trans (company_code=1000, doc_type&lt;&gt;CO, excl CCs w/o 10SC012000, assignment&lt;&gt;TFRS16, NO sign flip, NO doc_status) + fail-loud SapActualsFetchError-&gt;502 never silent-empty. app/read_model.py dbo.board_budget FULL OUTER JOIN budget.pending_budget (local cross-schema ADR-0023) key (cc,gl); FULL OUTER not LEFT per ADR-0010 (board-only + manual pending-only rows must persist) - gate RULED CORRECT. SAP merged in FastAPI, period_month-&gt;m01..m12 pivot. Years spec 1c: SAP=Y, Approved=Y, Pending=Y+1; router year=planning, board_year=year-1. RLS: SQL-side parameterized cost_center IN (See scope) + Python backstop; empty See-&gt;0 rows; admin-wide only if is_admin AND admin_view_enabled. GET /budget. 502 detail generic (raw logged server-side). 85/85 tests. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (SAP char-by-char verified, fail-loud, RLS/admin verified). PENDING: env re-point-&gt;fabric_sql_database for live integration test. A5 write next.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>A4 read path (SAP+Approved+Pending 3 ชั้น) เสร็จ; gate APPROVE; 85 tests ผ่าน; รอ env re-point เพื่อ live verify</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a3-rls-scope-resolution</span>
         <span class="dt">15 July 2026 1:38 AM</span>
       </div>
