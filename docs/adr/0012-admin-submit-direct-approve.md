@@ -39,6 +39,16 @@ chain** (the admin-loop routing is unnecessary ceremony).
   admin one-CC fix submits the entire ฝ่าย.
 - **`board_budget` (Approved) import/export CSV is the admin's other lane** and is unchanged —
   separate lifecycle, unaffected by the deadline lock.
+- **AMENDED 2026-07-16 (A6 gate, confirmed by jakkaritw — "กันไว้ก่อน" / fail-closed):** while the
+  cycle is OPEN, an admin Submit (both the orphan branch and the Template-2 `ADMIN_SUBMIT` branch)
+  must NOT overwrite a `(ฝ่าย, fiscal_year)` record that is mid-chain (`PENDING_APPROVER1/2/3`) or
+  already `APPROVED` — the API returns 409; the admin must wait for a reject or for the deadline to
+  pass. Rationale: a dept can hold both Template-1.1 CCs (in the real chain) and Template-2 CCs; an
+  in-cycle admin submit would silently skip the pending approvers for the whole block (ADR-0008
+  whole-ฝ่าย semantics). The **post-deadline branch keeps its override-everything behavior**
+  unchanged. Backend guard: `_ensure_admin_overwrite_allowed` in `backend/app/approval.py`.
+  `ADMIN_OVERRIDE` logging is now split into `ADMIN_OVERRIDE_ORPHAN` / `ADMIN_OVERRIDE_DEADLINE`
+  so the audit trail distinguishes the two branches.
 
 ## Consequences
 

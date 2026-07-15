@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T12:06:44+0700",
+  "updated": "2026-07-15T14:20:08+0700",
   "tasks": [
+    {
+      "id": "a6-approval-engine",
+      "state": "done",
+      "created": "2026-07-15T13:40:11+0700",
+      "updated": "2026-07-15T14:20:08+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "GATE FINAL: APPROVE (combined 06+07+08, re-verified for real). B1 RLS fix confirmed live (real out-of-scope 403, no dept enumeration); B2 fail-closed guard confirmed, post-deadline override preserved, policy confirmed by jakkaritw + ADR-0012 amended; S1-S4 verified at exact lines. Gate re-ran suites itself: 265 mocked + 27 live pass, sentinels clean. A6 approval engine COMPLETE. Committing now.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a4-a5-exhaustive-verify",
       "state": "done",

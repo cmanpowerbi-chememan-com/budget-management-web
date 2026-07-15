@@ -42,12 +42,28 @@ DB at fixture setup, never hardcoded — the SharePoint-synced masters can
 change on their own sync cadence.
 """
 import threading
+from datetime import datetime, timezone
 
 import pyodbc
 import pytest
 from fastapi.testclient import TestClient
 
 import app.sap as sap_module
+from app.approval import (
+    APPROVED,
+    NIPAPORN_EMPCODE,
+    PENDING_APPROVER1,
+    PENDING_APPROVER2,
+    PENDING_APPROVER3,
+    REJECTED,
+    WARAPORN_EMPCODE,
+    ConcurrentApprovalError,
+    NotCurrentApproverError,
+    approve_department,
+    reject_department,
+    resolve_chain,
+    submit_department,
+)
 from app.auth import get_current_user_email
 from app.db import get_fabric_conn, get_gold_conn
 from app.main import app as fastapi_app
@@ -972,3 +988,429 @@ def test_cc_dims_lookup_is_deterministic_for_a_multi_division_cc() -> None:
 
         results = [_lookup_cc_dims(conn, cost_center) for _ in range(5)]
     assert all(r == results[0] for r in results), f"non-deterministic pick across repeated calls: {results}"
+
+
+# ---------------------------------------------------------------------------
+# A6 approval engine — live proofs (added 2026-07-16). Only 2 NEW tables are
+# touched here (`budget.approval_status` / `budget.approval_log`) -- no
+# collision with the A4/A5 sentinel usage above (different tables entirely).
+# Real department names + real employee relationships (Nipaporn/Waraporn's
+# own manager chain, a discovered normal filler's chain) are used to prove
+# chain resolution against LIVE data; all writes are scoped to sentinel
+# fiscal_year=2099 in the 2 A6-owned tables, cleaned up in `finally`. The
+# admin orphan/Template-2 branches use a synthetic department name that can
+# never collide with a real one.
+# ---------------------------------------------------------------------------
+
+FAKE_DEPARTMENT = "ZZ_TEST_DEPT_A6_NEVER_REAL"
+
+
+def _cleanup_approval(conn: pyodbc.Connection, department: str, fiscal_year: int = FISCAL_YEAR) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM budget.approval_log WHERE department = ? AND fiscal_year = ?", department, fiscal_year)
+        cursor.execute("DELETE FROM budget.approval_status WHERE department = ? AND fiscal_year = ?", department, fiscal_year)
+        conn.commit()
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.approval_log WHERE department = ? AND fiscal_year = ?", department, fiscal_year
+        )
+        log_left = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM budget.approval_status WHERE department = ? AND fiscal_year = ?", department, fiscal_year
+        )
+        status_left = cursor.fetchone()[0]
+    finally:
+        cursor.close()
+    assert log_left == 0, f"cleanup left {log_left} budget.approval_log rows for {department}/{fiscal_year}"
+    assert status_left == 0, f"cleanup left {status_left} budget.approval_status rows for {department}/{fiscal_year}"
+
+
+def _discover_nipaporn_waraporn_shared_department(conn: pyodbc.Connection) -> str:
+    """A department both Nipaporn and Waraporn personally Fill (real, verified
+    2026-07-16: 5 such departments exist) -- used to exercise the self-skip
+    single-step chain (ADR-0006's own worked example) end to end."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT DISTINCT department FROM dbo.cc_filler_map WHERE LOWER(filler_email) = LOWER(?) "
+            "INTERSECT "
+            "SELECT DISTINCT department FROM dbo.cc_filler_map WHERE LOWER(filler_email) = LOWER(?) "
+            "ORDER BY department",
+            "nipapornt@chememan.com", "warapornt@chememan.com",
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    assert row is not None, "no department shared by nipapornt and warapornt found in dbo.cc_filler_map"
+    return row[0]
+
+
+def _discover_full_chain_filler(conn: pyodbc.Connection) -> tuple[str, str, str]:
+    """Returns (department, filler_email, manager_email) for a filler whose
+    Primary-row manager is neither Nipaporn nor Waraporn -- exercises the
+    untouched full 3-step chain (no self-skip/dedup)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT TOP 1 f.department, f.filler_email, e.manager_email
+            FROM dbo.cc_filler_map f
+            JOIN dbo.v_employee_budget_01 e ON LOWER(e.email) = LOWER(f.filler_email)
+            WHERE f.filler_email NOT IN (?, ?)
+              AND e.manager_employee_code IS NOT NULL
+              AND e.manager_employee_code NOT IN (?, ?)
+            ORDER BY f.department, f.filler_email
+            """,
+            "nipapornt@chememan.com", "warapornt@chememan.com", NIPAPORN_EMPCODE, WARAPORN_EMPCODE,
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    assert row is not None, "no filler with a full 3-distinct-step chain found in the live data"
+    return row[0], row[1], row[2]
+
+
+def _log_actions(conn: pyodbc.Connection, department: str, fiscal_year: int = FISCAL_YEAR) -> list[str]:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT action FROM budget.approval_log WHERE department = ? AND fiscal_year = ? ORDER BY log_id",
+            department, fiscal_year,
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    return [r[0] for r in rows]
+
+
+@pytest.mark.integration
+def test_resolve_chain_self_skip_nipaporn_live() -> None:
+    """ADR-0006 worked example, live: Nipaporn's own Primary-row manager is
+    Waraporn -> chain collapses to ONE active step."""
+    with get_fabric_conn() as conn:
+        submitter_empcode, approver1_empcode, active = resolve_chain(conn, "nipapornt@chememan.com")
+    assert submitter_empcode == NIPAPORN_EMPCODE
+    assert approver1_empcode == WARAPORN_EMPCODE
+    assert active == [1]
+
+
+@pytest.mark.integration
+def test_resolve_chain_dedup_waraporn_live() -> None:
+    """ADR-0006 worked example, live: Waraporn's own manager is Piyada ->
+    chain keeps 2 steps (Piyada, then Nipaporn), her own step deduped away."""
+    with get_fabric_conn() as conn:
+        submitter_empcode, approver1_empcode, active = resolve_chain(conn, "warapornt@chememan.com")
+    assert submitter_empcode == WARAPORN_EMPCODE
+    assert approver1_empcode == "101218"  # Piyada -- verified live 2026-07-16
+    assert active == [1, 2]
+
+
+@pytest.mark.integration
+def test_resolve_chain_full_chain_live() -> None:
+    with get_fabric_conn() as conn:
+        _department, filler_email, _manager_email = _discover_full_chain_filler(conn)
+        submitter_empcode, approver1_empcode, active = resolve_chain(conn, filler_email)
+    assert active == [1, 2, 3]
+    assert approver1_empcode not in (NIPAPORN_EMPCODE, WARAPORN_EMPCODE)
+
+
+@pytest.mark.integration
+def test_submit_then_approve_self_skip_chain_end_to_end_live() -> None:
+    """Nipaporn submits one of her own departments -- the chain collapses to
+    ONE step (Waraporn); approving it goes straight to APPROVED."""
+    with get_fabric_conn() as conn:
+        department = _discover_nipaporn_waraporn_shared_department(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope("nipapornt@chememan.com", conn)
+            state = submit_department(conn, department, FISCAL_YEAR, "nipapornt@chememan.com", scope)
+        assert state.status == PENDING_APPROVER1
+        assert state.approver1_empcode == WARAPORN_EMPCODE
+
+        with get_fabric_conn() as conn:
+            approved = approve_department(conn, department, FISCAL_YEAR, "warapornt@chememan.com")
+        assert approved.status == APPROVED
+
+        with get_fabric_conn() as verify_conn:
+            actions = _log_actions(verify_conn, department)
+        assert actions == ["SUBMIT", "APPROVE"]
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_submit_then_approve_full_three_step_chain_end_to_end_live() -> None:
+    with get_fabric_conn() as conn:
+        department, filler_email, manager_email = _discover_full_chain_filler(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            state = submit_department(conn, department, FISCAL_YEAR, filler_email, scope)
+        assert state.status == PENDING_APPROVER1
+
+        with get_fabric_conn() as conn:
+            state = approve_department(conn, department, FISCAL_YEAR, manager_email)
+        assert state.status == PENDING_APPROVER2
+
+        with get_fabric_conn() as conn:
+            state = approve_department(conn, department, FISCAL_YEAR, "nipapornt@chememan.com")
+        assert state.status == PENDING_APPROVER3
+
+        with get_fabric_conn() as conn:
+            state = approve_department(conn, department, FISCAL_YEAR, "warapornt@chememan.com")
+        assert state.status == APPROVED
+
+        with get_fabric_conn() as verify_conn:
+            actions = _log_actions(verify_conn, department)
+        assert actions == ["SUBMIT", "APPROVE", "APPROVE", "APPROVE"]
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_approve_by_wrong_person_is_rejected_live() -> None:
+    with get_fabric_conn() as conn:
+        department, filler_email, _manager_email = _discover_full_chain_filler(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            submit_department(conn, department, FISCAL_YEAR, filler_email, scope)
+
+        with get_fabric_conn() as conn:
+            with pytest.raises(NotCurrentApproverError):
+                approve_department(conn, department, FISCAL_YEAR, filler_email)  # the submitter, not the manager
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_reject_then_resubmit_restarts_whole_chain_live() -> None:
+    with get_fabric_conn() as conn:
+        department, filler_email, manager_email = _discover_full_chain_filler(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            submit_department(conn, department, FISCAL_YEAR, filler_email, scope)
+
+        with get_fabric_conn() as conn:
+            rejected = reject_department(conn, department, FISCAL_YEAR, manager_email, "numbers look wrong")
+        assert rejected.status == REJECTED
+        assert rejected.reject_reason == "numbers look wrong"
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            resubmitted = submit_department(conn, department, FISCAL_YEAR, filler_email, scope)
+        assert resubmitted.status == PENDING_APPROVER1, "resubmit must restart at step 1, never resume mid-chain"
+        assert resubmitted.reject_reason is None, "re-freeze from scratch -- reject_reason must be cleared"
+        assert resubmitted.approver1_actioned_at is None, "re-freeze from scratch -- prior actioned_at must be cleared"
+
+        with get_fabric_conn() as verify_conn:
+            actions = _log_actions(verify_conn, department)
+        assert actions == ["SUBMIT", "REJECT", "RESUBMIT"]
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, department)
+
+
+@pytest.mark.integration
+def test_admin_direct_approve_orphan_department_live() -> None:
+    """A department name with ZERO rows in dbo.cc_filler_map (nobody can Fill
+    or submit it normally) -- admin direct-approve, logged
+    ADMIN_OVERRIDE_ORPHAN (S4 gate fix: distinct from the post-deadline
+    branch's ADMIN_OVERRIDE_DEADLINE), no approver chain ever created."""
+    admin_email = "jakkaritw@chememan.com"
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(admin_email, conn)
+            assert scope.is_admin, f"{admin_email} expected to be admin (ADMIN_EMAILS)"
+            state = submit_department(conn, FAKE_DEPARTMENT, FISCAL_YEAR, admin_email, scope)
+        assert state.status == APPROVED
+        assert state.approver1_empcode is None
+
+        with get_fabric_conn() as verify_conn:
+            actions = _log_actions(verify_conn, FAKE_DEPARTMENT)
+        assert actions == ["ADMIN_OVERRIDE_ORPHAN"]
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, FAKE_DEPARTMENT)
+
+
+@pytest.mark.integration
+def test_admin_direct_approve_template_2_door_live() -> None:
+    """A department with a real `template='ADMIN'` pending_budget row (the
+    Budget-dept Template-2 door, spec §1d) -- admin direct-approve, logged
+    ADMIN_SUBMIT (distinct from the orphan case's ADMIN_OVERRIDE_ORPHAN)."""
+    admin_email = "jakkaritw@chememan.com"
+    now = datetime.now(timezone.utc)
+    cost_center, gl_account = "ZZ_TEST_CC_A6", "ZZ_TEST_GL_A6"
+
+    try:
+        with get_fabric_conn() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO budget.pending_budget
+                        (cost_center, gl_account, fiscal_year,
+                         m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12,
+                         total_year, template, department, _user, _updated_at)
+                    VALUES (?, ?, ?, 0,0,0,0,0,0,0,0,0,0,0,0, 0, 'ADMIN', ?, ?, ?)
+                    """,
+                    cost_center, gl_account, FISCAL_YEAR, FAKE_DEPARTMENT, admin_email, now,
+                )
+                conn.commit()
+            finally:
+                cursor.close()
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(admin_email, conn)
+            state = submit_department(conn, FAKE_DEPARTMENT, FISCAL_YEAR, admin_email, scope)
+        assert state.status == APPROVED
+
+        with get_fabric_conn() as verify_conn:
+            actions = _log_actions(verify_conn, FAKE_DEPARTMENT)
+        assert actions == ["ADMIN_SUBMIT"]
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, FAKE_DEPARTMENT)
+            cursor = cleanup_conn.cursor()
+            try:
+                cursor.execute(
+                    "DELETE FROM budget.pending_budget WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, FISCAL_YEAR,
+                )
+                cleanup_conn.commit()
+            finally:
+                cursor.close()
+
+
+@pytest.mark.integration
+def test_concurrent_double_approve_does_not_double_advance_live() -> None:
+    """D5-style race (never-cut), applied to A6: two connections race to
+    approve the SAME single-step chain (the self-skip scenario -- only
+    Waraporn's step exists) -- exactly one must succeed (-> APPROVED), the
+    other must get ConcurrentApprovalError, and only ONE APPROVE log row may
+    ever be written (no double-advance)."""
+    with get_fabric_conn() as conn:
+        department = _discover_nipaporn_waraporn_shared_department(conn)
+
+    barrier = threading.Barrier(2)
+    results: list[tuple[str, str | None]] = []
+    errors: list[BaseException] = []
+
+    def _approve() -> None:
+        try:
+            with get_fabric_conn() as conn:
+                barrier.wait(timeout=10)
+                try:
+                    state = approve_department(conn, department, FISCAL_YEAR, "warapornt@chememan.com")
+                    results.append(("ok", state.status))
+                except ConcurrentApprovalError:
+                    results.append(("conflict", None))
+        except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors`, never swallowed
+            errors.append(exc)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope("nipapornt@chememan.com", conn)
+            submit_department(conn, department, FISCAL_YEAR, "nipapornt@chememan.com", scope)
+
+        t1 = threading.Thread(target=_approve)
+        t2 = threading.Thread(target=_approve)
+        t1.start()
+        t2.start()
+        t1.join(timeout=30)
+        t2.join(timeout=30)
+
+        assert not errors, f"thread(s) raised unexpectedly: {errors}"
+        assert len(results) == 2
+        ok_results = [r for r in results if r[0] == "ok"]
+        conflict_results = [r for r in results if r[0] == "conflict"]
+        assert len(ok_results) == 1, f"expected exactly one successful approve, got {results}"
+        assert len(conflict_results) == 1, f"expected exactly one conflict, got {results}"
+        assert ok_results[0][1] == APPROVED
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT status FROM budget.approval_status WHERE department = ? AND fiscal_year = ?",
+                    department, FISCAL_YEAR,
+                )
+                final_status = cursor.fetchone()[0]
+                cursor.execute(
+                    "SELECT COUNT(*) FROM budget.approval_log WHERE department = ? AND fiscal_year = ? AND action = 'APPROVE'",
+                    department, FISCAL_YEAR,
+                )
+                approve_log_count = cursor.fetchone()[0]
+            finally:
+                cursor.close()
+        assert final_status == APPROVED
+        assert approve_log_count == 1, "exactly one APPROVE log row expected -- no double-advance"
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval(cleanup_conn, department)
+
+
+# ---------------------------------------------------------------------------
+# B1 gate fix — GET /approval/status had no authorization at all. Read-only:
+# a 403 is raised before any DB write, so no cleanup is needed here.
+# ---------------------------------------------------------------------------
+
+def _discover_department_outside_filler_scope(conn: pyodbc.Connection, filler_email: str) -> str:
+    """Return a real department name whose cost centers (per
+    dbo.cc_filler_map) are entirely OUTSIDE `filler_email`'s own See scope --
+    used to prove B1 (a filler must not be able to view another
+    department's approval status)."""
+    scope = resolve_scope(filler_email, conn)
+    see_cost_centers = scope.see_cost_centers or ["__NONE__"]
+    placeholders = ", ".join("?" for _ in see_cost_centers)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            SELECT TOP 1 department FROM dbo.cc_filler_map
+            WHERE department NOT IN (
+                SELECT DISTINCT department FROM dbo.cc_filler_map WHERE cost_center IN ({placeholders})
+            )
+            ORDER BY department
+            """,
+            *see_cost_centers,
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    assert row is not None, f"no department found outside {filler_email}'s See scope"
+    return row[0]
+
+
+@pytest.mark.integration
+def test_status_forbidden_for_department_outside_callers_scope_live() -> None:
+    """B1 gate fix, live: GET /approval/status must 403 when the caller
+    queries a real department outside their own See scope -- proves the RLS
+    check runs against the real dbo.cc_filler_map, not just a mocked scope."""
+    with get_fabric_conn() as conn:
+        _department, filler_email, _manager_email = _discover_full_chain_filler(conn)
+        other_department = _discover_department_outside_filler_scope(conn, filler_email)
+
+    fastapi_app.dependency_overrides[get_current_user_email] = lambda: filler_email
+    try:
+        with TestClient(fastapi_app) as client:
+            response = client.get(
+                "/approval/status", params={"department": other_department, "fiscal_year": FISCAL_YEAR}
+            )
+        assert response.status_code == 403, response.text
+    finally:
+        fastapi_app.dependency_overrides.pop(get_current_user_email, None)

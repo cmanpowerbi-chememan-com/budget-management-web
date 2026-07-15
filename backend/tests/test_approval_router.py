@@ -1,0 +1,190 @@
+"""Unit tests for the A6 approval endpoints — POST /approval/submit|approve|
+reject, GET /approval/status. DB always mocked; the state machine itself is
+unit-tested in test_approval.py — these tests only prove the router wiring:
+auth, error-code -> HTTP-status mapping, and the 502 DB-unavailable path.
+"""
+from unittest.mock import MagicMock, patch
+
+from app.approval import (
+    APPROVED,
+    PENDING_APPROVER1,
+    ApprovalRecordNotFoundError,
+    ApprovalStatusState,
+    InvalidApprovalStateError,
+    MidChainAdminOverwriteError,
+    NotAuthorizedToViewDepartmentError,
+    NotCurrentApproverError,
+    NotFillerOfDepartmentError,
+)
+from app.auth import get_current_user_email
+from app.main import app
+
+DEPT = "Accounting"
+FY = 2027
+
+
+def _override_auth(email: str) -> None:
+    app.dependency_overrides[get_current_user_email] = lambda: email
+
+
+def _fake_state(**overrides) -> ApprovalStatusState:
+    defaults = dict(department=DEPT, fiscal_year=FY, status=PENDING_APPROVER1)
+    defaults.update(overrides)
+    return ApprovalStatusState(**defaults)
+
+
+def test_submit_401_without_auth(client):
+    response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 401
+
+
+def test_submit_success_returns_200(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.submit_department", return_value=_fake_state()):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["status"] == PENDING_APPROVER1
+
+
+def test_submit_forbidden_maps_to_403(client):
+    _override_auth("outsider@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        side_effect=NotFillerOfDepartmentError("outsider@chememan.com does not Fill any cost center of 'Accounting'"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 403
+
+
+def test_submit_invalid_state_maps_to_409(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        side_effect=InvalidApprovalStateError("Accounting/2027 is PENDING_APPROVER2 -- cannot submit"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 409
+
+
+def test_submit_db_failure_maps_to_502(client):
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", side_effect=pyodbc.Error("connection lost")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 502
+
+
+def test_approve_success_returns_200(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department", return_value=_fake_state(status=APPROVED)
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["status"] == APPROVED
+
+
+def test_approve_not_current_approver_maps_to_403(client):
+    _override_auth("someone-else@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department",
+        side_effect=NotCurrentApproverError("not the current approver"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 403
+
+
+def test_approve_no_record_maps_to_404(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department",
+        side_effect=ApprovalRecordNotFoundError("no approval record"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 404
+
+
+def test_reject_success_returns_200(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.reject_department", return_value=_fake_state(status="REJECTED", reject_reason="bad")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post(
+            "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "REJECTED"
+
+
+def test_reject_requires_reason_field_422(client):
+    _override_auth("manager@chememan.com")
+    response = client.post("/approval/reject", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 422
+
+
+def test_status_returns_draft_when_never_submitted(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status="DRAFT", current_position=None),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["status"] == "DRAFT"
+
+
+def test_status_401_without_auth(client):
+    response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 401
+
+
+def test_status_forbidden_maps_to_403(client):
+    """B1 gate fix: an out-of-scope (or nonexistent-department) caller must
+    get 403 from GET /approval/status, never the raw record."""
+    _override_auth("outsider@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.authorize_status_view",
+        side_effect=NotAuthorizedToViewDepartmentError("not authorized to view this department's approval status"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 403
+
+
+def test_submit_mid_chain_admin_overwrite_maps_to_409(client):
+    """B2 gate fix: the new fail-closed guard's error must map to 409, same
+    as the other approval-conflict cases."""
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        side_effect=MidChainAdminOverwriteError("Accounting/2027 is PENDING_APPROVER2 -- mid-approval"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 409
