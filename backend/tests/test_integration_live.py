@@ -2139,3 +2139,172 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovere
     finally:
         with get_fabric_conn() as cleanup_conn:
             _cleanup_delete_sentinel_year(cleanup_conn)
+
+
+# =========================================================================
+# A13 RLS role matrix — live e2e (ADR-0019 + BUILD_PLAN)
+# =========================================================================
+
+@pytest.mark.integration
+def test_rls_filler_has_fill_scope_rows_editable_live() -> None:
+    """A13 RLS matrix: a real filler's Fill-scope cost centers must have
+    editable=True, See must be a superset of Fill, and all out-of-scope
+    rows must be filtered away (RLS pushdown verified on the real DB)."""
+    with get_fabric_conn() as conn:
+        cost_center, filler_email = _discover_cc_filler(conn)
+        scope = resolve_scope(filler_email, conn)
+
+    assert scope.fill_cost_centers, f"{filler_email} has empty Fill scope"
+    assert set(scope.fill_cost_centers) <= set(scope.see_cost_centers), "See must be ⊇ Fill"
+    assert cost_center in scope.fill_cost_centers
+
+    with get_fabric_conn() as conn, get_gold_conn() as gold_conn:
+        board_year = _discover_board_year(conn)
+        rows = get_budget_grid(
+            conn, gold_conn, planning_year=board_year + 1, scope=scope
+        )
+
+    fill_ccs = set(scope.fill_cost_centers)
+    see_ccs = set(scope.see_cost_centers)
+    for row in rows:
+        assert row.cost_center in see_ccs, f"row {row.cost_center} outside See scope"
+        if row.cost_center in fill_ccs:
+            assert row.editable is True, f"Fill-scope row {row.cost_center} not editable"
+        elif row.cost_center in see_ccs:
+            assert row.editable is False, f"See-only row {row.cost_center} editable"
+
+
+@pytest.mark.integration
+def test_rls_see_only_manager_cannot_edit_their_sees_live() -> None:
+    """A13 RLS matrix: a manager's See-only cost centers (See minus Fill)
+    must have editable=False even though they appear in the grid."""
+    with get_fabric_conn() as conn:
+        # Discover a manager-filler with See > Fill
+        emails = []
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT DISTINCT filler_email FROM dbo.cc_filler_map "
+                "WHERE filler_email IS NOT NULL AND LTRIM(RTRIM(filler_email)) <> ''"
+            )
+            emails = [r[0] for r in cursor.fetchall()]
+        finally:
+            cursor.close()
+
+        for email in emails:
+            scope = resolve_scope(email, conn)
+            see_only = set(scope.see_cost_centers) - set(scope.fill_cost_centers)
+            if see_only:
+                filler_email = email
+                break
+        else:
+            pytest.skip("no manager-filler with See > Fill found in live data")
+
+    with get_fabric_conn() as conn, get_gold_conn() as gold_conn:
+        board_year = _discover_board_year(conn)
+        scope = resolve_scope(filler_email, conn)
+        rows = get_budget_grid(
+            conn, gold_conn, planning_year=board_year + 1, scope=scope
+        )
+
+    see_only_ccs = set(scope.see_cost_centers) - set(scope.fill_cost_centers)
+    for row in rows:
+        if row.cost_center in see_only_ccs:
+            assert row.editable is False, (
+                f"See-only row {row.cost_center} for {filler_email} must not be editable"
+            )
+
+
+# =========================================================================
+# A13 pending-row persistence — live e2e at sentinel fiscal_year 2092
+# (full approval lifecycle is proven by the A6/A10 tests, not this one)
+# =========================================================================
+
+APPROVAL_LIFECYCLE_FISCAL_YEAR = 2092
+
+
+def _cleanup_approval_lifecycle_sentinel_year(conn: pyodbc.Connection) -> None:
+    """Delete every row at APPROVAL_LIFECYCLE_FISCAL_YEAR + verify cleanup."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.pending_budget_detail WHERE fiscal_year = ?",
+            APPROVAL_LIFECYCLE_FISCAL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.budget_trip WHERE fiscal_year = ?",
+            APPROVAL_LIFECYCLE_FISCAL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.pending_budget WHERE fiscal_year = ?",
+            APPROVAL_LIFECYCLE_FISCAL_YEAR,
+        )
+        cursor.execute(
+            "DELETE FROM budget.approval_status WHERE fiscal_year = ?",
+            APPROVAL_LIFECYCLE_FISCAL_YEAR,
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        for table in [
+            "budget.pending_budget_detail",
+            "budget.budget_trip",
+            "budget.pending_budget",
+            "budget.approval_status",
+        ]:
+            cursor.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE fiscal_year = ?",
+                APPROVAL_LIFECYCLE_FISCAL_YEAR,
+            )
+            remaining = cursor.fetchone()[0]
+            assert remaining == 0, f"cleanup left {remaining} rows at fiscal_year={APPROVAL_LIFECYCLE_FISCAL_YEAR} in {table}"
+    finally:
+        cursor.close()
+
+
+@pytest.mark.integration
+def test_a13_pending_row_persists_across_reconnect_live() -> None:
+    """A13: Create a pending budget row at sentinel fiscal_year 2092 and verify
+    it persists on a fresh connection (the atomic write + commit pattern works
+    end-to-end, not just in unit tests). Does not exercise approval/submit —
+    see the A6/A10 tests for the full approval lifecycle."""
+    with get_fabric_conn() as conn:
+        cost_center, filler_email = _discover_cc_filler(conn)
+        non_special_gl = _discover_non_special_gl(conn)
+        scope = resolve_scope(filler_email, conn)
+
+    try:
+        # Phase 1: Create a pending row for the real filler
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            save_results = save_pending_rows(
+                conn,
+                [PendingRowInput(cost_center=cost_center, gl_account=non_special_gl, fiscal_year=APPROVAL_LIFECYCLE_FISCAL_YEAR, m01=100.0)],
+                user_email=filler_email, scope=scope,
+            )
+        assert save_results[0].ok, save_results[0].detail
+
+        # Phase 2: Verify row is really persisted on a fresh connection
+        # (The key assertion: write committed cleanly, not rolled back)
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01, total_year FROM budget.pending_budget "
+                    "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, non_special_gl, APPROVAL_LIFECYCLE_FISCAL_YEAR,
+                )
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+
+        assert row is not None, "pending row must persist on a fresh connection"
+        assert float(row[0]) == 100.0, "m01 must be 100.0"
+        assert float(row[1]) == 100.0, "total_year must be 100.0"
+
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_approval_lifecycle_sentinel_year(cleanup_conn)

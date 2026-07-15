@@ -531,3 +531,75 @@ def test_get_budget_grid_admin_without_toggle_still_passes_see_cost_centers_filt
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=False)
 
     assert captured["cost_centers"] == ["CC1"]
+
+
+# =========================================================================
+# A13 board Replace-by-Year resilience (ADR-0021 + BUILD_PLAN)
+# =========================================================================
+
+def test_board_year_empty_returns_zero_filled_pending_and_sap_layers():
+    """When dbo.board_budget has ZERO rows for the board year (mid-sync or
+    post-deletion), the grid still renders SAP+Pending layers with board
+    zero-filled — never crashes, never silent-empty grid."""
+    join_rows = [
+        _blank_join_row(
+            "CC1", "GL1",
+            # No board fields (all None) — board year was empty for this cc/gl
+            pending_cost_center="CC1", pending_m01=100.0, pending_total_year=100.0
+        ),
+    ]
+    # SAP data passed separately (ADR-0020: cross-store merge)
+    sap_actuals = {
+        ("CC1", "GL2"): {"m01": 50.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
+                        "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,
+                        "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0}
+    }
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert len(rows) == 2
+    # Row 1: board=0, pending=100, sap=None (GL1 not in SAP)
+    assert rows[0].board.total_year == 0
+    assert rows[0].pending.m01 == 100.0
+    assert rows[0].sap.total_year == 0
+    # Row 2: board=0, pending=None, sap=50 (GL2 SAP-only row)
+    assert rows[1].cost_center == "CC1" and rows[1].gl_account == "GL2"
+    assert rows[1].board.total_year == 0
+    assert rows[1].pending.total_year == 0
+    assert rows[1].sap.m01 == 50.0
+
+
+def test_board_year_partial_missing_cost_center_still_renders():
+    """When dbo.board_budget is present but missing a specific cost center
+    (sync in progress, mid-DROP+re-INSERT), rows from SAP/Pending for that
+    CC still appear with zero-filled board layer — never lost."""
+    join_rows = []  # No join row yet (board empty for CC_NEW)
+    # But SAP has a row for CC_NEW
+    sap_actuals = {
+        ("CC_NEW", "GL1"): {"m01": 200.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
+                           "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,
+                           "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0}
+    }
+    scope = _scope(fill_cost_centers=["CC_NEW"], see_cost_centers=["CC_NEW"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert len(rows) == 1
+    assert rows[0].cost_center == "CC_NEW"
+    assert rows[0].board.total_year == 0  # zero-filled, not skipped
+    assert rows[0].sap.m01 == 200.0
+
+
+def test_fetch_board_pending_rows_empty_board_year_no_crash():
+    """A FULL OUTER JOIN returning 0 board rows (mid-sync) must not crash,
+    just return an empty list — grid render happens downstream in merge_budget_rows."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []  # Empty board/pending join
+    conn.cursor.return_value.close.return_value = None
+
+    rows = fetch_board_pending_rows(conn, board_year=2026, pending_year=2027)
+
+    assert rows == []
+    conn.cursor.return_value.execute.assert_called_once()
+    conn.cursor.return_value.close.assert_called_once()

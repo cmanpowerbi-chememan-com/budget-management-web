@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T20:23:47+0700",
+  "updated": "2026-07-15T21:25:29+0700",
   "tasks": [
+    {
+      "id": "a13-final-verify",
+      "state": "done",
+      "created": "2026-07-15T20:40:48+0700",
+      "updated": "2026-07-15T21:25:29+0700",
+      "agent": "08-tester",
+      "skills": [],
+      "files": [],
+      "ai": "FINAL GATE: READY (after 1 mechanical fix). Whole-system verdict: 0 ungated endpoints; never-cut->test mapping complete (control-number reconcile = manual A14 gate by design); secrets/PDPA/injection/XSS clean; fail-safe defaults verified. Blocker fixed: ci-tests.yml verify step false-failed every run (collect-only prints IDs not decorators) — removed, exclusion = pytest.ini addopts + explicit -m; lifecycle test renamed (was overclaiming — real chain proven by A6/A10 tests, gate verified each green). Counts: 486 mocked + 42 live + 2 jobs, FE 254 + build, audit 0, sentinels 0 @2092-2099. Gate transparency: its own 120s timeout once killed a live run mid-txn leaving 1 dirty row @2099 — self-healed on rerun, sweep confirms clean. A13 COMPLETE. A14 = deploy checklist for jakkaritw (8 items in commit msg). Committed.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a10-approval-ui",
       "state": "done",
