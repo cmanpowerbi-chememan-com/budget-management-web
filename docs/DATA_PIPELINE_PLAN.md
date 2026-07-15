@@ -65,16 +65,18 @@ Sites.ReadWrite.All). Cadence = **DAILY, same job/schedule as `employee_master`*
 
 **6. closing-date → `dbo.submission_deadline` (in `fabric_sql_database`, `dbo` schema).** From `วันปิดรับข้อมูลงบประมาณ.xlsx` (5 TEXT cols). Derive `deadline_date = DATE(closing_year, closing_month, closing_date)`, `reminder_date = DATE(closing_year, closing_month, reminder_day)`. **Validate `reminder_day < closing_date`.** One row per fiscal_year.
 
-**7. SAP actuals query contract on `gold.fact_gl_trans`** (the app runs this read-through; pin it here). VERIFIED 2026-07-13/14:
+**7. SAP actuals query contract on `gold.fact_gl_trans`** (the app runs this read-through; pin it here). VERIFIED 2026-07-13/14; **CORRECTED 2026-07-16 (D2, exhaustive live verify)**:
 ```sql
 SELECT cost_center, gl_account_number, fiscal_year, period_month, SUM(company_curr_amount) AS actual_thb
 FROM gold.fact_gl_trans
 WHERE company_code='1000' AND doc_type<>'CO'
   AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')  -- 10SC012000 KEPT
-  AND assignment_number<>'TFRS16' AND fiscal_year=@year   -- NO doc_status filter; NO sign flip
+  AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=@year   -- NO doc_status filter; NO sign flip
 GROUP BY cost_center, gl_account_number, fiscal_year, period_month
 ```
 `company_code='1000'` is triply load-bearing (currency + double-count + sign). `period_month` is DW-derived. Reversals net to 0 (no filter). (ADR-0020)
+
+**D2 dated note (2026-07-16):** the bare `assignment_number<>'TFRS16'` is NOT NULL-safe (`NULL <> 'TFRS16'` = SQL UNKNOWN) — it silently dropped every NULL-assignment row. Live impact: FY2025 lost 706 rows / −12,827,790.81 THB; FY2026 fabricated ~3.87M THB of phantom actuals on balanced clearing accounts (GL 9110100020, CC 10QC011000 net ~0.00 after the fix, was a multi-million THB phantom before). Confirmed policy: keep NULL-assignment rows.
 
 **8. board_budget → `dbo.board_budget` (in `fabric_sql_database`, `dbo` schema).** From `approved budget/approved_budget_<year>.xlsx`, sheet `sheet1`, **cols A–N only** (cost_center, gl_code, jan..dec); **year from FILENAME** (strict `approved_budget_(\d{4})\.xlsx`, else reject). **Validate-all-then-Replace-by-Year** (DELETE year + bulk INSERT, one txn). Re-derive dim cols from master (gl_name/gl_group/division/dept/c_level); remark NULL. Trigger = **admin "Sync now" button + daily auto-sync**. (ADR-0021)
 

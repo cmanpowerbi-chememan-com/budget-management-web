@@ -95,6 +95,40 @@ def _board_pending_join_sql(cc_filter_clause: str) -> str:
     """
 
 
+def fetch_cc_dims(conn: pyodbc.Connection, cost_centers: list[str]) -> dict[str, dict[str, str | None]]:
+    """Batch (cost_center -> department/division/c_level) lookup used ONLY to
+    backfill a SAP-led row's dimensions when the caller applies the
+    department filter (D10): a pure-SAP (cost_center, gl_account) key has no
+    board/pending snapshot yet, so it has no department of its own — without
+    this fallback, the department filter silently dropped it (real loss
+    observed live: a department lost 10 SAP-led rows / 302,560.17 THB).
+
+    One deterministic row per cost_center (`ORDER BY filler_email` — same
+    tie-break rule as `write_model._lookup_cc_dims`, D11): a cost_center can
+    have more than one row in `dbo.cc_filler_map` (one per filler_email)."""
+    if not cost_centers:
+        return {}
+    placeholders = ", ".join(["?"] * len(cost_centers))
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            SELECT cost_center, department, division, c_level FROM (
+                SELECT cost_center, department, division, c_level,
+                       ROW_NUMBER() OVER (PARTITION BY cost_center ORDER BY filler_email) AS rn
+                FROM dbo.cc_filler_map
+                WHERE cost_center IN ({placeholders})
+            ) ranked
+            WHERE rn = 1
+            """,
+            *cost_centers,
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    return {r[0]: {"department": r[1], "division": r[2], "c_level": r[3]} for r in rows}
+
+
 def fetch_board_pending_rows(
     conn: pyodbc.Connection,
     board_year: int,
@@ -229,9 +263,18 @@ def merge_budget_rows(
     admin_view_enabled: bool = False,
     cost_center_filter: str | None = None,
     department_filter: str | None = None,
+    cc_dims: dict[str, dict[str, str | None]] | None = None,
 ) -> list[BudgetRow]:
     """Pure merge: board+pending join rows + SAP dict + RLS scope -> the final
-    visible/editable row list. No I/O — fully unit-testable.
+    visible/editable row list. No I/O (aside from the optional pre-fetched
+    `cc_dims` dict, itself I/O-free here) — fully unit-testable.
+
+    `cc_dims` (D10 fix): a SAP-led row (no board/pending layer) has no
+    department of its own — when `department_filter` is applied, fall back
+    to `cc_dims[cost_center]["department"]` (from `dbo.cc_filler_map`, fetched
+    by the caller via `fetch_cc_dims`) instead of silently dropping the row.
+    `None` (the default) preserves the old behavior for callers that don't
+    need the department filter at all.
 
     RLS (ADR-0019, honoring A3's `admin_view_enabled` hook): a non-admin (or
     an admin with the toggle off) only sees rows whose cost_center is in their
@@ -271,6 +314,8 @@ def merge_budget_rows(
             continue
         if department_filter is not None:
             dept = row.pending.department or row.board.department
+            if dept is None and cc_dims is not None:
+                dept = cc_dims.get(cc, {}).get("department")
             if dept != department_filter:
                 continue
         row.editable = admin_wide or cc in fill_ccs
@@ -307,6 +352,13 @@ def get_budget_grid(
     )
     sap_actuals = fetch_sap_actuals(gold_conn, fiscal_year=board_year)
 
+    # D10: only fetch cc_dims when the department filter is actually in use —
+    # avoids an extra round-trip on every plain (unfiltered) grid load.
+    cc_dims = None
+    if department_filter is not None:
+        all_ccs = {jr["cost_center"] for jr in join_rows} | {key[0] for key in sap_actuals}
+        cc_dims = fetch_cc_dims(fabric_conn, sorted(all_ccs))
+
     return merge_budget_rows(
         join_rows,
         sap_actuals,
@@ -314,4 +366,5 @@ def get_budget_grid(
         admin_view_enabled=admin_view_enabled,
         cost_center_filter=cost_center_filter,
         department_filter=department_filter,
+        cc_dims=cc_dims,
     )

@@ -45,11 +45,11 @@ Design (see final report for the full rationale):
 """
 import json
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 import pyodbc
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError, derive_per_diem
 from app.rls import Scope
@@ -80,6 +80,22 @@ PER_DIEM_GL_BY_SIDE: dict[str, str] = TRAVEL_GL_BY_TYPE_SIDE["per_diem"]
 _TRAVEL_GL_SIDE: dict[str, str] = {
     gl: side for sides in TRAVEL_GL_BY_TYPE_SIDE.values() for side, gl in sides.items()
 }
+
+# D6 (never-cut): quantize every incoming month amount to DECIMAL(18,2) AT
+# THE API BOUNDARY, before any sum is computed — see `_quantize_month` below.
+_CENT = Decimal("0.01")
+
+# Live NVARCHAR column widths (verified against INFORMATION_SCHEMA.COLUMNS
+# on `fabric_sql_database`, 2026-07-16 — D9). Kept as named constants so a
+# schema change only needs updating in one place.
+_MAX_LEN_CC_OR_GL = 20      # cost_center, gl_account, traveler_empcode
+_MAX_LEN_REMARK = 500       # pending_budget.remark, budget_trip.purpose
+_MAX_LEN_LINE_LABEL = 300   # pending_budget_detail.line_label
+_MAX_LEN_DESTINATION = 200  # budget_trip.destination
+_MAX_LEN_TRAVEL_MONTHS_CSV = 40  # budget_trip.travel_months (joined CSV)
+# DECIMAL(18,2) max magnitude is 9,999,999,999,999,999.99 (16 integer digits);
+# 1e16 is a clean, safely-below-max bound for the Pydantic guard.
+_MAX_MONTH_AMOUNT = 1e16
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +167,13 @@ class InvalidRequestError(ValueError):
     missing, or a new row supplying one)."""
 
 
+class DataOverflowError(ValueError):
+    """A value overflowed its column's storage limit (NVARCHAR length or
+    DECIMAL(18,2) magnitude) and reached the database despite the Pydantic
+    `max_length`/range guards above (D9, never-cut: one bad row must never
+    surface as an uncaught 500 or block the rest of the batch)."""
+
+
 # HTTP status per error code — the single source of truth the router reads
 # (per_diem's fail-loud errors are 5xx: a missing FX/rate year is an app data
 # problem, never the caller's fault, and must never look like a 4xx typo).
@@ -169,6 +192,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "invalid_meta": 400,
     "invalid_request": 400,
     "conflict": 409,
+    "data_overflow": 400,
     "missing_per_diem_rate": 500,
     "missing_fx_rate": 500,
 }
@@ -188,6 +212,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     MetaValidationError: "invalid_meta",
     InvalidRequestError: "invalid_request",
     RowConflictError: "conflict",
+    DataOverflowError: "data_overflow",
 }
 _CAUGHT_PER_ITEM = tuple(_ERROR_CODE_BY_EXCEPTION)  # never includes the per_diem fail-loud errors — those propagate
 
@@ -198,6 +223,25 @@ def _now() -> datetime:
 
 def _num(value) -> float:
     return 0.0 if value is None else float(value)
+
+
+def _quantize_month(value: float) -> Decimal:
+    """Quantize an incoming month amount to DECIMAL(18,2) (2dp, ROUND_HALF_UP)
+    AT THE API BOUNDARY (D6, never-cut): `total_year` must equal
+    `SUM(m01..m12)` exactly, which only holds if every month is rounded
+    BEFORE it is summed, never after — summing the raw unrounded floats then
+    rounding the total drifts from the sum of the independently-rounded
+    months whenever a value sits near a cent boundary (two entries of
+    100.005 must both persist as 100.00, so their total is 200.00 — not
+    200.01 from rounding the unrounded sum after the fact).
+
+    `Decimal(value)` (NOT `Decimal(str(value))`) is deliberate: it preserves
+    the exact IEEE-754 double the client actually sent, which is what any
+    binary-to-decimal conversion (including SQL Server's own float->DECIMAL
+    cast) would also see — so Python's rounding decision matches what the
+    database would otherwise have decided implicitly.
+    """
+    return Decimal(value).quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +279,7 @@ def _ensure_not_excluded(cost_center: str) -> None:
         raise ExcludedCostCenterError(f"{cost_center} is an excluded cost center — never valid for budget entry")
 
 
-def _ensure_no_negative_months(months: list[float]) -> None:
+def _ensure_no_negative_months(months: list[Decimal]) -> None:
     if any(v < 0 for v in months):
         raise NegativeMonthError("month amounts must be >= 0")
 
@@ -254,15 +298,23 @@ def _lookup_gl_group(conn: pyodbc.Connection, gl_account: str) -> tuple[str, str
     finally:
         cursor.close()
     if row is None:
-        raise UnknownGlAccountError(f"gl_account {gl_account} not found in dbo.gl_group")
+        # D13: never echo the internal table name to the client — this
+        # message flows straight into the HTTP error body via `detail`.
+        raise UnknownGlAccountError(f"gl_account {gl_account} is not a recognised GL account")
     return row[0], row[1]
 
 
 def _lookup_cc_dims(conn: pyodbc.Connection, cost_center: str) -> dict[str, str | None]:
+    """A cost_center can have more than one row in `dbo.cc_filler_map` (one
+    per filler_email) with DIFFERING department/division/c_level (D11) — pick
+    deterministically (`ORDER BY filler_email`, alphabetically first) so the
+    same cost_center always resolves to the same dims snapshot, never
+    flipping by whatever order the DB happens to scan rows in."""
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT TOP 1 department, division, c_level FROM dbo.cc_filler_map WHERE cost_center = ?",
+            "SELECT TOP 1 department, division, c_level FROM dbo.cc_filler_map "
+            "WHERE cost_center = ? ORDER BY filler_email",
             cost_center,
         )
         row = cursor.fetchone()
@@ -286,7 +338,16 @@ def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
     """Process each item of a batch independently: known business exceptions
     become a failed result (never abort the batch); anything else propagates.
     Rolls back on a caught failure so a partial transaction from one item
-    never leaks into the next item's work on the same shared connection."""
+    never leaks into the next item's work on the same shared connection.
+
+    D9 (never-cut): a value that slips past the Pydantic max_length/range
+    guards can still overflow its NVARCHAR/DECIMAL column at the DB layer
+    (`pyodbc.DataError`, e.g. SQLSTATE 22001/22003) — that must become a
+    per-item 400 too, never an uncaught 500 that also aborts every OTHER
+    item in the same batch. A genuine connection-level `pyodbc.Error` (not
+    `DataError`) still propagates uncaught, matching this module's existing
+    "fail loud on real DB/connection failures" contract.
+    """
     results = []
     for item in items:
         try:
@@ -294,6 +355,9 @@ def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
         except _CAUGHT_PER_ITEM as exc:
             conn.rollback()
             results.append(on_result(item, exc))
+        except pyodbc.DataError as exc:
+            conn.rollback()
+            results.append(on_result(item, DataOverflowError(str(exc))))
     return results
 
 
@@ -302,22 +366,22 @@ def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
 # ---------------------------------------------------------------------------
 
 class PendingRowInput(BaseModel):
-    cost_center: str
-    gl_account: str
+    cost_center: str = Field(max_length=_MAX_LEN_CC_OR_GL)
+    gl_account: str = Field(max_length=_MAX_LEN_CC_OR_GL)
     fiscal_year: int
-    m01: float = 0
-    m02: float = 0
-    m03: float = 0
-    m04: float = 0
-    m05: float = 0
-    m06: float = 0
-    m07: float = 0
-    m08: float = 0
-    m09: float = 0
-    m10: float = 0
-    m11: float = 0
-    m12: float = 0
-    remark: str | None = None
+    m01: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m02: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m03: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m04: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m05: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m06: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m07: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m08: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m09: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m10: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m11: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m12: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    remark: str | None = Field(default=None, max_length=_MAX_LEN_REMARK)
     template: Literal["USER", "ADMIN"] = "USER"
     expected_updated_at: datetime | None = None  # None = create a new row
 
@@ -362,7 +426,7 @@ class RowSaveResult(BaseModel):
 def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_email: str, scope: Scope) -> RowSaveResult:
     _ensure_not_excluded(row.cost_center)
     _ensure_write_scope(row.cost_center, scope, conn)
-    months = [getattr(row, m) for m in MONTH_COLUMNS]
+    months = [_quantize_month(getattr(row, m)) for m in MONTH_COLUMNS]
     _ensure_no_negative_months(months)
 
     dims = _derive_dim_snapshot(conn, row.cost_center, row.gl_account)
@@ -374,7 +438,7 @@ def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_em
     # Admin overlay: a non-admin can never write template=ADMIN (the Template-2
     # / Budget-dept door, spec §1d) even if they crafted the request field.
     template = row.template if scope.is_admin else "USER"
-    total_year = round(sum(months), 2)
+    total_year = sum(months)  # D6: already-quantized Decimals — exact, no extra rounding needed
     now = _now()
 
     cursor = conn.cursor()
@@ -452,24 +516,24 @@ def save_pending_rows(
 
 class DetailLineInput(BaseModel):
     detail_id: int | None = None  # None = new line
-    cost_center: str
-    gl_account: str
+    cost_center: str = Field(max_length=_MAX_LEN_CC_OR_GL)
+    gl_account: str = Field(max_length=_MAX_LEN_CC_OR_GL)
     fiscal_year: int
     trip_id: int | None = None
-    line_label: str | None = None
+    line_label: str | None = Field(default=None, max_length=_MAX_LEN_LINE_LABEL)
     meta_json: dict | None = None
-    m01: float = 0
-    m02: float = 0
-    m03: float = 0
-    m04: float = 0
-    m05: float = 0
-    m06: float = 0
-    m07: float = 0
-    m08: float = 0
-    m09: float = 0
-    m10: float = 0
-    m11: float = 0
-    m12: float = 0
+    m01: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m02: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m03: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m04: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m05: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m06: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m07: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m08: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m09: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m10: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m11: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
+    m12: float = Field(default=0, lt=_MAX_MONTH_AMOUNT)
     expected_updated_at: datetime | None = None
 
 
@@ -519,6 +583,27 @@ def _lookup_trip(conn: pyodbc.Connection, trip_id: int) -> tuple[str, str, int] 
     return (row[0], row[1], row[2]) if row else None
 
 
+def _lookup_detail_owner(conn: pyodbc.Connection, detail_id: int) -> tuple[str, str, int] | None:
+    """Returns the CURRENT (cost_center, gl_account, fiscal_year) actually
+    stored for `detail_id`, or None if it no longer exists. Read BEFORE any
+    scope check — the payload's own cost_center/gl_account/fiscal_year must
+    NEVER be trusted for authorization on an EXISTING line (IDOR fix, D3/D4):
+    a caller could otherwise declare their OWN in-scope cost_center while
+    `detail_id` actually belongs to someone else's, passing the scope check
+    while the UPDATE and parent-cell recompute silently operated on the real
+    owner's row/cell."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT cost_center, gl_account, fiscal_year FROM budget.pending_budget_detail WHERE detail_id = ?",
+            detail_id,
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return (row[0], row[1], row[2]) if row else None
+
+
 def _recompute_parent_cell(
     conn: pyodbc.Connection, cost_center: str, gl_account: str, fiscal_year: int,
     dims: dict[str, str | None], user_email: str, now: datetime,
@@ -526,37 +611,61 @@ def _recompute_parent_cell(
     """Re-assert the never-cut DQ rule 'parent cell == SUM(detail lines)'
     after every detail-line write. This aggregate row is never addressed
     directly by a user (save_pending_rows refuses that for a special GL), so
-    no optimistic lock applies here — it always reflects the current sum."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            f"SELECT {', '.join(f'SUM({m})' for m in MONTH_COLUMNS)} "
-            "FROM budget.pending_budget_detail WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
-            cost_center, gl_account, fiscal_year,
+    no optimistic lock applies here — it always reflects the current sum.
+
+    D5 (never-cut, atomic): the SUM and the parent-cell write happen in ONE
+    UPDATE statement (the month/total_year subqueries below), not a separate
+    SELECT followed by a blind UPDATE. SQL Server takes a row lock on the
+    target `pending_budget` row for the duration of this statement, so a 2nd
+    concurrent detail save targeting the SAME parent cell blocks until the
+    1st commits, then its own subquery re-reads the just-committed detail
+    row — no writer can ever compute its sum from a stale read that a
+    concurrent writer's commit then races past (the old bug: SELECT sum,
+    then UPDATE — a 2nd writer's commit landing in between was silently
+    lost)."""
+
+    def _atomic_update(cursor: pyodbc.Cursor) -> int:
+        month_set_sql = ", ".join(
+            f"{m} = (SELECT COALESCE(SUM({m}), 0) FROM budget.pending_budget_detail "
+            "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?)"
+            for m in MONTH_COLUMNS
         )
-        sums_row = cursor.fetchone()
-    finally:
-        cursor.close()
-
-    months = {m: _num(v) for m, v in zip(MONTH_COLUMNS, sums_row)} if sums_row else {m: 0.0 for m in MONTH_COLUMNS}
-    total_year = round(sum(months.values()), 2)
-
-    cursor = conn.cursor()
-    try:
+        total_year_sql = (
+            "(SELECT COALESCE(SUM(total_year), 0) FROM budget.pending_budget_detail "
+            "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?)"
+        )
+        month_params: list = []
+        for _ in MONTH_COLUMNS:
+            month_params.extend([cost_center, gl_account, fiscal_year])
         cursor.execute(
             f"""
             UPDATE budget.pending_budget
-            SET {', '.join(f'{m} = ?' for m in MONTH_COLUMNS)}, total_year = ?,
+            SET {month_set_sql}, total_year = {total_year_sql},
                 gl_name = ?, gl_group = ?, c_level = ?, division = ?, department = ?,
                 _user = ?, _updated_at = ?
             WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?
             """,
-            *[months[m] for m in MONTH_COLUMNS], total_year,
+            *month_params, cost_center, gl_account, fiscal_year,
             dims["gl_name"], dims["gl_group"], dims["c_level"], dims["division"], dims["department"],
             user_email, now,
             cost_center, gl_account, fiscal_year,
         )
-        if cursor.rowcount == 0:
+        return cursor.rowcount
+
+    cursor = conn.cursor()
+    try:
+        rowcount = _atomic_update(cursor)
+        if rowcount == 0:
+            # No parent row exists yet — re-derive the sum fresh (D5: never a
+            # stale precomputed value) to build the very first INSERT.
+            cursor.execute(
+                f"SELECT {', '.join(f'SUM({m})' for m in MONTH_COLUMNS)} "
+                "FROM budget.pending_budget_detail WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                cost_center, gl_account, fiscal_year,
+            )
+            sums_row = cursor.fetchone()
+            months = {m: _num(v) for m, v in zip(MONTH_COLUMNS, sums_row)} if sums_row else {m: 0.0 for m in MONTH_COLUMNS}
+            total_year = round(sum(months.values()), 2)
             try:
                 cursor.execute(
                     f"""
@@ -573,25 +682,15 @@ def _recompute_parent_cell(
                 )
             except pyodbc.IntegrityError as exc:
                 # Two concurrent FIRST-EVER writes to the same parent cell:
-                # both saw rowcount==0 on the UPDATE above, both tried this
-                # INSERT, and the loser hits this PK violation. The row
-                # exists now (the winner just created it) — retry the
-                # UPDATE; if that somehow still matches nothing, surface a
-                # 409 instead of letting a raw pyodbc error escape as a 502.
-                cursor.execute(
-                    f"""
-                    UPDATE budget.pending_budget
-                    SET {', '.join(f'{m} = ?' for m in MONTH_COLUMNS)}, total_year = ?,
-                        gl_name = ?, gl_group = ?, c_level = ?, division = ?, department = ?,
-                        _user = ?, _updated_at = ?
-                    WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?
-                    """,
-                    *[months[m] for m in MONTH_COLUMNS], total_year,
-                    dims["gl_name"], dims["gl_group"], dims["c_level"], dims["division"], dims["department"],
-                    user_email, now,
-                    cost_center, gl_account, fiscal_year,
-                )
-                if cursor.rowcount == 0:
+                # both saw rowcount==0 on the atomic UPDATE above, both tried
+                # this INSERT, and the loser hits this PK violation. The row
+                # exists now (the winner just created it) — retry the SAME
+                # atomic UPDATE (D5: never reuse the `months`/`total_year`
+                # computed above, always re-derive); if that somehow still
+                # matches nothing, surface a 409 instead of letting a raw
+                # pyodbc error escape as a 502.
+                rowcount = _atomic_update(cursor)
+                if rowcount == 0:
                     raise RowConflictError(
                         f"parent cell {cost_center}/{gl_account}/{fiscal_year} conflict while recomputing"
                     ) from exc
@@ -600,9 +699,30 @@ def _recompute_parent_cell(
 
 
 def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_email: str, scope: Scope) -> DetailLineSaveResult:
-    _ensure_not_excluded(line.cost_center)
-    _ensure_write_scope(line.cost_center, scope, conn)
-    months = [getattr(line, m) for m in MONTH_COLUMNS]
+    if line.detail_id is not None:
+        # IDOR fix (D3/D4): authorize an EXISTING line against its ACTUAL
+        # owner, read fresh from the DB — never the payload's own
+        # cost_center/gl_account/fiscal_year. A caller could otherwise
+        # declare their OWN in-scope cost_center while detail_id belongs to
+        # a different cost_center, passing the scope check below while the
+        # UPDATE + parent-cell recompute silently operated on someone else's
+        # row and cell.
+        owner = _lookup_detail_owner(conn, line.detail_id)
+        if owner is None:
+            raise RowConflictError(f"detail line {line.detail_id} not found — reload and retry")
+        actual_cc, actual_gl, actual_fy = owner
+        if (actual_cc, actual_gl, actual_fy) != (line.cost_center, line.gl_account, line.fiscal_year):
+            raise RowConflictError(
+                f"detail line {line.detail_id} does not belong to "
+                f"{line.cost_center}/{line.gl_account}/{line.fiscal_year} — reload and retry"
+            )
+        _ensure_not_excluded(actual_cc)
+        _ensure_write_scope(actual_cc, scope, conn)
+    else:
+        _ensure_not_excluded(line.cost_center)
+        _ensure_write_scope(line.cost_center, scope, conn)
+
+    months = [_quantize_month(getattr(line, m)) for m in MONTH_COLUMNS]
     _ensure_no_negative_months(months)
 
     dims = _derive_dim_snapshot(conn, line.cost_center, line.gl_account)
@@ -651,7 +771,7 @@ def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_e
     else:
         cleaned_meta = meta  # not GL-conditional (spec §4a) — free-form
 
-    total_year = round(sum(months), 2)
+    total_year = sum(months)  # D6: already-quantized Decimals — exact, no extra rounding needed
     now = _now()
     meta_json_str = json.dumps(cleaned_meta, ensure_ascii=False) if cleaned_meta else None
 
@@ -729,16 +849,45 @@ def save_detail_lines(
 
 class TripInput(BaseModel):
     trip_id: int | None = None  # None = create a new trip
-    cost_center: str
+    cost_center: str = Field(max_length=_MAX_LEN_CC_OR_GL)
     fiscal_year: int
-    traveler_empcode: str
-    destination: str | None = None
+    traveler_empcode: str = Field(max_length=_MAX_LEN_CC_OR_GL)
+    destination: str | None = Field(default=None, max_length=_MAX_LEN_DESTINATION)
     country_group: int = Field(ge=1, le=3)  # 1 domestic / 2 asian / 3 other
     days: int = Field(ge=0)
     travel_months: list[str]
-    purpose: str | None = None
+    purpose: str | None = Field(default=None, max_length=_MAX_LEN_REMARK)
     side: Literal["COST", "SGA"]
     expected_updated_at: datetime | None = None
+
+    @field_validator("travel_months")
+    @classmethod
+    def _validate_travel_months(cls, value: list[str]) -> list[str]:
+        """D7 fix: validate each entry is a 2-digit month '01'..'12', dedupe
+        EXACT duplicates (a client accidentally submitting the same month
+        twice must not halve the per-diem split — see derive_per_diem's
+        even-split-by-count formula), and reject anything malformed
+        (non-numeric, '', a CSV-in-one-element like '03,03', or out of
+        range) as a 422 — never a silent per-diem miscalculation and never
+        an uncaught 500. Also enforces the persisted CSV's NVARCHAR(40)
+        limit (D9) — the CSV is built from this same deduped/sorted list at
+        save time (see `_save_one_trip`)."""
+        if not value:
+            raise ValueError("travel_months must not be empty")
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            if not isinstance(raw, str) or len(raw) != 2 or not raw.isdigit():
+                raise ValueError(f"invalid travel_months entry {raw!r} — must be a 2-digit month string '01'..'12'")
+            if not (1 <= int(raw) <= 12):
+                raise ValueError(f"invalid travel_months entry {raw!r} — month out of range 01..12")
+            if raw not in seen:
+                seen.add(raw)
+                deduped.append(raw)
+        csv = ",".join(sorted(deduped, key=int))
+        if len(csv) > _MAX_LEN_TRAVEL_MONTHS_CSV:
+            raise ValueError(f"travel_months has too many distinct months for its storage column: {csv!r}")
+        return deduped
 
 
 class TripState(BaseModel):
@@ -785,10 +934,17 @@ def _lookup_traveler(conn: pyodbc.Connection, empcode: str) -> tuple[str, str]:
 
 
 def _lookup_per_diem_rate(conn: pyodbc.Connection, position: str) -> dict[str, Decimal | None]:
+    """D1 SHOWSTOPPER fix: the live `dbo.per_diem_rate` column is `job_level`,
+    not `position` — the spec DBML's column name was wrong (verified live
+    2026-07-15 via INFORMATION_SCHEMA.COLUMNS). The VALUE passed in here is
+    still the traveler's `job_level_name_en` (the `position` parameter name
+    is kept as-is; only the SQL column name was the bug) — every real
+    `POST|PUT /budget/trip` raised pyodbc 42S22 ("invalid column name
+    'position'") before this fix."""
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT rate_domestic, rate_asian, rate_other FROM dbo.per_diem_rate WHERE position = ?", position
+            "SELECT rate_domestic, rate_asian, rate_other FROM dbo.per_diem_rate WHERE job_level = ?", position
         )
         row = cursor.fetchone()
     finally:
@@ -845,6 +1001,24 @@ def _upsert_trip_detail_line(
                 """,
                 *[months[m] for m in MONTH_COLUMNS], total, user_email, now, existing[0],
             )
+    finally:
+        cursor.close()
+
+
+def _rehome_trip_detail_lines(conn: pyodbc.Connection, trip_id: int, old_gl: str, new_gl: str) -> None:
+    """D8 (never-cut, COST/SGA never cross): move any manually-entered
+    (non-per-diem) detail lines of `trip_id` still under the OLD side's GL
+    to the NEW side's GL for the same travel type (transport/accommodation/
+    other) — keeps the Filler's entered amount, just re-homes which GL it
+    counts against. A trip side flip must never leave a line stranded on
+    the old side. Per-diem is handled separately (deleted + freshly
+    re-derived, never just moved — ADR-0015)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE budget.pending_budget_detail SET gl_account = ? WHERE trip_id = ? AND gl_account = ?",
+            new_gl, trip_id, old_gl,
+        )
     finally:
         cursor.close()
 
@@ -946,13 +1120,28 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
     _recompute_parent_cell(conn, trip.cost_center, per_diem_gl, trip.fiscal_year, dims, user_email, now)
 
     if old_side is not None and old_side != trip.side:
-        # side flipped (e.g. COST->SGA): the per-diem GL changed, so the OLD
-        # GL's line would otherwise survive as a ghost amount forever — wipe
-        # it and recompute the OLD GL's parent cell too, same transaction.
-        old_gl = PER_DIEM_GL_BY_SIDE[old_side]
-        _delete_trip_detail_line(conn, trip_id=trip_id, gl_account=old_gl)
-        old_dims = _derive_dim_snapshot(conn, trip.cost_center, old_gl)
-        _recompute_parent_cell(conn, trip.cost_center, old_gl, trip.fiscal_year, old_dims, user_email, now)
+        # Side flipped (e.g. COST->SGA): EVERY one of this trip's detail
+        # lines must move, not just per-diem (D8, never-cut: COST and SG&A
+        # never cross on one trip). Per-diem is DERIVED (ADR-0015): the old
+        # GL's line would otherwise survive as a ghost amount forever, so it
+        # is deleted here (the new GL's line was already freshly created
+        # above, never just moved). The 3 manual lines (transport/
+        # accommodation/other) keep whatever amount the Filler entered and
+        # are re-homed to the matching NEW-side GL.
+        old_per_diem_gl = PER_DIEM_GL_BY_SIDE[old_side]
+        _delete_trip_detail_line(conn, trip_id=trip_id, gl_account=old_per_diem_gl)
+        old_pd_dims = _derive_dim_snapshot(conn, trip.cost_center, old_per_diem_gl)
+        _recompute_parent_cell(conn, trip.cost_center, old_per_diem_gl, trip.fiscal_year, old_pd_dims, user_email, now)
+
+        for travel_type, side_to_gl in TRAVEL_GL_BY_TYPE_SIDE.items():
+            if travel_type == "per_diem":
+                continue  # handled above (delete + fresh re-derive, never a plain move)
+            old_type_gl, new_type_gl = side_to_gl[old_side], side_to_gl[trip.side]
+            _rehome_trip_detail_lines(conn, trip_id=trip_id, old_gl=old_type_gl, new_gl=new_type_gl)
+            old_type_dims = _derive_dim_snapshot(conn, trip.cost_center, old_type_gl)
+            _recompute_parent_cell(conn, trip.cost_center, old_type_gl, trip.fiscal_year, old_type_dims, user_email, now)
+            new_type_dims = _derive_dim_snapshot(conn, trip.cost_center, new_type_gl)
+            _recompute_parent_cell(conn, trip.cost_center, new_type_gl, trip.fiscal_year, new_type_dims, user_email, now)
 
     conn.commit()
 

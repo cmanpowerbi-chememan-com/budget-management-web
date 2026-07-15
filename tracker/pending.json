@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T10:12:25+0700",
+  "updated": "2026-07-15T12:06:44+0700",
   "tasks": [
+    {
+      "id": "a4-a5-exhaustive-verify",
+      "state": "done",
+      "created": "2026-07-15T10:55:29+0700",
+      "updated": "2026-07-15T12:06:44+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "A4+A5 exhaustive live verify DONE + all 11 defects FIXED (194 mocked + 15 live green). D1 per_diem col position->job_level (SHOWSTOPPER, trip feature was 100% dead live). D2 SAP assignment NULL-safe (policy jakkaritw: keep NULL, cut only TFRS16) - ADR-0020 + DATA_PIPELINE#7 corrected; the old live parity check passed only because it compared the query to an identical hand-query dropping NULLs the same way (self-consistency != correctness). D3/D4 IDOR+parent desync -> resolve detail row's ACTUAL cc. D5 parent recompute now atomic single-statement SUM (was losing money 5/5 live races under RCSI). D6 quantize months at boundary -> total_year==SUM(months). D7 travel_months 1..12 + dedupe. D8 side-flip handles ALL trip lines. D9 max_length/range + per-item rollback. D10 fetch_cc_dims for SAP-led rows. D11 ORDER BY filler_email. D13 no table-name leak. D12 policy: rate 0.00 = VALID (fail only when job_level has no row). LOGIC AUDIT (jakkaritw asked 'make sense?'): cost_center NOT IN is NULL-unsafe TOO but its NULLs MUST stay dropped - FY2025 2249381 rows/-1138962985.31 THB have no cc and cannot appear in a cc-keyed grid; making it NULL-safe would pull ~1.1 BILLION THB in and corrupt every cell. doc_type<>CO NULL-unsafe but 0 NULL rows live. Both recorded in ADR-0020. REMAINING: add explicit 'AND cost_center IS NOT NULL' (behavior-identical, prevents a future catastrophic fix) - needs dev agent, session limit resets 15:50.",
+      "human": "ตรวจ A4+A5 ทุกมุมกับ DB จริง (6 lens) เจอ defect จริง ~13 ตัว รวม showstopper + NEVER-CUT financial ที่ mock+gate 6 รอบมองไม่เห็น; ยังไม่ผ่าน ต้องแก้ก่อนไป A6"
+    },
     {
       "id": "live-db-verification",
       "state": "done",

@@ -13,6 +13,7 @@ import pytest
 from app.read_model import (
     JOIN_ROW_COLUMNS,
     fetch_board_pending_rows,
+    fetch_cc_dims,
     get_budget_grid,
     merge_budget_rows,
 )
@@ -123,6 +124,26 @@ def test_fetch_board_pending_rows_empty_cost_centers_short_circuits_no_query():
     rows = fetch_board_pending_rows(conn, board_year=2026, pending_year=2027, cost_centers=[])
     assert rows == []
     conn.cursor.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_cc_dims — batch dims lookup for the D10 department-filter fallback
+# ---------------------------------------------------------------------------
+
+def test_fetch_cc_dims_empty_list_short_circuits_no_query():
+    conn = MagicMock()
+    result = fetch_cc_dims(conn, [])
+    assert result == {}
+    conn.cursor.assert_not_called()
+
+
+def test_fetch_cc_dims_returns_one_deterministic_row_per_cc():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [("CC1", "deptA", "divA", "clA")]
+    result = fetch_cc_dims(conn, ["CC1"])
+    assert result == {"CC1": {"department": "deptA", "division": "divA", "c_level": "clA"}}
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "ORDER BY filler_email" in sql_text  # D11: deterministic tie-break
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +331,37 @@ def test_optional_department_filter_narrows_result():
     assert [r.cost_center for r in rows] == ["CC1"]
 
 
+def test_department_filter_falls_back_to_cc_dims_for_sap_led_rows():
+    """D10 fix: a SAP-led (cc,gl) with no board/pending row has no department
+    on either layer -> the department filter used to silently drop it.
+    Falls back to the caller-supplied cc_dims (from dbo.cc_filler_map)."""
+    join_rows: list[dict] = []
+    months = {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}
+    months["m01"] = 500.0
+    months["total_year"] = 500.0
+    sap_actuals = {("CC1", "GL1"): months}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    cc_dims = {"CC1": {"department": "ฝ่ายบัญชี", "division": "divA", "c_level": "clA"}}
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope, department_filter="ฝ่ายบัญชี", cc_dims=cc_dims)
+
+    assert [r.cost_center for r in rows] == ["CC1"]
+
+
+def test_department_filter_without_cc_dims_still_drops_sap_led_row():
+    """Backward-compatible default: cc_dims=None (no fallback data supplied)
+    preserves the pre-fix behavior for callers that don't pass it."""
+    join_rows: list[dict] = []
+    months = {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}
+    months["total_year"] = 500.0
+    sap_actuals = {("CC1", "GL1"): months}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope, department_filter="ฝ่ายบัญชี", cc_dims=None)
+
+    assert rows == []
+
+
 def test_rows_sorted_by_cost_center_then_gl_account():
     join_rows = [
         _blank_join_row("CC2", "GL1", pending_cost_center="CC2"),
@@ -399,6 +451,27 @@ def test_get_budget_grid_non_admin_passes_see_cost_centers_as_filter(monkeypatch
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=False)
 
     assert sorted(captured["cost_centers"]) == ["CC1", "CC2"]
+
+
+def test_get_budget_grid_fetches_cc_dims_only_when_department_filter_given(monkeypatch):
+    """D10: fetch_cc_dims (an extra DB round-trip) must only run when the
+    caller actually applies a department filter — never on a plain load."""
+    calls = {"n": 0}
+
+    def fake_fetch_cc_dims(conn, cost_centers):
+        calls["n"] += 1
+        return {}
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_cc_dims", fake_fetch_cc_dims)
+
+    scope = _scope()
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+    assert calls["n"] == 0
+
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, department_filter="ฝ่ายบัญชี")
+    assert calls["n"] == 1
 
 
 def test_get_budget_grid_admin_without_toggle_still_passes_see_cost_centers_filter(monkeypatch):

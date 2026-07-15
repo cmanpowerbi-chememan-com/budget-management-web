@@ -39,8 +39,30 @@ Two options were grilled 2026-07-11:
   - **Mandatory WHERE filters (never-cut financial correctness):** `company_code='1000'`
     (CMAN-TH / THB only), `doc_type<>'CO'` (CO postings double-count the FI side — 19% of
     rows, 2.15M carry cost_center), excluded CCs `CMRY01, CMKK01, CMPB01, MNLB00..04`
-    (**10SC012000 is KEPT** — user 2026-07-14, removed from the exclusion list), `assignment_number
-    <>'TFRS16'`, `fiscal_year=@year`. **No `doc_status` filter** — resolved 2026-07-14: only two
+    (**10SC012000 is KEPT** — user 2026-07-14, removed from the exclusion list),
+    `(assignment_number IS NULL OR assignment_number<>'TFRS16')`, `fiscal_year=@year`.
+    **CORRECTED 2026-07-16 (D2, exhaustive live verify):** the filter was originally a bare
+    `assignment_number<>'TFRS16'`, which is NOT NULL-safe — in SQL, `NULL <> 'TFRS16'`
+    evaluates to UNKNOWN, so the WHERE clause silently dropped every NULL-assignment row.
+    Live impact: FY2025 lost 706 rows / −12,827,790.81 THB; FY2026 fabricated ~3.87M THB of
+    PHANTOM actuals on balanced clearing accounts (e.g. GL 9110100020, CC 10QC011000 — the
+    `+NULL` legs were dropped while the `-PO` legs were kept, so a cell whose true actual is
+    ~0.00 showed a multi-million THB balance). This also undermined the "reversal pairs net
+    to zero" claim below — the earlier live parity check only matched because it compared
+    the shipped query to an IDENTICAL hand-written query that dropped NULLs the same way
+    (self-consistency, not correctness). Fixed to explicitly keep NULL-assignment rows;
+    confirmed by jakkaritw as the correct policy (balanced clearing accounts must net to 0).
+    **⚠️ DO NOT apply that same NULL-safe fix to `cost_center NOT IN (...)`.** Audited live
+    2026-07-16: `NULL NOT IN (...)` is UNKNOWN too, so NULL-cost_center rows are ALSO already
+    dropped — and that is **correct and required**. The grid is keyed by `(cost_center,
+    gl_account)`; a posting with no cost center belongs to no user's scope and cannot be shown.
+    Live volume: FY2025 = 2,249,381 rows / **−1,138,962,985.31 THB**; FY2026 = 515,775 rows /
+    −132,909,268.58 THB. "Fixing" this predicate the way `assignment_number` was fixed would pull
+    ~1.1 **BILLION** THB of non-cost-center postings into the actuals and corrupt every cell.
+    Prefer an explicit `AND cost_center IS NOT NULL` so the exclusion is deliberate rather than an
+    accident of NULL semantics. `doc_type<>'CO'` is NULL-unsafe by the same rule, but live has
+    **0** NULL-doc_type rows in FY2025/FY2026 — no impact today; re-check if the DW build changes.
+    **No `doc_status` filter** — resolved 2026-07-14: only two
     values exist (`NULL` = the real actuals, net −981k THB; `'U'` = 4.55M rows that net to
     **exactly 0.00 THB at every grain**, so including or excluding them never moves a SUM). `'U'`
     is ~98% `doc_type='CO'` (already excluded) plus reversal pairs — likely statistical/CO/MM memo

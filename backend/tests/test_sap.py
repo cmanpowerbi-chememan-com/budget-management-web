@@ -30,6 +30,15 @@ def test_sap_query_contains_all_mandatory_filters_verbatim():
     assert "GROUP BY cost_center, gl_account_number, fiscal_year, period_month" in SAP_ACTUALS_SQL
 
 
+def test_sap_query_keeps_null_assignment_rows():
+    """D2 fix (confirmed policy call): a bare `assignment_number<>'TFRS16'`
+    is not NULL-safe — `NULL <> 'TFRS16'` is SQL UNKNOWN, so every
+    NULL-assignment row was silently dropped (never-cut: balanced clearing
+    accounts must net to ~0.00, not show a phantom actual). The filter must
+    explicitly keep NULLs."""
+    assert "assignment_number IS NULL OR assignment_number<>'TFRS16'" in SAP_ACTUALS_SQL
+
+
 def test_sap_query_excludes_cost_centers_without_10sc012000():
     assert "'CMRY01'" in SAP_ACTUALS_SQL
     assert "'CMKK01'" in SAP_ACTUALS_SQL

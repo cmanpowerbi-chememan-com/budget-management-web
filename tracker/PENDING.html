@@ -37,8 +37,8 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 10:12 AM &bull; rendered: 15 July 2026 10:12 AM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (24)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 23</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 12:06 PM &bull; rendered: 15 July 2026 12:06 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (25)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 24</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
@@ -58,6 +58,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a4-a5-exhaustive-verify</span>
+        <span class="dt">15 July 2026 10:55 AM &rarr; 15 July 2026 12:06 PM</span>
+      </div>
+      <div class="id">a4-a5-exhaustive-verify</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A4+A5 exhaustive live verify DONE + all 11 defects FIXED (194 mocked + 15 live green). D1 per_diem col position-&gt;job_level (SHOWSTOPPER, trip feature was 100% dead live). D2 SAP assignment NULL-safe (policy jakkaritw: keep NULL, cut only TFRS16) - ADR-0020 + DATA_PIPELINE#7 corrected; the old live parity check passed only because it compared the query to an identical hand-query dropping NULLs the same way (self-consistency != correctness). D3/D4 IDOR+parent desync -&gt; resolve detail row&#x27;s ACTUAL cc. D5 parent recompute now atomic single-statement SUM (was losing money 5/5 live races under RCSI). D6 quantize months at boundary -&gt; total_year==SUM(months). D7 travel_months 1..12 + dedupe. D8 side-flip handles ALL trip lines. D9 max_length/range + per-item rollback. D10 fetch_cc_dims for SAP-led rows. D11 ORDER BY filler_email. D13 no table-name leak. D12 policy: rate 0.00 = VALID (fail only when job_level has no row). LOGIC AUDIT (jakkaritw asked &#x27;make sense?&#x27;): cost_center NOT IN is NULL-unsafe TOO but its NULLs MUST stay dropped - FY2025 2249381 rows/-1138962985.31 THB have no cc and cannot appear in a cc-keyed grid; making it NULL-safe would pull ~1.1 BILLION THB in and corrupt every cell. doc_type&lt;&gt;CO NULL-unsafe but 0 NULL rows live. Both recorded in ADR-0020. REMAINING: add explicit &#x27;AND cost_center IS NOT NULL&#x27; (behavior-identical, prevents a future catastrophic fix) - needs dev agent, session limit resets 15:50.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ตรวจ A4+A5 ทุกมุมกับ DB จริง (6 lens) เจอ defect จริง ~13 ตัว รวม showstopper + NEVER-CUT financial ที่ mock+gate 6 รอบมองไม่เห็น; ยังไม่ผ่าน ต้องแก้ก่อนไป A6</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#live-db-verification</span>
         <span class="dt">15 July 2026 10:12 AM</span>
       </div>

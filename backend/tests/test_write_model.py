@@ -11,6 +11,7 @@ Covers the never-cut rules (BUILD_PLAN A5 / task brief):
 - editing never touches budget.approval_status / pending_budget.status
 - total_year stays in sync with SUM(months); parent cell == SUM(detail)
 """
+import itertools
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -120,6 +121,32 @@ def test_unknown_gl_account_rejected():
     assert results[0].error == "unknown_gl_account"
 
 
+def test_unknown_gl_account_error_message_does_not_leak_internal_table_name():
+    """D13: the 400 body reaches the client via `detail` — must never echo
+    `dbo.gl_group` (an internal implementation detail)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(gl_account="NOPE")], "filler@chememan.com", scope)
+    assert "dbo.gl_group" not in results[0].detail
+
+
+def test_lookup_cc_dims_query_is_deterministic_order_by_filler_email():
+    """D11: a cost_center can have more than one row in dbo.cc_filler_map
+    (one per filler_email) with DIFFERENT department/division/c_level — the
+    lookup must pick deterministically, not by whatever order the DB scans
+    rows in."""
+    from app.write_model import _lookup_cc_dims
+
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = ("deptA", "divA", "clA")
+    _lookup_cc_dims(conn, "10OS011400")
+    sql_text = cursor.execute.call_args.args[0]
+    assert "ORDER BY filler_email" in sql_text
+
+
 def test_special_gl_cell_cannot_be_edited_directly():
     conn = MagicMock()
     cursor = conn.cursor.return_value
@@ -206,6 +233,71 @@ def test_two_rows_in_one_batch_succeed_and_fail_independently():
     assert results[1].ok is False
     assert results[1].error == "conflict"
     assert results[1].cost_center == "CC2"
+
+
+def test_pending_row_month_amounts_are_quantized_and_total_year_matches_sum():
+    """D6 fix: incoming floats are quantized to DECIMAL(18,2) (ROUND_HALF_UP)
+    BEFORE summing — total_year must equal the SUM of the ROUNDED months,
+    never a float sum of the raw unrounded inputs. Live-observed bug:
+    100.005 + 100.005 -> total_year 200.01 while the DB-stored months summed
+    to 200.00 (each individually rounds to 100.00)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    scope = _scope()
+    row = _row(m01=100.005, m02=100.005, expected_updated_at=None)
+    results = save_pending_rows(conn, [row], "filler@chememan.com", scope)
+    result = results[0]
+    assert result.ok is True
+    assert result.row.m01 == 100.00
+    assert result.row.m02 == 100.00
+    assert result.row.total_year == 200.00
+
+
+def test_detail_line_month_amounts_are_quantized_and_total_year_matches_sum():
+    """Same D6 fix, for save_detail_lines (write_model.py:654 in the finding)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
+        (100.0, 100.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
+    ]
+    scope = _scope()
+    results = save_detail_lines(
+        conn, [_detail(m01=100.005, m02=100.005)], "filler@chememan.com", scope,
+    )
+    result = results[0]
+    assert result.ok is True
+    assert result.line.m01 == 100.00
+    assert result.line.m02 == 100.00
+    assert result.line.total_year == 200.00
+
+
+def test_data_overflow_pyodbc_error_becomes_per_item_400_not_500_and_batch_continues():
+    """D9: a value that still overflows at the DB layer (e.g. a string
+    truncation SQL Server catches that slipped past the Pydantic guards)
+    must become a per-item 400 with rollback — the OTHER item in the same
+    batch must still succeed, never an uncaught 500 that aborts everything."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # row A dims
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # row B dims
+    ]
+    cursor.execute.side_effect = [
+        None, None,  # row A dims lookups
+        pyodbc.DataError("22001", "string or binary data would be truncated"),  # row A INSERT overflow
+        None, None,  # row B dims lookups
+        None,  # row B INSERT succeeds
+    ]
+    scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
+    row_a = _row(cost_center="CC1", gl_account="GLA", remark="ok", expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", m01=10, expected_updated_at=None)
+    results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "data_overflow"
+    assert results[1].ok is True
+    assert conn.rollback.call_count == 1
 
 
 def test_admin_write_to_nonexistent_cost_center_is_rejected():
@@ -370,7 +462,10 @@ def test_trip_side_match_succeeds_and_recomputes_parent_cell():
 def test_detail_line_stale_lock_conflict():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),  # owner lookup (D3/D4 IDOR fix) — matches the payload, in-scope
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),
+    ]
     cursor.rowcount = 0
     scope = _scope()
     results = save_detail_lines(
@@ -378,6 +473,56 @@ def test_detail_line_stale_lock_conflict():
     )
     assert results[0].error == "conflict"
     conn.commit.assert_not_called()
+
+
+def test_detail_line_idor_owner_mismatch_rejected_without_touching_the_row():
+    """D3/D4 IDOR fix: an attacker cannot rewrite an existing detail_id that
+    belongs to a DIFFERENT cost_center, even by declaring their OWN in-scope
+    cost_center in the payload — the fix reads the row's ACTUAL owner from
+    the DB and authorizes/compares against that, not the payload."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("VICTIM-CC", "5211900030", 2027)]  # owner lookup: real row belongs elsewhere
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])  # attacker's OWN in-scope CC
+    results = save_detail_lines(
+        conn,
+        [_detail(detail_id=30, cost_center="CC1", expected_updated_at=STALE, m01=999999)],
+        "attacker@chememan.com", scope,
+    )
+    assert results[0].ok is False
+    assert results[0].error in ("forbidden", "conflict")
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("UPDATE budget.pending_budget_detail" in s for s in executed_sql), (
+        "the victim's row must never be touched"
+    )
+
+
+def test_detail_line_owner_lookup_authorizes_against_actual_cc_not_payload():
+    """Non-malicious sibling (D4): even when the payload's declared
+    cost_center IS in scope, a mismatch against the row's real owner must
+    still be rejected before any write (prevents parent-cell desync for a
+    multi-CC filler who posts the wrong CC)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("CC9", "5211900030", 2027)]  # actual owner CC differs from the payload's CC1
+    scope = _scope(fill_cost_centers=["CC1", "CC9"], see_cost_centers=["CC1", "CC9"])  # in scope for BOTH
+    results = save_detail_lines(
+        conn, [_detail(detail_id=30, cost_center="CC1", expected_updated_at=STALE)],
+        "filler@chememan.com", scope,
+    )
+    assert results[0].ok is False
+    assert results[0].error == "conflict"
+
+
+def test_detail_line_not_found_by_detail_id_is_conflict_not_500():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None]  # owner lookup finds nothing
+    scope = _scope()
+    results = save_detail_lines(
+        conn, [_detail(detail_id=999, expected_updated_at=STALE)], "filler@chememan.com", scope,
+    )
+    assert results[0].error == "conflict"
 
 
 def test_detail_line_commit_happens_after_parent_cell_recompute_not_before():
@@ -397,6 +542,21 @@ def test_detail_line_commit_happens_after_parent_cell_recompute_not_before():
     assert results[0].ok is True
     assert conn.commit.call_count == 1
 
+    def _is_detail_table_write(sql: str) -> bool:
+        s = sql.strip()
+        return s.startswith("INSERT INTO budget.pending_budget_detail") or s.startswith("UPDATE budget.pending_budget_detail")
+
+    def _is_parent_table_write(sql: str) -> bool:
+        # D5: the atomic recompute UPDATE embeds a `pending_budget_detail`
+        # SUM subquery in its SET clause, so a plain substring check for
+        # "pending_budget_detail" would wrongly match it too — distinguish
+        # by which table is being written (the statement's own prefix),
+        # not by what the statement merely references.
+        s = sql.strip()
+        return (
+            s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")
+        ) and not _is_detail_table_write(sql)
+
     commit_idx = detail_write_idx = parent_write_idx = None
     for i, call in enumerate(conn.mock_calls):
         name, args = call[0], call[1]
@@ -404,9 +564,9 @@ def test_detail_line_commit_happens_after_parent_cell_recompute_not_before():
             commit_idx = i
         elif name.endswith("execute") and args:
             sql = args[0]
-            if "pending_budget_detail" in sql and ("INSERT INTO" in sql or "UPDATE" in sql):
+            if _is_detail_table_write(sql):
                 detail_write_idx = i
-            elif "pending_budget_detail" not in sql and ("INSERT INTO budget.pending_budget" in sql or "UPDATE budget.pending_budget" in sql):
+            elif _is_parent_table_write(sql):
                 parent_write_idx = i
 
     assert commit_idx is not None, "conn.commit() was never called"
@@ -463,12 +623,12 @@ def test_parent_cell_insert_pk_collision_retry_succeeds():
 
     def _execute_side_effect(sql, *params):
         call_count["n"] += 1
-        if call_count["n"] == 5:
-            cursor.rowcount = 0  # parent UPDATE matches nothing -> falls to INSERT
+        if call_count["n"] == 4:
+            cursor.rowcount = 0  # first atomic UPDATE (D5) matches nothing -> falls to INSERT
         elif call_count["n"] == 6:
             raise pyodbc.IntegrityError("23000", "PK violation")  # concurrent INSERT collision
         elif call_count["n"] == 7:
-            cursor.rowcount = 1  # retry UPDATE now matches the winner's row -> succeeds
+            cursor.rowcount = 1  # retry of the atomic UPDATE now matches the winner's row -> succeeds
         return None
 
     cursor.execute.side_effect = _execute_side_effect
@@ -542,6 +702,79 @@ def test_trip_input_rejects_negative_days():
         _trip(days=-1)
 
 
+# ---------------------------------------------------------------------------
+# D7 — travel_months validation (dedupe exact duplicates, reject malformed)
+# ---------------------------------------------------------------------------
+
+def test_trip_input_rejects_out_of_range_month():
+    with pytest.raises(ValidationError):
+        _trip(travel_months=["99"])
+
+
+def test_trip_input_rejects_empty_month_string():
+    with pytest.raises(ValidationError):
+        _trip(travel_months=[""])
+
+
+def test_trip_input_rejects_non_numeric_month():
+    with pytest.raises(ValidationError):
+        _trip(travel_months=["abc"])
+
+
+def test_trip_input_rejects_csv_in_one_element():
+    """A client sending '03,03' as a single list element (instead of two
+    entries) must be rejected, never silently mis-parsed."""
+    with pytest.raises(ValidationError):
+        _trip(travel_months=["03,03"])
+
+
+def test_trip_input_rejects_empty_travel_months_list():
+    with pytest.raises(ValidationError):
+        _trip(travel_months=[])
+
+
+def test_trip_input_dedupes_exact_duplicate_months():
+    """Decided (D7): dedupe EXACT duplicates rather than reject — a client
+    accidentally submitting the same month twice must not halve the
+    per-diem split (n=1, not n=2)."""
+    trip = _trip(travel_months=["03", "03"])
+    assert trip.travel_months == ["03"]
+
+
+# ---------------------------------------------------------------------------
+# D9 — Pydantic length/range guards (NVARCHAR / DECIMAL overflow)
+# ---------------------------------------------------------------------------
+
+def test_trip_input_rejects_destination_over_200_chars():
+    with pytest.raises(ValidationError):
+        _trip(destination="x" * 201)
+
+
+def test_trip_input_rejects_purpose_over_500_chars():
+    with pytest.raises(ValidationError):
+        _trip(purpose="x" * 501)
+
+
+def test_trip_input_rejects_cost_center_over_20_chars():
+    with pytest.raises(ValidationError):
+        _trip(cost_center="x" * 21)
+
+
+def test_pending_row_input_rejects_remark_over_500_chars():
+    with pytest.raises(ValidationError):
+        _row(remark="x" * 501)
+
+
+def test_pending_row_input_rejects_month_amount_at_decimal_max():
+    with pytest.raises(ValidationError):
+        _row(m01=1e16)
+
+
+def test_detail_line_input_rejects_line_label_over_300_chars():
+    with pytest.raises(ValidationError):
+        _detail(line_label="x" * 301)
+
+
 def test_trip_forbidden_scope_no_db_call():
     conn = MagicMock()
     scope = _scope(fill_cost_centers=[], see_cost_centers=[])
@@ -566,6 +799,48 @@ def test_missing_per_diem_rate_fails_loud_as_5xx_class_error():
     scope = _scope()
     with pytest.raises(MissingPerDiemRateError):
         save_trip(conn, [_trip()], "filler@chememan.com", scope)
+
+
+def test_per_diem_rate_lookup_queries_job_level_column_not_position():
+    """D1 SHOWSTOPPER fix: the live `dbo.per_diem_rate` column is `job_level`,
+    not `position` (the spec DBML's column name was wrong). Every real
+    POST|PUT /budget/trip raised pyodbc 42S22 ("invalid column name
+    'position'") before this fix — every single Travelling Expense save was
+    dead."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = (500, None, None)
+    from app.write_model import _lookup_per_diem_rate
+
+    _lookup_per_diem_rate(conn, "Manager")
+    sql_text = cursor.execute.call_args.args[0]
+    assert "job_level = ?" in sql_text
+    assert "position = ?" not in sql_text
+
+
+def test_save_trip_succeeds_for_a_traveler_whose_rate_is_zero_not_missing():
+    """D12 policy (decided): 0.00 IS a valid configured rate (e.g. a
+    Department Head / Operator position with no per-diem entitlement) — must
+    compute a 0 per-diem, never raise MissingPerDiemRateError. Only a
+    traveler whose job_level has NO ROW AT ALL (e.g. 'N/A') fails loud.
+    Verified: `_lookup_per_diem_rate` only raises when `row is None` (no
+    row), never when a rate column merely equals 0 — this was already
+    correct, this test locks it in as a regression guard."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Director"),  # traveler lookup
+        (0, None, None),           # per_diem_rate ROW EXISTS, rate_domestic=0.00 (not missing)
+        None,                       # existing trip-detail lookup -> none, will INSERT
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (0.0,) * 12,                 # SUM(...) recompute -> all zero
+    ]
+    cursor.fetchval.return_value = 55
+    scope = _scope()
+    results = save_trip(conn, [_trip(days=5, country_group=1)], "filler@chememan.com", scope)
+    result = results[0]
+    assert result.ok is True, f"expected success for a 0.00-rate traveler, got error={result.error}"
+    assert result.trip.per_diem_months["m03"] == 0.0
 
 
 def test_missing_fx_rate_fails_loud_for_asian_group():
@@ -669,23 +944,36 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
 
 
 def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
-    """A5 gate MUST-FIX 4 (NEVER-CUT COST/SGA + parent==SUM): updating a
-    trip's side (COST->SGA) changes its per-diem GL. Before this fix the OLD
-    GL's line + parent cell were never touched, leaving a ghost amount under
-    the old GL forever."""
+    """A5 gate MUST-FIX 4 + D8 (NEVER-CUT COST/SGA + parent==SUM): updating a
+    trip's side (COST->SGA) changes its per-diem GL AND must re-home the 3
+    manual travel lines (transport/accommodation/other) too — before the D8
+    fix, only per-diem moved and a manual line could be left stranded under
+    the OLD side's GL (one trip spanning both COST and SGA)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [
-        ("Somchai", "Manager"),                        # 1 traveler lookup
-        (500, None, None),                               # 2 per_diem_rate (domestic=500)
-        ("CC1", "COST", 2027),                            # 3 OLD trip lookup -> old side was COST
-        None,                                              # 4 existing per-diem line under NEW (SGA) gl -> none, INSERT
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),         # 5,6 dims for NEW gl
-        (0, 0, 5000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),         # 7 SUM recompute -> NEW gl m03=5000
-        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),         # 8,9 dims for OLD gl
-        (0,) * 12,                                          # 10 SUM recompute -> OLD gl now zero (line deleted)
-    ]
-    cursor.rowcount = 1  # trip UPDATE + both parent-cell recomputes all match an existing row
+
+    # The first 4 fetchone() calls are one-off (traveler/rate/old-trip/
+    # existing-per-diem-line lookups); every call after that is a
+    # gl_group-then-cc_dims pair for whichever GL is being recomputed next
+    # (D5's atomic recompute never issues a SELECT of its own when the
+    # parent row already exists — cursor.rowcount=1 below — so only the
+    # dims lookups remain to mock).
+    one_off = iter([
+        ("Somchai", "Manager"),    # 1 traveler lookup
+        (500, None, None),          # 2 per_diem_rate (domestic=500)
+        ("CC1", "COST", 2027),       # 3 OLD trip lookup -> old side was COST
+        None,                         # 4 existing per-diem line under NEW (SGA) gl -> none, INSERT
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1  # trip UPDATE + every atomic parent-cell recompute matches an existing row directly
     scope = _scope()
     results = save_trip(
         conn, [_trip(trip_id=1, side="SGA", days=10, country_group=1, expected_updated_at=STALE)],
@@ -696,17 +984,31 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
 
     executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
 
-    delete_calls = [args for sql, args in executed if "DELETE FROM budget.pending_budget_detail" in sql]
+    delete_calls = [args for sql, args in executed if sql.strip().startswith("DELETE FROM budget.pending_budget_detail")]
     assert delete_calls, "expected a DELETE of the stale per-diem line under the old (COST) GL"
     assert "5210400010" in delete_calls[0]  # COST per-diem GL — the OLD side
 
-    parent_updates = [
+    rehome_calls = [
         args for sql, args in executed
-        if "UPDATE budget.pending_budget" in sql and "pending_budget_detail" not in sql
+        if sql.strip().startswith("UPDATE budget.pending_budget_detail SET gl_account")
     ]
-    old_gl_updates = [args for args in parent_updates if "5210400010" in args]
-    assert old_gl_updates, "old GL's parent cell was never recomputed — ghost amount would remain"
-    assert all(v == 0 for v in old_gl_updates[0][:13]), "old GL's parent cell must be zeroed, not left stale"
+    rehomed_pairs = {(args[0], args[2]) for args in rehome_calls}  # (new_gl, old_gl) per _rehome_trip_detail_lines call
+    assert ("6210400020", "5210400020") in rehomed_pairs, "transport line must move COST->SGA"
+    assert ("6210400030", "5210400030") in rehomed_pairs, "accommodation line must move COST->SGA"
+    assert ("6210400999", "5210400999") in rehomed_pairs, "other-travel line must move COST->SGA"
 
-    new_gl_inserts = [args for sql, args in executed if "INSERT INTO budget.pending_budget_detail" in sql]
+    def _is_parent_table_write(sql: str) -> bool:
+        s = sql.strip()
+        is_detail = s.startswith("INSERT INTO budget.pending_budget_detail") or s.startswith("UPDATE budget.pending_budget_detail")
+        return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not is_detail
+
+    parent_writes = [args for sql, args in executed if _is_parent_table_write(sql)]
+    old_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
+    new_side_gls = {"6210400010", "6210400020", "6210400030", "6210400999"}
+    recomputed_old = {gl for args in parent_writes for gl in old_side_gls if gl in args}
+    recomputed_new = {gl for args in parent_writes for gl in new_side_gls if gl in args}
+    assert recomputed_old == old_side_gls, f"expected all 4 OLD-side parent cells recomputed, got {recomputed_old}"
+    assert recomputed_new == new_side_gls, f"expected all 4 NEW-side parent cells recomputed, got {recomputed_new}"
+
+    new_gl_inserts = [args for sql, args in executed if sql.strip().startswith("INSERT INTO budget.pending_budget_detail")]
     assert any("6210400010" in args for args in new_gl_inserts)  # SGA per-diem GL — the NEW side

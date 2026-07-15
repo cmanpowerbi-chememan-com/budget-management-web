@@ -8,7 +8,20 @@ edit its filters/columns without a matching ADR-0020 update:
 - `doc_type<>'CO'` drops CO postings that double-count the FI side.
 - The excluded cost-center list intentionally does NOT include `10SC012000`
   (removed from the exclusion list 2026-07-14 — it is a valid CC).
-- `assignment_number<>'TFRS16'` and `fiscal_year=?` (the caller's year).
+- `(assignment_number IS NULL OR assignment_number <> 'TFRS16')` and
+  `fiscal_year=?` (the caller's year). **Fixed 2026-07-16 (D2, confirmed
+  policy call):** the bare `assignment_number<>'TFRS16'` is NOT NULL-safe —
+  in SQL, `NULL <> 'TFRS16'` evaluates to UNKNOWN, so every NULL-assignment
+  row was silently dropped by the WHERE clause. Live evidence: FY2025 lost
+  706 rows / -12,827,790.81 THB; FY2026 fabricated ~3.87M THB of PHANTOM
+  actuals on balanced clearing accounts (e.g. GL 9110100020, CC 10QC011000 —
+  the +NULL legs were dropped while the -PO legs were kept, so a cell whose
+  true actual is ~0.00 showed a multi-million THB balance). This also
+  contradicted this same module's own "reversal pairs net to zero" note —
+  they only appeared to hold because the earlier live parity test compared
+  the code's query to an IDENTICAL hand-written query that dropped NULLs the
+  same way (self-consistency, not correctness). NULL-assignment rows are now
+  explicitly KEPT.
 - No sign flip: `company_curr_amount` already carries the correct sign.
 - No `doc_status` filter: verified 2026-07-14 that including/excluding the
   only other value ('U') never moves any SUM at any grain.
@@ -20,13 +33,15 @@ import pyodbc
 
 MONTH_COLUMNS: tuple[str, ...] = tuple(f"m{m:02d}" for m in range(1, 13))
 
-# Verbatim per ADR-0020 / BUILD_PLAN A4 — do not reformat/reorder/edit.
+# Per ADR-0020 / BUILD_PLAN A4, corrected 2026-07-16 (D2 — see module
+# docstring): the assignment_number filter is now NULL-safe. Do not
+# reformat/reorder/edit without a matching ADR-0020 update.
 SAP_ACTUALS_SQL = """
 SELECT cost_center, gl_account_number, fiscal_year, period_month, SUM(company_curr_amount) AS actual_thb
 FROM gold.fact_gl_trans
 WHERE company_code='1000' AND doc_type<>'CO'
   AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')
-  AND assignment_number<>'TFRS16' AND fiscal_year=?
+  AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=?
 GROUP BY cost_center, gl_account_number, fiscal_year, period_month
 """
 

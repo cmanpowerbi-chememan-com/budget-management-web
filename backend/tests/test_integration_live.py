@@ -41,12 +41,17 @@ Real cc/filler pair and Entertainment GL code are DISCOVERED from the live
 DB at fixture setup, never hardcoded — the SharePoint-synced masters can
 change on their own sync cadence.
 """
+import threading
+
 import pyodbc
 import pytest
+from fastapi.testclient import TestClient
 
 import app.sap as sap_module
+from app.auth import get_current_user_email
 from app.db import get_fabric_conn, get_gold_conn
-from app.read_model import fetch_board_pending_rows, get_budget_grid
+from app.main import app as fastapi_app
+from app.read_model import fetch_board_pending_rows, fetch_cc_dims, get_budget_grid
 from app.rls import resolve_scope
 from app.sap import MONTH_COLUMNS, SapActualsFetchError, fetch_sap_actuals
 from app.special_gl import SPECIAL_GL_GROUPS
@@ -164,6 +169,72 @@ def _discover_grid_filler(conn: pyodbc.Connection, board_ccs: set[str]) -> str:
             return email
     assert fallback is not None, "no filler with a non-empty Fill scope found in dbo.cc_filler_map"
     return fallback
+
+
+def _discover_traveler_with_a_configured_rate(conn: pyodbc.Connection) -> str:
+    """Return a real employee_code whose job_level_name_en HAS a matching row
+    in dbo.per_diem_rate (i.e. not e.g. 'N/A') — used to exercise a real
+    per-diem calculation end to end (D1)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT TOP 1 e.employee_code FROM dbo.v_employee_primary e "
+            "JOIN dbo.per_diem_rate r ON r.job_level = e.job_level_name_en "
+            "ORDER BY e.employee_code"
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    assert row is not None, "no traveler found whose job_level has a matching dbo.per_diem_rate row"
+    return row[0]
+
+
+def _discover_two_disjoint_fillers(conn: pyodbc.Connection) -> tuple[str, str, str, str]:
+    """Return (victim_cc, victim_email, attacker_cc, attacker_email) — two
+    fillers whose Fill scopes are DISJOINT, used to prove the D3/D4 IDOR fix:
+    the attacker declares THEIR OWN in-scope cost_center but targets a
+    detail_id that actually belongs to the victim's cost_center."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT DISTINCT filler_email FROM dbo.cc_filler_map "
+            "WHERE filler_email IS NOT NULL AND LTRIM(RTRIM(filler_email)) <> '' ORDER BY filler_email"
+        )
+        emails = [r[0] for r in cursor.fetchall()]
+    finally:
+        cursor.close()
+
+    scopes: dict[str, set[str]] = {}
+    for email in emails:
+        scope = resolve_scope(email, conn)
+        fill = {cc for cc in scope.fill_cost_centers if cc not in EXCLUDED_COST_CENTERS}
+        if fill:
+            scopes[email] = fill
+
+    items = list(scopes.items())
+    for i, (email_a, fill_a) in enumerate(items):
+        for email_b, fill_b in items[i + 1:]:
+            if fill_a.isdisjoint(fill_b):
+                return next(iter(fill_a)), email_a, next(iter(fill_b)), email_b
+    pytest.skip("no two fillers with disjoint Fill scopes found in dbo.cc_filler_map")
+
+
+def _discover_department_with_sap_led_row(
+    fabric_conn: pyodbc.Connection, gold_conn: pyodbc.Connection, scope, planning_year: int
+) -> tuple[str, str, str]:
+    """Return (department, cost_center, gl_account) for a REAL SAP-led
+    (cc,gl) row (no board, no pending) whose cost_center's department (via
+    dbo.cc_filler_map) is resolvable — used to prove D10 (department filter
+    must not drop SAP-led rows) on real data."""
+    rows = get_budget_grid(fabric_conn, gold_conn, planning_year=planning_year, scope=scope)
+    sap_led = [r for r in rows if r.sap.total_year != 0 and r.board.gl_name is None and r.pending.gl_name is None]
+    ccs = list({r.cost_center for r in sap_led})
+    cc_dims = fetch_cc_dims(fabric_conn, ccs)
+    for r in sap_led:
+        dept = cc_dims.get(r.cost_center, {}).get("department")
+        if dept:
+            return dept, r.cost_center, r.gl_account
+    pytest.skip("no SAP-led row with a resolvable department found for this filler/board_year — cannot prove D10 live")
 
 
 def _cleanup_sentinel_year(conn: pyodbc.Connection) -> None:
@@ -344,13 +415,20 @@ def test_add_second_detail_line_parent_cell_sums_both(discovered: tuple[str, str
 
 @pytest.mark.integration
 def test_sap_actuals_query_runs_live_and_matches_an_independent_sum() -> None:
-    """The never-cut financial contract (ADR-0020), proven live for the
-    first time: `fetch_sap_actuals`' total SUM must equal the SAME
+    """The never-cut financial contract (ADR-0020, corrected 2026-07-16 by
+    D2), proven live: `fetch_sap_actuals`' total SUM must equal the SAME
     aggregate hand-written independently (`company_code='1000'`,
-    `doc_type<>'CO'`, the 8 excluded CCs WITHOUT `10SC012000`,
-    `assignment_number<>'TFRS16'`, `SUM(company_curr_amount)`, no sign
-    flip, no `doc_status` filter) — exact match. Also proves the pivot:
-    one (cc, gl) key's m01..m12 sums back to that key's own total_year."""
+    `doc_type<>'CO'`, the 8 excluded CCs WITHOUT `10SC012000`, the D2
+    NULL-safe `(assignment_number IS NULL OR assignment_number<>'TFRS16')`,
+    `SUM(company_curr_amount)`, no sign flip, no `doc_status` filter) —
+    exact match. Also proves the pivot: one (cc, gl) key's m01..m12 sums
+    back to that key's own total_year.
+
+    NOTE: this test's own "independent" SQL previously used the bare
+    (non-NULL-safe) filter, which matched `fetch_sap_actuals` only because
+    both sides shared the SAME NULL-dropping bug (self-consistency, not
+    correctness — see the D2 finding). Updated here in lockstep with the D2
+    fix so this test keeps proving the CORRECT contract, not the old one."""
     with get_gold_conn() as conn:
         cursor = conn.cursor()
         try:
@@ -380,7 +458,7 @@ def test_sap_actuals_query_runs_live_and_matches_an_independent_sum() -> None:
                 FROM gold.fact_gl_trans
                 WHERE company_code='1000' AND doc_type<>'CO'
                   AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')
-                  AND assignment_number<>'TFRS16' AND fiscal_year=?
+                  AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=?
                 """,
                 year,
             )
@@ -528,3 +606,294 @@ def test_pending_layer_appears_in_get_budget_grid_after_a_sentinel_write() -> No
     finally:
         with get_fabric_conn() as cleanup_conn:
             _cleanup_sentinel_year(cleanup_conn)
+
+
+# ---------------------------------------------------------------------------
+# A4+A5 exhaustive-verify defect fixes — live proofs (2026-07-16, see
+# docs/a4-a5-verify-findings.md). Sentinel fiscal_year=2099 throughout.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+def test_post_trip_endpoint_succeeds_end_to_end_after_the_job_level_column_fix(
+    discovered: tuple[str, str, str],
+) -> None:
+    """D1 SHOWSTOPPER, live, through the REAL HTTP endpoint: before the fix,
+    `_lookup_per_diem_rate`'s `WHERE position = ?` raised pyodbc 42S22 ("no
+    such column") on EVERY real trip save -> `POST /budget/trip` always 502.
+    Proves the fix through the full stack (real router, real auth override,
+    real Fabric SQL DB): 200 + a persisted `budget.budget_trip` row."""
+    cost_center, filler_email, _ = discovered
+
+    with get_fabric_conn() as conn:
+        traveler_empcode = _discover_traveler_with_a_configured_rate(conn)
+
+    fastapi_app.dependency_overrides[get_current_user_email] = lambda: filler_email
+    try:
+        with TestClient(fastapi_app) as client:
+            response = client.post(
+                "/budget/trip",
+                json={
+                    "cost_center": cost_center,
+                    "fiscal_year": FISCAL_YEAR,
+                    "traveler_empcode": traveler_empcode,
+                    "country_group": 1,
+                    "days": 3,
+                    "travel_months": ["05"],
+                    "side": "COST",
+                },
+            )
+        assert response.status_code == 200, response.text
+        trip_id = response.json()["trip_id"]
+        assert trip_id is not None
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute("SELECT trip_id FROM budget.budget_trip WHERE trip_id = ?", trip_id)
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+        assert row is not None, "trip row was not persisted despite a 200 response"
+    finally:
+        fastapi_app.dependency_overrides.pop(get_current_user_email, None)
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_sap_null_assignment_fix_nets_a_balanced_clearing_account_to_zero() -> None:
+    """D2 policy fix (confirmed): NULL-assignment rows are KEPT, not
+    silently dropped by a bare `assignment_number<>'TFRS16'` (`NULL <>
+    'TFRS16'` is SQL UNKNOWN). Before the fix, GL 9110100020 on cost center
+    10QC011000 (a balanced clearing account, FY2026) showed a multi-million
+    THB phantom because the +NULL legs were dropped while the -PO legs were
+    kept. After the fix the per-cell total must net to ~0.00. Read-only —
+    no writes, no cleanup needed."""
+    gl_account = "9110100020"
+    cost_center = "10QC011000"
+    fiscal_year = 2026
+    with get_gold_conn() as conn:
+        result = fetch_sap_actuals(conn, fiscal_year)
+    key = (cost_center, gl_account)
+    assert key in result, f"{key} not found in fiscal_year={fiscal_year} SAP actuals — re-check the discovery values"
+    total = result[key]["total_year"]
+    assert abs(total) < 1.0, f"expected a near-zero balanced clearing total, got {total}"
+
+
+@pytest.mark.integration
+def test_idor_cannot_rewrite_a_detail_line_outside_fill_scope() -> None:
+    """D3/D4 IDOR fix, live: a filler cannot rewrite an existing detail_id
+    that belongs to a DIFFERENT cost_center, even by declaring their OWN
+    in-scope cost_center in the payload — the fix reads the row's ACTUAL
+    owner from the DB and authorizes/compares against that, never the
+    payload. The victim row must remain unchanged."""
+    with get_fabric_conn() as conn:
+        victim_cc, victim_email, attacker_cc, attacker_email = _discover_two_disjoint_fillers(conn)
+        gl_account = _discover_entertainment_gl(conn)
+        victim_scope = resolve_scope(victim_email, conn)
+        attacker_scope = resolve_scope(attacker_email, conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            create_results = save_detail_lines(
+                conn,
+                [DetailLineInput(cost_center=victim_cc, gl_account=gl_account, fiscal_year=FISCAL_YEAR, m01=42)],
+                user_email=victim_email, scope=victim_scope,
+            )
+        assert create_results[0].ok, create_results[0].detail
+        victim_detail_id = create_results[0].line.detail_id
+        victim_updated_at = create_results[0].line.updated_at
+
+        with get_fabric_conn() as conn:
+            attack_results = save_detail_lines(
+                conn,
+                [DetailLineInput(
+                    detail_id=victim_detail_id, cost_center=attacker_cc, gl_account=gl_account,
+                    fiscal_year=FISCAL_YEAR, m01=999999, expected_updated_at=victim_updated_at,
+                )],
+                user_email=attacker_email, scope=attacker_scope,
+            )
+        assert attack_results[0].ok is False, "attacker's rewrite must be rejected"
+        assert attack_results[0].error in ("forbidden", "conflict"), attack_results[0].error
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01, cost_center FROM budget.pending_budget_detail WHERE detail_id = ?",
+                    victim_detail_id,
+                )
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+        assert row is not None
+        assert float(row[0]) == 42, f"victim row was modified: m01={row[0]}"
+        assert row[1] == victim_cc
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_concurrent_detail_saves_never_lose_a_line_in_the_parent_sum(
+    discovered: tuple[str, str, str],
+) -> None:
+    """D5 (never-cut): two REAL connections each save a detail line to the
+    SAME parent cell within the same window (via a Barrier to maximize
+    overlap) — the atomic recompute (D5 fix) must make the parent cell equal
+    SUM(detail), never lose either writer's line to a race (the old bug:
+    SELECT sum, then a separate UPDATE — a concurrent commit landing in
+    between was silently overwritten)."""
+    cost_center, filler_email, gl_account = discovered
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def _write(amount: float) -> None:
+        try:
+            with get_fabric_conn() as conn:
+                scope = resolve_scope(filler_email, conn)
+                barrier.wait(timeout=10)
+                save_detail_lines(
+                    conn,
+                    [DetailLineInput(cost_center=cost_center, gl_account=gl_account, fiscal_year=FISCAL_YEAR, m01=amount)],
+                    user_email=filler_email, scope=scope,
+                )
+        except BaseException as exc:  # noqa: BLE001 — surfaced via `errors`, never swallowed
+            errors.append(exc)
+
+    try:
+        t1 = threading.Thread(target=_write, args=(150.0,))
+        t2 = threading.Thread(target=_write, args=(150.0,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=30)
+        t2.join(timeout=30)
+        assert not errors, f"writer thread(s) raised: {errors}"
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01 FROM budget.pending_budget WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, FISCAL_YEAR,
+                )
+                parent_row = cursor.fetchone()
+                cursor.execute(
+                    "SELECT COUNT(*), SUM(m01) FROM budget.pending_budget_detail "
+                    "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, FISCAL_YEAR,
+                )
+                detail_count, detail_sum = cursor.fetchone()
+            finally:
+                cursor.close()
+
+        assert detail_count == 2, f"expected both concurrent writes to persist, found {detail_count} detail rows"
+        assert parent_row is not None
+        assert float(parent_row[0]) == float(detail_sum) == 300.0, (
+            f"parent m01={parent_row[0]} != SUM(detail)={detail_sum} — a concurrent write was lost (D5 race)"
+        )
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_decimal_quantization_two_lines_of_100_005_sum_to_200_00(
+    discovered: tuple[str, str, str],
+) -> None:
+    """D6 (never-cut): two detail lines each entered as 100.005 must each
+    persist as 100.00 (DECIMAL(18,2), ROUND_HALF_UP on the exact double) and
+    the parent cell must be exactly 200.00 — proving total_year ==
+    SUM(m01..m12) holds at a real cent-rounding boundary, on the real DB."""
+    cost_center, filler_email, gl_account = discovered
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            results = save_detail_lines(
+                conn,
+                [
+                    DetailLineInput(cost_center=cost_center, gl_account=gl_account, fiscal_year=FISCAL_YEAR, m01=100.005),
+                    DetailLineInput(cost_center=cost_center, gl_account=gl_account, fiscal_year=FISCAL_YEAR, m01=100.005),
+                ],
+                user_email=filler_email, scope=scope,
+            )
+        assert all(r.ok for r in results), [r.error for r in results if not r.ok]
+        assert results[0].line.m01 == 100.00
+        assert results[1].line.m01 == 100.00
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01, total_year FROM budget.pending_budget "
+                    "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, FISCAL_YEAR,
+                )
+                parent_row = cursor.fetchone()
+            finally:
+                cursor.close()
+        assert parent_row is not None
+        assert float(parent_row[0]) == 200.00, f"parent m01={parent_row[0]}, expected 200.00"
+        assert float(parent_row[1]) == 200.00, f"parent total_year={parent_row[1]}, expected 200.00"
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_department_filter_keeps_sap_led_rows_live() -> None:
+    """D10 fix, live: a department filter must not silently drop SAP-led
+    (cc,gl) rows that have no board/pending snapshot yet — the department
+    for those rows is now derived from dbo.cc_filler_map via fetch_cc_dims."""
+    with get_fabric_conn() as conn:
+        board_year = _discover_board_year(conn)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT DISTINCT cost_center FROM dbo.board_budget WHERE fiscal_year = ?", board_year)
+            board_ccs = {r[0] for r in cursor.fetchall()}
+        finally:
+            cursor.close()
+        filler_email = _discover_grid_filler(conn, board_ccs)
+        scope = resolve_scope(filler_email, conn)
+
+    planning_year = board_year + 1
+    with get_fabric_conn() as fabric_conn, get_gold_conn() as gold_conn:
+        department, cost_center, gl_account = _discover_department_with_sap_led_row(
+            fabric_conn, gold_conn, scope, planning_year
+        )
+
+    with get_fabric_conn() as fabric_conn, get_gold_conn() as gold_conn:
+        filtered_rows = get_budget_grid(
+            fabric_conn, gold_conn, planning_year=planning_year, scope=scope, department_filter=department
+        )
+
+    assert any(r.cost_center == cost_center and r.gl_account == gl_account for r in filtered_rows), (
+        f"SAP-led row ({cost_center}, {gl_account}) for department={department!r} was dropped by the department filter"
+    )
+
+
+@pytest.mark.integration
+def test_cc_dims_lookup_is_deterministic_for_a_multi_division_cc() -> None:
+    """D11 fix: `dbo.cc_filler_map` can have >1 row (>1 filler_email) for the
+    same cost_center with DIFFERENT divisions — `_lookup_cc_dims` must return
+    the SAME row every time (`ORDER BY filler_email`), not flip by scan
+    order. CC 10OS011400 is a real 2-division CC per the exhaustive verify
+    finding; skips gracefully if that's no longer true today."""
+    from app.write_model import _lookup_cc_dims
+
+    cost_center = "10OS011400"
+    with get_fabric_conn() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COUNT(DISTINCT division) FROM dbo.cc_filler_map WHERE cost_center = ?", cost_center
+            )
+            distinct_divisions = cursor.fetchone()[0]
+        finally:
+            cursor.close()
+        if distinct_divisions < 2:
+            pytest.skip(f"{cost_center} no longer has >1 division in dbo.cc_filler_map (today: {distinct_divisions})")
+
+        results = [_lookup_cc_dims(conn, cost_center) for _ in range(5)]
+    assert all(r == results[0] for r in results), f"non-deterministic pick across repeated calls: {results}"
