@@ -1,5 +1,6 @@
 """Unit tests for GET /budget/detail + GET /budget/trip (A9 gap-fill router).
 DB always mocked, no live connection (same convention as test_reference_router.py)."""
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from app.auth import get_current_user_email
@@ -16,6 +17,38 @@ def _scope(**overrides) -> Scope:
                      fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
     defaults.update(overrides)
     return Scope(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# Model-level regression: pyodbc returns `updated_at` as a real `datetime`
+# (never a string), so DetailLineRow/TripRow must accept one directly.
+# ---------------------------------------------------------------------------
+
+def test_detail_line_row_accepts_real_datetime_updated_at():
+    from app.routers.subform import DetailLineRow
+
+    row = DetailLineRow(
+        detail_id=1, cost_center="CC1", gl_account="GL1", fiscal_year=2027,
+        trip_id=None, gl_group="Entertainment", line_label=None,
+        **{f"m{m:02d}": 0.0 for m in range(1, 13)},
+        total_year=0.0, meta_json=None, updated_at=datetime(2026, 7, 15, 10, 30, 0),
+    )
+
+    assert row.model_dump(mode="json")["updated_at"] == "2026-07-15T10:30:00"
+
+
+def test_trip_row_accepts_real_datetime_updated_at():
+    from app.routers.subform import TripRow
+
+    row = TripRow(
+        trip_id=10, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
+        traveler_name="สมชาย", position="Supervisor", destination="Japan",
+        country_group=2, days=5, travel_months=["02", "03"], purpose=None, side="COST",
+        updated_at=datetime(2026, 7, 15, 10, 30, 0),
+        per_diem_months={f"m{m:02d}": 0.0 for m in range(1, 13)}, per_diem_error=None,
+    )
+
+    assert row.model_dump(mode="json")["updated_at"] == "2026-07-15T10:30:00"
 
 
 # ---------------------------------------------------------------------------
@@ -130,3 +163,48 @@ def test_get_trips_502_on_db_error(client):
         response = client.get("/budget/trip", params={"cost_center": "CC1", "fiscal_year": 2027})
 
     assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# Regression: pyodbc returns `updated_at` as a real datetime, not a string.
+# DetailLineRow/TripRow used to type it `str`, so Pydantic v2 rejected the
+# datetime and the router's `except pyodbc.Error` never caught it -> 500 on
+# any non-empty result. Fixed by typing `updated_at: datetime` (matches the
+# write-side TripState/DetailLineState models).
+# ---------------------------------------------------------------------------
+
+def test_get_detail_lines_200_with_real_datetime_updated_at(client):
+    _override_auth("filler@chememan.com")
+    fake_rows = [{
+        "detail_id": 1, "cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027,
+        "trip_id": None, "gl_group": "Entertainment", "line_label": None,
+        **{f"m{m:02d}": 0.0 for m in range(1, 13)},
+        "total_year": 0.0, "meta_json": None, "updated_at": datetime(2026, 7, 15, 10, 30, 0),
+    }]
+    with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
+        "app.routers.subform.resolve_scope", return_value=_scope()
+    ), patch("app.routers.subform.fetch_detail_lines", return_value=fake_rows):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/detail", params={"cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027})
+
+    assert response.status_code == 200
+    assert response.json()[0]["updated_at"] == "2026-07-15T10:30:00"
+
+
+def test_get_trips_200_with_real_datetime_updated_at(client):
+    _override_auth("filler@chememan.com")
+    fake_rows = [{
+        "trip_id": 10, "cost_center": "CC1", "fiscal_year": 2027, "traveler_empcode": "E1",
+        "traveler_name": "สมชาย", "position": "Supervisor", "destination": "Japan",
+        "country_group": 2, "days": 5, "travel_months": ["02", "03"], "purpose": None, "side": "COST",
+        "updated_at": datetime(2026, 7, 15, 10, 30, 0),
+        "per_diem_months": {f"m{m:02d}": 0.0 for m in range(1, 13)}, "per_diem_error": None,
+    }]
+    with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
+        "app.routers.subform.resolve_scope", return_value=_scope()
+    ), patch("app.routers.subform.fetch_trips", return_value=fake_rows):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/trip", params={"cost_center": "CC1", "fiscal_year": 2027})
+
+    assert response.status_code == 200
+    assert response.json()[0]["updated_at"] == "2026-07-15T10:30:00"

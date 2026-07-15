@@ -11,6 +11,7 @@ time since these two endpoints always take a specific `cost_center` query
 param rather than a scoped list.
 """
 import logging
+from datetime import datetime
 
 import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -56,7 +57,7 @@ class DetailLineRow(BaseModel):
     m12: float
     total_year: float
     meta_json: dict | None
-    updated_at: str
+    updated_at: datetime
 
 
 class TripRow(BaseModel):
@@ -72,7 +73,7 @@ class TripRow(BaseModel):
     travel_months: list[str]
     purpose: str | None
     side: str
-    updated_at: str
+    updated_at: datetime
     # Recomputed on every read (ADR-0015) — `None` + `per_diem_error` set
     # when the current rate/FX config can't derive it (never a fallback
     # number, never a 500 for the whole list — see subform_read.fetch_trips).
