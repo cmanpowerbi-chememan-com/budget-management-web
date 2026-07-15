@@ -37,9 +37,23 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 3:07 PM &bull; rendered: 15 July 2026 3:07 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (27)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 26</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 3:57 PM &bull; rendered: 15 July 2026 3:57 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (29)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 27</button></div>
   
+    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a8-main-grid</span>
+        <span class="dt">15 July 2026 3:12 PM</span>
+      </div>
+      <div class="id">a8-main-grid</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A8 per BUILD_PLAN: main grid 3 layers (SAP RO / Approved RO / Pending edit), fai-picker สายงาน&gt;ฝ่าย&gt;CC with counts (login bar V3), year, sorted by gl_group, RLS-scoped via GET /budget, + เพิ่ม transaction, inline month edit + auto total, optimistic-lock 409 UX. Special-GL/trip cells edit-blocked (subform=A9). NOT: A9 subforms, A10 approve/admin toggle. Mockup 0002.3 = canonical behavior. Dispatched.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
@@ -58,6 +72,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a5-deadline-lock</span>
+        <span class="dt">15 July 2026 3:12 PM &rarr; 15 July 2026 3:57 PM</span>
+      </div>
+      <div class="id">a5-deadline-lock</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>GATE: APPROVE WITH SUGGESTIONS (no blockers). Extraction verified behavior-preserving; all 3 write entry points gated before first write; admin exemption server-side; batch per-item independence tested; fail-loud on lookup error; monkeypatch target fix verified correct (module-namespace lookup). Gate re-ran: isolated 124, full mocked 291, live 31, sentinels 0 @2097+2099. Suggestions: docstring (applied via cavecrew), pre-existing fetchone side_effect extras (logged, not new). Committed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a7-frontend-scaffold</span>
         <span class="dt">15 July 2026 2:30 PM &rarr; 15 July 2026 3:07 PM</span>
       </div>

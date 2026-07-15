@@ -27,12 +27,12 @@ themselves, dedup/self-skip drops the redundant position automatically —
 no special-cased branches needed for "invalid approver1" vs "self-submit".
 """
 import logging
-from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 import pyodbc
 from pydantic import BaseModel
 
+from app.deadline import PastDeadlineError, bangkok_today as _bangkok_today, is_post_deadline as _is_post_deadline
 from app.rls import Scope
 
 logger = logging.getLogger(__name__)
@@ -102,12 +102,6 @@ class MidChainAdminOverwriteError(PermissionError):
     status. Kept as its own error/guard so flipping the policy later (if
     jakkaritw wants admin to always override mid-chain) is a small change,
     not a rewrite."""
-
-
-class PastDeadlineError(PermissionError):
-    """A normal user tried to submit after `dbo.submission_deadline` for this
-    fiscal_year has passed — the cycle is closed to users (ADR-0012); only
-    admin's direct-approve branch may act past this point."""
 
 
 class InvalidApprovalStateError(ValueError):
@@ -286,36 +280,6 @@ def _department_has_admin_template_rows(conn: pyodbc.Connection, department: str
     finally:
         cursor.close()
     return row is not None
-
-
-_BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
-
-
-def _bangkok_today() -> date:
-    """S1 gate fix: anchor the deadline comparison to Asia/Bangkok explicitly
-    instead of the server-local `date.today()` — a server running in a
-    different timezone (e.g. UTC) would flip the post-deadline boundary by
-    hours. Deliberately separate from `_now()` (kept UTC — used only for
-    timestamp columns, never the deadline gate) so the two clocks are never
-    conflated."""
-    return datetime.now(_BANGKOK_TZ).date()
-
-
-def _is_post_deadline(conn: pyodbc.Connection, fiscal_year: int) -> bool:
-    """No `dbo.submission_deadline` row for this fiscal_year -> treat as OPEN
-    (never silently lock a year nobody configured a cutoff for). Inclusive of
-    the deadline day itself — only the day AFTER `deadline_date` counts as
-    post-deadline (unchanged semantics; S1 only changed which clock decides
-    "today")."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT deadline_date FROM dbo.submission_deadline WHERE fiscal_year = ?", fiscal_year)
-        row = cursor.fetchone()
-    finally:
-        cursor.close()
-    if row is None:
-        return False
-    return _bangkok_today() > row[0]
 
 
 def _fetch_row(conn: pyodbc.Connection, department: str, fiscal_year: int) -> dict | None:

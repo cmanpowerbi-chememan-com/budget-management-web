@@ -42,6 +42,9 @@ Design (see final report for the full rationale):
   (403 forbidden, 400 validation-after-parsing, 409 conflict). The two
   layers check different things: 422 = "not a well-formed request",
   4xx-from-here = "well-formed but violates a budget rule".
+- **Deadline lock:** every write entry point rejects non-admin writes to a
+  past-deadline `fiscal_year` via the shared check in `app/deadline.py`,
+  raising `past_deadline` (403).
 """
 import json
 from datetime import datetime, timezone
@@ -51,6 +54,7 @@ from typing import Literal
 import pyodbc
 from pydantic import BaseModel, Field, field_validator
 
+from app.deadline import PastDeadlineError, is_post_deadline
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError, derive_per_diem
 from app.rls import Scope
 from app.special_gl import (
@@ -193,6 +197,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "invalid_request": 400,
     "conflict": 409,
     "data_overflow": 400,
+    "past_deadline": 403,
     "missing_per_diem_rate": 500,
     "missing_fx_rate": 500,
 }
@@ -213,6 +218,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     InvalidRequestError: "invalid_request",
     RowConflictError: "conflict",
     DataOverflowError: "data_overflow",
+    PastDeadlineError: "past_deadline",
 }
 _CAUGHT_PER_ITEM = tuple(_ERROR_CODE_BY_EXCEPTION)  # never includes the per_diem fail-loud errors — those propagate
 
@@ -277,6 +283,22 @@ def _ensure_cost_center_exists(conn: pyodbc.Connection, cost_center: str) -> Non
 def _ensure_not_excluded(cost_center: str) -> None:
     if cost_center in EXCLUDED_COST_CENTERS:
         raise ExcludedCostCenterError(f"{cost_center} is an excluded cost center — never valid for budget entry")
+
+
+def _ensure_not_post_deadline(conn: pyodbc.Connection, fiscal_year: int, scope: Scope) -> None:
+    """A5 gap close (flagged twice by the A6 gate, 2026-07-16): A6's Submit
+    enforces the submission deadline, but editing via /budget/rows|detail|trip
+    did not — a normal user could keep editing a closed fiscal_year forever.
+    ADR-0012: after the deadline the cycle is closed to normal users, only
+    admin may keep editing. Reuses `app.deadline.is_post_deadline` (the exact
+    same Bangkok-anchored, deadline-day-inclusive, missing-row-is-OPEN check
+    A6's `submit_department` already applies) so the two gates can never
+    silently disagree. Called as the LAST check before the first DB write in
+    each write path — reads (dims/GL/trip lookups) are unaffected."""
+    if scope.is_admin:
+        return
+    if is_post_deadline(conn, fiscal_year):
+        raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
 
 
 def _ensure_no_negative_months(months: list[Decimal]) -> None:
@@ -440,6 +462,8 @@ def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_em
     template = row.template if scope.is_admin else "USER"
     total_year = sum(months)  # D6: already-quantized Decimals — exact, no extra rounding needed
     now = _now()
+
+    _ensure_not_post_deadline(conn, row.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -775,6 +799,8 @@ def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_e
     now = _now()
     meta_json_str = json.dumps(cleaned_meta, ensure_ascii=False) if cleaned_meta else None
 
+    _ensure_not_post_deadline(conn, line.fiscal_year, scope)
+
     cursor = conn.cursor()
     try:
         if line.detail_id is None:
@@ -1070,6 +1096,11 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         existing_trip = _lookup_trip(conn, trip.trip_id)
         if existing_trip is not None:
             old_side = existing_trip[1]
+
+    # Checked once, right before the FIRST write of this function — covers
+    # create, update, AND the side-flip path below (all reached only after
+    # this point), so a blocked past-deadline trip never touches the DB.
+    _ensure_not_post_deadline(conn, trip.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:

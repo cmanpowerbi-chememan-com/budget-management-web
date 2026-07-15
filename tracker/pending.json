@@ -1,8 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T15:07:14+0700",
+  "updated": "2026-07-15T15:57:01+0700",
   "tasks": [
+    {
+      "id": "a8-main-grid",
+      "state": "doing",
+      "created": "2026-07-15T15:12:06+0700",
+      "updated": "2026-07-15T15:12:06+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "A8 per BUILD_PLAN: main grid 3 layers (SAP RO / Approved RO / Pending edit), fai-picker สายงาน>ฝ่าย>CC with counts (login bar V3), year, sorted by gl_group, RLS-scoped via GET /budget, + เพิ่ม transaction, inline month edit + auto total, optimistic-lock 409 UX. Special-GL/trip cells edit-blocked (subform=A9). NOT: A9 subforms, A10 approve/admin toggle. Mockup 0002.3 = canonical behavior. Dispatched.",
+      "human": "(retired field — see ai)"
+    },
+    {
+      "id": "a5-deadline-lock",
+      "state": "done",
+      "created": "2026-07-15T15:12:06+0700",
+      "updated": "2026-07-15T15:57:01+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Extraction verified behavior-preserving; all 3 write entry points gated before first write; admin exemption server-side; batch per-item independence tested; fail-loud on lookup error; monkeypatch target fix verified correct (module-namespace lookup). Gate re-ran: isolated 124, full mocked 291, live 31, sentinels 0 @2097+2099. Suggestions: docstring (applied via cavecrew), pre-existing fetchone side_effect extras (logged, not new). Committed.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a7-frontend-scaffold",
       "state": "done",

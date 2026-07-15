@@ -42,7 +42,7 @@ DB at fixture setup, never hardcoded — the SharePoint-synced masters can
 change on their own sync cadence.
 """
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pyodbc
 import pytest
@@ -423,6 +423,161 @@ def test_add_second_detail_line_parent_cell_sums_both(discovered: tuple[str, str
     finally:
         with get_fabric_conn() as cleanup_conn:
             _cleanup_sentinel_year(cleanup_conn)
+
+
+# ---------------------------------------------------------------------------
+# A5 gap close — deadline lock on the write path (final A6 gate flag,
+# 2026-07-16): A6's submit already enforces dbo.submission_deadline, but
+# PUT /budget/rows|detail|trip did not — a non-admin could edit a closed
+# fiscal_year forever. Proves the fix against the REAL database: a non-admin
+# write is rejected once the deadline has passed, admin is exempt (ADR-0012).
+#
+# Uses its OWN sentinel fiscal_year (2097, distinct from the 2099 sentinel
+# used throughout the rest of this file) because this is the ONLY test in
+# the whole suite allowed to write to dbo.submission_deadline — strictly
+# keyed to fiscal_year=2097, deleted in the cleanup below. No other dbo.*
+# row is ever touched.
+# ---------------------------------------------------------------------------
+
+DEADLINE_SENTINEL_YEAR = 2097
+
+
+def _insert_past_deadline_row(conn: pyodbc.Connection) -> None:
+    """INSERT one dbo.submission_deadline row for DEADLINE_SENTINEL_YEAR with
+    deadline_date safely in the past (2020-01-01). All 9 live columns are
+    NOT NULL (verified via INFORMATION_SCHEMA.COLUMNS) so every one needs a
+    value; only fiscal_year/deadline_date matter to `is_post_deadline`, the
+    rest are filled with coherent placeholder values."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO dbo.submission_deadline
+                (fiscal_year, closing_date, closing_month, closing_year, reminder_day,
+                 deadline_date, reminder_date, _load_dt, _load_dttm)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            DEADLINE_SENTINEL_YEAR, 1, 1, 2020, 15,
+            date(2020, 1, 1), date(2019, 12, 17), date(2020, 1, 1), datetime(2020, 1, 1),
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+
+def _cleanup_deadline_sentinel(conn: pyodbc.Connection) -> None:
+    """Delete DEADLINE_SENTINEL_YEAR from budget.pending_budget (the write
+    target) and dbo.submission_deadline (the one sentinel row this file is
+    allowed to write), then verify 0 rows remain at that year in either."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM budget.pending_budget WHERE fiscal_year = ?", DEADLINE_SENTINEL_YEAR)
+        cursor.execute("DELETE FROM dbo.submission_deadline WHERE fiscal_year = ?", DEADLINE_SENTINEL_YEAR)
+        conn.commit()
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year = ?", DEADLINE_SENTINEL_YEAR)
+        pending_left = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM dbo.submission_deadline WHERE fiscal_year = ?", DEADLINE_SENTINEL_YEAR)
+        deadline_left = cursor.fetchone()[0]
+    finally:
+        cursor.close()
+
+    assert pending_left == 0, (
+        f"cleanup left {pending_left} budget.pending_budget rows at fiscal_year={DEADLINE_SENTINEL_YEAR}"
+    )
+    assert deadline_left == 0, (
+        f"cleanup left {deadline_left} dbo.submission_deadline rows at fiscal_year={DEADLINE_SENTINEL_YEAR}"
+    )
+
+
+@pytest.mark.integration
+def test_write_path_rejects_non_admin_past_deadline_write_live(discovered: tuple[str, str, str]) -> None:
+    """A5 gap close: a normal Filler's write to a fiscal_year whose deadline
+    already passed must be rejected (past_deadline, 403 at the router) with
+    NO row written — proven against the real database, not a mock."""
+    cost_center, filler_email, _ = discovered
+
+    try:
+        with get_fabric_conn() as conn:
+            _insert_past_deadline_row(conn)
+
+        with get_fabric_conn() as conn:
+            gl_account = _discover_non_special_gl(conn)
+            scope = resolve_scope(filler_email, conn)
+            assert cost_center in scope.fill_cost_centers, (
+                f"{cost_center} should be in {filler_email}'s Fill scope (A3 RLS)"
+            )
+
+            results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEADLINE_SENTINEL_YEAR, m01=100,
+                )],
+                user_email=filler_email,
+                scope=scope,
+            )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.ok is False, "expected the write to be rejected past the deadline"
+        assert result.error == "past_deadline"
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM budget.pending_budget "
+                    "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, DEADLINE_SENTINEL_YEAR,
+                )
+                row_count = cursor.fetchone()[0]
+            finally:
+                cursor.close()
+        assert row_count == 0, "the blocked write must not have created a budget.pending_budget row"
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_deadline_sentinel(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_write_path_admin_bypasses_past_deadline_write_live() -> None:
+    """ADR-0012: after the deadline the admin handles everything — admin's
+    write to the SAME closed fiscal_year must still succeed."""
+    admin_email = "jakkaritw@chememan.com"
+
+    try:
+        with get_fabric_conn() as conn:
+            _insert_past_deadline_row(conn)
+
+        with get_fabric_conn() as conn:
+            cost_center, _ = _discover_cc_filler(conn)
+            gl_account = _discover_non_special_gl(conn)
+            scope = resolve_scope(admin_email, conn)
+            assert scope.is_admin, f"{admin_email} expected to be admin (ADMIN_EMAILS)"
+
+            results = save_pending_rows(
+                conn,
+                [PendingRowInput(
+                    cost_center=cost_center, gl_account=gl_account,
+                    fiscal_year=DEADLINE_SENTINEL_YEAR, m01=250,
+                )],
+                user_email=admin_email,
+                scope=scope,
+            )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.ok, f"admin write should succeed past the deadline, got error={result.error} detail={result.detail}"
+        assert result.row is not None
+        assert result.row.m01 == 250
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_deadline_sentinel(cleanup_conn)
 
 
 # ---------------------------------------------------------------------------
@@ -1414,3 +1569,49 @@ def test_status_forbidden_for_department_outside_callers_scope_live() -> None:
         assert response.status_code == 403, response.text
     finally:
         fastapi_app.dependency_overrides.pop(get_current_user_email, None)
+
+
+# ---------------------------------------------------------------------------
+# A8 reference-data pickers — live proofs (added 2026-07-16). Read-only
+# (dbo.gl_group / dbo.cc_filler_map, both already read elsewhere in this
+# file) -- no writes, no sentinel year needed.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+def test_fetch_gl_accounts_runs_live_and_flags_a_known_special_group() -> None:
+    """Proves `dbo.gl_group`'s real columns (gl_code/gl_group/gl_name) work
+    end-to-end through `fetch_gl_accounts`, and that a real Entertainment GL
+    is correctly flagged `is_special` (ADR-0005)."""
+    from app.reference_data import fetch_gl_accounts
+
+    with get_fabric_conn() as conn:
+        rows = fetch_gl_accounts(conn)
+
+    assert rows, "dbo.gl_group returned zero rows live"
+    assert all({"gl_code", "gl_group", "gl_name", "is_special"} <= row.keys() for row in rows)
+    entertainment_rows = [r for r in rows if r["gl_group"] == "Entertainment"]
+    assert entertainment_rows, "no live Entertainment GL found to prove is_special=True"
+    assert all(r["is_special"] is True for r in entertainment_rows)
+    normal_rows = [r for r in rows if r["gl_group"] not in SPECIAL_GL_GROUPS]
+    assert normal_rows, "no live normal (non-special) GL found"
+    assert all(r["is_special"] is False for r in normal_rows)
+
+
+@pytest.mark.integration
+def test_fetch_departments_runs_live_scoped_to_a_real_fillers_see_scope() -> None:
+    """Proves `dbo.cc_filler_map` read + the D11 dedup tie-break work live,
+    scoped exactly like GET /budget for a real filler (never wider)."""
+    from app.reference_data import fetch_departments
+
+    with get_fabric_conn() as conn:
+        cost_center, filler_email = _discover_cc_filler(conn)
+        scope = resolve_scope(filler_email, conn)
+        assert scope.see_cost_centers, f"{filler_email} unexpectedly has an empty See scope"
+
+        rows = fetch_departments(conn, scope.see_cost_centers)
+
+    assert rows, "fetch_departments returned zero rows for a real filler's See scope"
+    returned_ccs = {r["cost_center"] for r in rows}
+    assert returned_ccs <= set(scope.see_cost_centers), "fetch_departments returned a CC outside the requested scope"
+    assert cost_center in returned_ccs
+    assert all({"cost_center", "department", "division", "c_level"} <= row.keys() for row in rows)

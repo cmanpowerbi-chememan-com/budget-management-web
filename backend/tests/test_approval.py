@@ -667,11 +667,17 @@ def test_authorize_status_view_unknown_department_raises_the_same_error_as_out_o
 
 def test_is_post_deadline_inclusive_of_deadline_day_itself(monkeypatch: pytest.MonkeyPatch):
     """Pinning the existing inclusive/exclusive semantics: the deadline DAY
-    itself is still open (not post-deadline); only the day AFTER it is."""
-    import app.approval as approval_module
+    itself is still open (not post-deadline); only the day AFTER it is.
+
+    `_is_post_deadline`/`_bangkok_today` are now imported aliases of
+    `app.deadline.is_post_deadline`/`bangkok_today` (extracted so `write_model`
+    can reuse the identical check) — patch the real owning module, not the
+    alias's origin module, or the monkeypatch has no effect on the imported
+    function's own internal call."""
+    import app.deadline as deadline_module
 
     pinned_today = date(2027, 6, 15)
-    monkeypatch.setattr(approval_module, "_bangkok_today", lambda: pinned_today)
+    monkeypatch.setattr(deadline_module, "bangkok_today", lambda: pinned_today)
 
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = (pinned_today,)  # deadline == today
