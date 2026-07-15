@@ -1,8 +1,41 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T21:25:29+0700",
+  "updated": "2026-07-15T22:18:08+0700",
   "tasks": [
+    {
+      "id": "sign-laddawan-specs",
+      "state": "done",
+      "created": "2026-07-15T22:18:08+0700",
+      "updated": "2026-07-15T22:18:08+0700",
+      "agent": "main",
+      "skills": [],
+      "files": [],
+      "ai": "Stamped cursive 'Jakkarit W' signature PNG (Freestyle Script, blue ink, -3deg) into Signature cell of Prepared-by row in 3 signoff docx (Spec A/B/C V2.0, laddawan). Raw OOXML: media+rel+inline drawing. Verify PASS x3 (zip ok, XML well-formed, 1 drawing in target row, rel ok). Backups in scratchpad backup_originals; tool stamp_signature.py",
+      "human": "เซ็นชื่อ Jakkarit W (ตัวเขียน) ลงช่อง Signature ของเอกสาร signoff 3 ฉบับ (Spec A/B/C V2.0) โฟลเดอร์ laddawan"
+    },
+    {
+      "id": "a13-6-e2e-journey",
+      "state": "doing",
+      "created": "2026-07-15T22:03:07+0700",
+      "updated": "2026-07-15T22:03:07+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "jakkaritw: A13.5 Playwright journey was shallower than briefed (page-load smoke only) — redo DEEP to standard. Upgrade: permanent @playwright/test suite at frontend/e2e/ (route-mocked API, webServer auto-start vite): full filler journey (deep-link, grid 3 layers, cell edit+payload assert, 409 revert, subform line add+parent refetch, trip+per-diem server-value, delete w/ confirm, submit -> chip PENDING_1), approver (badge, approve -> chip 2, reject+reason -> REJECTED, resubmit -> chip 1), admin (toggle+param assert+dept reset, attachments upload/list), no-scope empty state, error states (SAP 502 loud, scope-fail banner), zero console errors throughout. npm run test:e2e separate from vitest; NOT added to ci-tests.yml yet (browser install on runner = later decision). Dispatched.",
+      "human": "(retired field — see ai)"
+    },
+    {
+      "id": "a13-5-tool-sweep",
+      "state": "done",
+      "created": "2026-07-15T21:38:52+0700",
+      "updated": "2026-07-15T22:00:30+0700",
+      "agent": "08-tester",
+      "skills": [],
+      "files": [],
+      "ai": "A13.5 SWEEP COMPLETE — overall PASS, nothing blocks A14. (1) pip-audit/Bandit: Bandit 18 hits all false-positive (documented closed-enum pattern); requirements.txt fresh-resolve clean; stale shared venv has 3 real backend-relevant CVEs (starlette via fastapi, python-multipart = attachment surface, idna) — fresh install at deploy pulls clean; recommend pinning requirements.txt. (2) Schemathesis: 274 calls / 22 endpoints / 0x 5xx; injection/XSS/IDOR/RLS/error-leak all clean; row-count invariant proven 0 writes; minor note: no-scope GET /budget still runs the full SAP fetch before filtering -> slow/timeout, could short-circuit role=none (non-blocking). (3) Locust 30 users x 3min: /me p95 36ms, /scope p95 660ms, /budget p95 2.6-3.5s (SAP cross-store read-through — dominant cost), 0 failures on core endpoints; 47 'failures' = test-harness 422s (missing query params), not system errors. Playwright journey ran shallower than briefed (page-load smoke x3 personas, 0 console errors) — acceptable because A8/A9/A10 per-feature Playwright runs (13+2+6 scenarios) already covered the flows individually; noted honestly. Deferred items logged: dep pin, no-scope short-circuit, locust harness params.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "a13-final-verify",
       "state": "done",

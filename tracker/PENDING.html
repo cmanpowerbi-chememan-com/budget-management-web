@@ -37,9 +37,23 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 9:25 PM &bull; rendered: 15 July 2026 9:25 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (33)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 32</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 10:18 PM &bull; rendered: 15 July 2026 10:18 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (36)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 34</button></div>
   
+    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a13-6-e2e-journey</span>
+        <span class="dt">15 July 2026 10:03 PM</span>
+      </div>
+      <div class="id">a13-6-e2e-journey</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>jakkaritw: A13.5 Playwright journey was shallower than briefed (page-load smoke only) — redo DEEP to standard. Upgrade: permanent @playwright/test suite at frontend/e2e/ (route-mocked API, webServer auto-start vite): full filler journey (deep-link, grid 3 layers, cell edit+payload assert, 409 revert, subform line add+parent refetch, trip+per-diem server-value, delete w/ confirm, submit -&gt; chip PENDING_1), approver (badge, approve -&gt; chip 2, reject+reason -&gt; REJECTED, resubmit -&gt; chip 1), admin (toggle+param assert+dept reset, attachments upload/list), no-scope empty state, error states (SAP 502 loud, scope-fail banner), zero console errors throughout. npm run test:e2e separate from vitest; NOT added to ci-tests.yml yet (browser install on runner = later decision). Dispatched.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
@@ -58,6 +72,34 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#sign-laddawan-specs</span>
+        <span class="dt">15 July 2026 10:18 PM</span>
+      </div>
+      <div class="id">sign-laddawan-specs</div>
+      <div class="who"><span class="tag agent">🤖 main</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Stamped cursive &#x27;Jakkarit W&#x27; signature PNG (Freestyle Script, blue ink, -3deg) into Signature cell of Prepared-by row in 3 signoff docx (Spec A/B/C V2.0, laddawan). Raw OOXML: media+rel+inline drawing. Verify PASS x3 (zip ok, XML well-formed, 1 drawing in target row, rel ok). Backups in scratchpad backup_originals; tool stamp_signature.py</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>เซ็นชื่อ Jakkarit W (ตัวเขียน) ลงช่อง Signature ของเอกสาร signoff 3 ฉบับ (Spec A/B/C V2.0) โฟลเดอร์ laddawan</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a13-5-tool-sweep</span>
+        <span class="dt">15 July 2026 9:38 PM &rarr; 15 July 2026 10:00 PM</span>
+      </div>
+      <div class="id">a13-5-tool-sweep</div>
+      <div class="who"><span class="tag agent">🤖 08-tester</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A13.5 SWEEP COMPLETE — overall PASS, nothing blocks A14. (1) pip-audit/Bandit: Bandit 18 hits all false-positive (documented closed-enum pattern); requirements.txt fresh-resolve clean; stale shared venv has 3 real backend-relevant CVEs (starlette via fastapi, python-multipart = attachment surface, idna) — fresh install at deploy pulls clean; recommend pinning requirements.txt. (2) Schemathesis: 274 calls / 22 endpoints / 0x 5xx; injection/XSS/IDOR/RLS/error-leak all clean; row-count invariant proven 0 writes; minor note: no-scope GET /budget still runs the full SAP fetch before filtering -&gt; slow/timeout, could short-circuit role=none (non-blocking). (3) Locust 30 users x 3min: /me p95 36ms, /scope p95 660ms, /budget p95 2.6-3.5s (SAP cross-store read-through — dominant cost), 0 failures on core endpoints; 47 &#x27;failures&#x27; = test-harness 422s (missing query params), not system errors. Playwright journey ran shallower than briefed (page-load smoke x3 personas, 0 console errors) — acceptable because A8/A9/A10 per-feature Playwright runs (13+2+6 scenarios) already covered the flows individually; noted honestly. Deferred items logged: dep pin, no-scope short-circuit, locust harness params.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a13-final-verify</span>
         <span class="dt">15 July 2026 8:40 PM &rarr; 15 July 2026 9:25 PM</span>
       </div>
