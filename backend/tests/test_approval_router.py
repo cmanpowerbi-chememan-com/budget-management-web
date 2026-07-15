@@ -227,23 +227,71 @@ def test_approve_notifies_next_approver_when_still_pending(client):
     assert mock_notify.call_args.kwargs["approver_empcode"] == "101032"
 
 
-def test_approve_final_step_does_not_notify_turn(client):
+def test_approve_final_step_notifies_approved_not_turn(client):
     """current_position is None once status reaches APPROVED -- no approver
-    left to notify (a separate final-confirmation email is explicitly out
-    of scope, see final report)."""
+    left to notify_turn; the LAST approve fires notify_approved (4th
+    notification, submitter confirmation) instead."""
     _override_auth("manager@chememan.com")
-    state = _fake_state(status=APPROVED, current_position=None, current_approver_empcode=None)
+    state = _fake_state(
+        status=APPROVED, current_position=None, current_approver_empcode=None,
+        submitter_email="filler@chememan.com",
+    )
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.approve_department", return_value=state
-    ), patch("app.routers.approval.notifications.notify_turn") as mock_notify, patch(
+    ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
         "app.routers.approval.notifications.notify_reject"
-    ) as mock_reject:
+    ) as mock_reject, patch(
+        "app.routers.approval.notifications.notify_approved"
+    ) as mock_approved:
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
     assert response.status_code == 200
-    mock_notify.assert_not_called()
+    assert response.json().get("notification_warning") is None
+    mock_turn.assert_not_called()
     mock_reject.assert_not_called()
+    mock_approved.assert_called_once()
+    assert mock_approved.call_args.kwargs["submitter_email"] == "filler@chememan.com"
+    assert mock_approved.call_args.kwargs["department"] == DEPT
+    assert mock_approved.call_args.kwargs["fiscal_year"] == FY
+
+
+def test_approve_mid_chain_still_notifies_turn_not_approved(client):
+    """Guard against regression: a mid-chain approve (status still
+    PENDING_*) must keep firing notify_turn, never notify_approved."""
+    _override_auth("manager@chememan.com")
+    state = _fake_state(status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department", return_value=state
+    ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
+        "app.routers.approval.notifications.notify_approved"
+    ) as mock_approved:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+
+    assert response.status_code == 200
+    mock_turn.assert_called_once()
+    mock_approved.assert_not_called()
+
+
+def test_approve_final_step_notification_failure_never_fails_the_request(client):
+    """Never-cut: a notify_approved exception must not roll back or fail the
+    already-committed transition -- 200 with a non-fatal warning field."""
+    _override_auth("manager@chememan.com")
+    state = _fake_state(
+        status=APPROVED, current_position=None, current_approver_empcode=None,
+        submitter_email="filler@chememan.com",
+    )
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department", return_value=state
+    ), patch(
+        "app.routers.approval.notifications.notify_approved", side_effect=RuntimeError("graph down")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json()["notification_warning"] is not None
 
 
 def test_reject_notifies_the_last_submitter(client):

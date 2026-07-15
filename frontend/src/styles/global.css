@@ -573,6 +573,313 @@ input:focus-visible {
   color: var(--status-sap);
 }
 
+/* ─── A9 special-GL subform / Trip Manager button on the main grid ─── */
+.special-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border: 1px solid var(--special-edge);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--special-bg) 55%, var(--surface));
+  color: var(--special-edge);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.special-open-btn:hover {
+  background: var(--special-bg);
+  border-color: var(--ink);
+}
+
+/* ─── A9 modal shell (special-GL DetailSubform + Trip Manager) ─── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  background: rgba(28, 26, 22, 0.5);
+  overflow-y: auto;
+}
+.modal {
+  width: 100%;
+  max-width: 980px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 24px 60px -12px rgba(11, 26, 18, 0.35);
+}
+.trip-modal {
+  max-width: 1100px;
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line-2);
+}
+.modal-title {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--ink);
+}
+.modal-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.modal-subtitle {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.modal-close:hover {
+  border-color: var(--ink);
+}
+.modal-body {
+  padding: 20px 24px;
+  max-height: 65vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line-2);
+}
+.modal-foot-info {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─── Special-GL detail table (DetailSubform) ─── */
+.detail-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.detail-table th {
+  background: var(--paper-2);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 7px 9px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.detail-table th.special-col {
+  background: var(--special-bg);
+  color: var(--special-edge);
+}
+.detail-table td {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line-2);
+  vertical-align: middle;
+}
+.detail-table .special-col-cell {
+  background: color-mix(in oklab, var(--special-bg) 30%, var(--surface));
+}
+.detail-input {
+  width: 100%;
+  min-width: 90px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+.detail-input.month-input {
+  min-width: 62px;
+  width: 62px;
+  text-align: right;
+  font-family: var(--mono);
+}
+.detail-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  outline: none;
+}
+.detail-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.action-btn {
+  padding: 4px 10px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 11.5px;
+  cursor: not-allowed;
+}
+.action-btn:disabled {
+  opacity: 0.6;
+}
+
+/* ─── Trip Manager (TripManager) ─── */
+.trip-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  overflow: hidden;
+}
+.trip-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--paper-2);
+  font-weight: 600;
+  font-size: 13px;
+}
+.trip-idx {
+  font-family: var(--mono);
+  color: var(--ink-3);
+}
+.trip-card-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.trip-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.trip-field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.trip-field-grid input,
+.trip-field-grid select {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.trip-months-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.trip-months-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+}
+.tm-toggle {
+  padding: 6px 0;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.tm-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.trip-per-diem-note {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: color-mix(in oklab, var(--special-bg) 45%, var(--surface));
+  border: 1px solid var(--special-edge);
+  border-radius: var(--r);
+  padding: 8px 12px;
+}
+.trip-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.trip-exp-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.trip-exp-table th {
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.trip-exp-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line-2);
+}
+.exp-type-name {
+  font-weight: 600;
+}
+.exp-detail-input {
+  width: 56px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-family: var(--mono);
+  text-align: right;
+}
+.trip-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 /* ─── Main content placeholder (retired once A8 mounted BudgetGrid; kept
    for any leftover reference during rollout) ─── */
 .table-panel-placeholder {

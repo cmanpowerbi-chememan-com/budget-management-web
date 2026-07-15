@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app import notifications
 from app.approval import (
+    APPROVED,
     ERROR_CODE_BY_EXCEPTION,
     ERROR_HTTP_STATUS,
     ApprovalStatusState,
@@ -56,10 +57,18 @@ def _notify_after_transition(conn: pyodbc.Connection, action: str, state: Approv
     lost by wiring it here instead.
 
     No admin-direct-approve branch (ADMIN_SUBMIT/ADMIN_OVERRIDE_*) ever
-    reaches the `notify_turn` branch below — their `current_position` is
-    always `None` (status goes straight to `APPROVED`, no chain) — flagged
-    decision: no email fires for those branches (no approver to notify, and
-    the spec's email trigger map never describes one)."""
+    reaches the `notify_turn`/`notify_approved` branches below — those
+    branches run through `submit_department` (action == "submit"), and both
+    branches below are gated on action == "approve" or "reject" specifically
+    — flagged decision: no email fires for admin branches (no chain, and the
+    spec's email trigger map never describes one).
+
+    `notify_approved` (4th notification, added 2026-07-16) fires only when
+    an "approve" action is the one that lands the department on `APPROVED`
+    — the LAST step of the normal chain, where there is no next approver
+    left to `notify_turn`. Auto-escalate can never land `APPROVED` directly
+    (ADR-0006, asserted in `app.approval.auto_escalate_step`), so that path
+    never needs this branch either."""
     settings = get_settings()
     try:
         if action == "reject":
@@ -67,6 +76,11 @@ def _notify_after_transition(conn: pyodbc.Connection, action: str, state: Approv
                 department=state.department, fiscal_year=state.fiscal_year,
                 submitter_email=state.submitter_email, reason=state.reject_reason,
                 dry_run=settings.notifications_dry_run,
+            )
+        elif action == "approve" and state.status == APPROVED:
+            notifications.notify_approved(
+                department=state.department, fiscal_year=state.fiscal_year,
+                submitter_email=state.submitter_email, dry_run=settings.notifications_dry_run,
             )
         elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
             notifications.notify_turn(

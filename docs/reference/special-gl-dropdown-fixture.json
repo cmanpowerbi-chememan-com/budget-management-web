@@ -1,0 +1,31 @@
+{
+  "_purpose": "Single source of truth for the GL-conditional dropdown option sets that backend/app/special_gl.py validates AND the frontend (frontend/src/subform/glDropdownConstants.ts) must render identically. A backend test (test_special_gl_fixture_parity.py) and a frontend test (glDropdownConstants.test.ts) each load this SAME file and assert their own hardcoded constants match it — so the two languages can never silently drift apart. Sourced from docs/13Template Special/_dropdown_summary.md (that folder is gitignored — large Excel source dumps — so this derived JSON lives here in docs/reference/ instead, where it is tracked and reachable in CI). Training & Seminar's Method dropdown is deliberately NOT here: special_gl.py does not validate it server-side (free-form meta_json), so there is nothing to keep in parity — it stays a frontend-only UI convenience list.",
+  "entertainment": {
+    "external_gls": ["5211900030", "6211900030"],
+    "internal_gls": ["6211900031"],
+    "external_values": ["Customer", "Business partner", "หน่วยงานราชการ", "อื่นๆ"],
+    "internal_values": ["พนักงานบริษัท", "กรรมการบริษัท"]
+  },
+  "lease_rental": {
+    "vehicle_suffix": "060",
+    "machinery_suffix": "030",
+    "nonvehicle_suffixes": ["010", "020", "040", "050", "999"],
+    "vehicle_types": ["Car", "Van", "Trucks"],
+    "machinery_types": [
+      "Mobile Scalper", "Dumper", "Tractors", "Backhoe", "Forklift", "Tractor",
+      "Excavator", "Loader", "Crane", "Water Truck", "Road Sweeper Truck"
+    ],
+    "plants": ["BK", "TK", "KK", "PB", "RY"],
+    "plates": [
+      "6ขผ-3918", "1นจ-3508", "6ขจ-3513", "5ขง-5712", "1นจ-1468", "6ขผ-8150", "7ขถ-9660", "ไม่ระบุ"
+    ]
+  },
+  "travelling": {
+    "gl_by_type_side": {
+      "per_diem": { "COST": "5210400010", "SGA": "6210400010" },
+      "transport": { "COST": "5210400020", "SGA": "6210400020" },
+      "accommodation": { "COST": "5210400030", "SGA": "6210400030" },
+      "other": { "COST": "5210400999", "SGA": "6210400999" }
+    }
+  }
+}

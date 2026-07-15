@@ -68,6 +68,23 @@ describe('GridTable', () => {
     expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument()
   })
 
+  it('shows an "เปิดฟอร์มย่อย" button for an editable special-GL row and calls onOpenSpecial with the row + group', () => {
+    const onOpenSpecial = vi.fn()
+    const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: true })]
+    render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
+    const openBtn = screen.getByTestId('open-subform-CC1-5211900030')
+    fireEvent.click(openBtn)
+    expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
+  })
+
+  it('does not show the open-subform button for a non-editable (See-only) special-GL row', () => {
+    const onOpenSpecial = vi.fn()
+    const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: false })]
+    render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
+    expect(screen.queryByTestId('open-subform-CC1-5211900030')).not.toBeInTheDocument()
+    expect(screen.getByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).toBeInTheDocument()
+  })
+
   it('shows a per-row error message when rowMessages carries one', () => {
     const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
     render(

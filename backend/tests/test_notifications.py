@@ -11,6 +11,7 @@ from app.config import Settings
 from app.notifications import (
     NotificationError,
     build_deep_link,
+    notify_approved,
     notify_reject,
     notify_reminder,
     notify_turn,
@@ -185,6 +186,50 @@ def test_notify_reject_no_submitter_email_skips(monkeypatch):
         reason="bad", dry_run=True, settings=_settings(),
     )
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# notify_approved — final-APPROVED confirmation, uses the frozen
+# submitter_email directly, no DB lookup (same pattern as notify_reject)
+# ---------------------------------------------------------------------------
+
+def test_notify_approved_sends_to_submitter(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_approved(
+        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert "Accounting" in subject and "2027" in subject
+    assert "อนุมัติครบทุกขั้น" in subject
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    assert link in body
+    assert kwargs["dry_run"] is True
+
+
+def test_notify_approved_no_submitter_email_skips(monkeypatch):
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
+    result = notify_approved(
+        department="Accounting", fiscal_year=2027, submitter_email=None, dry_run=True, settings=_settings(),
+    )
+    assert result is None
+
+
+def test_notify_approved_dry_run_makes_zero_http_calls(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.httpx.post", lambda *a, **k: calls.append((a, k)))
+
+    notify_approved(
+        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    assert calls == []  # zero HTTP calls in dry-run — never-cut
 
 
 # ---------------------------------------------------------------------------

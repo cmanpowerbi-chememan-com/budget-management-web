@@ -16,9 +16,10 @@ turned into a 500 with a clear, actionable (non-leaky) message, matching the
 "missing FX/rate -> fail loud, 5xx, never silent" never-cut rule.
 """
 import logging
+from datetime import datetime
 
 import pyodbc
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_email
 from app.db import get_fabric_conn
@@ -29,6 +30,8 @@ from app.write_model import (
     DetailLineInput,
     PendingRowInput,
     TripInput,
+    delete_detail_line,
+    delete_trip,
     save_detail_lines,
     save_pending_rows,
     save_trip,
@@ -98,3 +101,37 @@ def update_trip(body: TripInput, email: str = Depends(get_current_user_email)):
     if body.trip_id is None:
         raise HTTPException(status_code=422, detail="trip_id is required to update an existing trip")
     return _save_one_trip(body, email)
+
+
+@router.delete("/detail")
+def delete_detail(
+    detail_id: int = Query(...),
+    expected_updated_at: datetime = Query(...),
+    email: str = Depends(get_current_user_email),
+):
+    with get_fabric_conn() as conn:
+        scope = resolve_scope(email, conn)
+        try:
+            result = delete_detail_line(conn, detail_id, expected_updated_at, email, scope)
+        except pyodbc.Error as exc:
+            logger.exception("delete_detail_line failed for detail_id=%s", detail_id)
+            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    _raise_for_result(result)
+    return {"ok": True, "detail_id": detail_id}
+
+
+@router.delete("/trip")
+def delete_trip_endpoint(
+    trip_id: int = Query(...),
+    expected_updated_at: datetime = Query(...),
+    email: str = Depends(get_current_user_email),
+):
+    with get_fabric_conn() as conn:
+        scope = resolve_scope(email, conn)
+        try:
+            result = delete_trip(conn, trip_id, expected_updated_at, email, scope)
+        except pyodbc.Error as exc:
+            logger.exception("delete_trip failed for trip_id=%s", trip_id)
+            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    _raise_for_result(result)
+    return {"ok": True, "trip_id": trip_id}

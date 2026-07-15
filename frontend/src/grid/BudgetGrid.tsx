@@ -4,9 +4,11 @@ import { fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
+import { DetailSubform } from '../subform/DetailSubform'
+import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
-import { buildNewRowPayload, buildSavePayload, mergeSavedRow, type MonthKey } from './model'
+import { buildNewRowPayload, buildSavePayload, glMetaFor, mergeSavedRow, type MonthKey } from './model'
 import { DeptPicker } from '../picker/DeptPicker'
 import { buildDeptHierarchy, resolveInitialDept } from '../picker/model'
 import { YearPicker } from './YearPicker'
@@ -42,6 +44,12 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // A9: which special-GL subform (or Trip Manager) is currently open, if
+  // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย"
+  // button (GridTable). `null` = none open.
+  const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string } | null>(null)
+  const [tripManagerOpenFor, setTripManagerOpenFor] = useState<string | null>(null) // cost_center, or null
 
   // Pure admins (ADR-0014: no base actor role, so no toggle — always
   // admin-wide) vs dual-role overlay admins (toggle deferred to A10, so
@@ -124,6 +132,17 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  /** Special-GL cells never edit inline (A8) — clicking "เปิดฟอร์มย่อย"
+   * opens the matching A9 editor: Travelling Expense (8 GL, trip-centric)
+   * goes to Trip Manager; the other 5 special groups go to DetailSubform. */
+  function handleOpenSpecial(row: BudgetRow, glGroup: string) {
+    if (glGroup === 'Travelling Expense') {
+      setTripManagerOpenFor(row.cost_center)
+    } else {
+      setDetailTarget({ row, glGroup })
+    }
+  }
+
   async function handleAddTransaction(costCenter: string, glAccount: string): Promise<AddResult> {
     try {
       const saved = await saveRow(buildNewRowPayload(costCenter, glAccount, year))
@@ -186,7 +205,29 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       {loading && !error && <div className="grid-loading">กำลังโหลดข้อมูลงบประมาณ…</div>}
 
       {!loading && !error && (
-        <GridTable rows={rows} glRef={glRef} onCommitMonth={handleCommitMonth} rowMessages={rowMessages} />
+        <GridTable
+          rows={rows}
+          glRef={glRef}
+          onCommitMonth={handleCommitMonth}
+          rowMessages={rowMessages}
+          onOpenSpecial={handleOpenSpecial}
+        />
+      )}
+
+      {detailTarget && (
+        <DetailSubform
+          costCenter={detailTarget.row.cost_center}
+          glAccount={detailTarget.row.gl_account}
+          glGroup={detailTarget.glGroup}
+          glName={glMetaFor(detailTarget.row.gl_account, glRef).gl_name}
+          fiscalYear={year}
+          onClose={() => setDetailTarget(null)}
+          onSaved={loadGrid}
+        />
+      )}
+
+      {tripManagerOpenFor && (
+        <TripManager costCenter={tripManagerOpenFor} fiscalYear={year} onClose={() => setTripManagerOpenFor(null)} onSaved={loadGrid} />
       )}
     </div>
   )

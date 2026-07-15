@@ -1,17 +1,17 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T17:54:44+0700",
+  "updated": "2026-07-15T18:40:03+0700",
   "tasks": [
     {
       "id": "a9-subforms-trip",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-15T16:45:08+0700",
-      "updated": "2026-07-15T16:45:08+0700",
+      "updated": "2026-07-15T18:40:03+0700",
       "agent": "05-software-developer",
       "skills": [],
       "files": [],
-      "ai": "A9 per BUILD_PLAN: special-GL subforms (5 groups, GL-conditional dropdowns hardcoded, grey-out) + Trip Manager (enter-once, per-diem auto-recompute FX-on-read fail-loud, 8 travel GL = 4 type x 2 side, 1GL=1type/page). Backend A5 endpoints exist (PUT /budget/detail, POST|PUT /budget/trip, special_gl validation, per_diem engine). Frontend on top of A8 grid. Mockup 0002.3 + signoff doc 02 + ADR-0005/0015 = behavior. Dispatched.",
+      "ai": "GATE: APPROVE, zero findings. See-scope read judged correct (matches GET /budget); DELETE IDOR-proof confirmed (id+token only, owner from DB); commit-order asserted via mock_calls index; fixture parity = real shared file both sides (git check-ignore clean); no client per-diem math (grep-verified); notify_approved correct branch gating. Gate re-ran: 402 mocked + 34 live + 2 jobs live, sentinels 0 @2095-2099, FE 184 + build, audit 0. Committed.",
       "human": "(retired field — see ai)"
     },
     {

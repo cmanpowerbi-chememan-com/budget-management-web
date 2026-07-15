@@ -1203,3 +1203,159 @@ def save_trip(
         )
 
     return _run_per_item(conn, trips, lambda t: _save_one_trip(conn, t, user_email, scope), _fail)
+
+
+# ---------------------------------------------------------------------------
+# 4. Delete — detail line / trip (A9 backend gap close, flagged in the A9
+# final report rather than invented inline: save-only endpoints shipped with
+# no delete path anywhere).
+#
+# Neither delete function accepts cost_center/gl_account/fiscal_year (or, for
+# a trip, its side) in its signature at all — authorization is resolved
+# ENTIRELY from the row's actual owner, looked up fresh from the DB by its
+# id. This is a stricter version of the save path's D3/D4 IDOR fix: there
+# isn't just a check against a payload-declared value, there is no
+# payload-declared value to spoof in the first place.
+# ---------------------------------------------------------------------------
+
+class DetailLineDeleteResult(BaseModel):
+    detail_id: int
+    ok: bool
+    error: str | None = None
+    detail: str | None = None
+
+
+class TripDeleteResult(BaseModel):
+    trip_id: int
+    ok: bool
+    error: str | None = None
+    detail: str | None = None
+
+
+def _delete_one_detail_line(
+    conn: pyodbc.Connection, detail_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
+) -> DetailLineDeleteResult:
+    """Delete one special-GL detail line, then re-assert parent==SUM(detail)
+    (never-cut, same as every other detail-line write).
+
+    Deleting the LAST remaining detail line for a cell is allowed by design:
+    SUM(detail) becomes 0 and `_recompute_parent_cell`'s atomic UPDATE zeroes
+    the EXISTING `pending_budget` row in place — the parent row is kept
+    (zeroed), never deleted. This matches the "parent row always reflects
+    SUM(detail)" contract every save path already relies on; deleting the
+    parent row too would be a second, unrelated behavior (removing a
+    cost_center/gl_account cell from the grid entirely) that nothing in this
+    task asked for and that would desync the grid's zero-filled-layer
+    contract (`read_model` always expects a Pending layer to exist once any
+    budget activity has happened on that cell).
+    """
+    owner = _lookup_detail_owner(conn, detail_id)
+    if owner is None:
+        raise RowConflictError(f"detail line {detail_id} not found — reload and retry")
+    cost_center, gl_account, fiscal_year = owner
+
+    _ensure_not_excluded(cost_center)
+    _ensure_write_scope(cost_center, scope, conn)
+    _ensure_not_post_deadline(conn, fiscal_year, scope)
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.pending_budget_detail WHERE detail_id = ? AND _updated_at = ?",
+            detail_id, expected_updated_at,
+        )
+        if cursor.rowcount == 0:
+            raise RowConflictError(f"detail line {detail_id} was changed by someone else — reload and retry")
+    finally:
+        cursor.close()
+
+    # Recompute BEFORE commit — same commit-order rule as every other
+    # detail-line write (db.py has no implicit commit; a commit placed
+    # before the recompute would silently discard it on connection close).
+    now = _now()
+    dims = _derive_dim_snapshot(conn, cost_center, gl_account)
+    _recompute_parent_cell(conn, cost_center, gl_account, fiscal_year, dims, user_email, now)
+    conn.commit()
+
+    return DetailLineDeleteResult(detail_id=detail_id, ok=True)
+
+
+def delete_detail_line(
+    conn: pyodbc.Connection, detail_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
+) -> DetailLineDeleteResult:
+    """Delete one special-GL detail line by id (see `_delete_one_detail_line`
+    for the full contract). Single-item, not batch-shaped like `save_*`
+    above — a delete always targets exactly one row, there is no bulk-delete
+    UI — but reuses `_run_per_item` for the same rollback-on-failure and
+    error-code-mapping behavior every other write path already has."""
+    def _fail(_id: int, exc: Exception) -> DetailLineDeleteResult:
+        return DetailLineDeleteResult(detail_id=_id, ok=False, error=_ERROR_CODE_BY_EXCEPTION[type(exc)], detail=str(exc))
+
+    return _run_per_item(
+        conn, [detail_id], lambda d: _delete_one_detail_line(conn, d, expected_updated_at, user_email, scope), _fail,
+    )[0]
+
+
+def _delete_one_trip(
+    conn: pyodbc.Connection, trip_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
+) -> TripDeleteResult:
+    """Delete one trip's header row AND every one of its detail lines
+    (per-diem + the 3 manual travel-expense types — a single
+    `WHERE trip_id = ?` DELETE removes all of them regardless of which GL
+    they are under), then recompute all 4 of that side's travel-GL parent
+    cells (never-cut: parent==SUM(detail)).
+
+    Recomputing all 4 unconditionally — rather than first figuring out which
+    ones actually had a line for THIS trip — is deliberately the simplest
+    correct option: `_recompute_parent_cell` re-derives SUM(detail) fresh
+    from whatever remains, so recomputing a cell this trip never touched
+    costs nothing and cannot desync it (other trips' lines under the same
+    GL are untouched by this trip's DELETE and remain fully counted)."""
+    trip = _lookup_trip(conn, trip_id)
+    if trip is None:
+        raise RowConflictError(f"trip {trip_id} not found — reload and retry")
+    cost_center, side, fiscal_year = trip
+
+    _ensure_not_excluded(cost_center)
+    _ensure_write_scope(cost_center, scope, conn)
+    _ensure_not_post_deadline(conn, fiscal_year, scope)
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.budget_trip WHERE trip_id = ? AND _updated_at = ?",
+            trip_id, expected_updated_at,
+        )
+        if cursor.rowcount == 0:
+            raise RowConflictError(f"trip {trip_id} was changed by someone else — reload and retry")
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM budget.pending_budget_detail WHERE trip_id = ?", trip_id)
+    finally:
+        cursor.close()
+
+    now = _now()
+    for side_to_gl in TRAVEL_GL_BY_TYPE_SIDE.values():
+        gl_account = side_to_gl[side]
+        dims = _derive_dim_snapshot(conn, cost_center, gl_account)
+        _recompute_parent_cell(conn, cost_center, gl_account, fiscal_year, dims, user_email, now)
+
+    conn.commit()
+
+    return TripDeleteResult(trip_id=trip_id, ok=True)
+
+
+def delete_trip(
+    conn: pyodbc.Connection, trip_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
+) -> TripDeleteResult:
+    """Delete one trip and every one of its lines by id (see
+    `_delete_one_trip`). Single-item like `delete_detail_line` above."""
+    def _fail(_id: int, exc: Exception) -> TripDeleteResult:
+        return TripDeleteResult(trip_id=_id, ok=False, error=_ERROR_CODE_BY_EXCEPTION[type(exc)], detail=str(exc))
+
+    return _run_per_item(
+        conn, [trip_id], lambda t: _delete_one_trip(conn, t, expected_updated_at, user_email, scope), _fail,
+    )[0]

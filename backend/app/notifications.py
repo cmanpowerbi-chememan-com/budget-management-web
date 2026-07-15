@@ -180,6 +180,31 @@ def notify_reject(
     return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
 
 
+def notify_approved(
+    *, department: str, fiscal_year: int, submitter_email: str | None,
+    dry_run: bool, settings: Settings | None = None,
+) -> NotificationResult | None:
+    """Approved-notify: fires once, when the LAST step of the normal
+    approval chain lands the department on APPROVED (there is no next
+    approver left to `notify_turn`). Recipient is `submitter_email`, the
+    same frozen value `notify_reject` uses — no DB lookup needed. Never
+    fired for the admin-direct-approve branches (ADMIN_SUBMIT/
+    ADMIN_OVERRIDE_*) — those go through `submit_department`, not the
+    `approve` action this is gated on (router decision)."""
+    if not submitter_email:
+        logger.warning("notify_approved: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
+        return None
+    link = build_deep_link(department, fiscal_year, settings)
+    subject = f"[Budget] งบประมาณของฝ่าย {department} ปี {fiscal_year} ได้รับการอนุมัติครบทุกขั้นแล้ว"
+    body = (
+        "<p>เรียน ผู้ส่งงบประมาณ</p>"
+        f"<p>งบประมาณของฝ่าย <b>{department}</b> ปีงบประมาณ {fiscal_year} "
+        "ได้รับการอนุมัติครบทุกขั้นแล้ว</p>"
+        f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
+    )
+    return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
+
+
 def notify_reminder(
     to_email: str, pending_departments: list[tuple[str, int]], *, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult | None:

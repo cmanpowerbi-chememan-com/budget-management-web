@@ -37,6 +37,8 @@ from app.write_model import (
     TripNotFoundError,
     TripSideMismatchError,
     UnknownGlAccountError,
+    delete_detail_line,
+    delete_trip,
     save_detail_lines,
     save_pending_rows,
     save_trip,
@@ -1150,3 +1152,244 @@ def test_trip_update_rejected_when_deadline_has_passed_no_db_write_and_no_side_f
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any(s.strip().startswith("UPDATE budget.budget_trip") for s in executed_sql)
     assert not any("DELETE FROM budget.pending_budget_detail" in s for s in executed_sql)
+
+
+# ---------------------------------------------------------------------------
+# A9 backend gap close — delete_detail_line / delete_trip
+#
+# Authorization is resolved from the row's ACTUAL owner (detail_id/trip_id
+# looked up fresh from the DB) — neither delete function accepts
+# cost_center/gl_account/fiscal_year in its signature at all, so unlike
+# save's IDOR fix (which has to compare a payload-declared CC against the
+# real owner) there is no redundant field left to spoof in the first place.
+# ---------------------------------------------------------------------------
+
+def test_delete_detail_line_forbidden_when_actual_cc_outside_caller_scope():
+    """The caller's OWN Fill scope (CC-MINE) never includes the row's ACTUAL
+    owning cost_center (CC-OTHER) — rejected before any write, no spoof
+    vector exists since the request never carries a cost_center at all."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("CC-OTHER", "5211900030", 2027)]  # owner lookup
+    scope = _scope(fill_cost_centers=["CC-MINE"], see_cost_centers=["CC-MINE"])
+    result = delete_detail_line(conn, 30, STALE, "attacker@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "forbidden"
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget_detail" in s for s in executed_sql)
+
+
+def test_delete_detail_line_stale_token_is_conflict_no_write():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),  # owner lookup
+        None,                          # deadline check -> no row, open
+    ]
+    cursor.rowcount = 0  # DELETE matches nothing -> stale token
+    scope = _scope()
+    result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "conflict"
+    conn.commit.assert_not_called()
+
+
+def test_delete_detail_line_rejected_when_deadline_has_passed_no_db_write():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),   # owner lookup
+        (date(2020, 1, 1),),            # dbo.submission_deadline -> already passed
+    ]
+    scope = _scope()
+    result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "past_deadline"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget_detail" in s for s in executed_sql)
+
+
+def test_delete_detail_line_admin_bypasses_deadline_and_scope():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("ANY-CC", "5211900030", 2027),                                     # owner lookup
+        (1,),                                                                # admin CC-existence check
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims for recompute
+    ]
+    cursor.rowcount = 1
+    scope = _admin_scope()
+    result = delete_detail_line(conn, 5, STALE, "admin@chememan.com", scope)
+    assert result.ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("submission_deadline" in s for s in executed_sql)
+
+
+def test_delete_detail_line_commit_happens_after_delete_and_recompute():
+    """Same commit-order rule as every other write in this module: db.py has
+    no implicit commit, so a commit placed before the DELETE/recompute would
+    silently discard them on connection close."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),                                          # owner lookup
+        None,                                                                  # deadline check -> open
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims for recompute
+    ]
+    cursor.rowcount = 1
+    scope = _scope()
+    result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+    assert conn.commit.call_count == 1
+
+    def _is_detail_delete(sql: str) -> bool:
+        return sql.strip().startswith("DELETE FROM budget.pending_budget_detail")
+
+    def _is_parent_write(sql: str) -> bool:
+        s = sql.strip()
+        return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not (
+            s.startswith("INSERT INTO budget.pending_budget_detail") or s.startswith("UPDATE budget.pending_budget_detail")
+        )
+
+    commit_idx = delete_idx = parent_write_idx = None
+    for i, call in enumerate(conn.mock_calls):
+        name, args = call[0], call[1]
+        if name == "commit":
+            commit_idx = i
+        elif name.endswith("execute") and args:
+            if _is_detail_delete(args[0]):
+                delete_idx = i
+            elif _is_parent_write(args[0]):
+                parent_write_idx = i
+
+    assert commit_idx is not None
+    assert delete_idx is not None, "detail-line DELETE not found"
+    assert parent_write_idx is not None, "parent-cell recompute write not found"
+    assert delete_idx < commit_idx
+    assert parent_write_idx < commit_idx
+
+
+def test_delete_detail_line_not_found_is_conflict_not_500():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None]  # owner lookup finds nothing
+    scope = _scope()
+    result = delete_detail_line(conn, 999, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "conflict"
+
+
+def test_delete_detail_line_deleting_last_line_zeroes_parent_row_not_removed():
+    """Deleting the LAST remaining detail line is allowed: parent ==
+    SUM(detail) becomes 0 and the atomic recompute zeroes the EXISTING
+    pending_budget row in place (never deletes it) — same contract every
+    other detail-line write already relies on."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("CC1", "5211900030", 2027),
+        None,
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),
+    ]
+    cursor.rowcount = 1  # parent row already exists -> atomic UPDATE matches it directly, zeroing it
+    scope = _scope()
+    result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    # the atomic recompute always runs an UPDATE (never a DELETE) against the parent table
+    assert not any(s.strip().startswith("DELETE FROM budget.pending_budget ") for s in executed_sql)
+    assert any(s.strip().startswith("UPDATE budget.pending_budget") for s in executed_sql)
+
+
+def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    one_off = iter([
+        ("CC1", "COST", 2027),  # trip lookup
+        None,                    # deadline check -> open
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+
+    executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
+
+    trip_delete_calls = [args for sql, args in executed if sql.strip().startswith("DELETE FROM budget.budget_trip")]
+    assert trip_delete_calls, "trip header row was never deleted"
+
+    line_delete_calls = [
+        (sql, args) for sql, args in executed if sql.strip().startswith("DELETE FROM budget.pending_budget_detail")
+    ]
+    assert line_delete_calls, "expected exactly one DELETE removing every one of the trip's detail lines"
+    assert "trip_id" in line_delete_calls[0][0]
+    assert 7 in line_delete_calls[0][1]
+
+    def _is_parent_write(sql: str) -> bool:
+        s = sql.strip()
+        is_detail = s.startswith("INSERT INTO budget.pending_budget_detail") or s.startswith("UPDATE budget.pending_budget_detail")
+        return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not is_detail
+
+    parent_writes = [args for sql, args in executed if _is_parent_write(sql)]
+    cost_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
+    recomputed = {gl for args in parent_writes for gl in cost_side_gls if gl in args}
+    assert recomputed == cost_side_gls, f"expected all 4 COST-side parent cells recomputed, got {recomputed}"
+
+
+def test_delete_trip_forbidden_when_actual_cc_outside_caller_scope():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("CC-OTHER", "COST", 2027)]  # trip lookup
+    scope = _scope(fill_cost_centers=["CC-MINE"], see_cost_centers=["CC-MINE"])
+    result = delete_trip(conn, 7, STALE, "attacker@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "forbidden"
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.budget_trip" in s for s in executed_sql)
+
+
+def test_delete_trip_stale_token_is_conflict_no_lines_removed():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("CC1", "COST", 2027), None]  # trip lookup, deadline open
+    cursor.rowcount = 0  # trip DELETE matches nothing -> stale
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "conflict"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget_detail" in s for s in executed_sql)
+
+
+def test_delete_trip_rejected_when_deadline_has_passed_no_db_write():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("CC1", "COST", 2027), (date(2020, 1, 1),)]  # trip lookup, deadline passed
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "past_deadline"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.budget_trip" in s for s in executed_sql)
+
+
+def test_delete_trip_not_found_is_conflict_not_500():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None]  # trip lookup finds nothing
+    scope = _scope()
+    result = delete_trip(conn, 999, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "conflict"

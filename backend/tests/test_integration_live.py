@@ -73,10 +73,15 @@ from app.sap import MONTH_COLUMNS, SapActualsFetchError, fetch_sap_actuals
 from app.special_gl import SPECIAL_GL_GROUPS
 from app.write_model import (
     EXCLUDED_COST_CENTERS,
+    TRAVEL_GL_BY_TYPE_SIDE,
     DetailLineInput,
     PendingRowInput,
+    TripInput,
+    delete_detail_line,
+    delete_trip,
     save_detail_lines,
     save_pending_rows,
+    save_trip,
 )
 
 FISCAL_YEAR = 2099  # sentinel — never a real planning year
@@ -1615,3 +1620,210 @@ def test_fetch_departments_runs_live_scoped_to_a_real_fillers_see_scope() -> Non
     assert returned_ccs <= set(scope.see_cost_centers), "fetch_departments returned a CC outside the requested scope"
     assert cost_center in returned_ccs
     assert all({"cost_center", "department", "division", "c_level"} <= row.keys() for row in rows)
+
+
+# ---------------------------------------------------------------------------
+# A9 backend gap close — delete_detail_line / delete_trip, live (2026-07-16).
+# Own sentinel year: 2096/2097/2099 are already used elsewhere in this file.
+# ---------------------------------------------------------------------------
+
+DELETE_FISCAL_YEAR = 2095  # sentinel — never a real planning year, distinct from 2096/2097/2099 above
+
+
+def _cleanup_delete_sentinel_year(conn: pyodbc.Connection) -> None:
+    """Same shape as `_cleanup_sentinel_year` above, parametrized to
+    DELETE_FISCAL_YEAR instead of the module-wide FISCAL_YEAR — kept as its
+    own small helper rather than generalizing the existing one, so this
+    section never risks touching the other tests' sentinel year."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM budget.pending_budget_detail WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        cursor.execute("DELETE FROM budget.budget_trip WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        cursor.execute("DELETE FROM budget.pending_budget WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        conn.commit()
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        detail_left = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM budget.budget_trip WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        trip_left = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year = ?", DELETE_FISCAL_YEAR)
+        pending_left = cursor.fetchone()[0]
+    finally:
+        cursor.close()
+
+    assert detail_left == 0, f"cleanup left {detail_left} budget.pending_budget_detail rows at fiscal_year={DELETE_FISCAL_YEAR}"
+    assert trip_left == 0, f"cleanup left {trip_left} budget.budget_trip rows at fiscal_year={DELETE_FISCAL_YEAR}"
+    assert pending_left == 0, f"cleanup left {pending_left} budget.pending_budget rows at fiscal_year={DELETE_FISCAL_YEAR}"
+
+
+@pytest.mark.integration
+def test_delete_detail_line_zeroes_parent_cell_live(discovered: tuple[str, str, str]) -> None:
+    """Create an Entertainment detail line (1000) -> parent cell is really
+    1000 -> delete it -> parent cell is really 0 (row kept, zeroed, never
+    removed) and the detail row itself is gone."""
+    cost_center, filler_email, gl_account = discovered
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            create_results = save_detail_lines(
+                conn,
+                [DetailLineInput(cost_center=cost_center, gl_account=gl_account, fiscal_year=DELETE_FISCAL_YEAR, m01=1000)],
+                user_email=filler_email, scope=scope,
+            )
+        assert create_results[0].ok, create_results[0].detail
+        detail_id = create_results[0].line.detail_id
+        updated_at = create_results[0].line.updated_at
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            delete_result = delete_detail_line(conn, detail_id, updated_at, filler_email, scope)
+        assert delete_result.ok, delete_result.detail
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT m01, total_year FROM budget.pending_budget "
+                    "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                    cost_center, gl_account, DELETE_FISCAL_YEAR,
+                )
+                parent_row = cursor.fetchone()
+                cursor.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE detail_id = ?", detail_id)
+                detail_left = cursor.fetchone()[0]
+            finally:
+                cursor.close()
+
+        assert parent_row is not None, "parent row must be KEPT (zeroed), not removed"
+        assert float(parent_row[0]) == 0, f"parent m01 = {parent_row[0]}, expected 0 after deleting the only line"
+        assert float(parent_row[1]) == 0, f"parent total_year = {parent_row[1]}, expected 0"
+        assert detail_left == 0, "the detail row itself must be gone after delete"
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_delete_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_delete_detail_line_stale_token_is_409_and_row_still_there_live(discovered: tuple[str, str, str]) -> None:
+    """A stale `expected_updated_at` (deliberately not the real lock token
+    just returned by the create) must be rejected with a conflict and must
+    NOT delete the row."""
+    cost_center, filler_email, gl_account = discovered
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            create_results = save_detail_lines(
+                conn,
+                [DetailLineInput(cost_center=cost_center, gl_account=gl_account, fiscal_year=DELETE_FISCAL_YEAR, m01=250)],
+                user_email=filler_email, scope=scope,
+            )
+        assert create_results[0].ok, create_results[0].detail
+        detail_id = create_results[0].line.detail_id
+        stale_token = datetime(2020, 1, 1, tzinfo=timezone.utc)  # deliberately not the real lock token
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            delete_result = delete_detail_line(conn, detail_id, stale_token, filler_email, scope)
+        assert delete_result.ok is False
+        assert delete_result.error == "conflict"
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute("SELECT m01 FROM budget.pending_budget_detail WHERE detail_id = ?", detail_id)
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+        assert row is not None, "the row must still exist after a rejected stale-token delete"
+        assert float(row[0]) == 250
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_delete_sentinel_year(cleanup_conn)
+
+
+@pytest.mark.integration
+def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovered: tuple[str, str, str]) -> None:
+    """Create a trip (auto-derived per-diem) + its 3 manual expense lines
+    (transport/accommodation/other) -> delete the trip -> the trip row is
+    gone, every one of its detail lines (all 4 types) is gone, and all 4
+    of that side's travel-GL parent cells are really 0."""
+    cost_center, filler_email, _ = discovered
+
+    with get_fabric_conn() as conn:
+        traveler_empcode = _discover_traveler_with_a_configured_rate(conn)
+
+    try:
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            trip_results = save_trip(
+                conn,
+                [TripInput(
+                    cost_center=cost_center, fiscal_year=DELETE_FISCAL_YEAR, traveler_empcode=traveler_empcode,
+                    country_group=1, days=3, travel_months=["01"], side="COST",
+                )],
+                user_email=filler_email, scope=scope,
+            )
+        assert trip_results[0].ok, trip_results[0].detail
+        trip_id = trip_results[0].trip.trip_id
+        trip_updated_at = trip_results[0].trip.updated_at
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            manual_results = save_detail_lines(
+                conn,
+                [
+                    DetailLineInput(
+                        cost_center=cost_center, gl_account=TRAVEL_GL_BY_TYPE_SIDE["transport"]["COST"],
+                        fiscal_year=DELETE_FISCAL_YEAR, trip_id=trip_id, m01=100,
+                    ),
+                    DetailLineInput(
+                        cost_center=cost_center, gl_account=TRAVEL_GL_BY_TYPE_SIDE["accommodation"]["COST"],
+                        fiscal_year=DELETE_FISCAL_YEAR, trip_id=trip_id, m01=200,
+                    ),
+                    DetailLineInput(
+                        cost_center=cost_center, gl_account=TRAVEL_GL_BY_TYPE_SIDE["other"]["COST"],
+                        fiscal_year=DELETE_FISCAL_YEAR, trip_id=trip_id, m01=50,
+                    ),
+                ],
+                user_email=filler_email, scope=scope,
+            )
+        assert all(r.ok for r in manual_results), [r.detail for r in manual_results if not r.ok]
+
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(filler_email, conn)
+            delete_result = delete_trip(conn, trip_id, trip_updated_at, filler_email, scope)
+        assert delete_result.ok, delete_result.detail
+
+        with get_fabric_conn() as verify_conn:
+            cursor = verify_conn.cursor()
+            try:
+                cursor.execute("SELECT COUNT(*) FROM budget.budget_trip WHERE trip_id = ?", trip_id)
+                trip_left = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE trip_id = ?", trip_id)
+                lines_left = cursor.fetchone()[0]
+                cost_side_gls = [sides["COST"] for sides in TRAVEL_GL_BY_TYPE_SIDE.values()]
+                parent_totals = {}
+                for gl in cost_side_gls:
+                    cursor.execute(
+                        "SELECT total_year FROM budget.pending_budget "
+                        "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+                        cost_center, gl, DELETE_FISCAL_YEAR,
+                    )
+                    r = cursor.fetchone()
+                    parent_totals[gl] = float(r[0]) if r else None
+            finally:
+                cursor.close()
+
+        assert trip_left == 0, "trip header row must be gone after delete"
+        assert lines_left == 0, "every one of the trip's detail lines must be gone after delete"
+        assert all(total == 0 for total in parent_totals.values()), (
+            f"expected all 4 COST-side parent cells to be 0 (row kept, zeroed), got {parent_totals}"
+        )
+    finally:
+        with get_fabric_conn() as cleanup_conn:
+            _cleanup_delete_sentinel_year(cleanup_conn)

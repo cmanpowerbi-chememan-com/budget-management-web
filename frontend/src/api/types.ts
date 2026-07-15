@@ -115,6 +115,117 @@ export interface PendingRowInput {
   expected_updated_at: string | null
 }
 
+/** A9 special-GL detail line — `GET/PUT /budget/detail`
+ * (`write_model.DetailLineInput`/`DetailLineState`, `routers/subform.py`'s
+ * `DetailLineRow` for the GET shape). `detail_id: null` + no
+ * `expected_updated_at` = create; both required together to update an
+ * existing line (mirrors `PendingRowInput`'s create/update convention). */
+export interface DetailLineInput {
+  detail_id: number | null
+  cost_center: string
+  gl_account: string
+  fiscal_year: number
+  trip_id: number | null
+  line_label: string | null
+  meta_json: Record<string, string | null> | null
+  m01: number
+  m02: number
+  m03: number
+  m04: number
+  m05: number
+  m06: number
+  m07: number
+  m08: number
+  m09: number
+  m10: number
+  m11: number
+  m12: number
+  expected_updated_at: string | null
+}
+
+export interface DetailLineState {
+  detail_id: number
+  cost_center: string
+  gl_account: string
+  fiscal_year: number
+  trip_id: number | null
+  gl_group: string
+  line_label: string | null
+  m01: number
+  m02: number
+  m03: number
+  m04: number
+  m05: number
+  m06: number
+  m07: number
+  m08: number
+  m09: number
+  m10: number
+  m11: number
+  m12: number
+  total_year: number
+  meta_json: Record<string, string | null> | null
+  updated_at: string
+}
+
+/** A9 Trip Manager — `POST|PUT /budget/trip` request body
+ * (`write_model.TripInput`). `trip_id: null` = create. `country_group`:
+ * 1=domestic, 2=asian, 3=other (matches `per_diem.py`). */
+export interface TripInput {
+  trip_id: number | null
+  cost_center: string
+  fiscal_year: number
+  traveler_empcode: string
+  destination: string | null
+  country_group: 1 | 2 | 3
+  days: number
+  travel_months: string[]
+  purpose: string | null
+  side: 'COST' | 'SGA'
+  expected_updated_at: string | null
+}
+
+/** `POST|PUT /budget/trip` success response (`write_model.TripState`).
+ * `per_diem_months` is always present here (the save just derived it). */
+export interface TripState {
+  trip_id: number
+  cost_center: string
+  fiscal_year: number
+  traveler_empcode: string
+  traveler_name: string
+  position: string
+  destination: string | null
+  country_group: 1 | 2 | 3
+  days: number
+  travel_months: string[]
+  purpose: string | null
+  side: 'COST' | 'SGA'
+  updated_at: string
+  per_diem_months: Record<string, number>
+}
+
+/** `GET /budget/trip` list item (`routers/subform.py`'s `TripRow`) —
+ * per-diem is recomputed on every read (ADR-0015/0011); `per_diem_months`
+ * is `null` + `per_diem_error` set when the current rate/FX config can't
+ * derive it for THIS trip (never blocks the rest of the list). */
+export interface TripListItem {
+  trip_id: number
+  cost_center: string
+  fiscal_year: number
+  traveler_empcode: string
+  traveler_name: string
+  position: string
+  destination: string | null
+  country_group: 1 | 2 | 3
+  days: number
+  travel_months: string[]
+  purpose: string | null
+  side: 'COST' | 'SGA'
+  updated_at: string
+  per_diem_months: Record<string, number> | null
+  per_diem_error: string | null
+}
+
 /** `PUT /budget/rows` success response (`write_model.PendingRowState`). */
 export interface PendingRowState {
   cost_center: string

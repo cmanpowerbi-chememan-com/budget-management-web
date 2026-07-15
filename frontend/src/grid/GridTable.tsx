@@ -17,6 +17,12 @@ export interface GridTableProps {
    * one row's failure must never block another, mirroring the backend's
    * batch-shaped-but-independent contract). */
   rowMessages?: Record<string, RowMessage>
+  /** Opens the A9 special-GL detail subform (or Trip Manager, for
+   * `glGroup === 'Travelling Expense'`) for one row — only offered when the
+   * row is in the caller's Fill scope (`row.editable`); a See-only special
+   * row just shows the static tooltip (viewing the detail breakdown for
+   * read-only users is out of this task's scope, flagged as a fast-follow). */
+  onOpenSpecial?: (row: BudgetRow, glGroup: string) => void
 }
 
 const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
@@ -87,11 +93,13 @@ function TxnBlock({
   glRef,
   onCommitMonth,
   message,
+  onOpenSpecial,
 }: {
   row: BudgetRow
   glRef: GlAccount[]
   onCommitMonth: GridTableProps['onCommitMonth']
   message?: RowMessage
+  onOpenSpecial?: GridTableProps['onOpenSpecial']
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special)
@@ -119,7 +127,20 @@ function TxnBlock({
         <td colSpan={3} />
         <td className="status-cell pending">
           Pending · รออนุมัติ
-          {meta.is_special && <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>}
+          {meta.is_special && row.editable && onOpenSpecial && (
+            <button
+              type="button"
+              className="special-open-btn"
+              title={SPECIAL_GL_TOOLTIP}
+              data-testid={`open-subform-${cc}-${gl}`}
+              onClick={() => onOpenSpecial(row, meta.gl_group)}
+            >
+              {SPECIAL_GL_TOOLTIP} ↗
+            </button>
+          )}
+          {meta.is_special && !(row.editable && onOpenSpecial) && (
+            <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
+          )}
         </td>
         <PendingCells row={row} editable={editable} isSpecial={meta.is_special} onCommitMonth={onCommitMonth} />
       </tr>
@@ -153,7 +174,7 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
  * 5xxx / SG&A 6xxx — NEVER-CUT, their totals never combine), each grouped
  * by gl_group with a subtotal row, 3 layers per transaction. Pure
  * presentational component — all state/API calls live in `BudgetGrid`. */
-export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {} }: GridTableProps) {
+export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpenSpecial }: GridTableProps) {
   if (rows.length === 0) {
     return <div className="grid-empty">ไม่มีรายการที่ตรงกับตัวกรองนี้</div>
   }
@@ -191,6 +212,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {} }: Grid
                       glRef={glRef}
                       onCommitMonth={onCommitMonth}
                       message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
+                      onOpenSpecial={onOpenSpecial}
                     />
                   ))}
                   <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />

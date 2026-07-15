@@ -4,10 +4,12 @@ import type { BudgetRow } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
 import { ApiError } from '../api/client'
 import * as budgetApi from '../api/budget'
+import * as subformApi from '../api/subform'
 import { BudgetGrid } from './BudgetGrid'
 import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
 
 vi.mock('../api/budget')
+vi.mock('../api/subform')
 
 function makeRow(cc: string, gl: string, overrides: Partial<BudgetRow> = {}): BudgetRow {
   return makeRowFromOverrides({ cost_center: cc, gl_account: gl, editable: true, ...overrides })
@@ -156,5 +158,42 @@ describe('BudgetGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
     await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toBeInTheDocument())
+  })
+
+  it('opens the A9 DetailSubform for a non-travel special-GL row and refetches the grid after a save', async () => {
+    const SPECIAL_GL_REF = [
+      { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SPECIAL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211900030')])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    const openBtn = await screen.findByTestId('open-subform-CC1-5211900030')
+    fireEvent.click(openBtn)
+
+    expect(await screen.findByTestId('detail-subform')).toBeInTheDocument()
+    await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledWith('CC1', '5211900030', expect.any(Number)))
+  })
+
+  it('opens Trip Manager (not DetailSubform) for a Travelling Expense special-GL row', async () => {
+    const TRAVEL_GL_REF = [
+      { gl_code: '5210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5210400010')])
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    const openBtn = await screen.findByTestId('open-subform-CC1-5210400010')
+    fireEvent.click(openBtn)
+
+    expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+    expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
   })
 })
