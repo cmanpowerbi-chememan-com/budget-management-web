@@ -1,7 +1,11 @@
-fastapi
-uvicorn[standard]
-pyodbc
-pydantic-settings
-pytest
-httpx
-python-multipart
+# Pinned to exact installed versions (A14 step 1). fastapi and
+# python-multipart bumped past known stale-CVE versions flagged by the
+# A13.5 audit (fastapi bump also pulls a clean starlette; idna is a
+# transitive-only dep, upgraded in the venv but not pinned here).
+fastapi==0.139.0
+uvicorn[standard]==0.46.0
+pyodbc==5.3.0
+pydantic-settings==2.14.2
+pytest==9.0.2
+httpx==0.28.1
+python-multipart==0.0.32

@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T23:11:41+0700",
+  "updated": "2026-07-15T23:52:18+0700",
   "tasks": [
+    {
+      "id": "a14-deploy",
+      "state": "done",
+      "created": "2026-07-15T23:13:09+0700",
+      "updated": "2026-07-15T23:52:18+0700",
+      "agent": "10-devops",
+      "skills": [],
+      "files": [],
+      "ai": "GATE FINAL: READY — RUNBOOK APPROVED FOR JAKKARITW. Critical path-traversal (static.py CWE-22) fixed + re-verified: original 8-vector exploit all 404 (was 200+secret), _is_contained resolve()-based containment, test_static 7->14, full mocked 493->500. Bundle desk-checked clean: Dockerfile (multi-stage, msodbcsql17, non-root appuser, workers 2), .dockerignore (lean, keeps frontend src + backend, drops dist/node_modules/.env), A14_RUNBOOK.md (Cloud Shell: acr build, containerapp create, Easy Auth all-paths incl /docs, 9-step verify-landed, control-number reconcile=trivial-0 pre-launch, rollback), yml.DISABLED inert. env-checklist complete vs config.py, no baked secrets. Counts: 500 mocked + 42+2 live + FE 255 + build. Runbook stale 'unpinned' comments corrected. Image builds in Cloud Shell only (no-install machine). NEXT: jakkaritw executes docs/deploy/A14_RUNBOOK.md; go-live flips (email dry-run OFF, cron enable) stay deferred. Committed.",
+      "human": "(retired field — see ai)"
+    },
     {
       "id": "pc-health-check",
       "state": "done",

@@ -1,0 +1,84 @@
+# DISABLED BY DESIGN — this file's extension is `.yml.DISABLED`, not `.yml`,
+# so GitHub Actions does NOT parse or run it. A14 (see docs/deploy/A14_RUNBOOK.md)
+# is a manual, hand-run-in-Cloud-Shell first deploy — this file is only a
+# TEMPLATE for the future CI/CD path, sketched now so the shape is decided,
+# not run today (lean: manual first, automation later, per A14 task scope).
+#
+# To enable once the app is live and stable:
+#   1. Rename to `budget-app-deploy.yml` (drop `.DISABLED`).
+#   2. Add the GitHub repo secrets referenced below that don't already exist:
+#        AZURE_CREDENTIALS       — a Service Principal with AcrPush on the
+#                                  registry + Contributor (or narrower,
+#                                  Container Apps Contributor) on the RG,
+#                                  as JSON for azure/login@v2.
+#      Already present in this repo's Actions secrets (reused, do not
+#      recreate): FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE,
+#      FABRIC_AAD_CLIENT_ID, FABRIC_AAD_CLIENT_SECRET, FABRIC_AAD_TENANT_ID
+#      (see .github/workflows/sync_employees.yml / budget-automations.yml for
+#      the existing naming convention this reuses).
+#   3. Fill in ACR_NAME / RESOURCE_GROUP / CONTAINER_APP_NAME below with the
+#      real names decided in A14_RUNBOOK.md section 2.
+#   4. Confirm a 07-security-auditor pass + jakkaritw approval before the
+#      first run against the `production` environment gate.
+
+name: Budget App — Build & Deploy (Container Apps)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target"
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'backend/**'
+  #     - 'frontend/**'
+  #     - 'backend/Dockerfile'
+  #     - '.github/workflows/budget-app-deploy.yml'
+  # ^ intentionally commented out — enable auto-deploy-on-push only after the
+  # manual A14 first deploy is proven and jakkaritw agrees to automate it.
+
+env:
+  ACR_NAME: cmanbudgetacr           # confirm against A14_RUNBOOK.md section 2
+  RESOURCE_GROUP: <resource-group>  # fill in from A14_RUNBOOK.md section 2
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+    environment: ${{ inputs.target }}   # maps to a GitHub Environment for extra approval gates on `production`
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build image in ACR (cloud build, no local Docker)
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          az acr build \
+            --registry ${{ env.ACR_NAME }} \
+            --image budget-web:$IMAGE_TAG \
+            --file backend/Dockerfile \
+            .
+
+      - name: Update Container App
+        run: |
+          APP_NAME=cman-budget-web-stg
+          if [ "${{ inputs.target }}" = "production" ]; then APP_NAME=cman-budget-web-prd; fi
+          az containerapp update \
+            --name "$APP_NAME" \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/budget-web:${{ env.IMAGE_TAG }}
+
+      - name: Remind — verify-deploy-landed is still manual
+        run: |
+          echo "Image updated. This workflow does NOT run verify-deploy-landed"
+          echo "(A14_RUNBOOK.md section 7) automatically — do that by hand"
+          echo "(or add it as a scripted follow-up step) before trusting this deploy."

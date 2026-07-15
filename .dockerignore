@@ -1,0 +1,66 @@
+# Docker build context = repo root (backend/Dockerfile needs both frontend/
+# and backend/ — see the Dockerfile header comment + docs/deploy/A14_RUNBOOK.md).
+# This file prunes everything else out of the build context sent to
+# `az acr build` / the Docker daemon.
+
+# --- VCS / CI / editor / Claude Code state ---
+.git
+.github
+.claude
+.mcp.json
+.playwright_auth.json
+.pytest_cache
+.graphifyignore
+
+# --- Secrets — must never enter the build context ---
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- Root-level content unrelated to this container image ---
+03-edit-master-table
+bin
+cman-prd-ingest-backend
+db
+design
+docs
+fabric
+graphify-out
+monthly_update
+requirement_spec
+setup
+skill
+tasks
+tracker
+weekly_update
+venv
+.venv
+requirements.txt
+README.md
+CONTEXT.md
+CLAUDE.md
+Dockerfile.sync
+
+# --- Backend: local/dev-only artifacts (rebuilt fresh or not needed in prod) ---
+backend/venv
+backend/.venv
+backend/tests
+backend/uvicorn.log
+backend/*.log
+backend/README.md
+
+# --- Frontend: rebuilt fresh inside the image, never copy host artifacts ---
+frontend/node_modules
+frontend/dist
+frontend/e2e
+frontend/playwright-report
+frontend/test-results
+frontend/README.md
+
+# --- Generic, everywhere ---
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store
+**/Thumbs.db
+**/*.md

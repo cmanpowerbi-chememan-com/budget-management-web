@@ -82,6 +82,20 @@ class Settings(BaseSettings):
     attachments_library_name: str = "Budgeting and Management"
     attachments_root_folder: str = "เอกสาร ฝ่าย"
 
+    # A14 — built SPA location (`frontend/dist`), ONE Container App serves
+    # both API + frontend. In the container this will be an absolute path
+    # (e.g. /app/static); unset locally, where it falls back to the sibling
+    # `frontend/dist` so a local `uvicorn` run can preview a production build
+    # without any extra config. Missing dir = API-only, no error (app/static.py).
+    static_dir: str | None = None
+
+    @property
+    def static_dir_path(self) -> Path:
+        if self.static_dir:
+            return Path(self.static_dir)
+        # backend/app/config.py -> backend/ -> repo root -> frontend/dist
+        return Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
     @property
     def is_local(self) -> bool:
         return self.app_env.strip().lower() == "local"

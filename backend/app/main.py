@@ -7,10 +7,14 @@ A9 subform read-only support (`GET /budget/detail`, `GET /budget/trip`).
 A10 approval UI support (`GET /approval/pending-for-me`) + SharePoint
 attachments (`GET /attachments`, `POST /attachments/upload`,
 `GET /attachments/download-url`).
+A14 — serves the built React SPA (`frontend/dist`) from this same app; see
+`app/static.py`. Mounted LAST so no API route can ever be shadowed.
 """
 from fastapi import FastAPI
 
+from app.config import get_settings
 from app.routers import approval, attachments, budget, budget_write, health, me, reference, scope, subform
+from app.static import mount_frontend
 
 app = FastAPI(title="Budget Management Web API")
 
@@ -23,3 +27,5 @@ app.include_router(approval.router)
 app.include_router(reference.router)
 app.include_router(subform.router)
 app.include_router(attachments.router)
+
+mount_frontend(app, get_settings().static_dir_path)
