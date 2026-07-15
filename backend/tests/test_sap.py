@@ -51,6 +51,33 @@ def test_sap_query_excludes_cost_centers_without_10sc012000():
     assert "10SC012000" not in SAP_ACTUALS_SQL
 
 
+def test_sap_query_makes_the_null_cost_center_exclusion_explicit():
+    """2026-07-16 D2 follow-up: `NULL NOT IN (...)` is already UNKNOWN, so
+    NULL-cost_center rows were always excluded — but only as a side effect of
+    NULL semantics. This must now be an explicit, deliberate predicate.
+    Behavior-identical: adding it changes nothing about which rows match."""
+    assert "cost_center IS NOT NULL" in SAP_ACTUALS_SQL
+
+
+def test_sap_query_no_other_filter_changed_alongside_the_null_hardening():
+    """Guards against the D2-style mistake happening again: this new
+    predicate must sit ALONGSIDE the existing filters, not replace or alter
+    any of them."""
+    assert "company_code='1000'" in SAP_ACTUALS_SQL
+    assert "doc_type<>'CO'" in SAP_ACTUALS_SQL
+    assert (
+        "cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')"
+        in SAP_ACTUALS_SQL
+    )
+    assert "assignment_number IS NULL OR assignment_number<>'TFRS16'" in SAP_ACTUALS_SQL
+    assert "fiscal_year=?" in SAP_ACTUALS_SQL
+    assert "SUM(company_curr_amount) AS actual_thb" in SAP_ACTUALS_SQL
+    assert "GROUP BY cost_center, gl_account_number, fiscal_year, period_month" in SAP_ACTUALS_SQL
+    assert "doc_status" not in SAP_ACTUALS_SQL
+    assert "-1" not in SAP_ACTUALS_SQL
+    assert "CASE" not in SAP_ACTUALS_SQL.upper()
+
+
 def test_sap_query_has_no_sign_flip_and_no_doc_status_filter():
     assert "doc_status" not in SAP_ACTUALS_SQL
     assert "-1" not in SAP_ACTUALS_SQL

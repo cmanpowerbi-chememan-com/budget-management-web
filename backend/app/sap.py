@@ -25,6 +25,18 @@ edit its filters/columns without a matching ADR-0020 update:
 - No sign flip: `company_curr_amount` already carries the correct sign.
 - No `doc_status` filter: verified 2026-07-14 that including/excluding the
   only other value ('U') never moves any SUM at any grain.
+- `AND cost_center IS NOT NULL`: added 2026-07-16 (D2 follow-up audit) purely
+  to make an EXISTING, INTENTIONAL exclusion explicit — it is **behavior-
+  identical**, not a fix. `NULL NOT IN (...)` already evaluates to SQL
+  UNKNOWN, so NULL-cost_center rows were already dropped by the `NOT IN`
+  clause above. That drop is correct and required: the budget grid is keyed
+  by `(cost_center, gl_account)`, so a posting with no cost center belongs to
+  no user's scope and cannot be displayed. Live volume audited 2026-07-16:
+  FY2025 = 2,249,381 such rows / -1,138,962,985.31 THB; FY2026 = 515,775 rows
+  / -132,909,268.58 THB. **DO NOT "NULL-safe" this predicate** the way
+  `assignment_number` was fixed above — unlike that column, keeping
+  NULL-cost_center rows would pull ~1.1 BILLION THB of postings with no
+  cost center into the actuals and corrupt every cell. See ADR-0020.
 
 A missing/failed DW connection or query must surface as a loud error to the
 caller (never a silently empty green actuals layer) — see `SapActualsFetchError`.
@@ -36,11 +48,18 @@ MONTH_COLUMNS: tuple[str, ...] = tuple(f"m{m:02d}" for m in range(1, 13))
 # Per ADR-0020 / BUILD_PLAN A4, corrected 2026-07-16 (D2 — see module
 # docstring): the assignment_number filter is now NULL-safe. Do not
 # reformat/reorder/edit without a matching ADR-0020 update.
+#
+# `cost_center IS NOT NULL` (added 2026-07-16, D2 follow-up) is a deliberate,
+# behavior-identical restatement of the exclusion `cost_center NOT IN (...)`
+# already produces via NULL semantics (NULL NOT IN (...) = UNKNOWN). Unlike
+# `assignment_number` above, do NOT make this NULL-safe — see the module
+# docstring: NULL-cost_center rows have no scope owner and must stay excluded.
 SAP_ACTUALS_SQL = """
 SELECT cost_center, gl_account_number, fiscal_year, period_month, SUM(company_curr_amount) AS actual_thb
 FROM gold.fact_gl_trans
 WHERE company_code='1000' AND doc_type<>'CO'
   AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')
+  AND cost_center IS NOT NULL
   AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=?
 GROUP BY cost_center, gl_account_number, fiscal_year, period_month
 """

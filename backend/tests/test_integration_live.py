@@ -481,6 +481,81 @@ def test_sap_actuals_query_runs_live_and_matches_an_independent_sum() -> None:
 
 
 @pytest.mark.integration
+def test_cost_center_is_not_null_hardening_is_behavior_identical() -> None:
+    """2026-07-16 D2 follow-up (ADR-0020 + `app.sap` docstring): the new
+    explicit `AND cost_center IS NOT NULL` predicate must be **behavior-
+    identical** to the OLD form, which excluded NULL-cost_center rows only
+    as a side effect of `cost_center NOT IN (...)` evaluating to SQL UNKNOWN
+    for NULL. Proves this directly on the live warehouse: the OLD-form query
+    (no explicit predicate) and the NEW-form query (with it) must return the
+    exact same (cost_center, gl_account) keys and per-key totals, and the
+    shipped `fetch_sap_actuals` (now carrying the new predicate) must match
+    both. Does not compare against the stale pre-D2-assignment-fix constant
+    (1722 keys / 309,049,478.15 THB) since that total legitimately changed
+    when D2 stopped dropping NULL-assignment rows — self-consistency against
+    a fresh independent query is the correct proof here, not that constant."""
+    with get_gold_conn() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT DISTINCT fiscal_year FROM gold.fact_gl_trans WHERE company_code = '1000' ORDER BY fiscal_year DESC"
+            )
+            years_with_data = [r[0] for r in cursor.fetchall()]
+        finally:
+            cursor.close()
+        assert years_with_data, "gold.fact_gl_trans has no company_code='1000' rows at all"
+        year = int(years_with_data[0])
+
+        old_form_sql = """
+            SELECT cost_center, gl_account_number, SUM(company_curr_amount) AS actual_thb
+            FROM gold.fact_gl_trans
+            WHERE company_code='1000' AND doc_type<>'CO'
+              AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')
+              AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=?
+            GROUP BY cost_center, gl_account_number
+        """
+        new_form_sql = """
+            SELECT cost_center, gl_account_number, SUM(company_curr_amount) AS actual_thb
+            FROM gold.fact_gl_trans
+            WHERE company_code='1000' AND doc_type<>'CO'
+              AND cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')
+              AND cost_center IS NOT NULL
+              AND (assignment_number IS NULL OR assignment_number<>'TFRS16') AND fiscal_year=?
+            GROUP BY cost_center, gl_account_number
+        """
+
+        cursor = conn.cursor()
+        try:
+            cursor.execute(old_form_sql, year)
+            old_rows = {(r[0], r[1]): round(float(r[2]), 2) for r in cursor.fetchall()}
+            cursor.execute(new_form_sql, year)
+            new_rows = {(r[0], r[1]): round(float(r[2]), 2) for r in cursor.fetchall()}
+        finally:
+            cursor.close()
+
+        assert len(old_rows) == len(new_rows), (
+            f"key count changed: old={len(old_rows)} new={len(new_rows)} -- the hardening is NOT behavior-identical"
+        )
+        assert old_rows == new_rows, "row values changed after adding the explicit cost_center IS NOT NULL predicate"
+
+        new_total = round(sum(new_rows.values()), 2)
+
+        result = fetch_sap_actuals(conn, year)
+        code_total = round(sum(v["total_year"] for v in result.values()), 2)
+        assert len(result) == len(new_rows), (
+            f"fetch_sap_actuals key count {len(result)} != independent explicit-form key count {len(new_rows)}"
+        )
+        assert code_total == new_total, (
+            f"fetch_sap_actuals total {code_total} != independent explicit-form total {new_total}"
+        )
+
+        print(  # noqa: T201 -- observed live figure requested for the task report, run with `-s` to see it
+            f"[D2 cost_center IS NOT NULL hardening] fiscal_year={year} "
+            f"keys={len(new_rows)} total_thb={new_total} (old form == new form, behavior-identical)"
+        )
+
+
+@pytest.mark.integration
 def test_sap_failure_is_loud_not_silent(monkeypatch: pytest.MonkeyPatch) -> None:
     """A revoked grant / dropped table must raise `SapActualsFetchError` —
     never resolve to a silently-empty actuals layer (ADR-0020 Consequences).
