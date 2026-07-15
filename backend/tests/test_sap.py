@@ -110,3 +110,16 @@ def test_fetch_sap_actuals_closes_cursor_even_on_failure():
     with pytest.raises(SapActualsFetchError):
         fetch_sap_actuals(conn, fiscal_year=2026)
     conn.cursor.return_value.close.assert_called_once()
+
+
+def test_fetch_sap_actuals_wraps_a_connection_level_failure_too():
+    """`conn.cursor()` itself can raise (closed connection, dropped session)
+    -- this must ALSO become SapActualsFetchError, not a raw pyodbc.Error,
+    or a connection drop silently bypasses the loud-failure contract
+    (live-DB finding, 2026-07-15: this used to escape unwrapped)."""
+    from unittest.mock import MagicMock
+
+    conn = MagicMock()
+    conn.cursor.side_effect = pyodbc.Error("08S01", "Attempt to use a closed connection.")
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_actuals(conn, fiscal_year=2026)

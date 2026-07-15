@@ -47,16 +47,22 @@ def fetch_sap_actuals(
     Different `gl_account` values for the same `cost_center` are always kept
     as separate keys — COST (5xxx) and SG&A (6xxx) totals never cross.
     """
-    cursor = conn.cursor()
+    cursor = None
     try:
+        cursor = conn.cursor()
         cursor.execute(SAP_ACTUALS_SQL, fiscal_year)
         rows = cursor.fetchall()
     except pyodbc.Error as exc:
+        # `conn.cursor()` itself can raise (closed connection, dropped
+        # session) -- must wrap that too, not just execute()/fetchall()
+        # failures, or a connection-level drop bypasses SapActualsFetchError
+        # entirely (live-DB finding, 2026-07-15).
         raise SapActualsFetchError(
             f"SAP actuals read-through failed for fiscal_year={fiscal_year}: {exc}"
         ) from exc
     finally:
-        cursor.close()
+        if cursor is not None:
+            cursor.close()
 
     result: dict[tuple[str, str], dict[str, float]] = {}
     for cost_center, gl_account_number, _fiscal_year, period_month, actual_thb in rows:
