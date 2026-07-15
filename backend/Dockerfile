@@ -28,8 +28,13 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
-# tsc -b && vite build (see frontend/package.json "build" script) -> ./dist
-RUN npm run build
+# tsc -b && vite build --logLevel warn (see frontend/package.json "build:ci"
+# script) -> ./dist. Uses the quiet variant, NOT plain "build": vite's default
+# log level prints a unicode checkmark ("modules transformed") that crashes
+# the local Windows az CLI's colorama layer mid-stream during `az acr build`
+# (cp1252 UnicodeEncodeError), which cancels the ACR run even though the
+# build itself succeeded. `build` (verbose) is still fine for local dev.
+RUN npm run build:ci
 
 # ---------------------------------------------------------------------------
 # Stage 2 — Python runtime (FastAPI + pyodbc + Microsoft ODBC Driver 17)
@@ -41,16 +46,18 @@ FROM python:3.12-slim-bookworm AS runtime
 # MUST be msodbcsql17, not 18. Base image is pinned to -bookworm (Debian 12)
 # so the Microsoft apt repo config below always matches the OS codename.
 #
-# ⚠️ DESK-CHECKED, NOT EXECUTED — verify this step in the first `az acr build`
-# log. If apt fails on the microsoft.asc key (apt deprecating plain-armored
-# keys in trusted.gpg.d), fall back to:
-#   curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-# and add `[signed-by=/usr/share/keyrings/microsoft-prod.gpg]` to the repo line
-# in /etc/apt/sources.list.d/mssql-release.list before `apt-get update`.
+# FIXED 2026-07-16 — real `az acr build` (run cm3) failed here with:
+#   GPG error: NO_PUBKEY EB3E94ADBE1229CF / repository is not signed
+# Root cause: bookworm's apt does not accept an ASCII-armored key dropped in
+# /etc/apt/trusted.gpg.d (the old `microsoft.asc` approach below). Fix:
+# dearmor the key into a binary keyring under /usr/share/keyrings/ and
+# reference it explicitly via `signed-by=` on the repo's deb line (verified
+# against the live https://packages.microsoft.com/config/debian/12/prod.list
+# content on 2026-07-16 — same signed-by path + `bookworm main` suite).
 RUN apt-get update -qq \
     && apt-get install -y --no-install-recommends curl gnupg ca-certificates unixodbc unixodbc-dev \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc -o /etc/apt/trusted.gpg.d/microsoft.asc \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/mssql-release.list \
+    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update -qq \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
     && apt-get purge -y --auto-remove curl gnupg \

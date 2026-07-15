@@ -57,9 +57,37 @@ App) ตั้งค่าไม่ครบ หน้า `/health` หรือ
 
 ---
 
+## ⛔ CRITICAL PRE-REQ (discovered in staging 2026-07-16): Fabric SQL IP firewall
+
+The staging deploy proved the image runs, but **every DB call timed out** (`pyodbc HYT00
+Login timeout`). Root cause: the Fabric tenant has `ConfigureWorkspaceLevelIPFirewallRules`
+enabled, and the Container Apps environment egresses from ONE static public IP that is not on
+the workspace allow-list. The identical connection string works from the corporate network,
+so this is a **network allow-list gap, not a code/credential problem**.
+
+**Action (Fabric/DATA workspace admin, before the app is useful):** in the Fabric portal →
+workspace `budget_management_web` → Settings → **Network security / IP firewall** → add the
+Container Apps environment's outbound static IP. For the existing env
+`managedEnvironment-CMANBUDGETMNGTW-b33f` that IP is **`40.119.206.243`**
+(`az containerapp env show -n <env> -g <rg> --query properties.staticIp`). Because staging and
+production share this same environment, **allow-listing this one IP unblocks BOTH**. The same
+must be done for the GOLD warehouse workspace (`cman_dw_wh_gold`) if it enforces the same
+firewall. Re-test with `curl https://<fqdn>/health?deep=1` → expect `{"db":"ok"}`.
+
+## Confirmed live resource names (staging, 2026-07-16 — no more discovery guessing)
+
+| Resource | Confirmed value |
+|---|---|
+| Resource group | `CMAN-BUDGET-MNGT-WEB-RG` (southeastasia) |
+| ACR | `cmanbudgetacr` (reused) |
+| Container Apps env | `managedEnvironment-CMANBUDGETMNGTW-b33f` (reused; vnet=null; static egress IP `40.119.206.243`) |
+| Staging app | `cman-budget-web-stg` → `cman-budget-web-stg.kindstone-f34836dd.southeastasia.azurecontainerapps.io` |
+| Image | `cmanbudgetacr.azurecr.io/budget-web:<git-sha>` |
+
 ## 2. Resource discovery (confirm before creating anything new)
 
 Run these first — reuse whatever already exists, only create what's missing.
+(The table above is what staging actually found; the commands below are how to re-confirm.)
 
 ```bash
 # Confirm subscription/tenant context
