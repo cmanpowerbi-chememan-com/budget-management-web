@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './auth/useAuth'
-import { useScope } from './auth/useScope'
+import { useScope, type ScopeState } from './auth/useScope'
 import type { ScopeRole } from './api/types'
-import { parseDeepLink, type DeepLinkFilter } from './filters/deepLink'
+import { parseDeepLink } from './filters/deepLink'
+import { BudgetGrid } from './grid/BudgetGrid'
 import './styles/global.css'
 
 const THEME_STORAGE_KEY = 'budget-theme'
@@ -50,13 +51,19 @@ function roleLabel(role: ScopeRole | null): string {
   }
 }
 
-/** Login-bar area: who am I + what can I access (ADR-0004/0019). The full
- * สายงาน›ฝ่าย›CC hierarchy picker is A8 — this only surfaces identity +
- * scope counts so a developer/tester can see the auth wiring works. */
-function UserBar() {
-  const { email, loading: authLoading, error: authError } = useAuth()
-  const scope = useScope()
+interface UserBarProps {
+  email: string | null
+  authLoading: boolean
+  authError: string | null
+  scope: ScopeState
+}
 
+/** Login-bar area: who am I + what can I access (ADR-0004/0019). The ฝ่าย
+ * picker itself (สายงาน›ฝ่าย›CC, counts) is `BudgetGrid`'s `DeptPicker`
+ * (A8) — this bar only surfaces identity + scope counts. Takes
+ * auth/scope as props (resolved once in `App`) rather than calling the
+ * hooks again, so the page fires one `/me` + one `/scope` request, not two. */
+function UserBar({ email, authLoading, authError, scope }: UserBarProps) {
   if (authLoading || scope.loading) {
     return (
       <section className="user-bar" data-testid="user-bar">
@@ -70,6 +77,16 @@ function UserBar() {
       <section className="user-bar" data-testid="user-bar">
         <span className="user-bar-status user-bar-error">
           โหลดข้อมูลผู้ใช้ไม่สำเร็จ — กรุณาลองรีเฟรชหน้าใหม่
+        </span>
+      </section>
+    )
+  }
+
+  if (scope.error) {
+    return (
+      <section className="user-bar" data-testid="user-bar">
+        <span className="user-bar-status user-bar-error">
+          โหลดข้อมูลสิทธิ์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง
         </span>
       </section>
     )
@@ -96,33 +113,16 @@ function UserBar() {
   )
 }
 
-/** Renders the ADR-0016 deep-link filter as a visible chip so the parse
- * result is testable/observable — A8's real picker consumes the same
- * `filter` state. */
-function FilterSummary({ filter }: { filter: DeepLinkFilter }) {
-  if (!filter.dept && !filter.year) {
-    return (
-      <div className="filter-chip filter-chip-empty" data-testid="filter-chip">
-        ยังไม่มีตัวกรองจากลิงก์อีเมล — เลือกฝ่าย/ปีด้านล่าง (มาใน A8)
-      </div>
-    )
-  }
-
-  const parts: string[] = []
-  if (filter.dept) parts.push(`ฝ่าย ${filter.dept}`)
-  if (filter.year) parts.push(`ปี ${filter.year}`)
-
-  return (
-    <div className="filter-chip" data-testid="filter-chip">
-      🔗 ลิงก์จากอีเมล: {parts.join(' · ')}
-    </div>
-  )
-}
-
 function App() {
   // Parsed once on load — ADR-0016 deep-link is convenience-only, the
-  // server enforces scope regardless of what this pre-fills.
-  const [filter] = useState<DeepLinkFilter>(() => parseDeepLink(window.location.search))
+  // server enforces scope regardless of what this pre-fills; BudgetGrid
+  // validates `filter.dept` against the caller's actual scope before ever
+  // using it (never a bearer of access).
+  const [filter] = useState(() => parseDeepLink(window.location.search))
+  const { email, loading: authLoading, error: authError } = useAuth()
+  const scope = useScope()
+
+  const ready = !authLoading && !authError && !scope.loading && !scope.error
 
   return (
     <>
@@ -138,16 +138,13 @@ function App() {
 
       <main className="wrap">
         <header className="page-head">
-          <UserBar />
+          <UserBar email={email} authLoading={authLoading} authError={authError} scope={scope} />
           <div className="page-title-row">
             <h1 className="page-title">OPEX Management</h1>
           </div>
-          <FilterSummary filter={filter} />
         </header>
 
-        <section className="table-panel-placeholder" data-testid="grid-placeholder">
-          ตารางงบประมาณ (SAP / Approved / Pending) จะมาในขั้นถัดไป — A8
-        </section>
+        {ready && email && <BudgetGrid scope={scope} initialFilter={filter} />}
       </main>
     </>
   )

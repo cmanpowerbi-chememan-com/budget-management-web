@@ -57,4 +57,37 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/health')).rejects.toMatchObject({ status: 0 })
   })
+
+  it('maps a 409 response to a conflict ApiError with a Thai message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'row changed' })))
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('captures the backend detail string from an error response body (per-row error surfacing)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(403, { detail: 'CC1 is not in your Fill scope' })),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 403,
+      detail: 'CC1 is not in your Fill scope',
+    })
+  })
+
+  it('tolerates an error response with an unparsable/empty body (detail undefined, never crashes)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => {
+          throw new Error('not json')
+        },
+      } as unknown as Response),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({ status: 400, detail: undefined })
+  })
 })

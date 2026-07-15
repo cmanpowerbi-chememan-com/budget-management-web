@@ -172,6 +172,47 @@ def test_row_present_in_all_three_layers():
     assert row.editable is True
 
 
+def test_pending_layer_carries_updated_at_optimistic_lock_token():
+    """A8 needs the pending row's `_updated_at` token to send back as
+    `expected_updated_at` on `PUT /budget/rows` — without it the frontend can
+    never edit an EXISTING pending row (only ever create new ones)."""
+    from datetime import datetime, timezone
+
+    stamp = datetime(2026, 7, 16, 10, 30, tzinfo=timezone.utc)
+    join_rows = [
+        _blank_join_row(
+            "CC1", "GL1",
+            pending_cost_center="CC1", pending_m01=50.0, pending_total_year=50.0,
+            pending_updated_at=stamp,
+        )
+    ]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert rows[0].pending.updated_at == stamp
+
+
+def test_pending_layer_updated_at_is_none_when_no_pending_row_exists():
+    join_rows: list[dict] = []
+    sap_actuals = {("CC1", "GL1"): {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert rows[0].pending.updated_at is None
+
+
+def test_pending_budget_query_selects_updated_at_column():
+    """SQL shape: the pending-side subquery must select `_updated_at` so the
+    optimistic-lock token is available to alias as `pending_updated_at`."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_board_pending_rows(conn, board_year=2026, pending_year=2027)
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "p._updated_at AS pending_updated_at" in sql_text
+
+
 def test_sap_led_row_with_no_board_or_pending_shows_blank_editable_pending():
     """Never-cut: SAP-only (cc,gl) must still render, with a blank (all-zero)
     Pending layer that IS editable if the CC is in Fill scope — persistence

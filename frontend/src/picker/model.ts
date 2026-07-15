@@ -1,0 +1,74 @@
+/** Pure hierarchy-building logic for the ฝ่าย picker (สายงาน›ฝ่าย›Cost
+ * Center, counts inline — login-bar V3 design, ADR-0019 scope). No DOM,
+ * no fetch — built from `GET /scope/departments` rows, already RLS-scoped
+ * server-side. */
+import type { DepartmentRow } from '../api/types'
+
+const UNKNOWN_DIVISION = 'ไม่ระบุสายงาน'
+const UNKNOWN_DEPARTMENT = 'ไม่ระบุฝ่าย'
+
+export interface DepartmentNode {
+  department: string
+  division: string
+  costCenters: string[]
+}
+
+export interface DivisionNode {
+  division: string
+  departments: DepartmentNode[]
+}
+
+/** Groups rows into สายงาน (division) -> ฝ่าย (department) -> unique Cost
+ * Centers, sorted alphabetically (Thai-aware) at every level. A row with a
+ * blank division/department is bucketed under a visible placeholder
+ * rather than silently dropped or crashing. */
+export function buildDeptHierarchy(rows: DepartmentRow[]): DivisionNode[] {
+  const byDivision = new Map<string, Map<string, Set<string>>>()
+
+  rows.forEach((r) => {
+    const division = r.division?.trim() || UNKNOWN_DIVISION
+    const department = r.department?.trim() || UNKNOWN_DEPARTMENT
+    const depts = byDivision.get(division) ?? new Map<string, Set<string>>()
+    const ccs = depts.get(department) ?? new Set<string>()
+    ccs.add(r.cost_center)
+    depts.set(department, ccs)
+    byDivision.set(division, depts)
+  })
+
+  return [...byDivision.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, 'th'))
+    .map(([division, depts]) => ({
+      division,
+      departments: [...depts.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, 'th'))
+        .map(([department, ccs]) => ({
+          department,
+          division,
+          costCenters: [...ccs].sort(),
+        })),
+    }))
+}
+
+/** Flat list of every department across all divisions, for a simple
+ * search-filtered picker list (division shown as a group header). */
+export function flattenDepartments(divisions: DivisionNode[]): DepartmentNode[] {
+  return divisions.flatMap((d) => d.departments)
+}
+
+/** Case-insensitive substring match against department or division name —
+ * used by the picker's search box. Empty query matches everything. */
+export function matchesQuery(node: DepartmentNode, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return node.department.toLowerCase().includes(q) || node.division.toLowerCase().includes(q)
+}
+
+/** Validates a deep-link-provided department name against the built
+ * hierarchy — returns it unchanged if real, `null` if it doesn't exist in
+ * the caller's scope (ADR-0016: the deep-link is convenience-only, never
+ * a bearer of access; an invalid/out-of-scope name is just ignored). */
+export function resolveInitialDept(divisions: DivisionNode[], deepLinkDept: string | null): string | null {
+  if (!deepLinkDept) return null
+  const exists = flattenDepartments(divisions).some((d) => d.department === deepLinkDept)
+  return exists ? deepLinkDept : null
+}

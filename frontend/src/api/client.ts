@@ -14,11 +14,20 @@ const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
 
 export class ApiError extends Error {
   readonly status: number
+  /** The backend's raw `detail` string (FastAPI `HTTPException.detail`),
+   * when the error response body was JSON and carried one. Per-row error
+   * surfacing (A8) shows this alongside the generic Thai `message` — the
+   * backend never returns a machine error *code* over the wire (only an
+   * HTTP status + a human detail string), so callers must not assume a
+   * fixed set of `detail` values; an unrecognised one is just displayed
+   * as-is (never a crash). `undefined` when the body was empty/unparsable. */
+  readonly detail?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -36,8 +45,27 @@ function defaultOnUnauthorized(): void {
 
 function messageForStatus(status: number): string {
   if (status === 403) return 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้'
+  if (status === 409) return 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง'
+  if (status === 400) return 'คำขอไม่ถูกต้อง'
   if (status >= 500) return 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'
   return `คำขอไม่สำเร็จ (HTTP ${status})`
+}
+
+/** Best-effort parse of an error response's JSON body's `detail` field.
+ * Never throws — an empty/non-JSON body (or a `detail` that isn't a
+ * string) just yields `undefined`, so a malformed error body never masks
+ * the original HTTP status as a crash. */
+async function tryReadDetail(response: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json()
+    if (body && typeof body === 'object' && 'detail' in body) {
+      const detail = (body as { detail?: unknown }).detail
+      return typeof detail === 'string' ? detail : undefined
+    }
+  } catch {
+    // empty or non-JSON body — no detail available
+  }
+  return undefined
 }
 
 export interface ApiFetchOptions extends RequestInit {
@@ -66,7 +94,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, messageForStatus(response.status))
+    const detail = await tryReadDetail(response)
+    throw new ApiError(response.status, messageForStatus(response.status), detail)
   }
 
   return (await response.json()) as T

@@ -1,17 +1,28 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T15:57:01+0700",
+  "updated": "2026-07-15T16:44:45+0700",
   "tasks": [
     {
-      "id": "a8-main-grid",
+      "id": "a11-a12-automations",
       "state": "doing",
-      "created": "2026-07-15T15:12:06+0700",
-      "updated": "2026-07-15T15:12:06+0700",
+      "created": "2026-07-15T16:18:38+0700",
+      "updated": "2026-07-15T16:18:38+0700",
       "agent": "05-software-developer",
       "skills": [],
       "files": [],
-      "ai": "A8 per BUILD_PLAN: main grid 3 layers (SAP RO / Approved RO / Pending edit), fai-picker สายงาน>ฝ่าย>CC with counts (login bar V3), year, sorted by gl_group, RLS-scoped via GET /budget, + เพิ่ม transaction, inline month edit + auto total, optimistic-lock 409 UX. Special-GL/trip cells edit-blocked (subform=A9). NOT: A9 subforms, A10 approve/admin toggle. Mockup 0002.3 = canonical behavior. Dispatched.",
+      "ai": "Phase A3 automations combined (same concern, one dispatch per ADR-0021): A11 jobs = auto-submit DRAFT depts at deadline (AUTO_SUBMIT, approver1=last-editor's manager) + 30-day auto-escalate (AUTO_ESCALATE), current planning year only; A12 emails = Graph sendMail (probe-safe, NO real sends in tests): approver turn-notify, reject->last submitter only, reminder_date grouped per Filler; all deep-linked ?dept&year. GH Actions cron workflows gated (workflow_dispatch/DRY_RUN) until jakkaritw enables at deploy. Parallel with A8 (no file overlap; live tests in NEW file, sentinel 2096). Dispatched.",
+      "human": "(retired field — see ai)"
+    },
+    {
+      "id": "a8-main-grid",
+      "state": "done",
+      "created": "2026-07-15T15:12:06+0700",
+      "updated": "2026-07-15T16:44:45+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Security clear: /scope/departments scoped server-side (unit+live attack tests), no filler-email leak, updated_at = timestamp only; COST/SGA lock structurally tested; year semantics correct; 409 revert covered; is_special single-source (classify_special_gl both sides); admin auto-see-all = correct ADR-0014 reading (pure admin, backend re-checks). Gate re-ran: FE 109 + build, BE 293 mocked + 31 live, sentinels clean. Suggestions: scope-error banner (APPLIED — 110/110), commit-hygiene note (2 A8 live tests rode in 9bdbc16), test_notifications collect error = A11/12 in-flight, negative-months = open policy Q for jakkaritw. Committed.",
       "human": "(retired field — see ai)"
     },
     {

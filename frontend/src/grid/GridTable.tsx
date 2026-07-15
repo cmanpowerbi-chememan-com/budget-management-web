@@ -1,0 +1,206 @@
+import { Fragment } from 'react'
+import type { BudgetRow, GlAccount } from '../api/types'
+import { MonthCell } from './MonthCell'
+import { formatThb, glMetaFor, groupAndSortBySide, isEditableCell, MONTH_KEYS, sectionTotals, type MonthKey } from './model'
+
+export interface RowMessage {
+  kind: 'error' | 'saving' | 'saved'
+  text: string
+}
+
+export interface GridTableProps {
+  rows: BudgetRow[]
+  glRef: GlAccount[]
+  onCommitMonth: (row: BudgetRow, month: MonthKey, value: number) => void
+  /** Keyed by `${cost_center}|${gl_account}` — per-row save status (never a
+   * single global banner, since the write endpoint is one row per call and
+   * one row's failure must never block another, mirroring the backend's
+   * batch-shaped-but-independent contract). */
+  rowMessages?: Record<string, RowMessage>
+}
+
+const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
+  COST: 'ฝั่งผลิต / ต้นทุน (5xxx)',
+  SGA: 'ฝั่งบริหาร / ขาย · SG&A (6xxx)',
+}
+
+const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
+
+function rowKey(cc: string, gl: string): string {
+  return `${cc}|${gl}`
+}
+
+function MonthCells({
+  values,
+  layerTestId,
+  cc,
+  gl,
+}: {
+  values: Record<MonthKey, number>
+  layerTestId: 'sap-value' | 'board-value'
+  cc: string
+  gl: string
+}) {
+  return (
+    <>
+      {MONTH_KEYS.map((m) => (
+        <td key={m} className="month-cell" data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
+          {formatThb(values[m])}
+        </td>
+      ))}
+    </>
+  )
+}
+
+function PendingCells({
+  row,
+  editable,
+  isSpecial,
+  onCommitMonth,
+}: {
+  row: BudgetRow
+  editable: boolean
+  isSpecial: boolean
+  onCommitMonth: GridTableProps['onCommitMonth']
+}) {
+  const { cost_center: cc, gl_account: gl } = row
+  return (
+    <>
+      {MONTH_KEYS.map((m) => (
+        <td key={m} className="month-cell" data-testid={`pending-cell-${cc}-${gl}-${m}`}>
+          <MonthCell
+            value={row.pending[m]}
+            editable={editable}
+            label={`Pending ${m} ${cc} ${gl}`}
+            disabledReason={isSpecial ? SPECIAL_GL_TOOLTIP : undefined}
+            testId={editable ? `pending-input-${cc}-${gl}-${m}` : undefined}
+            onCommit={(value) => onCommitMonth(row, m, value)}
+          />
+        </td>
+      ))}
+    </>
+  )
+}
+
+function TxnBlock({
+  row,
+  glRef,
+  onCommitMonth,
+  message,
+}: {
+  row: BudgetRow
+  glRef: GlAccount[]
+  onCommitMonth: GridTableProps['onCommitMonth']
+  message?: RowMessage
+}) {
+  const meta = glMetaFor(row.gl_account, glRef)
+  const editable = isEditableCell(row.editable, meta.is_special)
+  const cc = row.cost_center
+  const gl = row.gl_account
+
+  return (
+    <tbody className="txn-block" data-testid={`txn-${cc}-${gl}`}>
+      <tr className="txn-row first" data-status="sap">
+        <td className="idx-cell">{cc}</td>
+        <td className="gl-cell">
+          {gl}
+          <div className="gl-name">{meta.gl_name ?? '—'}</div>
+        </td>
+        <td className="gl-group-cell">{meta.gl_group}</td>
+        <td className="status-cell sap">SAP · ใช้จริง</td>
+        <MonthCells values={row.sap} layerTestId="sap-value" cc={cc} gl={gl} />
+      </tr>
+      <tr className="txn-row" data-status="approved">
+        <td colSpan={3} />
+        <td className="status-cell approved">Approved · งบ</td>
+        <MonthCells values={row.board} layerTestId="board-value" cc={cc} gl={gl} />
+      </tr>
+      <tr className="txn-row last" data-status="pending">
+        <td colSpan={3} />
+        <td className="status-cell pending">
+          Pending · รออนุมัติ
+          {meta.is_special && <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>}
+        </td>
+        <PendingCells row={row} editable={editable} isSpecial={meta.is_special} onCommitMonth={onCommitMonth} />
+      </tr>
+      {message && (
+        <tr className="txn-row-message">
+          <td colSpan={16} className={`row-message row-message-${message.kind}`}>
+            {message.text}
+          </td>
+        </tr>
+      )}
+    </tbody>
+  )
+}
+
+function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<typeof sectionTotals> }) {
+  return (
+    <tbody>
+      <tr className="subtotal-row">
+        <td colSpan={4}>{label}</td>
+        {MONTH_KEYS.map((m) => (
+          <td key={m} className="month-cell">
+            {formatThb(totals.pending[m])}
+          </td>
+        ))}
+      </tr>
+    </tbody>
+  )
+}
+
+/** Renders the main budget grid: two structurally-separate sections (COST
+ * 5xxx / SG&A 6xxx — NEVER-CUT, their totals never combine), each grouped
+ * by gl_group with a subtotal row, 3 layers per transaction. Pure
+ * presentational component — all state/API calls live in `BudgetGrid`. */
+export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {} }: GridTableProps) {
+  if (rows.length === 0) {
+    return <div className="grid-empty">ไม่มีรายการที่ตรงกับตัวกรองนี้</div>
+  }
+
+  const sections = groupAndSortBySide(rows, glRef)
+
+  return (
+    <div className="table-panel">
+      {(['COST', 'SGA'] as const).map((side) => {
+        const groups = sections[side]
+        if (groups.length === 0) return null
+        return (
+          <div key={side} className="side-section" data-testid={`side-section-${side}`}>
+            <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Cost Center</th>
+                  <th>GL Code</th>
+                  <th>GL Group</th>
+                  <th>Status</th>
+                  {MONTH_KEYS.map((m) => (
+                    <th key={m} className="month-col">
+                      {m}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              {groups.map((group) => (
+                <Fragment key={group.glGroup}>
+                  {group.rows.map((row) => (
+                    <TxnBlock
+                      key={rowKey(row.cost_center, row.gl_account)}
+                      row={row}
+                      glRef={glRef}
+                      onCommitMonth={onCommitMonth}
+                      message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
+                    />
+                  ))}
+                  <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
+                </Fragment>
+              ))}
+              <SubtotalRow label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`} totals={sectionTotals(groups.flatMap((g) => g.rows))} />
+            </table>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

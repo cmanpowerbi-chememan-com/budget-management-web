@@ -37,19 +37,19 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 3:57 PM &bull; rendered: 15 July 2026 3:57 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (29)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 27</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 4:44 PM &bull; rendered: 15 July 2026 4:44 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (30)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 28</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
         
-        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a8-main-grid</span>
-        <span class="dt">15 July 2026 3:12 PM</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a11-a12-automations</span>
+        <span class="dt">15 July 2026 4:18 PM</span>
       </div>
-      <div class="id">a8-main-grid</div>
+      <div class="id">a11-a12-automations</div>
       <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>A8 per BUILD_PLAN: main grid 3 layers (SAP RO / Approved RO / Pending edit), fai-picker สายงาน&gt;ฝ่าย&gt;CC with counts (login bar V3), year, sorted by gl_group, RLS-scoped via GET /budget, + เพิ่ม transaction, inline month edit + auto total, optimistic-lock 409 UX. Special-GL/trip cells edit-blocked (subform=A9). NOT: A9 subforms, A10 approve/admin toggle. Mockup 0002.3 = canonical behavior. Dispatched.</code></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Phase A3 automations combined (same concern, one dispatch per ADR-0021): A11 jobs = auto-submit DRAFT depts at deadline (AUTO_SUBMIT, approver1=last-editor&#x27;s manager) + 30-day auto-escalate (AUTO_ESCALATE), current planning year only; A12 emails = Graph sendMail (probe-safe, NO real sends in tests): approver turn-notify, reject-&gt;last submitter only, reminder_date grouped per Filler; all deep-linked ?dept&amp;year. GH Actions cron workflows gated (workflow_dispatch/DRY_RUN) until jakkaritw enables at deploy. Parallel with A8 (no file overlap; live tests in NEW file, sentinel 2096). Dispatched.</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
       
     </div>
@@ -72,6 +72,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a8-main-grid</span>
+        <span class="dt">15 July 2026 3:12 PM &rarr; 15 July 2026 4:44 PM</span>
+      </div>
+      <div class="id">a8-main-grid</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>GATE: APPROVE WITH SUGGESTIONS (no blockers). Security clear: /scope/departments scoped server-side (unit+live attack tests), no filler-email leak, updated_at = timestamp only; COST/SGA lock structurally tested; year semantics correct; 409 revert covered; is_special single-source (classify_special_gl both sides); admin auto-see-all = correct ADR-0014 reading (pure admin, backend re-checks). Gate re-ran: FE 109 + build, BE 293 mocked + 31 live, sentinels clean. Suggestions: scope-error banner (APPLIED — 110/110), commit-hygiene note (2 A8 live tests rode in 9bdbc16), test_notifications collect error = A11/12 in-flight, negative-months = open policy Q for jakkaritw. Committed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a5-deadline-lock</span>
         <span class="dt">15 July 2026 3:12 PM &rarr; 15 July 2026 3:57 PM</span>
       </div>

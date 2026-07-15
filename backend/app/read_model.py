@@ -28,6 +28,8 @@ board_budget (an Approved import with no actual yet) or ONLY in pending_budget
 is FULL OUTER (not board-only-LEFT), and any SAP-only key not matched by the
 join is appended as its own row with a blank (all-zero) Pending layer.
 """
+from datetime import datetime
+
 from pydantic import BaseModel
 import pyodbc
 
@@ -48,6 +50,7 @@ _PENDING_BUDGET_COLUMNS: tuple[str, ...] = (
     "gl_account",
     *MONTH_COLUMNS,
     "total_year",
+    "_updated_at",
     *_PENDING_META_COLUMNS,
 )
 
@@ -61,6 +64,7 @@ JOIN_ROW_COLUMNS: tuple[str, ...] = (
     *(f"board_{c}" for c in _BOARD_COLUMNS),
     *(f"pending_{m}" for m in MONTH_COLUMNS),
     "pending_total_year",
+    "pending_updated_at",
     *(f"pending_{c}" for c in _PENDING_META_COLUMNS),
 )
 
@@ -88,6 +92,7 @@ def _board_pending_join_sql(cc_filter_clause: str) -> str:
             {", ".join(f"b.{c} AS board_{c}" for c in _BOARD_COLUMNS)},
             {", ".join(f"p.{m} AS pending_{m}" for m in MONTH_COLUMNS)},
             p.total_year AS pending_total_year,
+            p._updated_at AS pending_updated_at,
             {", ".join(f"p.{c} AS pending_{c}" for c in _PENDING_META_COLUMNS)}
         FROM (SELECT {", ".join(_BOARD_BUDGET_COLUMNS)} FROM dbo.board_budget WHERE fiscal_year = ?{cc_filter_clause}) b
         FULL OUTER JOIN (SELECT {", ".join(_PENDING_BUDGET_COLUMNS)} FROM budget.pending_budget WHERE fiscal_year = ?{cc_filter_clause}) p
@@ -206,7 +211,14 @@ class PendingLayer(LayerAmounts):
     blank (all defaults) when no `pending_budget` row exists yet.
 
     No `status` field — `budget.pending_budget` has no status column
-    (status lives on `budget.approval_status`, owned by A6)."""
+    (status lives on `budget.approval_status`, owned by A6).
+
+    `updated_at` (added for A8): the row's `_updated_at` optimistic-lock
+    token, `None` when no `pending_budget` row exists yet (the frontend
+    then sends `expected_updated_at=None` on `PUT /budget/rows`, the
+    create path). Without exposing this, an existing pending row could
+    never be edited via the lock-token contract `write_model.py` requires —
+    only ever created."""
 
     template: str | None = None
     remark: str | None = None
@@ -215,6 +227,7 @@ class PendingLayer(LayerAmounts):
     c_level: str | None = None
     division: str | None = None
     department: str | None = None
+    updated_at: datetime | None = None
 
 
 class BudgetRow(BaseModel):
@@ -252,6 +265,7 @@ def _pending_layer(jr: dict) -> PendingLayer:
     return PendingLayer(
         **{m: _num(jr.get(f"pending_{m}")) for m in MONTH_COLUMNS},
         total_year=_num(jr.get("pending_total_year")),
+        updated_at=jr.get("pending_updated_at"),
         **{c: jr.get(f"pending_{c}") for c in _PENDING_META_COLUMNS},
     )
 
