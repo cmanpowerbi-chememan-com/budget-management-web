@@ -7,14 +7,17 @@ ADR-0006), submit branch selection (normal chain vs admin direct-approve,
 ADR-0012), step-gated approve/reject, reject-then-resubmit restarts the
 whole chain, concurrent-approve race protection, and append-only logging.
 """
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pyodbc
 import pytest
 
 from app.approval import (
+    ACTION_AUTO_ESCALATE,
+    ACTION_AUTO_SUBMIT,
     APPROVED,
+    AUTO_ESCALATE_THRESHOLD_DAYS,
     NIPAPORN_EMPCODE,
     PENDING_APPROVER1,
     PENDING_APPROVER2,
@@ -33,10 +36,15 @@ from app.approval import (
     PastDeadlineError,
     _active_positions,
     _bangkok_today,
+    _current_step_started_at,
     _is_post_deadline,
     approve_department,
     authorize_status_view,
+    auto_escalate_step,
+    auto_submit_department,
+    fetch_pending_rows,
     get_approval_status,
+    is_step_stale,
     reject_department,
     resolve_chain,
     submit_department,
@@ -713,3 +721,220 @@ def _status_row(
         DEPT, FY, status, submitter_empcode, "submitter@chememan.com", now,
         approver1_empcode, None, None, None, reject_reason, rejected_by_empcode, now,
     )
+
+
+def _row_dict(
+    status: str,
+    approver1_empcode: str | None = "200",
+    submitter_empcode: str | None = "999",
+    submitted_at: datetime | None = None,
+    approver1_actioned_at: datetime | None = None,
+    approver2_actioned_at: datetime | None = None,
+) -> dict:
+    """Build a row dict in the shape `_fetch_row`/`fetch_pending_rows` return
+    (keyed, not a raw tuple) -- used by the A11 job-facing tests below."""
+    return {
+        "department": DEPT, "fiscal_year": FY, "status": status,
+        "submitter_empcode": submitter_empcode, "submitter_email": "submitter@chememan.com",
+        "submitted_at": submitted_at or datetime(2027, 1, 1, tzinfo=timezone.utc),
+        "approver1_empcode": approver1_empcode,
+        "approver1_actioned_at": approver1_actioned_at, "approver2_actioned_at": approver2_actioned_at,
+        "approver3_actioned_at": None, "reject_reason": None, "rejected_by_empcode": None,
+        "_updated_at": datetime(2027, 1, 1, tzinfo=timezone.utc),
+    }
+
+
+# ---------------------------------------------------------------------------
+# A11 — auto_submit_department (jobs/auto_submit.py's entry point)
+# ---------------------------------------------------------------------------
+
+def test_auto_submit_department_creates_first_step_and_logs_auto_submit():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,                    # _fetch_row -> no existing record (job's discovery already filtered this)
+        (date(2020, 1, 1),),     # _is_post_deadline -> already passed
+        ("999", "200"),          # resolve_submitter(last_editor_email)
+    ]
+
+    result = auto_submit_department(conn, DEPT, FY, "last-editor@chememan.com")
+
+    assert result.status == PENDING_APPROVER1
+    assert result.submitter_empcode == "999"
+    assert result.submitter_email == "last-editor@chememan.com"
+    assert result.approver1_empcode == "200"
+    conn.commit.assert_called_once()
+    log_call = cursor.execute.call_args_list[-1]
+    assert "budget.approval_log" in log_call.args[0]
+    assert ACTION_AUTO_SUBMIT in log_call.args
+
+
+def test_auto_submit_department_raises_if_a_row_already_exists():
+    """Defense-in-depth: the job's own discovery query should never call this
+    for a department that already has a row, but this must not silently
+    overwrite one if it somehow does."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = _status_row(status=PENDING_APPROVER1)
+
+    with pytest.raises(InvalidApprovalStateError):
+        auto_submit_department(conn, DEPT, FY, "last-editor@chememan.com")
+    conn.commit.assert_not_called()
+
+
+def test_auto_submit_department_concurrent_insert_race_raises_conflict():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, (date(2020, 1, 1),), ("999", "200")]
+    # 3 dummy calls (_fetch_row, _is_post_deadline, resolve_submitter) then the INSERT raises.
+    cursor.execute.side_effect = [None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
+
+    with pytest.raises(ConcurrentApprovalError):
+        auto_submit_department(conn, DEPT, FY, "last-editor@chememan.com")
+    conn.commit.assert_not_called()
+
+
+def test_auto_submit_department_self_skip_still_applies():
+    """The last editor IS Nipaporn -> her own self-skip/dedup collapses the
+    chain exactly like a normal submit would (ADR-0006 worked example)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, (date(2020, 1, 1),), (NIPAPORN_EMPCODE, WARAPORN_EMPCODE)]
+
+    result = auto_submit_department(conn, DEPT, FY, "nipapornt@chememan.com")
+
+    assert result.status == PENDING_APPROVER1  # single surviving step (Waraporn)
+    assert result.current_approver_empcode == WARAPORN_EMPCODE
+
+
+def test_auto_submit_department_raises_when_deadline_not_passed():
+    """Defense-in-depth (this task): `jobs/auto_submit.py` already checks
+    `is_post_deadline` before calling this function, but the function must
+    refuse on its own too — never trust the caller as the only gate."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,                # _fetch_row -> no existing record
+        (date(2099, 1, 1),),  # _is_post_deadline -> deadline configured, not yet passed
+    ]
+
+    with pytest.raises(InvalidApprovalStateError):
+        auto_submit_department(conn, DEPT, FY, "last-editor@chememan.com")
+    conn.commit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# A11 — auto_escalate_step (jobs/auto_escalate.py's entry point)
+# ---------------------------------------------------------------------------
+
+def test_auto_escalate_step_advances_to_next_position_and_logs():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.rowcount = 1
+    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999")
+
+    result = auto_escalate_step(conn, DEPT, FY, row)
+
+    assert result.status == PENDING_APPROVER2
+    conn.commit.assert_called_once()
+    log_call = cursor.execute.call_args_list[-1]
+    assert "budget.approval_log" in log_call.args[0]
+    assert ACTION_AUTO_ESCALATE in log_call.args
+
+
+def test_auto_escalate_step_final_active_position_raises_invalid_state():
+    """ADR-0006: never a silent jump to APPROVED just because someone was
+    slow -- a stuck FINAL step is simply not escalated by this job."""
+    conn = MagicMock()
+    row = _row_dict(status=PENDING_APPROVER3, approver1_empcode="200", submitter_empcode="999")
+
+    with pytest.raises(InvalidApprovalStateError):
+        auto_escalate_step(conn, DEPT, FY, row)
+    conn.commit.assert_not_called()
+
+
+def test_auto_escalate_step_skips_a_dropped_middle_position():
+    """active=[1,3] (invalid-approver1 fallback) -- escalating position 1
+    must land on PENDING_APPROVER3 directly, same as a real approve would."""
+    conn = MagicMock()
+    conn.cursor.return_value.rowcount = 1
+    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE, submitter_empcode="999")
+
+    result = auto_escalate_step(conn, DEPT, FY, row)
+    assert result.status == PENDING_APPROVER3
+
+
+def test_auto_escalate_step_concurrent_race_raises_conflict():
+    conn = MagicMock()
+    conn.cursor.return_value.rowcount = 0
+    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999")
+
+    with pytest.raises(ConcurrentApprovalError):
+        auto_escalate_step(conn, DEPT, FY, row)
+
+
+# ---------------------------------------------------------------------------
+# _current_step_started_at / is_step_stale — the derived "turn start" signal
+# (no dedicated per-step timestamp column exists on budget.approval_status;
+# flagged in the final report, this is the safest derivation from existing
+# columns, never a schema change).
+# ---------------------------------------------------------------------------
+
+def test_current_step_started_at_position1_is_submitted_at():
+    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    row = _row_dict(status=PENDING_APPROVER1, submitted_at=submitted)
+    assert _current_step_started_at(row) == submitted
+
+
+def test_current_step_started_at_position2_uses_approver1_actioned_at_when_present():
+    actioned = datetime(2027, 2, 1, tzinfo=timezone.utc)
+    row = _row_dict(status=PENDING_APPROVER2, approver1_actioned_at=actioned)
+    assert _current_step_started_at(row) == actioned
+
+
+def test_current_step_started_at_position2_falls_back_to_submitted_at_when_position1_was_skipped():
+    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    row = _row_dict(status=PENDING_APPROVER2, submitted_at=submitted, approver1_actioned_at=None)
+    assert _current_step_started_at(row) == submitted
+
+
+def test_current_step_started_at_position3_walks_back_through_skipped_positions():
+    """position 2 was skipped (its actioned_at stays NULL forever) -> falls
+    back to position 1's actioned_at, not straight to submitted_at."""
+    p1_actioned = datetime(2027, 3, 1, tzinfo=timezone.utc)
+    row = _row_dict(
+        status=PENDING_APPROVER3, approver1_actioned_at=p1_actioned, approver2_actioned_at=None,
+    )
+    assert _current_step_started_at(row) == p1_actioned
+
+
+def test_is_step_stale_true_past_threshold():
+    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    row = _row_dict(status=PENDING_APPROVER1, submitted_at=submitted)
+    now = submitted + timedelta(days=AUTO_ESCALATE_THRESHOLD_DAYS)
+    assert is_step_stale(row, now) is True
+
+
+def test_is_step_stale_false_before_threshold():
+    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    row = _row_dict(status=PENDING_APPROVER1, submitted_at=submitted)
+    now = submitted + timedelta(days=AUTO_ESCALATE_THRESHOLD_DAYS - 1)
+    assert is_step_stale(row, now) is False
+
+
+# ---------------------------------------------------------------------------
+# fetch_pending_rows — read helper for the auto_escalate job's discovery pass
+# ---------------------------------------------------------------------------
+
+def test_fetch_pending_rows_returns_keyed_dicts_for_the_given_year():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.return_value = [_status_row(status=PENDING_APPROVER1)]
+
+    rows = fetch_pending_rows(conn, FY)
+
+    assert len(rows) == 1
+    assert rows[0]["department"] == DEPT
+    assert rows[0]["status"] == PENDING_APPROVER1
+    query = cursor.execute.call_args.args[0]
+    assert "budget.approval_status" in query
+    assert "IN (?, ?, ?)" in query

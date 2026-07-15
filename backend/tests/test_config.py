@@ -1,4 +1,6 @@
 """Unit tests for app.config — env-driven settings, no live DB."""
+import logging
+
 from app.config import Settings, get_settings
 
 
@@ -41,6 +43,33 @@ def test_admin_emails_defaults_to_empty_set():
 def test_admin_emails_parses_comma_separated_lowercased_and_trimmed():
     settings = Settings(_env_file=None, admin_emails=" Jakkaritw@Chememan.com, nipapornt@chememan.com ,,")
     assert settings.admin_emails_set == {"jakkaritw@chememan.com", "nipapornt@chememan.com"}
+
+
+def test_notifications_dry_run_defaults_true():
+    """Never-cut safety default (A12) — real sends require an explicit,
+    deliberate config flip, never the out-of-the-box value."""
+    settings = Settings(_env_file=None)
+    assert settings.notifications_dry_run is True
+
+
+def test_app_base_url_has_a_placeholder_default():
+    settings = Settings(_env_file=None)
+    assert settings.app_base_url == "https://budget.chememan.com"
+
+
+def test_production_with_placeholder_base_url_warns_loudly(caplog):
+    """Misconfiguration guard: production + still-default app_base_url must
+    log a warning at settings load (never crash) so a forgotten
+    APP_BASE_URL override for a real deploy does not go unnoticed."""
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        Settings(_env_file=None, app_env="production")
+    assert any("app_base_url" in record.message for record in caplog.records)
+
+
+def test_local_with_placeholder_base_url_does_not_warn(caplog):
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        Settings(_env_file=None, app_env="local")
+    assert not any("app_base_url" in record.message for record in caplog.records)
 
 
 def test_get_settings_reads_from_environment(monkeypatch):

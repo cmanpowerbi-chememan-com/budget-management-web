@@ -37,19 +37,19 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 4:44 PM &bull; rendered: 15 July 2026 4:44 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (30)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 28</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 5:54 PM &bull; rendered: 15 July 2026 5:54 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (31)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 29</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
         
-        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a11-a12-automations</span>
-        <span class="dt">15 July 2026 4:18 PM</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a9-subforms-trip</span>
+        <span class="dt">15 July 2026 4:45 PM</span>
       </div>
-      <div class="id">a11-a12-automations</div>
+      <div class="id">a9-subforms-trip</div>
       <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>Phase A3 automations combined (same concern, one dispatch per ADR-0021): A11 jobs = auto-submit DRAFT depts at deadline (AUTO_SUBMIT, approver1=last-editor&#x27;s manager) + 30-day auto-escalate (AUTO_ESCALATE), current planning year only; A12 emails = Graph sendMail (probe-safe, NO real sends in tests): approver turn-notify, reject-&gt;last submitter only, reminder_date grouped per Filler; all deep-linked ?dept&amp;year. GH Actions cron workflows gated (workflow_dispatch/DRY_RUN) until jakkaritw enables at deploy. Parallel with A8 (no file overlap; live tests in NEW file, sentinel 2096). Dispatched.</code></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>A9 per BUILD_PLAN: special-GL subforms (5 groups, GL-conditional dropdowns hardcoded, grey-out) + Trip Manager (enter-once, per-diem auto-recompute FX-on-read fail-loud, 8 travel GL = 4 type x 2 side, 1GL=1type/page). Backend A5 endpoints exist (PUT /budget/detail, POST|PUT /budget/trip, special_gl validation, per_diem engine). Frontend on top of A8 grid. Mockup 0002.3 + signoff doc 02 + ADR-0005/0015 = behavior. Dispatched.</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
       
     </div>
@@ -72,6 +72,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a11-a12-automations</span>
+        <span class="dt">15 July 2026 4:18 PM &rarr; 15 July 2026 5:54 PM</span>
+      </div>
+      <div class="id">a11-a12-automations</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>GATE: APPROVE WITH SUGGESTIONS. Triple dry-run gate verified independently (job --execute + DRY_RUN env + notifications_dry_run); workflow dispatch-only; recipients correct (no name-guessing, frozen submitter_email); refactor byte-identical + A6 live 31/31 regression clean; REJECTED-exclusion judged CORRECT per ADR-0012 (not a policy Q). Tests: 136/136 scope, 2/2 live jobs, sentinels clean. Both suggestions applied (in-function deadline guard + prod placeholder warning, 89/89). POLICY ANSWERS (jakkaritw 2026-07-16): final-APPROVED email = BUILD (dispatching); admin stuck-view = Phase 2; negative months = NO (positive only). Committed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a8-main-grid</span>
         <span class="dt">15 July 2026 3:12 PM &rarr; 15 July 2026 4:44 PM</span>
       </div>

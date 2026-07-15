@@ -13,6 +13,7 @@ import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app import notifications
 from app.approval import (
     ERROR_CODE_BY_EXCEPTION,
     ERROR_HTTP_STATUS,
@@ -25,6 +26,7 @@ from app.approval import (
     submit_department,
 )
 from app.auth import get_current_user_email
+from app.config import get_settings
 from app.db import get_fabric_conn
 from app.rls import resolve_scope
 
@@ -33,6 +35,48 @@ router = APIRouter(prefix="/approval")
 
 _DB_UNAVAILABLE_DETAIL = "Database unavailable, please try again later"
 _T = TypeVar("_T")
+
+
+def _notify_after_transition(conn: pyodbc.Connection, action: str, state: ApprovalStatusState) -> None:
+    """A12: fire the relevant email AFTER the transition already committed
+    (`submit_department`/`approve_department`/`reject_department` all
+    commit internally before returning). Wrapped so a notification failure
+    NEVER fails the request (never-cut) — caught, logged loudly, and
+    surfaced only as a non-fatal `notification_warning` on the response,
+    never a 5xx.
+
+    Placement note: wired HERE (the router) rather than inside
+    `app.approval`'s pure state-machine functions — those are unit-tested
+    with a single shared mock cursor and finite `side_effect` lists (see
+    test_approval.py's own docstring); adding an unconditional extra DB
+    lookup inside them would have broken most of that suite. The router
+    already receives the fully-resolved `ApprovalStatusState` (department,
+    fiscal_year, current_approver_empcode, submitter_email, reject_reason),
+    which is everything notify_turn/notify_reject need, so no behavior is
+    lost by wiring it here instead.
+
+    No admin-direct-approve branch (ADMIN_SUBMIT/ADMIN_OVERRIDE_*) ever
+    reaches the `notify_turn` branch below — their `current_position` is
+    always `None` (status goes straight to `APPROVED`, no chain) — flagged
+    decision: no email fires for those branches (no approver to notify, and
+    the spec's email trigger map never describes one)."""
+    settings = get_settings()
+    try:
+        if action == "reject":
+            notifications.notify_reject(
+                department=state.department, fiscal_year=state.fiscal_year,
+                submitter_email=state.submitter_email, reason=state.reject_reason,
+                dry_run=settings.notifications_dry_run,
+            )
+        elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
+            notifications.notify_turn(
+                conn, department=state.department, fiscal_year=state.fiscal_year,
+                approver_empcode=state.current_approver_empcode, submitter_email=state.submitter_email,
+                dry_run=settings.notifications_dry_run,
+            )
+    except Exception as exc:  # noqa: BLE001 -- deliberate: a notify failure must never fail the action
+        logger.error("notification failed after %s for %s/%s: %s", action, state.department, state.fiscal_year, exc)
+        state.notification_warning = "การแจ้งเตือนอีเมลล้มเหลว แต่การทำรายการสำเร็จแล้ว"
 
 
 class DepartmentYearBody(BaseModel):
@@ -64,7 +108,9 @@ def submit(body: DepartmentYearBody, email: str = Depends(get_current_user_email
     def _action():
         with get_fabric_conn() as conn:
             scope = resolve_scope(email, conn)
-            return submit_department(conn, body.department, body.fiscal_year, email, scope)
+            state = submit_department(conn, body.department, body.fiscal_year, email, scope)
+            _notify_after_transition(conn, "submit", state)
+            return state
 
     return _run(_action)
 
@@ -73,7 +119,9 @@ def submit(body: DepartmentYearBody, email: str = Depends(get_current_user_email
 def approve(body: ApproveBody, email: str = Depends(get_current_user_email)):
     def _action():
         with get_fabric_conn() as conn:
-            return approve_department(conn, body.department, body.fiscal_year, email, body.comment)
+            state = approve_department(conn, body.department, body.fiscal_year, email, body.comment)
+            _notify_after_transition(conn, "approve", state)
+            return state
 
     return _run(_action)
 
@@ -82,7 +130,9 @@ def approve(body: ApproveBody, email: str = Depends(get_current_user_email)):
 def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
     def _action():
         with get_fabric_conn() as conn:
-            return reject_department(conn, body.department, body.fiscal_year, email, body.reason)
+            state = reject_department(conn, body.department, body.fiscal_year, email, body.reason)
+            _notify_after_transition(conn, "reject", state)
+            return state
 
     return _run(_action)
 

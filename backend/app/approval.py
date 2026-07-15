@@ -53,13 +53,21 @@ _POSITION_TO_STATUS: dict[int, str] = {1: PENDING_APPROVER1, 2: PENDING_APPROVER
 _STATUS_TO_POSITION: dict[str, int] = {v: k for k, v in _POSITION_TO_STATUS.items()}
 PENDING_STATUSES: frozenset[str] = frozenset(_STATUS_TO_POSITION)
 
-# Append-only action log values this module writes (AUTO_SUBMIT/AUTO_ESCALATE
-# are A11's scheduled jobs — not written here, just reserved nvarchar values).
+# Append-only action log values this module writes.
 ACTION_SUBMIT = "SUBMIT"
 ACTION_RESUBMIT = "RESUBMIT"
 ACTION_APPROVE = "APPROVE"
 ACTION_REJECT = "REJECT"
 ACTION_ADMIN_SUBMIT = "ADMIN_SUBMIT"
+# A11 scheduled jobs (jobs/auto_submit.py, jobs/auto_escalate.py) — written by
+# auto_submit_department / auto_escalate_step below, never by a human action.
+ACTION_AUTO_SUBMIT = "AUTO_SUBMIT"
+ACTION_AUTO_ESCALATE = "AUTO_ESCALATE"
+
+# ADR-0006: a stuck PENDING_* step auto-escalates once it has sat unactioned
+# for this many days (jobs/auto_escalate.py runs this check, never a live
+# trigger inside a request).
+AUTO_ESCALATE_THRESHOLD_DAYS = 30
 # S4 gate fix: split the old single ACTION_ADMIN_OVERRIDE value into two, so
 # the audit log can tell apart "department is structurally orphan" from "the
 # submission deadline has passed" — both used to log the same indistinguishable
@@ -202,6 +210,10 @@ class ApprovalStatusState(BaseModel):
     current_position: int | None = None  # 1/2/3 while PENDING_*, else None
     current_approver_empcode: str | None = None  # who may act right now, if PENDING_*
     can_act: bool = False  # True when the caller's own empcode IS current_approver_empcode
+    # A12: set by the router (never by this module) ONLY when the post-commit
+    # notify attempt raised — a non-fatal warning, never a reason to fail the
+    # request (the transition above already committed successfully).
+    notification_warning: str | None = None
 
 
 def _occupant_for_position(position: int, approver1_empcode: str | None) -> str:
@@ -463,6 +475,35 @@ def submit_department(
     )
 
 
+def _insert_new_approval_row(
+    cursor: pyodbc.Cursor, department: str, fiscal_year: int, status: str,
+    submitter_empcode: str | None, submitter_email: str, submitted_at: datetime,
+    approver1_empcode: str | None, updated_at: datetime,
+) -> None:
+    """Shared brand-new-row INSERT for `budget.approval_status` — used by
+    both a normal first-time Submit (`ACTION_SUBMIT`) and the auto_submit
+    job (`ACTION_AUTO_SUBMIT`, ADR-0006/A11) so the two paths can never
+    drift on columns or on the concurrent-PK-violation ->
+    `ConcurrentApprovalError` mapping (S2 gate fix). Caller owns the
+    cursor/commit/log — the resubmit UPDATE path shares that same tail, so
+    it stays outside this helper, same as before this extraction."""
+    try:
+        cursor.execute(
+            """
+            INSERT INTO budget.approval_status
+                (department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at,
+                 approver1_empcode, _updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at,
+            approver1_empcode, updated_at,
+        )
+    except pyodbc.IntegrityError as exc:
+        raise ConcurrentApprovalError(
+            f"{department}/{fiscal_year} was submitted concurrently by another request"
+        ) from exc
+
+
 def _submit_normal_chain(
     conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, existing: dict | None, now: datetime,
 ) -> ApprovalStatusState:
@@ -481,27 +522,10 @@ def _submit_normal_chain(
     cursor = conn.cursor()
     try:
         if existing is None:
-            try:
-                cursor.execute(
-                    """
-                    INSERT INTO budget.approval_status
-                        (department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at,
-                         approver1_empcode, _updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    department, fiscal_year, first_status, submitter_empcode, submitter_email, now,
-                    approver1_empcode, now,
-                )
-            except pyodbc.IntegrityError as exc:
-                # S2 gate fix: two concurrent first-time submits for the same
-                # (department, fiscal_year) race the PK — the loser used to
-                # escape as an uncaught pyodbc error (-> generic 502). The PK
-                # already kept the data safe (never-cut); this only fixes the
-                # error semantics to match the same 409 the conditional
-                # UPDATE path below returns.
-                raise ConcurrentApprovalError(
-                    f"{department}/{fiscal_year} was submitted concurrently by another request"
-                ) from exc
+            _insert_new_approval_row(
+                cursor, department, fiscal_year, first_status, submitter_empcode, submitter_email, now,
+                approver1_empcode, now,
+            )
         else:
             # Re-freeze from scratch (never-cut: resubmit RESTARTS the whole
             # chain, it never resumes mid-chain) — every prior timestamp and
@@ -541,6 +565,73 @@ def _submit_normal_chain(
         "rejected_by_empcode": None, "_updated_at": now,
     }
     return _to_state(new_row, department, fiscal_year, caller_empcode=submitter_empcode)
+
+
+def auto_submit_department(
+    conn: pyodbc.Connection, department: str, fiscal_year: int, last_editor_email: str, now: datetime | None = None,
+) -> ApprovalStatusState:
+    """A11 (`jobs/auto_submit.py`): system-triggered submit for a department
+    still in TRUE DRAFT (no `approval_status` row at all) at/after the
+    fiscal year's deadline (ADR-0006 — "auto-submit DRAFT ฝ่าย at
+    deadline"). There is no human clicker, so approver1 resolves from the
+    LAST EDITOR's manager — the job's own discovery query finds the `_user`
+    on the most-recently-updated `pending_budget` row for this department
+    and passes it in as `last_editor_email`. Everything else (self-skip,
+    dedup, invalid-approver1 fallback) reuses `resolve_chain` UNCHANGED, so
+    an auto-submitted chain can never disagree with what a human Submit by
+    that same editor would have produced.
+
+    Deliberately narrower than `submit_department`: only ever valid when
+    `existing is None` (raises otherwise, defense-in-depth — the job's own
+    discovery query should never call this for a department that already
+    has a row). REJECTED departments are intentionally NOT covered here —
+    ADR-0012 gives the admin sole ownership of every post-deadline
+    straggler, REJECTED included, via `submit_department`'s post-deadline
+    override branch; keeping that as the one path avoids two different
+    automations racing the same row.
+
+    Defense-in-depth (ADR-0006 — this job only ever fires at/after the
+    deadline): `jobs/auto_submit.py` already checks `is_post_deadline`
+    before calling this function, but the check is repeated here too so the
+    function can never be misused to auto-submit a still-open department if
+    some future caller forgets that precondition."""
+    existing = _fetch_row(conn, department, fiscal_year)
+    if existing is not None:
+        raise InvalidApprovalStateError(
+            f"{department}/{fiscal_year} already has an approval_status row "
+            f"(status={existing['status']}) — not a true DRAFT, auto_submit_department must not run"
+        )
+    if not _is_post_deadline(conn, fiscal_year):
+        raise InvalidApprovalStateError(
+            f"{department}/{fiscal_year} — submission deadline has not passed yet; "
+            "auto_submit_department must only run at/after the deadline (ADR-0006)"
+        )
+
+    now = now or _now()
+    submitter_empcode, approver1_empcode, active = resolve_chain(conn, last_editor_email)
+    first_status = _POSITION_TO_STATUS[active[0]]
+
+    cursor = conn.cursor()
+    try:
+        _insert_new_approval_row(
+            cursor, department, fiscal_year, first_status, submitter_empcode, last_editor_email, now,
+            approver1_empcode, now,
+        )
+        _append_log(
+            conn, department, fiscal_year, ACTION_AUTO_SUBMIT, submitter_empcode, last_editor_email,
+            None, first_status, "auto-submitted at deadline (ADR-0006)", now,
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+    new_row = {
+        "status": first_status, "submitter_empcode": submitter_empcode, "submitter_email": last_editor_email,
+        "submitted_at": now, "approver1_empcode": approver1_empcode, "approver1_actioned_at": None,
+        "approver2_actioned_at": None, "approver3_actioned_at": None, "reject_reason": None,
+        "rejected_by_empcode": None, "_updated_at": now,
+    }
+    return _to_state(new_row, department, fiscal_year, caller_empcode=None)
 
 
 def _admin_direct_approve(
@@ -609,6 +700,37 @@ def _authorize_current_step(conn: pyodbc.Connection, row: dict, actor_email: str
     return actor_empcode, current_position
 
 
+def _advance_one_step(
+    conn: pyodbc.Connection, department: str, fiscal_year: int, row: dict, current_position: int,
+    new_status: str, action: str, by_empcode: str | None, by_email: str, comment: str | None, now: datetime,
+) -> None:
+    """Shared conditional UPDATE + log + commit for moving `(department,
+    fiscal_year)` off its CURRENT PENDING_* status to `new_status`, stamping
+    the current position's `_actioned_at` column. Used by both a real
+    approver's `approve_department` step (`ACTION_APPROVE`, `new_status` may
+    be the next PENDING_* or the final `APPROVED`) and the auto_escalate job
+    (`ACTION_AUTO_ESCALATE`, `new_status` is always the next PENDING_* —
+    never `APPROVED`, see `auto_escalate_step`) so the two can never drift
+    on the conditional-UPDATE race guard or the log shape."""
+    actioned_col = f"approver{current_position}_actioned_at"
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            UPDATE budget.approval_status
+            SET status = ?, {actioned_col} = ?, _updated_at = ?
+            WHERE department = ? AND fiscal_year = ? AND status = ?
+            """,
+            new_status, now, now, department, fiscal_year, row["status"],
+        )
+        if cursor.rowcount == 0:
+            raise ConcurrentApprovalError(f"{department}/{fiscal_year} status changed concurrently — reload and retry")
+        _append_log(conn, department, fiscal_year, action, by_empcode, by_email, row["status"], new_status, comment, now)
+        conn.commit()
+    finally:
+        cursor.close()
+
+
 def approve_department(
     conn: pyodbc.Connection, department: str, fiscal_year: int, approver_email: str, comment: str | None = None
 ) -> ApprovalStatusState:
@@ -624,31 +746,99 @@ def approve_department(
     is_last_step = idx == len(active) - 1
     new_status = APPROVED if is_last_step else _POSITION_TO_STATUS[active[idx + 1]]
     now = _now()
-    actioned_col = f"approver{current_position}_actioned_at"
 
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            f"""
-            UPDATE budget.approval_status
-            SET status = ?, {actioned_col} = ?, _updated_at = ?
-            WHERE department = ? AND fiscal_year = ? AND status = ?
-            """,
-            new_status, now, now, department, fiscal_year, row["status"],
-        )
-        if cursor.rowcount == 0:
-            raise ConcurrentApprovalError(f"{department}/{fiscal_year} status changed concurrently — reload and retry")
-        _append_log(conn, department, fiscal_year, ACTION_APPROVE, approver_empcode, approver_email,
-                    row["status"], new_status, comment, now)
-        conn.commit()
-    finally:
-        cursor.close()
+    _advance_one_step(conn, department, fiscal_year, row, current_position, new_status,
+                       ACTION_APPROVE, approver_empcode, approver_email, comment, now)
 
     new_row = dict(row)
     new_row["status"] = new_status
-    new_row[actioned_col] = now
+    new_row[f"approver{current_position}_actioned_at"] = now
     new_row["_updated_at"] = now
     return _to_state(new_row, department, fiscal_year, caller_empcode=approver_empcode)
+
+
+AUTO_ESCALATE_ACTOR_EMAIL = "system:auto_escalate"
+
+
+def _current_step_started_at(row: dict) -> datetime:
+    """Best available signal for "when did the CURRENT PENDING_* step
+    begin" — flagged: there is no dedicated per-step "turn started" column
+    on `budget.approval_status` (no schema change made for this). Derived
+    as the most recent `approverN_actioned_at` among EARLIER positions,
+    falling back further (ultimately to `submitted_at`) whenever an earlier
+    position was itself skipped by self-skip/dedup (its own `_actioned_at`
+    stays NULL forever, ADR-0006) — walking back this way is always
+    correct because positions are only ever skipped, never reordered."""
+    position = _STATUS_TO_POSITION[row["status"]]
+    if position >= 3 and row.get("approver2_actioned_at") is not None:
+        return row["approver2_actioned_at"]
+    if position >= 2 and row.get("approver1_actioned_at") is not None:
+        return row["approver1_actioned_at"]
+    return row["submitted_at"]
+
+
+def is_step_stale(row: dict, now: datetime, threshold_days: int = AUTO_ESCALATE_THRESHOLD_DAYS) -> bool:
+    """True once the CURRENT PENDING_* step has sat unactioned for
+    `threshold_days` (ADR-0006, 30 days) or more. Timestamps are compared as
+    naive UTC regardless of whether pyodbc returned them tz-aware or naive
+    (SQL Server DATETIME2 carries no offset) — never crashes on a tz mismatch."""
+    started = _current_step_started_at(row)
+    started_naive = started.replace(tzinfo=None) if started.tzinfo is not None else started
+    now_naive = now.replace(tzinfo=None) if now.tzinfo is not None else now
+    return (now_naive - started_naive).days >= threshold_days
+
+
+def auto_escalate_step(
+    conn: pyodbc.Connection, department: str, fiscal_year: int, row: dict, now: datetime | None = None,
+) -> ApprovalStatusState:
+    """A11 (`jobs/auto_escalate.py`): system-triggered one-step advance for
+    a `(department, fiscal_year)` row whose CURRENT PENDING_* step has gone
+    stale (`is_step_stale`, ADR-0006). Only ever advances to the NEXT
+    active position — NEVER straight to `APPROVED` even when the current
+    step happens to be the last active one, because ADR-0006 explicitly
+    forbids a silent jump to final approval "just because someone was
+    slow": `budget-dept must still review`. The caller (the job) is
+    expected to have already confirmed `is_step_stale`; this function's own
+    "already the final active position" guard is defense-in-depth, not the
+    only check."""
+    now = now or _now()
+    current_position = _STATUS_TO_POSITION[row["status"]]
+    active = _active_positions(row["submitter_empcode"], row["approver1_empcode"])
+    idx = active.index(current_position)
+    if idx == len(active) - 1:
+        raise InvalidApprovalStateError(
+            f"{department}/{fiscal_year} current step is already the final active position — "
+            "auto-escalate never jumps straight to APPROVED (ADR-0006)"
+        )
+    new_status = _POSITION_TO_STATUS[active[idx + 1]]
+
+    _advance_one_step(conn, department, fiscal_year, row, current_position, new_status,
+                       ACTION_AUTO_ESCALATE, by_empcode=None, by_email=AUTO_ESCALATE_ACTOR_EMAIL,
+                       comment="30-day auto-escalate (ADR-0006)", now=now)
+
+    new_row = dict(row)
+    new_row["status"] = new_status
+    new_row[f"approver{current_position}_actioned_at"] = now
+    new_row["_updated_at"] = now
+    return _to_state(new_row, department, fiscal_year, caller_empcode=None)
+
+
+def fetch_pending_rows(conn: pyodbc.Connection, fiscal_year: int) -> list[dict]:
+    """A11 (`jobs/auto_escalate.py`'s discovery pass): every `(department,
+    fiscal_year)` row currently in a PENDING_* status for `fiscal_year`,
+    keyed the same shape as `_fetch_row`. Read-only — the job filters via
+    `is_step_stale` and acts via `auto_escalate_step`, both above."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT {', '.join(_STATUS_COLUMNS)} FROM budget.approval_status "
+            "WHERE fiscal_year = ? AND status IN (?, ?, ?)",
+            fiscal_year, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3,
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    return [dict(zip(_STATUS_COLUMNS, row)) for row in rows]
 
 
 def reject_department(

@@ -8,15 +8,24 @@ pointed at `fabric_sql_database` (the DW SQL DB, budget.* + dbo.* schemas)
 once the user re-points env — this app never hardcodes a host, it only reads
 env vars. That re-point is a deploy-time config change, not done here.
 """
+import logging
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
 # Anchor to backend/.env regardless of cwd. Without this, running uvicorn/pytest
 # from the repo root would silently load the repo-root .env instead — which still
 # points at the retired DB1 Azure SQL (ADR-0023) — a silent wrong-database footgun.
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+# The out-of-the-box `app_base_url` value (ADR-0016) — a real placeholder,
+# not a live URL (the app is not deployed yet, CLAUDE.md). Kept as a named
+# constant so the misconfiguration guard below and its test compare against
+# the exact same value as the field default, never a duplicated literal.
+_DEFAULT_APP_BASE_URL = "https://budget.chememan.com"
 
 
 class Settings(BaseSettings):
@@ -48,6 +57,17 @@ class Settings(BaseSettings):
     # scope membership; grants is_admin regardless of Fill/See scope.
     admin_emails: str = ""
 
+    # A12 notifications (Graph sendMail) — fail-safe default TRUE (never-cut
+    # safety rule): every notify_* call is a log-only preview unless this is
+    # explicitly flipped, a deliberate go-live config change by jakkaritw,
+    # never touched by this build or by any test.
+    notifications_dry_run: bool = True
+
+    # Convenience-only deep-link base (ADR-0016) — placeholder default OK,
+    # flagged: the React+FastAPI app is not deployed yet (CLAUDE.md), so this
+    # is the intended production domain, not a live URL today.
+    app_base_url: str = _DEFAULT_APP_BASE_URL
+
     @property
     def is_local(self) -> bool:
         return self.app_env.strip().lower() == "local"
@@ -55,6 +75,25 @@ class Settings(BaseSettings):
     @property
     def admin_emails_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    def _warn_if_production_placeholder_base_url(self) -> None:
+        """Misconfiguration guard: `app_base_url` is meant to be overridden
+        with the real deployed domain before go-live. If `app_env` is
+        production and it is still the out-of-the-box placeholder, nobody
+        set `APP_BASE_URL` for this deploy — warn loudly so it surfaces in
+        logs, but never raise (a wrong base URL only degrades the deep-link
+        convenience feature, ADR-0016; it must not block app boot)."""
+        if self.app_env.strip().lower() == "production" and self.app_base_url == _DEFAULT_APP_BASE_URL:
+            logger.warning(
+                "app_base_url is still the placeholder default (%s) while app_env=production — "
+                "set APP_BASE_URL to the real deployed domain before go-live",
+                _DEFAULT_APP_BASE_URL,
+            )
+
+    def model_post_init(self, __context: object) -> None:
+        """Runs once per Settings load (pydantic v2 hook) — see
+        `_warn_if_production_placeholder_base_url`."""
+        self._warn_if_production_placeholder_base_url()
 
 
 @lru_cache
