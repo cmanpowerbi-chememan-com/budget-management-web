@@ -8,6 +8,9 @@ local.settings.json
 *.mov
 *.avi
 
+# Test scratch output (live integration runs)
+backend/integration_result.txt
+
 # Python
 __pycache__/
 *.py[cod]

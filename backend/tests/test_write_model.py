@@ -88,7 +88,7 @@ def test_admin_bypasses_fill_scope_restriction():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         (1,),                                    # CC-existence check (admin bypass still validates the CC exists)
-        ("Bank Charge",), ("deptA", "divA", "clA"),
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
     ]
     scope = _admin_scope()
     results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
@@ -123,7 +123,7 @@ def test_unknown_gl_account_rejected():
 def test_special_gl_cell_cannot_be_edited_directly():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Entertainment",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_pending_rows(conn, [_row(gl_account="5211900030")], "filler@chememan.com", scope)
     assert results[0].error == "special_gl_direct_edit"
@@ -132,7 +132,7 @@ def test_special_gl_cell_cannot_be_edited_directly():
 def test_new_row_insert_succeeds_and_total_year_is_sum_of_months():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     scope = _scope()
     row = _row(m01=100, m02=200, expected_updated_at=None)
     results = save_pending_rows(conn, [row], "filler@chememan.com", scope)
@@ -140,7 +140,7 @@ def test_new_row_insert_succeeds_and_total_year_is_sum_of_months():
     assert result.ok is True
     assert result.row.total_year == 300
     assert result.row.gl_group == "Bank Charge"
-    assert result.row.gl_name is None  # known gap — never invented
+    assert result.row.gl_name == "Bank Charge Fee"  # resolved from dbo.gl_group (2026-07-15 GAP fix)
     assert result.row.department == "deptA"
     conn.commit.assert_called_once()
     insert_sql = cursor.execute.call_args_list[-1].args[0]
@@ -154,7 +154,7 @@ def test_insert_conflict_when_row_already_exists_concurrently():
     never a silent overwrite."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     cursor.execute.side_effect = [None, None, pyodbc.IntegrityError("23000", "PK violation")]
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=None)], "filler@chememan.com", scope)
@@ -165,7 +165,7 @@ def test_insert_conflict_when_row_already_exists_concurrently():
 def test_stale_optimistic_lock_returns_conflict_and_does_not_write():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     cursor.rowcount = 0  # WHERE _updated_at = ? matched nothing -> stale
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -176,7 +176,7 @@ def test_stale_optimistic_lock_returns_conflict_and_does_not_write():
 def test_update_succeeds_when_lock_matches():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     cursor.rowcount = 1
     scope = _scope()
     results = save_pending_rows(conn, [_row(m01=50, expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -193,8 +193,8 @@ def test_two_rows_in_one_batch_succeed_and_fail_independently():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Bank Charge",), ("deptA", "divA", "clA"),  # row A dims
-        ("Bank Charge",), ("deptB", "divB", "clB"),  # row B dims
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # row A dims
+        ("Bank Charge", "Bank Charge Fee"), ("deptB", "divB", "clB"),  # row B dims
     ]
     cursor.rowcount = 0  # only consumed by row B's UPDATE (row A does a plain INSERT)
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
@@ -227,7 +227,7 @@ def test_stale_lock_conflict_triggers_rollback():
     the next item's work on the same shared connection."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     cursor.rowcount = 0
     scope = _scope()
     results = save_pending_rows(conn, [_row(expected_updated_at=STALE)], "filler@chememan.com", scope)
@@ -279,7 +279,7 @@ def test_detail_line_excluded_cost_center_rejected():
 def test_detail_line_on_a_normal_gl_group_is_rejected():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Bank Charge",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_detail_lines(conn, [_detail(gl_account="NORMALGL")], "filler@chememan.com", scope)
     assert results[0].error == "not_special_gl"
@@ -289,7 +289,7 @@ def test_entertainment_detail_line_insert_succeeds():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Entertainment",), ("deptA", "divA", "clA"),  # dims
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
     scope = _scope()
@@ -301,7 +301,7 @@ def test_entertainment_detail_line_insert_succeeds():
 def test_entertainment_detail_line_invalid_meta_rejected():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Entertainment",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_detail_lines(
         conn, [_detail(gl_account="6211900031", meta_json={"ประเภทการรับรอง": "Customer"})],
@@ -314,7 +314,7 @@ def test_direct_edit_of_per_diem_gl_via_detail_endpoint_is_rejected():
     """Per-diem lines are managed only through save_trip (ADR-0005 ordering: trips created in the per-diem subform)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Travelling Expense",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_detail_lines(
         conn, [_detail(gl_account="5210400010", trip_id=1, meta_json=None)], "filler@chememan.com", scope,
@@ -325,7 +325,7 @@ def test_direct_edit_of_per_diem_gl_via_detail_endpoint_is_rejected():
 def test_trip_not_found_for_a_referenced_trip_id():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Travelling Expense",), ("deptA", "divA", "clA"), None]
+    cursor.fetchone.side_effect = [("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA"), None]
     scope = _scope()
     results = save_detail_lines(
         conn, [_detail(gl_account="5210400020", trip_id=99, meta_json=None)], "filler@chememan.com", scope,
@@ -338,7 +338,7 @@ def test_trip_side_mismatch_rejects_a_sga_gl_on_a_cost_trip():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Travelling Expense",), ("deptA", "divA", "clA"),
+        ("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA"),
         ("CC1", "COST", 2027),  # trip row: cost_center, side, fiscal_year
     ]
     scope = _scope()
@@ -353,7 +353,7 @@ def test_trip_side_match_succeeds_and_recomputes_parent_cell():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Travelling Expense",), ("deptA", "divA", "clA"),  # dims
+        ("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA"),  # dims
         ("CC1", "COST", 2027),                                 # trip row: cost_center, side, fiscal_year
         (500.0, *([0.0] * 11)),                                # SUM(...) recompute
     ]
@@ -370,7 +370,7 @@ def test_trip_side_match_succeeds_and_recomputes_parent_cell():
 def test_detail_line_stale_lock_conflict():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Entertainment",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA")]
     cursor.rowcount = 0
     scope = _scope()
     results = save_detail_lines(
@@ -389,7 +389,7 @@ def test_detail_line_commit_happens_after_parent_cell_recompute_not_before():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Entertainment",), ("deptA", "divA", "clA"),  # dims
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
     scope = _scope()
@@ -425,7 +425,7 @@ def test_parent_cell_insert_pk_collision_becomes_conflict_not_500():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Entertainment",), ("deptA", "divA", "clA"),  # dims
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
     cursor.fetchval.return_value = 999  # OUTPUT INSERTED.detail_id
@@ -454,7 +454,7 @@ def test_parent_cell_insert_pk_collision_retry_succeeds():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
-        ("Entertainment",), ("deptA", "divA", "clA"),  # dims
+        ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims
         (1000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute
     ]
     cursor.fetchval.return_value = 999  # OUTPUT INSERTED.detail_id
@@ -485,7 +485,7 @@ def test_travel_gl_detail_line_without_trip_id_is_rejected():
     entirely and saved an orphan line."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Travelling Expense",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_detail_lines(
         conn, [_detail(gl_account="5210400020", trip_id=None, meta_json=None)],
@@ -506,7 +506,7 @@ def test_non_travelling_detail_line_with_trip_id_is_rejected():
     trusting an unrelated trip_id."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [("Entertainment",), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA")]
     scope = _scope()
     results = save_detail_lines(
         conn, [_detail(gl_account="5211900030", trip_id=1)], "filler@chememan.com", scope,
@@ -588,7 +588,7 @@ def test_trip_create_succeeds_and_derives_per_diem_matching_the_formula():
         ("Somchai", "Manager"),                        # traveler lookup
         (500, None, None),                               # per_diem_rate (domestic=500)
         None,                                             # existing trip-detail lookup -> none, will INSERT
-        ("Bank Charge",), ("deptA", "divA", "clA"),        # dims for the per-diem GL
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),        # dims for the per-diem GL
         (0, 0, 5000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),        # SUM(...) recompute -> m03=5000
     ]
     cursor.fetchval.return_value = 42  # OUTPUT INSERTED.trip_id
@@ -609,7 +609,7 @@ def test_trip_side_selects_the_matching_perdiem_gl():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Somchai", "Manager"), (500, None, None), None,
-        ("Bank Charge",), ("deptA", "divA", "clA"),
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
         (0,) * 12,
     ]
     cursor.fetchval.return_value = 7
@@ -648,7 +648,7 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
         ("Somchai", "Manager"), (500, None, None),
         ("CC1", "COST", 2027),  # old-trip lookup — side unchanged (COST->COST), no GL flip
         (99,),  # an existing per-diem detail line already exists (detail_id=99) — its OLD amount is never read
-        ("Bank Charge",), ("deptA", "divA", "clA"),
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
         (0, 0, 7000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),  # recompute SUM reflects the freshly-written amount
     ]
     cursor.rowcount = 1
@@ -680,9 +680,9 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
         (500, None, None),                               # 2 per_diem_rate (domestic=500)
         ("CC1", "COST", 2027),                            # 3 OLD trip lookup -> old side was COST
         None,                                              # 4 existing per-diem line under NEW (SGA) gl -> none, INSERT
-        ("Bank Charge",), ("deptA", "divA", "clA"),         # 5,6 dims for NEW gl
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),         # 5,6 dims for NEW gl
         (0, 0, 5000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),         # 7 SUM recompute -> NEW gl m03=5000
-        ("Bank Charge",), ("deptA", "divA", "clA"),         # 8,9 dims for OLD gl
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),         # 8,9 dims for OLD gl
         (0,) * 12,                                          # 10 SUM recompute -> OLD gl now zero (line deleted)
     ]
     cursor.rowcount = 1  # trip UPDATE + both parent-cell recomputes all match an existing row

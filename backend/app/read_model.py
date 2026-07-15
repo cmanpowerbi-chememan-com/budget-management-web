@@ -35,7 +35,10 @@ from app.rls import Scope
 from app.sap import MONTH_COLUMNS, fetch_sap_actuals
 
 _BOARD_COLUMNS = ("gl_name", "gl_group", "c_level", "division", "department")
-_PENDING_META_COLUMNS = ("status", "template", "remark", "gl_name", "gl_group", "c_level", "division", "department")
+# NOTE: no "status" here — `budget.pending_budget` has no status column
+# (verified live 2026-07-15; status lives entirely on `budget.approval_status`,
+# owned by A6). See app.write_model module docstring for the same finding.
+_PENDING_META_COLUMNS = ("template", "remark", "gl_name", "gl_group", "c_level", "division", "department")
 
 # Explicit column lists for the two join-side subqueries (SQL standard: no
 # SELECT * — only the columns the outer SELECT / row model actually consume).
@@ -166,9 +169,11 @@ class BoardLayer(LayerAmounts):
 
 class PendingLayer(LayerAmounts):
     """⚫ Pending · งบรออนุมัติ — the editable planning-year layer. Starts
-    blank (all defaults) when no `pending_budget` row exists yet."""
+    blank (all defaults) when no `pending_budget` row exists yet.
 
-    status: str | None = None
+    No `status` field — `budget.pending_budget` has no status column
+    (status lives on `budget.approval_status`, owned by A6)."""
+
     template: str | None = None
     remark: str | None = None
     gl_name: str | None = None

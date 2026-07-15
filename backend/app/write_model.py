@@ -14,15 +14,25 @@ Design (see final report for the full rationale):
   else created it first) the DB's own PK constraint raises
   `pyodbc.IntegrityError`, caught here and turned into the same conflict.
 - **Editing never touches `budget.approval_status`** (never-cut #6, ADR-0013):
-  not referenced anywhere in this module. `pending_budget.status` is set to
-  'DRAFT' only at row creation and is never part of an UPDATE's SET list.
-- **GL-name gap (flagged, not invented):** `gl_name` (the individual GL
-  account's display name) has no confirmed home yet
-  (`docs/DATA_PIPELINE_PLAN.md` item 4 GAP — `cfg_master.sap_gl_code_ref` is
-  a different, retiring store not reachable from this connection). Every
-  dimension snapshot sets `gl_name=None` and logs once; `gl_group` IS
-  resolvable via `dbo.gl_group` and is used both for the snapshot and to
-  decide normal vs special-GL routing.
+  not referenced anywhere in this module. **Verified live 2026-07-15:**
+  `budget.pending_budget` has NO `status` column at all — the DDL
+  (`db/ddl/budget_transactional_tables.sql`) says so explicitly ("NO status
+  column (status lives on approval_status, spec §5 Q4)") and the live table
+  matches that design. The INSERT statements here originally wrote a
+  hardcoded `'DRAFT'` into that non-existent column (would have raised
+  "Invalid column name 'status'" on the very first live write, hidden by
+  mocks); removed — no functional loss, since `PendingRowState`/`PendingLayer`
+  never modeled a `status` field either. Status lives entirely on
+  `budget.approval_status`, owned by A6.
+- **GL-name gap RESOLVED (2026-07-15, verified live):** `dbo.gl_group`'s real
+  columns are `gl_code`, `gl_group`, `gl_name` (+ `_load_dt`/`_load_dttm`) —
+  `gl_name` (the individual GL account's display name) has a home after all;
+  the prior `docs/DATA_PIPELINE_PLAN.md` item 4 GAP (seed `dbo.gl_account_ref`
+  vs add a SharePoint master file) is moot. `_lookup_gl_group` resolves both
+  `gl_group` and `gl_name` in one query and both flow into the dimension
+  snapshot. (`_lookup_gl_group` originally selected a non-existent
+  `group_name` column — would have raised a live SQL error on first real
+  call; fixed to select `gl_group`/`gl_name` directly.)
 - **422 vs 400/403/409 is intentional, not inconsistent:** Pydantic
   request-shape violations (e.g. `TripInput.country_group` outside
   {1, 2, 3}, a negative `days`) are rejected by FastAPI's standard 422
@@ -34,7 +44,6 @@ Design (see final report for the full rationale):
   4xx-from-here = "well-formed but violates a budget rule".
 """
 import json
-import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
@@ -50,8 +59,6 @@ from app.special_gl import (
     validate_entertainment_meta,
     validate_lease_meta,
 )
-
-logger = logging.getLogger(__name__)
 
 MONTH_COLUMNS: tuple[str, ...] = tuple(f"m{m:02d}" for m in range(1, 13))
 
@@ -233,16 +240,22 @@ def _ensure_no_negative_months(months: list[float]) -> None:
         raise NegativeMonthError("month amounts must be >= 0")
 
 
-def _lookup_gl_group(conn: pyodbc.Connection, gl_account: str) -> str:
+def _lookup_gl_group(conn: pyodbc.Connection, gl_account: str) -> tuple[str, str | None]:
+    """Returns (gl_group, gl_name). Verified against the live table
+    2026-07-15 (integration test): both the group/category value and the
+    account's display name live directly on `dbo.gl_group` as `gl_group` and
+    `gl_name` (not `group_name` — the old assumed column name was never
+    checked against the real synced table and would have raised "Invalid
+    column name 'group_name'" on first live call)."""
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT group_name FROM dbo.gl_group WHERE gl_code = ?", gl_account)
+        cursor.execute("SELECT gl_group, gl_name FROM dbo.gl_group WHERE gl_code = ?", gl_account)
         row = cursor.fetchone()
     finally:
         cursor.close()
     if row is None:
         raise UnknownGlAccountError(f"gl_account {gl_account} not found in dbo.gl_group")
-    return row[0]
+    return row[0], row[1]
 
 
 def _lookup_cc_dims(conn: pyodbc.Connection, cost_center: str) -> dict[str, str | None]:
@@ -261,15 +274,12 @@ def _lookup_cc_dims(conn: pyodbc.Connection, cost_center: str) -> dict[str, str 
 
 
 def _derive_dim_snapshot(conn: pyodbc.Connection, cost_center: str, gl_account: str) -> dict[str, str | None]:
-    """Re-derive the snapshot dims stored on pending_budget/pending_budget_detail.
-
-    `gl_name` is a KNOWN GAP (no confirmed reference home yet) — always None,
-    logged once per call rather than invented from nowhere.
-    """
-    gl_group = _lookup_gl_group(conn, gl_account)
+    """Re-derive the snapshot dims stored on pending_budget (spec §4):
+    `gl_name` + `gl_group` resolve from `dbo.gl_group`, `c_level`/`division`/
+    `department` resolve from `dbo.cc_filler_map`."""
+    gl_group, gl_name = _lookup_gl_group(conn, gl_account)
     dims = _lookup_cc_dims(conn, cost_center)
-    logger.info("gl_name snapshot left NULL for %s — no confirmed GL-name reference home yet (DATA gap)", gl_account)
-    return {"gl_name": None, "gl_group": gl_group, **dims}
+    return {"gl_name": gl_name, "gl_group": gl_group, **dims}
 
 
 def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
@@ -375,9 +385,9 @@ def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_em
                     f"""
                     INSERT INTO budget.pending_budget
                         (cost_center, gl_account, fiscal_year, {', '.join(MONTH_COLUMNS)}, total_year,
-                         template, remark, status, gl_name, gl_group, c_level, division, department,
+                         template, remark, gl_name, gl_group, c_level, division, department,
                          _user, _updated_at)
-                    VALUES (?, ?, ?, {', '.join(['?'] * 12)}, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, {', '.join(['?'] * 12)}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     row.cost_center, row.gl_account, row.fiscal_year, *months, total_year,
                     template, row.remark,
@@ -552,9 +562,9 @@ def _recompute_parent_cell(
                     f"""
                     INSERT INTO budget.pending_budget
                         (cost_center, gl_account, fiscal_year, {', '.join(MONTH_COLUMNS)}, total_year,
-                         template, remark, status, gl_name, gl_group, c_level, division, department,
+                         template, remark, gl_name, gl_group, c_level, division, department,
                          _user, _updated_at)
-                    VALUES (?, ?, ?, {', '.join(['?'] * 12)}, ?, 'USER', NULL, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, {', '.join(['?'] * 12)}, ?, 'USER', NULL, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     cost_center, gl_account, fiscal_year,
                     *[months[m] for m in MONTH_COLUMNS], total_year,

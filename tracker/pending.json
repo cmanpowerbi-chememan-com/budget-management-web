@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T08:46:37+0700",
+  "updated": "2026-07-15T10:12:25+0700",
   "tasks": [
+    {
+      "id": "live-db-verification",
+      "state": "done",
+      "created": "2026-07-15T10:12:25+0700",
+      "updated": "2026-07-15T10:12:25+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "FIRST LIVE-DB verification (env re-point DONE via backend/.env, gitignored). CONNECTION SOLVED: SERVER=<cluster>-<base32le(workspace GUID)>.database.fabric.microsoft.com ; DATABASE=<displayName>-<full item GUID> (GUID suffix REQUIRED; bare name -> error 40532). cluster v5o4qez3u4cupase7cogkwvyke shared across cman-dw workspaces. PROVEN ON REAL DB: Entertainment 1000 -> API 1000 -> fresh-connection re-read pending_budget.m01=1000 total_year=1000; 2nd line 500 -> 1500. Real data cc=10AC010000 filler=salineep@chememan.com GL=5211900030. 2 SHOWSTOPPERS mocks hid: (1) dbo.gl_group real col = gl_group NOT group_name; (2) budget.pending_budget has NO status column (correct per DDL/ADR-0013, status lives on approval_status) but A4 read + A5 write both referenced it -> every first save would fail 'Invalid column name status'. Both fixed+verified live. GL-NAME GAP RESOLVED: dbo.gl_group carries gl_code->gl_name (cols: gl_code, gl_group, gl_name) - no gl_account_ref seed, no extra SharePoint file; DATA_PIPELINE_PLAN item4 closed. 3 integration tests (sentinel fy=2099, cleanup 0 rows verified) + 165 mocked green. FOLLOW-UP: A4 read path still has NO live test (SapLayer lacks gl_name/gl_group; structural). NOT deployed.",
+      "human": "ต่อ DB จริงสำเร็จ + พิสูจน์ Entertainment 1,000 -> ยอดรวม 1,000 จริง; เจอบั๊ก showstopper อีก 2 ตัวที่ mock ซ่อนไว้ แก้แล้ว; gl_name GAP ปิด"
+    },
     {
       "id": "a5-write-path",
       "state": "done",

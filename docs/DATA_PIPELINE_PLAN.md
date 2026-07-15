@@ -48,9 +48,9 @@ Sites.ReadWrite.All). Cadence = **DAILY, same job/schedule as `employee_master`*
 **3. Create the 7 master tables in `[fabric_sql_database].[dbo]`** (spec §3b, ADR-0022):
 - `cc_filler_map` — **EXPLODED** (1 row per cost_center × filler_email), PK (cc, filler_email), index (filler_email); + department/division/c_level/description.
 - `per_diem_rate` (position PK; rate_domestic THB, rate_asian USD, rate_other USD), `country_group` (country PK, grp), `master_currency_rate` (fiscal_year PK, usd_thb).
-- `gl_group` (gl_code → group_id **and** group_name — see item 5 GAP), `hide_document`. (**`orgcode_cost_center` is app-unused per ADR-0019 and is NOT in the live `dbo` — do not create/sync it.**)
+- `gl_group` (gl_code → gl_group **and** gl_name — item 4, RESOLVED), `hide_document`. (**`orgcode_cost_center` is app-unused per ADR-0019 and is NOT in the live `dbo` — do not create/sync it.**)
 
-**4. [GAP-fix] Home the GL-name + group-name reference.** `sap_gl_code_ref` (137 gl_code→name) and `gl_group_dim` (18 group_id→group_name) currently live in `cfg_master` (dies with the retiring master-tables module, ADR-0022) and are NOT among the 8 SharePoint files (ADR-0018). Board re-derive, pending re-derive, and the 137-GL picker all need gl_name/gl_group. **Decide + deliver:** either (a) seed them into DW `dbo.*` (`dbo.gl_account_ref`, `dbo.gl_group_dim`) from the existing `cfg_master` snapshot, or (b) add a GL-name SharePoint master file. Confirm the `dbo.gl_group` table covers gl_code→group_id, group_id→name, AND gl_code→name.
+**4. [RESOLVED 2026-07-15, verified live] GL-name + group reference already homed on `dbo.gl_group`.** Real columns confirmed via `INFORMATION_SCHEMA.COLUMNS` against the live table: `gl_code`, `gl_group`, `gl_name` (+ `_load_dt`/`_load_dttm`). Board re-derive, pending re-derive, and the 137-GL picker all resolve `gl_code → gl_group` AND `gl_code → gl_name` from this one table — no `dbo.gl_account_ref` seed and no extra SharePoint master file are needed; the app's `write_model._lookup_gl_group` now selects both columns in one query.
 
 ---
 

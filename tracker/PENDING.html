@@ -37,8 +37,8 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 8:46 AM &bull; rendered: 15 July 2026 8:46 AM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (23)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 22</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 10:12 AM &bull; rendered: 15 July 2026 10:12 AM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (24)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 23</button></div>
   
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
@@ -58,6 +58,20 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#live-db-verification</span>
+        <span class="dt">15 July 2026 10:12 AM</span>
+      </div>
+      <div class="id">live-db-verification</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>FIRST LIVE-DB verification (env re-point DONE via backend/.env, gitignored). CONNECTION SOLVED: SERVER=&lt;cluster&gt;-&lt;base32le(workspace GUID)&gt;.database.fabric.microsoft.com ; DATABASE=&lt;displayName&gt;-&lt;full item GUID&gt; (GUID suffix REQUIRED; bare name -&gt; error 40532). cluster v5o4qez3u4cupase7cogkwvyke shared across cman-dw workspaces. PROVEN ON REAL DB: Entertainment 1000 -&gt; API 1000 -&gt; fresh-connection re-read pending_budget.m01=1000 total_year=1000; 2nd line 500 -&gt; 1500. Real data cc=10AC010000 filler=salineep@chememan.com GL=5211900030. 2 SHOWSTOPPERS mocks hid: (1) dbo.gl_group real col = gl_group NOT group_name; (2) budget.pending_budget has NO status column (correct per DDL/ADR-0013, status lives on approval_status) but A4 read + A5 write both referenced it -&gt; every first save would fail &#x27;Invalid column name status&#x27;. Both fixed+verified live. GL-NAME GAP RESOLVED: dbo.gl_group carries gl_code-&gt;gl_name (cols: gl_code, gl_group, gl_name) - no gl_account_ref seed, no extra SharePoint file; DATA_PIPELINE_PLAN item4 closed. 3 integration tests (sentinel fy=2099, cleanup 0 rows verified) + 165 mocked green. FOLLOW-UP: A4 read path still has NO live test (SapLayer lacks gl_name/gl_group; structural). NOT deployed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ต่อ DB จริงสำเร็จ + พิสูจน์ Entertainment 1,000 -&gt; ยอดรวม 1,000 จริง; เจอบั๊ก showstopper อีก 2 ตัวที่ mock ซ่อนไว้ แก้แล้ว; gl_name GAP ปิด</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a5-write-path</span>
         <span class="dt">15 July 2026 8:46 AM</span>
       </div>

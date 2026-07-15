@@ -135,7 +135,6 @@ def test_row_present_in_all_three_layers():
             "CC1", "GL1",
             board_cost_center="CC1", board_m01=100.0, board_total_year=100.0,
             pending_cost_center="CC1", pending_m01=50.0, pending_total_year=50.0,
-            pending_status="DRAFT",
         )
     ]
     sap_actuals = {("CC1", "GL1"): {**{c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}, "m01": 200.0, "total_year": 200.0}}
@@ -149,7 +148,6 @@ def test_row_present_in_all_three_layers():
     assert row.sap.m01 == 200.0
     assert row.board.m01 == 100.0
     assert row.pending.m01 == 50.0
-    assert row.pending.status == "DRAFT"
     assert row.editable is True
 
 
@@ -170,7 +168,6 @@ def test_sap_led_row_with_no_board_or_pending_shows_blank_editable_pending():
     row = rows[0]
     assert row.sap.m03 == 999.0
     assert row.pending.total_year == 0.0
-    assert row.pending.status is None
     assert row.editable is True
 
 
