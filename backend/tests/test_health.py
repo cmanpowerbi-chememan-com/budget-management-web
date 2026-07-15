@@ -52,6 +52,26 @@ def test_health_deep_failure_reports_db_fail_without_leaking_secrets(client):
         assert "topsecret" not in response.text
 
 
+def test_health_deep_reports_db_fail_on_token_acquisition_failure(client):
+    """`_acquire_access_token` (app.db) raises RuntimeError on token failure,
+    not pyodbc.Error — deep=1 must still degrade to db:fail, not a 500."""
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None,
+        fabric_sql_server="fabric-host",
+        fabric_sql_database="fabric_sql_database",
+        entra_client_id="id",
+        entra_client_secret="topsecret",
+    )
+    with patch("app.routers.health.get_fabric_conn") as mock_get_conn:
+        mock_get_conn.side_effect = RuntimeError("msal token acquisition failed: invalid_client - bad secret")
+        response = client.get("/health?deep=1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["db"] == "fail"
+        assert "topsecret" not in response.text
+
+
 def test_health_deep_reports_not_configured_when_env_missing(client):
     app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
     response = client.get("/health?deep=1")

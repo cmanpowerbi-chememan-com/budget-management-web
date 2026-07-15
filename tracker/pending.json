@@ -1,8 +1,21 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-16T01:03:25+0700",
+  "updated": "2026-07-16T01:47:06+0700",
   "tasks": [
+    {
+      "id": "stg-db-connectivity",
+      "state": "done",
+      "created": "2026-07-16T01:19:01+0700",
+      "updated": "2026-07-16T01:47:06+0700",
+      "agent": "main",
+      "skills": [
+        "40-diagnose"
+      ],
+      "files": [],
+      "ai": "DONE+VERIFIED: staging /health?deep=1 -> db:ok on image dbfix-b037a5e (rev 0000003, jakkaritw approved stg update). Root cause: msodbcsql internal SP token fetch ~20.3s on Linux > 15s login timeout (NOT ip block). Fix: db.py msal token + attrs_before 1256, health.py RuntimeError degrade, msal==1.36.0. Gate APPROVE-W-SUGG (07 all-pass), 508/508 unit. Probe jobs deleted. Pending: Easy Auth still OFF on stg (runbook s7 unmet); prod deploy awaits runbook run; stg image lacks 2 hardening follow-ups (in git, next build).",
+      "human": "-"
+    },
     {
       "id": "a14-deploy",
       "state": "done",

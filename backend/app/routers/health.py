@@ -34,5 +34,10 @@ def health(
     except pyodbc.Error:
         logger.exception("Deep health check: Fabric SQL connection failed")
         db_status = "fail"
+    except RuntimeError:
+        # Raised by app.db._acquire_access_token on msal token failure —
+        # a connection-layer failure just like pyodbc.Error, same degrade.
+        logger.exception("Deep health check: Fabric SQL token acquisition failed")
+        db_status = "fail"
 
     return {"status": "ok", "db": db_status}
