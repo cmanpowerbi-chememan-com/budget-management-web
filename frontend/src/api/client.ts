@@ -53,10 +53,24 @@ function defaultOnUnauthorized(): void {
  * but needs a different Thai message. */
 const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
 
+/** Stable marker substrings inside `deadline.PastDeadlineError`'s message
+ * (`"the submission deadline for fiscal_year=<Y> has passed"`, raised by both
+ * `write_model.py`'s per-item write guards and `approval.py`'s submit gate —
+ * same shared `app/deadline.py` implementation, ADR-0012). Split in two
+ * because the fiscal year is interpolated in the middle of the string.
+ * E2E edge-states 4.5 caught this: before this fix, a past-deadline save
+ * fell through to the generic "no permission" message, which is misleading
+ * (the user DOES have permission — the cycle is simply closed). */
+const PAST_DEADLINE_DETAIL_PREFIX = 'the submission deadline for fiscal_year='
+const PAST_DEADLINE_DETAIL_SUFFIX = 'has passed'
+
 function messageForStatus(status: number, detail?: string): string {
   if (status === 403) {
     if (detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER)) {
       return 'ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้'
+    }
+    if (detail?.includes(PAST_DEADLINE_DETAIL_PREFIX) && detail.includes(PAST_DEADLINE_DETAIL_SUFFIX)) {
+      return 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'
     }
     return 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้'
   }

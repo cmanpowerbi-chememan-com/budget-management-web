@@ -1,28 +1,39 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-15T22:18:08+0700",
+  "updated": "2026-07-15T23:11:41+0700",
   "tasks": [
+    {
+      "id": "pc-health-check",
+      "state": "done",
+      "created": "2026-07-15T22:46:53+0700",
+      "updated": "2026-07-15T23:05:12+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "DONE. User confirmed uvicorn 8001/8002 still in use for testing - kept alive. Cleanup executed: Temp>7d 12.9GB (40561 files), pip 1.7GB, npm ~2GB, Edge 465MB, VSCode CachedData 238MB. Disk 219 to 248GB free. uv cache clean deferred (lock held by live sessions). Root cause of lag = RAM 90% from 5 concurrent CC sessions; advice: keep <=3 sessions. Memory saved: reference_machine_multi_session_ram.md",
+      "human": "ตรวจเครื่องช้า: RAM เต็ม 90% จาก Claude Code 5 session; รอเลือกวิธีเคลียร์"
+    },
     {
       "id": "sign-laddawan-specs",
       "state": "done",
       "created": "2026-07-15T22:18:08+0700",
-      "updated": "2026-07-15T22:18:08+0700",
+      "updated": "2026-07-15T22:33:39+0700",
       "agent": "main",
       "skills": [],
       "files": [],
-      "ai": "Stamped cursive 'Jakkarit W' signature PNG (Freestyle Script, blue ink, -3deg) into Signature cell of Prepared-by row in 3 signoff docx (Spec A/B/C V2.0, laddawan). Raw OOXML: media+rel+inline drawing. Verify PASS x3 (zip ok, XML well-formed, 1 drawing in target row, rel ok). Backups in scratchpad backup_originals; tool stamp_signature.py",
+      "ai": "Stamped cursive 'Jakkarit W' signature into 3 signoff docx (Spec A/B/C V2.0, laddawan) - verify PASS x3, committed 2ba6c5a. Then exported all 3 to PDF via Word COM (ExportAsFixedFormat) for review email to Nipaporn+Waraporn, cut-off 20 Jul 2026. PDFs not committed (derived, regenerable via scratchpad convert_pdf.ps1).",
       "human": "เซ็นชื่อ Jakkarit W (ตัวเขียน) ลงช่อง Signature ของเอกสาร signoff 3 ฉบับ (Spec A/B/C V2.0) โฟลเดอร์ laddawan"
     },
     {
       "id": "a13-6-e2e-journey",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-15T22:03:07+0700",
-      "updated": "2026-07-15T22:03:07+0700",
+      "updated": "2026-07-15T23:11:41+0700",
       "agent": "05-software-developer",
       "skills": [],
       "files": [],
-      "ai": "jakkaritw: A13.5 Playwright journey was shallower than briefed (page-load smoke only) — redo DEEP to standard. Upgrade: permanent @playwright/test suite at frontend/e2e/ (route-mocked API, webServer auto-start vite): full filler journey (deep-link, grid 3 layers, cell edit+payload assert, 409 revert, subform line add+parent refetch, trip+per-diem server-value, delete w/ confirm, submit -> chip PENDING_1), approver (badge, approve -> chip 2, reject+reason -> REJECTED, resubmit -> chip 1), admin (toggle+param assert+dept reset, attachments upload/list), no-scope empty state, error states (SAP 502 loud, scope-fail banner), zero console errors throughout. npm run test:e2e separate from vitest; NOT added to ci-tests.yml yet (browser install on runner = later decision). Dispatched.",
+      "ai": "GATE: APPROVE. Depth audit: 23/23 classified DEEP (payload field-level asserts incl _updated_at echo, 409 reverts to REFETCHED value, dropdown-vs-fixture parity, per-diem == server number, negative cases, sessionStorage persistence, multipart field parsing, /budget never-called proof for no-scope); 0 shallow. Bug fix verified vs backend source (PastDeadlineError text match, disjoint from department_locked marker). Mock shapes == real Pydantic models (3 sampled). Gate re-ran: e2e 23/23 zero flakes 1.7m, vitest 255, build green, workflows untouched, artifacts gitignored. Committed.",
       "human": "(retired field — see ai)"
     },
     {

@@ -22,5 +22,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Playwright's permanent E2E suite lives in ./e2e (frontend/e2e/*.spec.ts)
+    // and must never be picked up by Vitest's default *.spec.ts include glob.
+    exclude: ['e2e/**', 'node_modules/**'],
   },
 })

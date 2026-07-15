@@ -37,23 +37,9 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 10:18 PM &bull; rendered: 15 July 2026 10:18 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (36)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 2</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 34</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 15 July 2026 11:11 PM &bull; rendered: 15 July 2026 11:11 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (37)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 36</button></div>
   
-    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
-      <div class="top">
-        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
-        
-        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a13-6-e2e-journey</span>
-        <span class="dt">15 July 2026 10:03 PM</span>
-      </div>
-      <div class="id">a13-6-e2e-journey</div>
-      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>jakkaritw: A13.5 Playwright journey was shallower than briefed (page-load smoke only) — redo DEEP to standard. Upgrade: permanent @playwright/test suite at frontend/e2e/ (route-mocked API, webServer auto-start vite): full filler journey (deep-link, grid 3 layers, cell edit+payload assert, 409 revert, subform line add+parent refetch, trip+per-diem server-value, delete w/ confirm, submit -&gt; chip PENDING_1), approver (badge, approve -&gt; chip 2, reject+reason -&gt; REJECTED, resubmit -&gt; chip 1), admin (toggle+param assert+dept reset, attachments upload/list), no-scope empty state, error states (SAP 502 loud, scope-fail banner), zero console errors throughout. npm run test:e2e separate from vitest; NOT added to ci-tests.yml yet (browser install on runner = later decision). Dispatched.</code></div>
-      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
-      
-    </div>
-
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
@@ -72,12 +58,40 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#a13-6-e2e-journey</span>
+        <span class="dt">15 July 2026 10:03 PM &rarr; 15 July 2026 11:11 PM</span>
+      </div>
+      <div class="id">a13-6-e2e-journey</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>GATE: APPROVE. Depth audit: 23/23 classified DEEP (payload field-level asserts incl _updated_at echo, 409 reverts to REFETCHED value, dropdown-vs-fixture parity, per-diem == server number, negative cases, sessionStorage persistence, multipart field parsing, /budget never-called proof for no-scope); 0 shallow. Bug fix verified vs backend source (PastDeadlineError text match, disjoint from department_locked marker). Mock shapes == real Pydantic models (3 sampled). Gate re-ran: e2e 23/23 zero flakes 1.7m, vitest 255, build green, workflows untouched, artifacts gitignored. Committed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>(retired field — see ai)</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#pc-health-check</span>
+        <span class="dt">15 July 2026 10:46 PM &rarr; 15 July 2026 11:05 PM</span>
+      </div>
+      <div class="id">pc-health-check</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DONE. User confirmed uvicorn 8001/8002 still in use for testing - kept alive. Cleanup executed: Temp&gt;7d 12.9GB (40561 files), pip 1.7GB, npm ~2GB, Edge 465MB, VSCode CachedData 238MB. Disk 219 to 248GB free. uv cache clean deferred (lock held by live sessions). Root cause of lag = RAM 90% from 5 concurrent CC sessions; advice: keep &lt;=3 sessions. Memory saved: reference_machine_multi_session_ram.md</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>ตรวจเครื่องช้า: RAM เต็ม 90% จาก Claude Code 5 session; รอเลือกวิธีเคลียร์</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#sign-laddawan-specs</span>
-        <span class="dt">15 July 2026 10:18 PM</span>
+        <span class="dt">15 July 2026 10:18 PM &rarr; 15 July 2026 10:33 PM</span>
       </div>
       <div class="id">sign-laddawan-specs</div>
       <div class="who"><span class="tag agent">🤖 main</span></div>
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>Stamped cursive &#x27;Jakkarit W&#x27; signature PNG (Freestyle Script, blue ink, -3deg) into Signature cell of Prepared-by row in 3 signoff docx (Spec A/B/C V2.0, laddawan). Raw OOXML: media+rel+inline drawing. Verify PASS x3 (zip ok, XML well-formed, 1 drawing in target row, rel ok). Backups in scratchpad backup_originals; tool stamp_signature.py</code></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Stamped cursive &#x27;Jakkarit W&#x27; signature into 3 signoff docx (Spec A/B/C V2.0, laddawan) - verify PASS x3, committed 2ba6c5a. Then exported all 3 to PDF via Word COM (ExportAsFixedFormat) for review email to Nipaporn+Waraporn, cut-off 20 Jul 2026. PDFs not committed (derived, regenerable via scratchpad convert_pdf.ps1).</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>เซ็นชื่อ Jakkarit W (ตัวเขียน) ลงช่อง Signature ของเอกสาร signoff 3 ฉบับ (Spec A/B/C V2.0) โฟลเดอร์ laddawan</span></div>
       
     </div>

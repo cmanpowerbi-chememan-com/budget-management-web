@@ -116,4 +116,18 @@ describe('apiFetch', () => {
       message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้',
     })
   })
+
+  it('maps a past_deadline 403 (deadline.PastDeadlineError) to a specific Thai message distinct from department_locked', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, { detail: 'the submission deadline for fiscal_year=2027 has passed' }),
+      ),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 403,
+      message: 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ',
+    })
+  })
 })

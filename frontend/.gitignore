@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Playwright E2E — transient run artifacts (traces/screenshots on failure),
+# never the specs themselves (frontend/e2e/*.spec.ts IS committed)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
