@@ -37,9 +37,37 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 16 July 2026 1:47 AM &bull; rendered: 16 July 2026 1:47 AM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (39)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 1</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 38</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 16 July 2026 5:05 PM &bull; rendered: 16 July 2026 5:05 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (48)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 3</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 45</button></div>
   
+    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#gl-not-in-master-readonly</span>
+        <span class="dt">16 July 2026 4:52 PM &rarr; 16 July 2026 4:57 PM</span>
+      </div>
+      <div class="id">gl-not-in-master-readonly</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>ข.3 rule finalized (jakkaritw): pending cell editable IFF (cc in fill-scope, existing server &#x27;editable&#x27; flag) AND (gl_account in 142-master from /budget/gl-accounts). Else read-only: show sap/board reference + Thai marker &#x27;ยังไม่เปิดให้ตั้งงบ&#x27;, no input. Dynamic - admin adds GL to master -&gt; row editable auto (add-later policy). 106 GL/884 cells/200.1M fy2026 outside master. 1xxx/9xxx already not rendered. Frontend-only, reuse loaded gl-accounts master + existing read-only styling. 05 fable implementing TDD.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#trip-idempotency</span>
+        <span class="dt">16 July 2026 1:54 PM</span>
+      </div>
+      <div class="id">trip-idempotency</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>jakkaritw chose option 1 (frontend guard + idempotency token, backend dedup). Design approved. Implementing (05, fable): backend client_token NVARCHAR(64) NULL on budget.budget_trip + UNIQUE filtered index (WHERE client_token IS NOT NULL); POST /budget/trip create-path dedups on (client_token,_user) returns existing trip, PUT ignores; TripInput.client_token optional. Frontend: crypto.randomUUID per add-trip intent, disable Save until response. Migration script setup/migrate_budget_trip_client_token.py authored but NOT run - live ALTER on budget_trip (empty, low-risk) GATED on jakkaritw explicit go. Sequencing: batch1 (Thai label+resolve_scope+headers, no schema) redeploy first; trip-idempotency=batch2 (has DDL).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
@@ -58,6 +86,104 @@
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
         <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#lease-rental-mockup-dropdown</span>
+        <span class="dt">16 July 2026 4:37 PM &rarr; 16 July 2026 5:05 PM</span>
+      </div>
+      <div class="id">lease-rental-mockup-dropdown</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>0002.3 mockup Lease&amp;Rental DONE: 7 GL codes (010/020/030/040/050/060/999) exact-match Excel GL sheet incl 030 comma rename; new detailColumns kind select-or-text for ทะเบียนรถ on …060 (tri-state &#x27;&#x27;=— เลือก — / known plate / ไม่ระบุ+off-list=free-text), handler updateDetailSelectOrText; sample txns 14-17 + details 20-24, counters 18/25. Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 07 PASS, 08 PASS (89 assertions re-run independently), 1 MEDIUM (blank row displayed ไม่ระบุ) + 1 LOW fixed. Visual approved by jakkaritw 2026-07-16. NOT-FIXED pre-existing: specialGLGroups dead data (Training&amp;Seminar cols mismatch detailColumns) - React-port trap, separate task.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#trip-side-derivation</span>
+        <span class="dt">16 July 2026 4:27 PM &rarr; 16 July 2026 4:52 PM</span>
+      </div>
+      <div class="id">trip-side-derivation</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DONE+GATED APPROVE-W-SUGG. Dept-grain side derivation: deriveTravelSideHistory (sap/board only, pending excluded), single-side lock non-admin, both-&gt;larger-total(tie SGA), no-history must-pick, admin always enabled. 287/287 vitest, build clean. Gate suggestions non-blocking backlog: align lock to adminViewEnabled or doc it; add mismatch-side+tie tests; backend side-enforce=post-golive (client lock acceptable: EasyAuth+own-dept+approver-visible+admin-fixable).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#design-concurrency</span>
+        <span class="dt">16 July 2026 3:58 PM</span>
+      </div>
+      <div class="id">design-concurrency</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DECIDED (jakkaritw 2026-07-16): grid concurrency = row-grain OPTIMISTIC-LOCK (keep current). No code change - code already matches ADR-0003 (decided 2026-06-07, supersedes last-write-wins). ADR correct. Only stale artifact was MEMORY.md index one-liner (&#x27;last-write-wins no-lock&#x27;) -&gt; fixed. F5-B &#x27;divergence&#x27; was a false flag from that stale index line, not a real code/ADR mismatch. Optimistic-lock protects the 73%-of-CCs multi-filler case from silent lost-update; frontend auto-reloads on 409.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#stg-test-suite3</span>
+        <span class="dt">16 July 2026 1:16 PM &rarr; 16 July 2026 2:35 PM</span>
+      </div>
+      <div class="id">stg-test-suite3</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>ALL 5 suites done. F5-A backend 60/60, F5-B database 39/40 (Thai-label bug), F5-C data 6/6 (91858 cells 0 mismatch), F5-D frontend 16/16 (0 console err, fy2020 clean), F5-E other 45/45. Bugs FOUND+FIXED (staged, gated APPROVE, NOT deployed per jakkaritw hold): (1) Thai per-diem label ??? -&gt; parameterized; (2) resolve_scope-500 -&gt; 502 across 4 read routers; (3) security headers added. Feature built (gated APPROVE, migration ready NOT applied): trip-idempotency client_token. Design calls PENDING jakkaritw: grid concurrency optimistic-lock vs last-write-wins; trip default side SGA vs COST-first dropdown; editable-but-unsaveable rows (SAP GL not in 142 master shows editable-&gt;400 on save; verify Y-1 SAP GLs subset master pre-golive); trip idempotency approach approved=option1. Follow-ups: get_fabric_conn connection-OPEN still 500 not 502 (db.py); modal-load click race; 422 generic msg. Nothing deployed; staging still on subform-fix image.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#backend-502-secheaders</span>
+        <span class="dt">16 July 2026 1:54 PM &rarr; 16 July 2026 1:59 PM</span>
+      </div>
+      <div class="id">backend-502-secheaders</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DONE: FIX1 resolve_scope inside try-&gt;502 in routers/budget.py+scope.py+subform.py(x2)+reference.py(departments); FIX2 add_security_headers middleware main.py (4 headers, CSP deferred). TDD RED-&gt;GREEN, 9 new tests, suite 513-&gt;522 pass/44 deselected. Residual: conn-OPEN failure still 500 (out of scope). Not deployed/committed.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>แก้ read API ให้ตอบ 502 เมื่อ DB ล่มระหว่างเช็คสิทธิ์ + เพิ่ม security headers</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#stg-test-sweep</span>
+        <span class="dt">16 July 2026 2:00 AM &rarr; 16 July 2026 6:22 AM</span>
+      </div>
+      <div class="id">stg-test-sweep</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>COMPLETE. 3 suites all app-correct: read-only 35/35 + mutation 28/28 + suite2 19/19-effective. Suite2 added: security/IDOR (approval-status view authz 403 no-leak, non-admin admin_view_enabled no-widen, header case-insensitive, IDOR trip-delete-by-other 403, IDOR detail owner-mismatch 409), financial edge (negative month 400, overflow 422, FX-with-rate asian fy2026 2*70*35.5=4970, cent-boundary total==sum, manual travel-line rollup+delete-recompute, side-mismatch 400), RLS depth (see_only manager read-yes/write-no/fill-empty, see-widening bunpotk fill0-&gt;see120, sibling-CC lock), approval edge (approve-unsubmitted 404, approve-approved 409, self-skip Nipaporn pos2). 3 suite2 fails ALL test-harness not app bugs: S4 httpx blocks whitespace header; R2 fixture scope-overlap (widening proven by R1); F5 cross-check polluted by S6 leftover line (clean repro confirms rollup=500 correct). Final reconcile budget.* ALL-ZERO. Untestable-naturally: past_deadline (deadlines all future), null-manager fallback (no such filler exists).</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#fix-subform-500</span>
+        <span class="dt">16 July 2026 3:17 AM &rarr; 16 July 2026 3:30 AM</span>
+      </div>
+      <div class="id">fix-subform-500</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>FIXED+VERIFIED. subform.py DetailLineRow/TripRow updated_at str-&gt;datetime (matches TripState/DetailLineState/PendingLayer). Gate 06+08 APPROVE-W-SUGG; Decimal-&gt;float verified safe (no 2nd latent 500). 512 unit pass (+4). Deployed to staging image subform-fix; mut_suite W6 now GREEN (/budget/detail returns 2 per-diem lines sum 1000). Committed 356570e. Note: staging now on subform-fix but git tip 356570e differs from that image build source only by the commit itself (working-tree identical); rebuild from 356570e before prod. Non-blocking suggestion: pin Decimal month in a router test.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#stg-db-connectivity</span>
         <span class="dt">16 July 2026 1:19 AM &rarr; 16 July 2026 1:47 AM</span>
       </div>

@@ -1475,7 +1475,9 @@
     if (group === 'Lease & Rental'){
       const cat = code.slice(-3);          // 060 รถ · 030 เครื่องจักร · อื่น = เทา
       let typeCol, plateCol;
-      if (cat === '060'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_VEH }; plateCol={ key:'ทะเบียนรถ', kind:'select', options:DD_LEASE_PLATE }; }
+      if (cat === '060'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_VEH };
+        // ไม่ระบุ → ช่องว่างกรอกได้ (ทะเบียนรถนอกรายการ)
+        plateCol={ key:'ทะเบียนรถ', kind:'select-or-text', options:DD_LEASE_PLATE, freeWhen:'ไม่ระบุ', placeholder:'ระบุทะเบียน…' }; }
       else if (cat === '030'){ typeCol={ key:'ประเภทรถ', kind:'select', options:DD_LEASE_MAC }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
       else { typeCol={ key:'ประเภทรถ', kind:'grey' }; plateCol={ key:'ทะเบียนรถ', kind:'grey' }; }
       return [ typeCol, plateCol,
@@ -1571,10 +1573,14 @@
     // Entertainment — dropdown ประเภทการรับรอง ขึ้นกับ GL: …900030 ภายนอก · …900031 ภายใน
     { code:'6211900030', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายนอก' },
     { code:'6211900031', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายใน' },
-    // Lease & Rental — dropdown/พื้นที่เทา ขึ้นกับ sub-category (suffix): 060 รถ · 030 เครื่องจักร · อื่น เทา
-    { code:'6211200060', group:'Lease & Rental',             name:'ค่าเช่า - ยานพาหนะ' },
-    { code:'6211200030', group:'Lease & Rental',             name:'ค่าเช่า - เครื่องจักร / อุปกรณ์โรงงาน' },
+    // Lease & Rental — dropdown/พื้นที่เทา ขึ้นกับ sub-category (suffix): 060 รถ (ทะเบียนรถ = select-or-text) · 030 เครื่องจักร · อื่น เทา
+    { code:'6211200010', group:'Lease & Rental',             name:'ค่าเช่า - ที่ดิน' },
     { code:'6211200020', group:'Lease & Rental',             name:'ค่าเช่า - อาคาร' },
+    { code:'6211200030', group:'Lease & Rental',             name:'ค่าเช่า - เครื่องจักร,อุปกรณ์โรงงาน' },
+    { code:'6211200040', group:'Lease & Rental',             name:'ค่าเช่า - อุปกรณ์สำนักงาน' },
+    { code:'6211200050', group:'Lease & Rental',             name:'ค่าเช่า - คอมพิวเตอร์' },
+    { code:'6211200060', group:'Lease & Rental',             name:'ค่าเช่า - ยานพาหนะ' },
+    { code:'6211200999', group:'Lease & Rental',             name:'ค่าเช่า - อื่นๆ' },
     // Professional & Legal Fee — text ล้วน (ไม่มี dropdown)
     { code:'6210700030', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษา - ทางกฎหมาย' },
     // Public Relation & Donation — text ล้วน (รายละเอียด คอลัมเดียว)
@@ -1649,10 +1655,46 @@
       sap:     [8000,8000,0,0,0,0,0,0,0,0,0,0],
       approved:[10000,10000,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
-      pendingDetails:[] }
+      pendingDetails:[] },
+    // ── Lease & Rental ตัวอย่าง (10IT012000) — สาธิต select-or-text ทะเบียนรถ (ไม่ระบุ → ช่องว่างกรอกได้) ──
+    { id:14, costCenter:'10IT012000', glCode:'6211200060', remark:'เช่ารถประจำฝ่าย', year:2026,
+      sap:     [43000,43000,43000,43000,43000,0,0,0,0,0,0,0],
+      approved:[43000,43000,43000,43000,43000,43000,43000,43000,43000,43000,43000,43000],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:20, 'ประเภทรถ':'Car', 'ทะเบียนรถ':'6ขผ-3918', 'สถานที่ใช้งาน':'BK', 'กิจกรรม':'รับส่งผู้บริหาร',
+          months:[25000,25000,25000,25000,25000,25000,25000,25000,25000,25000,25000,25000] },
+        // '2กก-1234' ไม่อยู่ใน DD_LEASE_PLATE โดยตั้งใจ — สาธิต select='ไม่ระบุ' + ช่องพิมพ์เอง
+        { id:21, 'ประเภทรถ':'Van', 'ทะเบียนรถ':'2กก-1234', 'สถานที่ใช้งาน':'RY', 'กิจกรรม':'ขนส่งอุปกรณ์หน้างาน',
+          months:[18000,18000,18000,18000,18000,18000,18000,18000,18000,18000,18000,18000] }
+      ] },
+    { id:15, costCenter:'10IT012000', glCode:'6211200030', remark:'เช่าเครื่องจักรโรงงาน', year:2026,
+      sap:     [0,0,40000,40000,40000,40000,0,0,0,0,0,0],
+      approved:[0,0,40000,40000,40000,40000,40000,40000,40000,40000,40000,40000],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:22, 'ประเภทรถ':'Forklift', 'ทะเบียนรถ':'', 'สถานที่ใช้งาน':'RY', 'กิจกรรม':'ยกวัตถุดิบในโรงงาน',
+          months:[0,0,40000,40000,40000,40000,40000,40000,40000,40000,40000,40000] }
+      ] },
+    { id:16, costCenter:'10IT012000', glCode:'6211200050', remark:'เช่าคอมพิวเตอร์ / Notebook', year:2026,
+      sap:     [30000,30000,30000,30000,30000,30000,0,0,0,0,0,0],
+      approved:[30000,30000,30000,30000,30000,30000,30000,30000,30000,30000,30000,30000],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:23, 'ประเภทรถ':'', 'ทะเบียนรถ':'', 'สถานที่ใช้งาน':'BK', 'กิจกรรม':'เช่า Notebook 10 เครื่อง',
+          months:[30000,30000,30000,30000,30000,30000,30000,30000,30000,30000,30000,30000] }
+      ] },
+    { id:17, costCenter:'10IT012000', glCode:'6211200020', remark:'เช่าพื้นที่สำนักงาน', year:2026,
+      sap:     [55000,55000,55000,55000,55000,55000,55000,55000,55000,0,0,0],
+      approved:[55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:24, 'ประเภทรถ':'', 'ทะเบียนรถ':'', 'สถานที่ใช้งาน':'BK', 'กิจกรรม':'เช่าพื้นที่ชั้น 5',
+          months:[55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000] }
+      ] }
   ];
-  let transactionIdCounter = 14;
-  let detailIdCounter = 20;
+  let transactionIdCounter = 18;   // raised above every hardcoded sample id (max used = 17)
+  let detailIdCounter = 25;        // raised above every hardcoded sample detail id (max used = 24)
   let currentEditingTxnId = null;
   let detailReadonly = false;   // subform locked (view-only) when the ฝ่าย is not editable (ADR-0013)
 
@@ -2429,6 +2471,19 @@
             const opts = `<option value="">— เลือก —</option>` + c.options.map(o => `<option ${o===cur?'selected':''}>${o}</option>`).join('');
             return `<td class="special-col-cell"><select class="detail-input detail-select"${dis} onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)">${opts}</select></td>`;
           }
+          if (c.kind === 'select-or-text'){
+            // dropdown of known values + freeWhen (เช่น 'ไม่ระบุ') + ว่าง '— เลือก —' (ยังไม่เลือก, ค่า default ตอนเพิ่มแถวใหม่);
+            // เลือก freeWhen แล้วเผยช่องพิมพ์เอง (ทะเบียนรถนอกรายการ) — เลือก '— เลือก —' = เคลียร์กลับว่าง
+            const key = c.key.replace(/'/g,"\\'");
+            const effective = (cur === '') ? '' : (c.options.includes(cur) ? cur : c.freeWhen);
+            const opts = `<option value=""${effective===''?' selected':''}>— เลือก —</option>` +
+              c.options.map(o => `<option ${o===effective?'selected':''}>${o}</option>`).join('');
+            const selectHtml = `<select class="detail-input detail-select"${dis} onchange="updateDetailSelectOrText(${d.id},'${key}',this.value)">${opts}</select>`;
+            if (effective !== c.freeWhen) return `<td class="special-col-cell">${selectHtml}</td>`;
+            const freeVal = c.options.includes(cur) ? '' : cur;
+            const inputHtml = `<input class="detail-input" style="margin-top:6px"${dis} value="${freeVal.replace(/"/g,'&quot;')}" placeholder="${(c.placeholder||'').replace(/"/g,'&quot;')}" onchange="updateDetailSelectOrText(${d.id},'${key}',this.value)">`;
+            return `<td class="special-col-cell">${selectHtml}${inputHtml}</td>`;
+          }
           return `<td class="special-col-cell"><input class="detail-input"${dis} value="${cur.replace(/"/g,'&quot;')}" onchange="updateDetailField(${d.id},'${c.key.replace(/'/g,"\\'")}',this.value)"></td>`;
         }).join('')}
         ${d.months.map((v,i) => `<td class="month-cell"><input class="detail-input month-input"${dis} value="${v || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onchange="updateDetailMonth(${d.id},${i}, this.value)"></td>`).join('')}
@@ -2457,6 +2512,14 @@
     const txn = transactions.find(t => t.id === currentEditingTxnId);
     const d = txn.pendingDetails.find(x => x.id === detailId);
     if (d) d[key] = v;
+  }
+  // select-or-text: select fires this on pick (incl. freeWhen), free-text input fires this on change (onchange, not
+  // oninput — keeps focus while typing). Re-renders so the free-text box appears/disappears immediately.
+  function updateDetailSelectOrText(detailId, key, v){
+    const txn = transactions.find(t => t.id === currentEditingTxnId);
+    const d = txn.pendingDetails.find(x => x.id === detailId);
+    if (d) d[key] = v;
+    renderDetailTable();
   }
   function updateDetailMonth(detailId, i, v){
     const txn = transactions.find(t => t.id === currentEditingTxnId);
