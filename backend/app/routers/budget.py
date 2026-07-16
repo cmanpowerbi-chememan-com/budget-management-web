@@ -29,9 +29,13 @@ def budget(
     admin_view_enabled: bool = Query(default=False),
     email: str = Depends(get_current_user_email),
 ) -> list[BudgetRow]:
-    with get_fabric_conn() as fabric_conn:
-        scope = resolve_scope(email, fabric_conn, admin_view_enabled=admin_view_enabled)
-        try:
+    try:
+        # BOTH connection opens are inside the try: a failure at open time
+        # (driver pyodbc.Error, or msal token failure — DbConnectionError,
+        # a pyodbc.Error subclass raised by app.db) is the same "DB blip"
+        # contract as a query-time failure → 502, never an uncaught 500.
+        with get_fabric_conn() as fabric_conn:
+            scope = resolve_scope(email, fabric_conn, admin_view_enabled=admin_view_enabled)
             with get_gold_conn() as gold_conn:
                 return get_budget_grid(
                     fabric_conn,
@@ -42,6 +46,6 @@ def budget(
                     cost_center_filter=cost_center,
                     department_filter=department,
                 )
-        except (SapActualsFetchError, pyodbc.Error) as exc:
-            logger.exception("Budget grid fetch failed for year=%s, email=%s", year, email)
-            raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc
+    except (SapActualsFetchError, pyodbc.Error) as exc:
+        logger.exception("Budget grid fetch failed for year=%s, email=%s", year, email)
+        raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc

@@ -37,9 +37,23 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 16 July 2026 5:05 PM &bull; rendered: 16 July 2026 5:05 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (48)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 3</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 45</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 16 July 2026 6:50 PM &bull; rendered: 16 July 2026 6:50 PM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (49)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 4</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 45</button></div>
   
+    <div class="card latest" data-state="doing" style="border-left:4px solid #f59e0b">
+      <div class="top">
+        <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
+        <span class="newest">✨ ล่าสุด</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#ent-prd-mockup-sample-data</span>
+        <span class="dt">16 July 2026 5:30 PM &rarr; 16 July 2026 6:50 PM</span>
+      </div>
+      <div class="id">ent-prd-mockup-sample-data</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -&gt; each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet &#x27;GL Acct &amp; Group  &#x27; cell E34 + 13Template Special/Public Relation &amp; Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -&gt; switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
+      
+    </div>
+
     <div class="card" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
@@ -82,10 +96,10 @@
       
     </div>
 
-    <div class="card latest" data-state="done" style="border-left:4px solid #22c55e">
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
       <div class="top">
         <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
-        <span class="newest">✨ ล่าสุด</span>
+        
         <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#lease-rental-mockup-dropdown</span>
         <span class="dt">16 July 2026 4:37 PM &rarr; 16 July 2026 5:05 PM</span>
       </div>

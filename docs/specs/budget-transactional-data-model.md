@@ -291,6 +291,7 @@ erDiagram
         int days
         nvarchar travel_months "selected months"
         nvarchar purpose
+        nvarchar client_token "idempotent create dedup, per (token,_user)"
         nvarchar control_user "_user"
         datetime2 control_updated_at "_updated_at"
     }
@@ -440,11 +441,17 @@ Table budget.budget_trip {
   days             int          [not null, default: 0]
   travel_months    nvarchar(40) [not null]   // comma list of selected months e.g. 03,09
   purpose          nvarchar(500)
+  client_token     nvarchar(64)              // idempotency token for POST create (client-generated, one per
+                                              // new-trip intent); repeated POST with the same token returns the
+                                              // existing trip. Dedup key = (client_token, _user) ONLY — never
+                                              // trip content (two identical trips are legitimate). NULL =
+                                              // legacy/token-less create, unconstrained.
   _user            nvarchar(150)[not null]
   _updated_at      datetime2    [not null]
 
   indexes {
     (cost_center, fiscal_year) [name: ix_trip_cc_year]
+    (client_token, _user) [unique, name: ux_trip_client_token_user]  // FILTERED: WHERE client_token IS NOT NULL (DBML cannot express the filter; see db/ddl/budget_transactional_tables.sql)
   }
 }
 

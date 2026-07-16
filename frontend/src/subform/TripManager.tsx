@@ -21,12 +21,21 @@ import {
   manualLineTotal,
   validateTripDraft,
   type ManualLineDraft,
+  type TravelSideHistory,
   type TripDraft,
+  type TripSide,
 } from './model'
 
 export interface TripManagerProps {
   costCenter: string
   fiscalYear: number
+  /** ฝ่าย-level travel-side history (`deriveTravelSideHistory` over the
+   * parent's already-loaded grid rows) — decides the side select's
+   * default / lock / placeholder state. */
+  sideHistory: TravelSideHistory
+  /** `is_admin` from /scope — only an admin may book a side the ฝ่าย has
+   * never used (e.g. legitimately introducing it in a forward budget). */
+  isAdmin: boolean
   onClose: () => void
   /** Called after EVERY successful trip/manual-line save — the parent grid
    * refetches so all 8 travel GL cells (both sides, in case of a side flip)
@@ -101,12 +110,17 @@ async function fetchAllManualLines(costCenter: string, fiscalYear: number): Prom
  * accommodation/other) are entered per month, locked to the trip's selected
  * travel_months. Per-diem is NEVER computed here — only the server's own
  * response/read is ever shown (never-cut). */
-export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripManagerProps) {
+export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onClose, onSaved }: TripManagerProps) {
   const [cards, setCards] = useState<TripCardState[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [newTripCounter, setNewTripCounter] = useState(0)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
+
+  // Exactly one side in the ฝ่าย's real history → non-admins cannot
+  // mis-book to the side the ฝ่าย never uses. Both sides / no history →
+  // the select stays open (nothing to lock to).
+  const sideLocked = !isAdmin && sideHistory.sides.length === 1
 
   async function load() {
     setLoading(true)
@@ -137,7 +151,7 @@ export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripMa
       ...prev,
       {
         localId,
-        draft: blankTripDraft(costCenter, fiscalYear),
+        draft: blankTripDraft(costCenter, fiscalYear, sideHistory.defaultSide),
         dirty: false,
         perDiemMonths: null,
         perDiemError: null,
@@ -216,7 +230,8 @@ export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripMa
 
   async function saveManualLine(localId: string, type: Exclude<TravelExpenseType, 'per_diem'>) {
     const card = cards.find((c) => c.localId === localId)
-    if (!card || card.draft.trip_id === null) return
+    // side is always set once a trip exists (the server returns it on save/read).
+    if (!card || card.draft.trip_id === null || card.draft.side === null) return
     const tripId = card.draft.trip_id
     const glAccount = TRAVEL_GL_BY_TYPE_SIDE[type][card.draft.side]
     setCards((prev) =>
@@ -389,9 +404,16 @@ export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripMa
                       ฝั่งบัญชี
                       <select
                         aria-label={`side ${card.localId}`}
-                        value={card.draft.side}
-                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, side: e.target.value as 'COST' | 'SGA' }))}
+                        value={card.draft.side ?? ''}
+                        disabled={sideLocked}
+                        title={sideLocked ? 'ฝ่ายนี้ใช้ฝั่งนี้ฝั่งเดียวตามข้อมูลจริง — เฉพาะ Admin เปลี่ยนได้' : undefined}
+                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, side: e.target.value as TripSide }))}
                       >
+                        {card.draft.side === null && (
+                          <option value="" disabled>
+                            — เลือกฝั่ง —
+                          </option>
+                        )}
                         <option value="COST">ฝั่งผลิต / ต้นทุน (5xxx)</option>
                         <option value="SGA">ฝั่งบริหาร / ขาย · SG&A (6xxx)</option>
                       </select>
@@ -434,7 +456,8 @@ export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripMa
                     <button
                       type="button"
                       className="btn btn-export"
-                      disabled={card.status === 'saving' || card.status === 'deleting'}
+                      disabled={card.status === 'saving' || card.status === 'deleting' || card.draft.side === null}
+                      title={card.draft.side === null ? 'กรุณาเลือกฝั่งบัญชีก่อนบันทึก' : undefined}
                       onClick={() => saveTrip(card.localId)}
                       data-testid={`save-trip-${card.localId}`}
                     >
@@ -507,7 +530,9 @@ export function TripManager({ costCenter, fiscalYear, onClose, onSaved }: TripMa
         <div className="modal-foot">
           <div className="modal-foot-info">ทริป: {cards.length}</div>
           <div className="modal-actions">
-            <button type="button" className="btn" onClick={addTrip}>
+            {/* Disabled while load() is in-flight — its setCards(...) REPLACES the
+             * array, so a card added before the data lands would be silently lost. */}
+            <button type="button" className="btn" disabled={loading} onClick={addTrip}>
               + เพิ่มทริป
             </button>
             <button type="button" className="btn" onClick={onClose}>

@@ -35,6 +35,22 @@ def test_scope_401_without_auth_header_in_production_mode(client):
     assert response.status_code == 401
 
 
+def test_scope_db_error_during_resolve_returns_502_not_500(client):
+    """A pyodbc.Error inside `resolve_scope` used to propagate uncaught
+    (HTTP 500) — a Fabric SQL failure on this read must be a 502."""
+    import pyodbc
+
+    app.dependency_overrides[get_current_user_email] = lambda: "user@chememan.com"
+    with patch("app.routers.scope.get_fabric_conn") as mock_get_conn, patch(
+        "app.routers.scope.resolve_scope", side_effect=pyodbc.Error("08S01", "boom")
+    ):
+        mock_get_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/scope")
+
+    assert response.status_code == 502
+    assert "boom" not in response.text
+
+
 def test_scope_passes_admin_view_enabled_query_param_through_to_resolve_scope(client):
     app.dependency_overrides[get_current_user_email] = lambda: "admin@chememan.com"
     with patch("app.routers.scope.get_fabric_conn") as mock_get_conn, patch(

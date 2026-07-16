@@ -51,41 +51,49 @@ def _raise_for_result(result) -> None:
 
 @router.put("/rows")
 def put_row(body: PendingRowInput, email: str = Depends(get_current_user_email)):
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        try:
+    try:
+        # Connection-open AND resolve_scope inside the try: a DB failure at
+        # open time (driver pyodbc.Error, or msal token failure —
+        # DbConnectionError, a pyodbc.Error subclass) or during scope
+        # resolution is a 502, never an uncaught 500.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
             result = save_pending_rows(conn, [body], email, scope)[0]
-        except pyodbc.Error as exc:
-            logger.exception("save_pending_rows failed for %s/%s", body.cost_center, body.gl_account)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("save_pending_rows failed for %s/%s", body.cost_center, body.gl_account)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     _raise_for_result(result)
     return result.row
 
 
 @router.put("/detail")
 def put_detail_line(body: DetailLineInput, email: str = Depends(get_current_user_email)):
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        try:
+    try:
+        # Same connection-open/resolve_scope contract as put_row above.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
             result = save_detail_lines(conn, [body], email, scope)[0]
-        except pyodbc.Error as exc:
-            logger.exception("save_detail_lines failed for %s/%s", body.cost_center, body.gl_account)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("save_detail_lines failed for %s/%s", body.cost_center, body.gl_account)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     _raise_for_result(result)
     return result.line
 
 
 def _save_one_trip(body: TripInput, email: str):
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        try:
+    try:
+        # Same connection-open/resolve_scope contract as put_row above. The
+        # fail-loud missing-FX/rate errors stay a 500 — they are RuntimeError
+        # subclasses, NOT pyodbc.Error, so the 502 branch never catches them.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
             result = save_trip(conn, [body], email, scope)[0]
-        except pyodbc.Error as exc:
-            logger.exception("save_trip failed for %s/%s", body.cost_center, body.traveler_empcode)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
-        except (MissingFxRateError, MissingPerDiemRateError) as exc:
-            logger.exception("save_trip fail-loud: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except pyodbc.Error as exc:
+        logger.exception("save_trip failed for %s/%s", body.cost_center, body.traveler_empcode)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except (MissingFxRateError, MissingPerDiemRateError) as exc:
+        logger.exception("save_trip fail-loud: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     _raise_for_result(result)
     return result.trip
 
@@ -109,13 +117,14 @@ def delete_detail(
     expected_updated_at: datetime = Query(...),
     email: str = Depends(get_current_user_email),
 ):
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        try:
+    try:
+        # Same connection-open/resolve_scope contract as put_row above.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
             result = delete_detail_line(conn, detail_id, expected_updated_at, email, scope)
-        except pyodbc.Error as exc:
-            logger.exception("delete_detail_line failed for detail_id=%s", detail_id)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("delete_detail_line failed for detail_id=%s", detail_id)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     _raise_for_result(result)
     return {"ok": True, "detail_id": detail_id}
 
@@ -126,12 +135,13 @@ def delete_trip_endpoint(
     expected_updated_at: datetime = Query(...),
     email: str = Depends(get_current_user_email),
 ):
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        try:
+    try:
+        # Same connection-open/resolve_scope contract as put_row above.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
             result = delete_trip(conn, trip_id, expected_updated_at, email, scope)
-        except pyodbc.Error as exc:
-            logger.exception("delete_trip failed for trip_id=%s", trip_id)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("delete_trip failed for trip_id=%s", trip_id)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     _raise_for_result(result)
     return {"ok": True, "trip_id": trip_id}

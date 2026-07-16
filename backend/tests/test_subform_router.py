@@ -113,6 +113,21 @@ def test_get_detail_lines_502_on_db_error(client):
     assert response.status_code == 502
 
 
+def test_get_detail_lines_db_error_during_scope_resolution_returns_502(client):
+    """A pyodbc.Error inside `resolve_scope` used to run outside the
+    try/except (HTTP 500) — a Fabric SQL failure on this read must be 502."""
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
+        "app.routers.subform.resolve_scope", side_effect=pyodbc.Error("08S01", "boom")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/detail", params={"cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027})
+
+    assert response.status_code == 502
+
+
 # ---------------------------------------------------------------------------
 # GET /budget/trip
 # ---------------------------------------------------------------------------
@@ -159,6 +174,20 @@ def test_get_trips_502_on_db_error(client):
     with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
         "app.routers.subform.resolve_scope", return_value=_scope()
     ), patch("app.routers.subform.fetch_trips", side_effect=pyodbc.Error("boom")):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/trip", params={"cost_center": "CC1", "fiscal_year": 2027})
+
+    assert response.status_code == 502
+
+
+def test_get_trips_db_error_during_scope_resolution_returns_502(client):
+    """Same contract as /budget/detail: scope-resolution DB failure → 502."""
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
+        "app.routers.subform.resolve_scope", side_effect=pyodbc.Error("08S01", "boom")
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/trip", params={"cost_center": "CC1", "fiscal_year": 2027})
 

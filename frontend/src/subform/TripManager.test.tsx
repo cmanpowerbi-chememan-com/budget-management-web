@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import * as subformApi from '../api/subform'
 import type { DetailLineState, TripListItem } from '../api/types'
+import type { TravelSideHistory } from './model'
 import { TripManager } from './TripManager'
 
 vi.mock('../api/subform')
+
+/** Default fixture = a ฝ่าย with history on BOTH sides (SGA the larger) —
+ * the select stays enabled and new trips default to SGA, preserving the
+ * behavior every pre-existing test in this file was written against. */
+const BOTH_SIDES: TravelSideHistory = { sides: ['COST', 'SGA'], defaultSide: 'SGA' }
 
 function blankMonths(): Record<string, number> {
   return Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`m${String(i + 1).padStart(2, '0')}`, 0]))
@@ -59,7 +65,7 @@ describe('TripManager', () => {
   it('shows a loading state then the existing trips', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     expect(screen.getByText(/กำลังโหลด/)).toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
   })
@@ -67,9 +73,32 @@ describe('TripManager', () => {
   it('shows an empty state with an "+ เพิ่มทริป" affordance', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /เพิ่มทริป/ })).toBeInTheDocument()
+  })
+
+  // FIX #2 — a click on "+ เพิ่มทริป" DURING the initial load used to be
+  // silently lost: load()'s setCards(...) replaces the array, discarding the
+  // just-added blank card. The button must be disabled until the data lands.
+  it('disables "+ เพิ่มทริป" while the initial load is in-flight, then a post-load click adds a card that survives', async () => {
+    let resolveTrips!: (trips: TripListItem[]) => void
+    vi.mocked(subformApi.fetchTrips).mockImplementation(
+      () =>
+        new Promise<TripListItem[]>((resolve) => {
+          resolveTrips = resolve
+        }),
+    )
+    mockNoManualLines()
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+    const addBtn = screen.getByRole('button', { name: /เพิ่มทริป/ })
+    expect(addBtn).toBeDisabled()
+
+    resolveTrips([])
+    await waitFor(() => expect(addBtn).toBeEnabled())
+
+    fireEvent.click(addBtn)
+    expect(screen.getByTestId('trip-card-new-0')).toBeInTheDocument()
   })
 
   it('shows an error state with retry on fetch failure', async () => {
@@ -77,7 +106,7 @@ describe('TripManager', () => {
       .mockRejectedValueOnce(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง'))
       .mockResolvedValueOnce([])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('เซิร์ฟเวอร์ขัดข้อง')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }))
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
@@ -86,7 +115,7 @@ describe('TripManager', () => {
   it('shows the server per-diem total for a freshly-loaded (non-dirty) trip', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
     expect(screen.getByText(/จากเซิร์ฟเวอร์/)).toBeInTheDocument()
     expect(screen.getByText(/1,000/)).toBeInTheDocument()
@@ -95,7 +124,7 @@ describe('TripManager', () => {
   it('shows "รอคำนวณหลังบันทึก" (never a client-computed number) once the trip is edited', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
     expect(screen.getByText(/ระบบจะคำนวณให้หลังกดบันทึก/)).toBeInTheDocument()
@@ -106,7 +135,7 @@ describe('TripManager', () => {
       tripItem({ per_diem_months: null, per_diem_error: 'no master_currency_rate for fiscal_year=2027' }),
     ])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ไม่สามารถคำนวณเบี้ยเลี้ยงได้/)).toBeInTheDocument())
   })
 
@@ -130,7 +159,7 @@ describe('TripManager', () => {
       per_diem_months: { ...blankMonths(), m05: 900 },
     })
     const onSaved = vi.fn()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={onSaved} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={onSaved} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
@@ -147,10 +176,104 @@ describe('TripManager', () => {
     await waitFor(() => expect(screen.getByText(/900/)).toBeInTheDocument())
   })
 
+  it('sends a client_token on create, keeps the SAME token on retry after an error, and re-enables the save button', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    vi.mocked(subformApi.createTrip)
+      .mockRejectedValueOnce(new Error('network down')) // lost response — the classic retry case
+      .mockResolvedValueOnce({
+        trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
+        traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
+        country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+        updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
+      })
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+
+    fireEvent.click(screen.getByTestId('save-trip-new-0'))
+    await waitFor(() => expect(screen.getByText('บันทึกทริปไม่สำเร็จ')).toBeInTheDocument())
+    expect(screen.getByTestId('save-trip-new-0')).toBeEnabled() // user can retry
+
+    fireEvent.click(screen.getByTestId('save-trip-new-0'))
+    await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(2))
+    const first = vi.mocked(subformApi.createTrip).mock.calls[0][0]
+    const second = vi.mocked(subformApi.createTrip).mock.calls[1][0]
+    expect(first.client_token).toBeTruthy()
+    expect(second.client_token).toBe(first.client_token) // same intent -> same token -> server dedups
+  })
+
+  it('each new trip card carries its own client_token (a new intent regenerates)', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    vi.mocked(subformApi.createTrip).mockImplementation(async (payload) => ({
+      trip_id: payload.traveler_empcode === 'E9' ? 99 : 100,
+      cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: payload.traveler_empcode,
+      traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
+      country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+      updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
+    }))
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'm05' })[0])
+    fireEvent.click(screen.getByTestId('save-trip-new-0'))
+    await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fireEvent.change(screen.getByLabelText('traveler_empcode new-1'), { target: { value: 'E7' } })
+    fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '4' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'm05' })[1])
+    fireEvent.click(screen.getByTestId('save-trip-new-1'))
+    await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(2))
+
+    const first = vi.mocked(subformApi.createTrip).mock.calls[0][0]
+    const second = vi.mocked(subformApi.createTrip).mock.calls[1][0]
+    expect(first.client_token).toBeTruthy()
+    expect(second.client_token).toBeTruthy()
+    expect(second.client_token).not.toBe(first.client_token)
+  })
+
+  it('disables the save button while the create is in flight (double-click cannot fire twice)', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    let resolveCreate: (value: Awaited<ReturnType<typeof subformApi.createTrip>>) => void = () => {}
+    vi.mocked(subformApi.createTrip).mockImplementation(
+      () => new Promise((resolve) => { resolveCreate = resolve }),
+    )
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+    fireEvent.click(screen.getByTestId('save-trip-new-0'))
+
+    await waitFor(() => expect(screen.getByTestId('save-trip-new-0')).toBeDisabled())
+    fireEvent.click(screen.getByTestId('save-trip-new-0')) // double-click during flight
+    expect(subformApi.createTrip).toHaveBeenCalledTimes(1)
+
+    resolveCreate({
+      trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
+      traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
+      country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+      updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
+    })
+    await waitFor(() => expect(screen.getByTestId('save-trip-existing-99')).toBeEnabled())
+  })
+
   it('rejects saving a trip with no traveler/days/months (client-side validation)', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     mockNoManualLines()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
@@ -166,7 +289,7 @@ describe('TripManager', () => {
       side: 'SGA',
       per_diem_months: { ...blankMonths(), m02: 500, m03: 500 },
     } as never)
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
     fireEvent.change(screen.getByLabelText('side existing-10'), { target: { value: 'SGA' } })
@@ -184,7 +307,7 @@ describe('TripManager', () => {
     vi.mocked(subformApi.createTrip).mockRejectedValue(
       new ApiError(500, 'เซิร์ฟเวอร์ขัดข้อง', 'no master_currency_rate for fiscal_year=2027'),
     )
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
     fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
@@ -201,7 +324,7 @@ describe('TripManager', () => {
     mockNoManualLines()
     vi.mocked(subformApi.saveDetailLine).mockResolvedValue(detailLine({ m02: 1000, total_year: 1000 }))
     const onSaved = vi.fn()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={onSaved} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={onSaved} />)
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
     // m02 is in travel_months (active) -> editable input exists
@@ -233,7 +356,7 @@ describe('TripManager', () => {
       mockNoManualLines()
       vi.mocked(subformApi.deleteTrip).mockResolvedValue({ ok: true })
       const onSaved = vi.fn()
-      render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={onSaved} />)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={onSaved} />)
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: 'ลบทริป' }))
@@ -250,7 +373,7 @@ describe('TripManager', () => {
       vi.mocked(window.confirm).mockReturnValue(false)
       vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
       mockNoManualLines()
-      render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: 'ลบทริป' }))
@@ -265,7 +388,7 @@ describe('TripManager', () => {
         .mockResolvedValueOnce([tripItem({ days: 9 })])
       mockNoManualLines()
       vi.mocked(subformApi.deleteTrip).mockRejectedValue(new ApiError(409, 'ถูกแก้ไขโดยผู้อื่น'))
-      render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: 'ลบทริป' }))
@@ -277,7 +400,7 @@ describe('TripManager', () => {
     it('removes an unsaved (never-persisted) trip card locally without calling the API or confirming', async () => {
       vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
       mockNoManualLines()
-      render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={vi.fn()} onSaved={vi.fn()} />)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
       await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
@@ -291,11 +414,100 @@ describe('TripManager', () => {
     })
   })
 
+  describe('accounting side (ฝั่งบัญชี) derivation — ฝ่าย-level history', () => {
+    it('single-side ฝ่าย (SGA-only) + non-admin → new trip locked to SGA, select disabled', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={{ sides: ['SGA'], defaultSide: 'SGA' }} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const select = screen.getByLabelText('side new-0')
+      expect(select).toHaveValue('SGA')
+      expect(select).toBeDisabled()
+    })
+
+    it('single-side ฝ่าย + admin → select stays enabled (only admin may introduce a new side)', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={{ sides: ['COST'], defaultSide: 'COST' }} isAdmin={true} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const select = screen.getByLabelText('side new-0')
+      expect(select).toHaveValue('COST')
+      expect(select).toBeEnabled()
+    })
+
+    it('an EXISTING trip in a single-side ฝ่าย is also locked for non-admin', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()]) // side COST
+      mockNoManualLines()
+      render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={{ sides: ['COST'], defaultSide: 'COST' }} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+      expect(screen.getByLabelText('side existing-10')).toBeDisabled()
+    })
+
+    it('both-side ฝ่าย → both options offered, default = the larger-total side', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={{ sides: ['COST', 'SGA'], defaultSide: 'COST' }} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const select = screen.getByLabelText('side new-0')
+      expect(select).toHaveValue('COST')
+      expect(select).toBeEnabled()
+      expect(screen.getByRole('option', { name: /5xxx/ })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /6xxx/ })).toBeInTheDocument()
+    })
+
+    it('no-history ฝ่าย → placeholder "— เลือกฝั่ง —", save blocked until a side is picked, then saves with it', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      vi.mocked(subformApi.createTrip).mockResolvedValue({
+        trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
+        traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
+        country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'COST',
+        updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
+      })
+      render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={{ sides: [], defaultSide: null }} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+      fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+      fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+
+      const select = screen.getByLabelText('side new-0')
+      expect(select).toBeEnabled() // nothing to lock to — the user decides
+      expect(select).toHaveValue('')
+      expect(screen.getByRole('option', { name: '— เลือกฝั่ง —' })).toBeInTheDocument()
+      expect(screen.getByTestId('save-trip-new-0')).toBeDisabled() // no silent default — blocked
+
+      fireEvent.change(select, { target: { value: 'COST' } })
+      expect(screen.getByTestId('save-trip-new-0')).toBeEnabled()
+
+      fireEvent.click(screen.getByTestId('save-trip-new-0'))
+      await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.createTrip).mock.calls[0][0].side).toBe('COST')
+    })
+  })
+
   it('calls onClose when the close button is clicked', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     mockNoManualLines()
     const onClose = vi.fn()
-    render(<TripManager costCenter="CC1" fiscalYear={2027} onClose={onClose} onSaved={vi.fn()} />)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={onClose} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
     expect(onClose).toHaveBeenCalled()

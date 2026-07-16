@@ -132,6 +132,27 @@ def test_put_trip_requires_trip_id_in_body(client):
     assert response.status_code == 422
 
 
+def test_post_trip_passes_client_token_through_to_save_trip(client):
+    """Idempotency wiring: the router must hand client_token to write_model
+    unchanged (the dedup itself is unit-tested in test_write_model.py)."""
+    _override_auth("filler@chememan.com")
+    fake_trip = TripState(
+        trip_id=1, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
+        traveler_name="Somchai", position="Manager", destination=None,
+        country_group=1, days=5, travel_months=["03"], purpose=None, side="COST",
+        updated_at="2026-01-01T00:00:00Z", per_diem_months={"m03": 2500.0},
+    )
+    fake_result = TripSaveResult(cost_center="CC1", fiscal_year=2027, traveler_empcode="E1", ok=True, trip=fake_trip)
+    with patch("app.routers.budget_write.get_fabric_conn") as mock_conn, patch(
+        "app.routers.budget_write.resolve_scope", return_value=_fake_scope()
+    ), patch("app.routers.budget_write.save_trip", return_value=[fake_result]) as mock_save:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/budget/trip", json={**_TRIP_BODY, "client_token": "uuid-abc-123"})
+    assert response.status_code == 200
+    sent_trip = mock_save.call_args.args[1][0]
+    assert sent_trip.client_token == "uuid-abc-123"
+
+
 def test_put_detail_conflict_maps_to_409(client):
     from app.write_model import DetailLineSaveResult
 

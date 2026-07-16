@@ -3,7 +3,7 @@
  * GL-conditional validation exactly (parity-tested against the shared
  * fixture in `glDropdownConstants.test.ts`), so the UI never offers/submits
  * a value the server will reject (A9 never-cut). */
-import type { DetailLineInput, DetailLineState, TripInput, TripListItem } from '../api/types'
+import type { BudgetRow, DetailLineInput, DetailLineState, TripInput, TripListItem } from '../api/types'
 import { MONTH_KEYS, type MonthKey } from '../grid/model'
 import {
   ENTERTAINMENT_EXTERNAL_VALUES,
@@ -159,6 +159,49 @@ export function detailLineTotal(draft: DetailLineDraft): number {
 // Trip draft (Travelling Expense)
 // ---------------------------------------------------------------------------
 
+export type TripSide = 'COST' | 'SGA'
+
+/** Which accounting side(s) a ฝ่าย actually books travel to, aggregated from
+ * the main grid's sap/board history (decided 2026-07-16, ฝ่าย grain — 85% of
+ * ฝ่าย with travel history use exactly one side). Drives the Trip Manager's
+ * side select: single side → hard-locked for non-admins; both → enabled,
+ * defaulting to the larger total; none → no silent default, the user must
+ * pick before save. */
+export interface TravelSideHistory {
+  sides: TripSide[]
+  defaultSide: TripSide | null
+}
+
+const TRAVEL_GLS_OF_SIDE: Record<TripSide, string[]> = {
+  COST: Object.values(TRAVEL_GL_BY_TYPE_SIDE).map((g) => g.COST),
+  SGA: Object.values(TRAVEL_GL_BY_TYPE_SIDE).map((g) => g.SGA),
+}
+
+/** Aggregates travel-GL history for ALL cost centers of the trip CC's ฝ่าย
+ * (`departmentCostCenters`) — a new/small CC with no history of its own
+ * inherits its ฝ่าย's side. "History" = nonzero sap or board total_year;
+ * Pending amounts never count (they are the numbers being drafted, not the
+ * dept's real booking pattern). Tie on a both-side ฝ่าย defaults to SGA
+ * (the org-wide majority side). */
+export function deriveTravelSideHistory(rows: BudgetRow[], departmentCostCenters: readonly string[]): TravelSideHistory {
+  const ccSet = new Set(departmentCostCenters)
+  const totals: Record<TripSide, number> = { COST: 0, SGA: 0 }
+  const hasHistory: Record<TripSide, boolean> = { COST: false, SGA: false }
+  for (const row of rows) {
+    if (!ccSet.has(row.cost_center)) continue
+    for (const side of ['COST', 'SGA'] as const) {
+      if (!TRAVEL_GLS_OF_SIDE[side].includes(row.gl_account)) continue
+      if (row.sap.total_year !== 0 || row.board.total_year !== 0) {
+        hasHistory[side] = true
+        totals[side] += row.sap.total_year + row.board.total_year
+      }
+    }
+  }
+  const sides = (['COST', 'SGA'] as const).filter((s) => hasHistory[s])
+  const defaultSide = sides.length === 1 ? sides[0] : sides.length === 2 ? (totals.COST > totals.SGA ? 'COST' : 'SGA') : null
+  return { sides, defaultSide }
+}
+
 export interface TripDraft {
   trip_id: number | null
   cost_center: string
@@ -166,25 +209,35 @@ export interface TripDraft {
   traveler_empcode: string
   destination: string | null
   country_group: 1 | 2 | 3
+  /** Generated ONCE when the new-trip card is created (one per create
+   * intent, kept across error retries so the server dedups); null for an
+   * existing trip — the server never dedups an edit. */
+  client_token: string | null
   days: number
   travel_months: string[]
   purpose: string | null
-  side: 'COST' | 'SGA'
+  /** null = the ฝ่าย has no travel history and the user has not picked yet
+   * — save is blocked until set (never a silent default). */
+  side: TripSide | null
   expected_updated_at: string | null
 }
 
-export function blankTripDraft(costCenter: string, fiscalYear: number): TripDraft {
+/** `side` comes from `deriveTravelSideHistory(...).defaultSide` — never a
+ * hard-coded value: the caller must state what the ฝ่าย's history says
+ * (null when there is none). */
+export function blankTripDraft(costCenter: string, fiscalYear: number, side: TripSide | null): TripDraft {
   return {
     trip_id: null,
     cost_center: costCenter,
     fiscal_year: fiscalYear,
     traveler_empcode: '',
     destination: null,
+    client_token: crypto.randomUUID(),
     country_group: 1,
     days: 0,
     travel_months: [],
     purpose: null,
-    side: 'SGA',
+    side,
     expected_updated_at: null,
   }
 }
@@ -196,6 +249,7 @@ export function draftFromTripListItem(item: TripListItem): TripDraft {
     fiscal_year: item.fiscal_year,
     traveler_empcode: item.traveler_empcode,
     destination: item.destination,
+    client_token: null,
     country_group: item.country_group,
     days: item.days,
     travel_months: item.travel_months,
@@ -206,7 +260,9 @@ export function draftFromTripListItem(item: TripListItem): TripDraft {
 }
 
 export function buildTripPayload(draft: TripDraft): TripInput {
-  return { ...draft }
+  const { side, ...rest } = draft
+  if (side === null) throw new Error('trip side unset — validateTripDraft must pass before building the payload')
+  return { ...rest, side }
 }
 
 export interface TripValidationResult {
@@ -221,6 +277,7 @@ export function validateTripDraft(draft: TripDraft): TripValidationResult {
   if (!draft.traveler_empcode.trim()) return { ok: false, errorTh: 'กรุณาระบุผู้เดินทาง' }
   if (draft.days <= 0) return { ok: false, errorTh: 'จำนวนวันต้องมากกว่า 0' }
   if (draft.travel_months.length === 0) return { ok: false, errorTh: 'กรุณาเลือกเดือนที่เดินทางอย่างน้อย 1 เดือน' }
+  if (draft.side === null) return { ok: false, errorTh: 'กรุณาเลือกฝั่งบัญชี' }
   return { ok: true }
 }
 

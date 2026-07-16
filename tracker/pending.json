@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-16T17:05:14+0700",
+  "updated": "2026-07-16T18:50:57+0700",
   "tasks": [
+    {
+      "id": "ent-prd-mockup-sample-data",
+      "state": "doing",
+      "created": "2026-07-16T17:30:28+0700",
+      "updated": "2026-07-16T18:50:57+0700",
+      "agent": "05-software-developer",
+      "skills": [],
+      "files": [],
+      "ai": "0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -> each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet 'GL Acct & Group  ' cell E34 + 13Template Special/Public Relation & Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -> switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review.",
+      "human": "-"
+    },
     {
       "id": "gl-not-in-master-readonly",
       "state": "doing",

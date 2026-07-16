@@ -34,6 +34,26 @@ from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+
+class DbConnectionError(pyodbc.Error, RuntimeError):
+    """Connection-OPEN failure: msal token acquisition failed before
+    pyodbc.connect was ever attempted.
+
+    Deliberately subclasses BOTH parents:
+
+    - ``pyodbc.Error`` — every DB-backed router already maps pyodbc.Error to
+      HTTP 502 with a generic detail, so an open-time token failure follows
+      the same "Fabric failure -> 502, never 500, never leak" contract as a
+      query-time driver error, with no per-router special-casing.
+    - ``RuntimeError`` — the pre-existing open-failure surface (health.py's
+      deep check, jobs, scripts caught RuntimeError) stays valid unchanged.
+
+    Raw RuntimeError must NOT be mapped to 502 by routers: this codebase uses
+    RuntimeError subclasses as business errors (ConcurrentApprovalError -> 409,
+    MissingFxRateError -> 500, ...), so the open failure gets its own type.
+    """
+
+
 _ODBC_DRIVER = "ODBC Driver 17 for SQL Server"
 
 # ODBC connection attribute for injecting a pre-acquired AAD access token
@@ -77,7 +97,7 @@ def _acquire_access_token(tenant_id: str, client_id: str, client_secret: str) ->
     result = app.acquire_token_for_client(scopes=[_TOKEN_SCOPE])
     token = result.get("access_token")
     if not token:
-        raise RuntimeError(
+        raise DbConnectionError(
             f"msal token acquisition failed: {result.get('error')} - {result.get('error_description')}"
         )
     return token

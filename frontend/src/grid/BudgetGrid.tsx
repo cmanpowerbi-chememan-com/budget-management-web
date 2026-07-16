@@ -11,6 +11,7 @@ import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
 import { DetailSubform } from '../subform/DetailSubform'
+import { deriveTravelSideHistory } from '../subform/model'
 import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
@@ -146,6 +147,19 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     () => (isPureAdmin ? [...new Set(departments.map((d) => d.cost_center))] : scope.fillCostCenters),
     [isPureAdmin, departments, scope.fillCostCenters],
   )
+
+  // Trip side history is ฝ่าย grain (decided 2026-07-16): the trip CC
+  // inherits the travel side its WHOLE ฝ่าย actually books to. The loaded
+  // grid already carries every sibling-CC row this caller can see (the dept
+  // filter is applied server-side under the same RLS a refetch would use),
+  // so no extra fetch adds anything. An unmapped CC (data gap — admin adds
+  // the mapping later) degrades to its own rows only.
+  const tripSideHistory = useMemo(() => {
+    if (!tripManagerOpenFor) return null
+    const dept = departments.find((d) => d.cost_center === tripManagerOpenFor)?.department
+    const deptCostCenters = dept ? costCentersOfDepartment(departments, dept) : [tripManagerOpenFor]
+    return deriveTravelSideHistory(rows, deptCostCenters)
+  }, [tripManagerOpenFor, departments, rows])
 
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
   const selectedDeptCostCenterCount = department !== null ? costCentersOfDepartment(departments, department).length : 0
@@ -305,8 +319,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         />
       )}
 
-      {tripManagerOpenFor && (
-        <TripManager costCenter={tripManagerOpenFor} fiscalYear={year} onClose={() => setTripManagerOpenFor(null)} onSaved={loadGrid} />
+      {tripManagerOpenFor && tripSideHistory && (
+        <TripManager
+          costCenter={tripManagerOpenFor}
+          fiscalYear={year}
+          sideHistory={tripSideHistory}
+          isAdmin={scope.isAdmin}
+          onClose={() => setTripManagerOpenFor(null)}
+          onSaved={loadGrid}
+        />
       )}
 
       {attachmentsOpen && department && (

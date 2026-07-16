@@ -188,6 +188,33 @@ def test_token_acquisition_failure_raises_runtime_error_with_error_description()
         patcher.stop()
 
 
+def test_token_acquisition_failure_raises_dbconnectionerror_with_both_parents():
+    """The open-error surface is DbConnectionError — a pyodbc.Error subclass
+    (so every router's existing `except pyodbc.Error -> 502` map covers an
+    open-time token failure) AND a RuntimeError subclass (so the pre-existing
+    RuntimeError catch surface, e.g. health.py's deep check, stays valid)."""
+    import pyodbc
+
+    from app.db import DbConnectionError
+
+    assert issubclass(DbConnectionError, pyodbc.Error)
+    assert issubclass(DbConnectionError, RuntimeError)
+
+    patcher = patch("app.db.msal.ConfidentialClientApplication")
+    mock_cls = patcher.start()
+    mock_cls.return_value.acquire_token_for_client.return_value = {
+        "error": "invalid_client",
+        "error_description": "AADSTS7000215: Invalid client secret provided.",
+    }
+    try:
+        with patch("app.db.pyodbc.connect"):
+            with pytest.raises(DbConnectionError):
+                with get_fabric_conn(FABRIC_SETTINGS):
+                    pass
+    finally:
+        patcher.stop()
+
+
 def test_msal_app_is_cached_across_connections():
     """Repeat calls must not rebuild ConfidentialClientApplication — msal's
     own cache (inside the instance) is what makes the token path fast."""

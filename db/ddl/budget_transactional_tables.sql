@@ -136,6 +136,7 @@ CREATE TABLE budget.budget_trip (
     [travel_months]     NVARCHAR(40)   NOT NULL,   -- comma list of months e.g. 03,09
     [purpose]           NVARCHAR(500)  NULL,
     [side]              NVARCHAR(4)    NOT NULL,   -- COST | SGA (one side per trip, spec §4a)
+    [client_token]      NVARCHAR(64)   NULL,   -- idempotency token for POST create (one per new-trip intent, client-generated); NULL = legacy/token-less create, unconstrained
     [_user]             NVARCHAR(150)  NOT NULL,
     [_updated_at]       DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
     CONSTRAINT pk_budget_trip PRIMARY KEY ([trip_id]),
@@ -144,6 +145,16 @@ CREATE TABLE budget.budget_trip (
 );
 GO
 CREATE INDEX ix_trip_cc_year ON budget.budget_trip ([cost_center], [fiscal_year]);
+GO
+/* Idempotent create (network retry / double-click): a repeated POST with the
+   same token from the same user returns the existing trip instead of a
+   duplicate. Dedup key = (client_token, _user) ONLY — NEVER trip content
+   (two genuinely-identical trips are legitimate). Filtered so legacy
+   NULL-token rows stay unconstrained.
+   Added to a live table via setup/migrate_budget_trip_client_token.py.     */
+CREATE UNIQUE INDEX ux_trip_client_token_user
+    ON budget.budget_trip ([client_token], [_user])
+    WHERE [client_token] IS NOT NULL;
 GO
 
 

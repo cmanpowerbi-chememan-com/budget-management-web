@@ -80,16 +80,107 @@ function messageForStatus(status: number, detail?: string): string {
   return `คำขอไม่สำเร็จ (HTTP ${status})`
 }
 
-/** Best-effort parse of an error response's JSON body's `detail` field.
- * Never throws — an empty/non-JSON body (or a `detail` that isn't a
- * string) just yields `undefined`, so a malformed error body never masks
- * the original HTTP status as a crash. */
-async function tryReadDetail(response: Response): Promise<string | undefined> {
+/** How many Pydantic validation entries to spell out before collapsing the
+ * rest into "และอีก N รายการ" — the first 1-2 name the culprit; more is noise. */
+const MAX_VALIDATION_ENTRIES_SHOWN = 2
+
+/** FastAPI prefixes each validation `loc` with the parameter source — users
+ * know their fields, not HTTP transport locations, so it is dropped. */
+const VALIDATION_LOC_SOURCES = new Set(['body', 'query', 'path', 'header', 'cookie'])
+
+/** "body.months.m01" → "months.m01"; null when loc is absent/unusable. */
+function fieldNameFromLoc(loc: unknown): string | null {
+  if (!Array.isArray(loc)) return null
+  const parts = loc.filter((p): p is string | number => typeof p === 'string' || typeof p === 'number')
+  if (parts.length > 1 && VALIDATION_LOC_SOURCES.has(String(parts[0]))) parts.shift()
+  return parts.length > 0 ? parts.join('.') : null
+}
+
+/** Thai reason for one Pydantic v2 error `type` (+ its `ctx` bound where the
+ * number makes the message actionable). Covers the constraint types this
+ * backend's models actually declare (`write_model.py`: ge/le on days and
+ * country_group, lt on month amounts, max_length on strings, Literal on
+ * template/side, required fields). An unmapped type falls back to the
+ * entry's own English `msg` — still names field + reason, never bare 422. */
+function thaiValidationReason(type: unknown, ctx: unknown, msg: unknown): string | null {
+  const bound = (key: string): number | string | null => {
+    if (ctx && typeof ctx === 'object' && key in ctx) {
+      const value = (ctx as Record<string, unknown>)[key]
+      if (typeof value === 'number' || typeof value === 'string') return value
+    }
+    return null
+  }
+  switch (type) {
+    case 'missing':
+      return 'จำเป็นต้องระบุ'
+    case 'greater_than_equal': {
+      const ge = bound('ge')
+      if (ge === 0) return 'ต้องไม่ติดลบ'
+      return ge !== null ? `ต้องไม่ต่ำกว่า ${ge}` : 'ค่าต่ำกว่าที่กำหนด'
+    }
+    case 'greater_than': {
+      const gt = bound('gt')
+      return gt !== null ? `ต้องมากกว่า ${gt}` : 'ค่าต่ำกว่าที่กำหนด'
+    }
+    case 'less_than_equal': {
+      const le = bound('le')
+      return le !== null ? `ต้องไม่เกิน ${le}` : 'ค่าเกินกำหนด'
+    }
+    case 'less_than': {
+      const lt = bound('lt')
+      return lt !== null ? `ค่าเกินกำหนด (ต้องน้อยกว่า ${lt})` : 'ค่าเกินกำหนด'
+    }
+    case 'string_too_long': {
+      const maxLength = bound('max_length')
+      return maxLength !== null ? `ยาวเกินกำหนด (ไม่เกิน ${maxLength} ตัวอักษร)` : 'ยาวเกินกำหนด'
+    }
+    case 'int_parsing':
+    case 'int_type':
+    case 'float_parsing':
+    case 'float_type':
+    case 'decimal_parsing':
+      return 'ต้องเป็นตัวเลข'
+    case 'literal_error':
+    case 'enum':
+      return 'ค่าไม่อยู่ในตัวเลือกที่กำหนด'
+    default:
+      return typeof msg === 'string' && msg ? msg : null
+  }
+}
+
+/** Summarizes a FastAPI 422 `detail` array ([{loc, msg, type, ctx}, ...])
+ * into ONE Thai sentence naming the offending field(s) and why — e.g.
+ * "ข้อมูลไม่ถูกต้อง: days — ต้องไม่ติดลบ". `undefined` when the value is
+ * not that shape (string detail, absent, malformed) so the caller can keep
+ * the generic message; never throws. */
+function summarizeValidationDetail(rawDetail: unknown): string | undefined {
+  if (!Array.isArray(rawDetail) || rawDetail.length === 0) return undefined
+  const parts: string[] = []
+  for (const entry of rawDetail) {
+    if (parts.length >= MAX_VALIDATION_ENTRIES_SHOWN) break
+    if (!entry || typeof entry !== 'object') continue
+    const { loc, msg, type, ctx } = entry as { loc?: unknown; msg?: unknown; type?: unknown; ctx?: unknown }
+    const field = fieldNameFromLoc(loc)
+    const reason = thaiValidationReason(type, ctx, msg)
+    if (field && reason) parts.push(`${field} — ${reason}`)
+    else if (field ?? reason) parts.push((field ?? reason) as string)
+  }
+  if (parts.length === 0) return undefined
+  const remaining = rawDetail.length - MAX_VALIDATION_ENTRIES_SHOWN
+  const suffix = remaining > 0 ? ` และอีก ${remaining} รายการ` : ''
+  return `ข้อมูลไม่ถูกต้อง: ${parts.join(' · ')}${suffix}`
+}
+
+/** Best-effort parse of an error response's JSON body's `detail` field,
+ * returned RAW (string for a plain HTTPException, array for a Pydantic
+ * 422, `undefined` when absent). Never throws — an empty/non-JSON body
+ * just yields `undefined`, so a malformed error body never masks the
+ * original HTTP status as a crash. */
+async function tryReadDetail(response: Response): Promise<unknown> {
   try {
     const body: unknown = await response.json()
     if (body && typeof body === 'object' && 'detail' in body) {
-      const detail = (body as { detail?: unknown }).detail
-      return typeof detail === 'string' ? detail : undefined
+      return (body as { detail?: unknown }).detail
     }
   } catch {
     // empty or non-JSON body — no detail available
@@ -123,8 +214,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   if (!response.ok) {
-    const detail = await tryReadDetail(response)
-    throw new ApiError(response.status, messageForStatus(response.status, detail), detail)
+    const rawDetail = await tryReadDetail(response)
+    const detail = typeof rawDetail === 'string' ? rawDetail : undefined
+    // A 422 (FastAPI/Pydantic validation) carries `detail` as an array of
+    // {loc, msg, type, ctx} — name the field(s)/reason instead of "HTTP 422";
+    // every other status (and an unparseable 422) keeps its existing message.
+    const message =
+      (response.status === 422 ? summarizeValidationDetail(rawDetail) : undefined) ??
+      messageForStatus(response.status, detail)
+    throw new ApiError(response.status, message, detail)
   }
 
   return (await response.json()) as T

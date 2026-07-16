@@ -107,6 +107,7 @@ _MAX_LEN_REMARK = 500       # pending_budget.remark, budget_trip.purpose
 _MAX_LEN_LINE_LABEL = 300   # pending_budget_detail.line_label
 _MAX_LEN_DESTINATION = 200  # budget_trip.destination
 _MAX_LEN_TRAVEL_MONTHS_CSV = 40  # budget_trip.travel_months (joined CSV)
+_MAX_LEN_CLIENT_TOKEN = 64       # budget_trip.client_token (idempotency, NVARCHAR(64))
 # DECIMAL(18,2) max magnitude is 9,999,999,999,999,999.99 (16 integer digits);
 # 1e16 is a clean, safely-below-max bound for the Pydantic guard.
 _MAX_MONTH_AMOUNT = 1e16
@@ -980,6 +981,12 @@ class TripInput(BaseModel):
     purpose: str | None = Field(default=None, max_length=_MAX_LEN_REMARK)
     side: Literal["COST", "SGA"]
     expected_updated_at: datetime | None = None
+    # Idempotency token for the CREATE path only (one per new-trip intent,
+    # generated client-side): a repeated POST with the same token returns the
+    # already-created trip instead of inserting a duplicate. Dedup key =
+    # (client_token, _user) — NEVER trip content (two genuinely-identical
+    # trips are legitimate). Ignored entirely on update (trip_id set).
+    client_token: str | None = Field(default=None, max_length=_MAX_LEN_CLIENT_TOKEN)
 
     @field_validator("travel_months")
     @classmethod
@@ -1106,10 +1113,14 @@ def _upsert_trip_detail_line(
                 INSERT INTO budget.pending_budget_detail
                     (cost_center, gl_account, fiscal_year, trip_id, gl_group, line_label,
                      {', '.join(MONTH_COLUMNS)}, total_year, meta_json, is_auto_calc, _user, _updated_at)
-                VALUES (?, ?, ?, ?, 'Travelling Expense', 'เบี้ยเลี้ยง · Per Diem',
+                VALUES (?, ?, ?, ?, 'Travelling Expense', ?,
                         {', '.join(['?'] * 12)}, ?, NULL, 1, ?, ?)
                 """,
-                cost_center, gl_account, fiscal_year, trip_id,
+                # line_label MUST be a bound parameter (pyodbc sends NVARCHAR):
+                # as a plain SQL literal the Thai text was converted through the
+                # DB's default code page and persisted as '??????????? · Per Diem'
+                # (live-DB confirmed 2026-07-16).
+                cost_center, gl_account, fiscal_year, trip_id, "เบี้ยเลี้ยง · Per Diem",
                 *[months[m] for m in MONTH_COLUMNS], total, user_email, now,
             )
         else:
@@ -1160,11 +1171,83 @@ def _delete_trip_detail_line(conn: pyodbc.Connection, trip_id: int, gl_account: 
         cursor.close()
 
 
+# Full row needed to rebuild a TripState for an idempotent replay (same order
+# as the SELECT in _lookup_trip_by_token).
+_TRIP_REPLAY_COLUMNS: tuple[str, ...] = (
+    "trip_id", "cost_center", "fiscal_year", "traveler_empcode", "traveler_name", "position",
+    "destination", "country_group", "days", "travel_months", "purpose", "side", "_updated_at",
+)
+
+
+def _lookup_trip_by_token(conn: pyodbc.Connection, client_token: str, user_email: str) -> dict | None:
+    """The trip this (client_token, _user) pair already created, or None.
+    Filtering on _user is the cross-user guard: one user's token can never
+    return another user's trip."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT {', '.join(_TRIP_REPLAY_COLUMNS)} FROM budget.budget_trip"
+            " WHERE client_token = ? AND _user = ?",
+            client_token, user_email,
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return dict(zip(_TRIP_REPLAY_COLUMNS, row)) if row else None
+
+
+def _replay_trip_result(conn: pyodbc.Connection, row: dict) -> TripSaveResult:
+    """Idempotent replay of an already-created trip (repeated client_token
+    from the same user — a network retry or double-click): return THE stored
+    trip. No INSERT, no per-diem line write, no parent-cell recompute — the
+    original create already did all of that once, so replaying is a pure
+    read and the per-diem amount is never double-counted.
+
+    Values come from the STORED row, not the retry payload — a retry after a
+    lost response may carry edits, and those must go through a normal PUT
+    using the `updated_at` lock token this response provides.
+    `per_diem_months` is re-derived from the stored fields with the current
+    rate/FX (recompute-on-read, ADR-0015 — same as `subform_read.fetch_trips`);
+    a missing rate/FX propagates loud exactly like the save path."""
+    rate_row = _lookup_per_diem_rate(conn, row["position"])
+    fx_rate = None
+    if row["country_group"] in (2, 3):
+        fx_rate = _lookup_fx(conn, row["fiscal_year"])
+        if fx_rate is None:
+            raise MissingFxRateError(f"no master_currency_rate for fiscal_year={row['fiscal_year']}")
+    travel_months = row["travel_months"].split(",") if row["travel_months"] else []
+    per_diem_months = derive_per_diem(
+        days=row["days"], country_group=row["country_group"], rate_row=rate_row,
+        fx_rate=fx_rate, travel_months=travel_months,
+    )
+    return TripSaveResult(
+        cost_center=row["cost_center"], fiscal_year=row["fiscal_year"],
+        traveler_empcode=row["traveler_empcode"], ok=True,
+        trip=TripState(
+            trip_id=row["trip_id"], cost_center=row["cost_center"], fiscal_year=row["fiscal_year"],
+            traveler_empcode=row["traveler_empcode"], traveler_name=row["traveler_name"],
+            position=row["position"], destination=row["destination"], country_group=row["country_group"],
+            days=row["days"], travel_months=travel_months, purpose=row["purpose"], side=row["side"],
+            updated_at=row["_updated_at"], per_diem_months=per_diem_months,
+        ),
+    )
+
+
 def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, scope: Scope) -> TripSaveResult:
     _ensure_not_excluded(trip.cost_center)
     _ensure_write_scope(trip.cost_center, scope, conn)
     if not trip.travel_months:
         raise InvalidRequestError("travel_months must not be empty")
+
+    # Idempotency (CREATE only — an update never dedups): if this exact
+    # (client_token, user) already created a trip, replay it instead of
+    # inserting a duplicate. Checked after the security gates but before the
+    # write gates (deadline/department-lock) — the replay performs NO write,
+    # and the original create already passed those gates when it wrote.
+    if trip.trip_id is None and trip.client_token is not None:
+        already_created = _lookup_trip_by_token(conn, trip.client_token, user_email)
+        if already_created is not None:
+            return _replay_trip_result(conn, already_created)
 
     traveler_name, position = _lookup_traveler(conn, trip.traveler_empcode)
     rate_row = _lookup_per_diem_rate(conn, position)  # fails loud (MissingPerDiemRateError) if no row / N/A level
@@ -1204,19 +1287,42 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         if trip.trip_id is None:
             if trip.expected_updated_at is not None:
                 raise InvalidRequestError("a new trip must not carry expected_updated_at")
-            cursor.execute(
-                """
-                INSERT INTO budget.budget_trip
-                    (cost_center, fiscal_year, traveler_empcode, traveler_name, position,
-                     destination, country_group, days, travel_months, purpose, side, _user, _updated_at)
-                OUTPUT INSERTED.trip_id
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                trip.cost_center, trip.fiscal_year, trip.traveler_empcode, traveler_name, position,
-                trip.destination, trip.country_group, trip.days, travel_months_csv, trip.purpose,
-                trip.side, user_email, now,
-            )
-            trip_id = cursor.fetchval()
+            # client_token column only when a token was sent — a token-less
+            # INSERT stays byte-identical to the pre-migration statement
+            # (works against a live table that has not run
+            # setup/migrate_budget_trip_client_token.py yet).
+            token_column = ", client_token" if trip.client_token is not None else ""
+            token_placeholder = ", ?" if trip.client_token is not None else ""
+            token_params = (trip.client_token,) if trip.client_token is not None else ()
+            try:
+                cursor.execute(
+                    f"""
+                    INSERT INTO budget.budget_trip
+                        (cost_center, fiscal_year, traveler_empcode, traveler_name, position,
+                         destination, country_group, days, travel_months, purpose, side, _user, _updated_at{token_column})
+                    OUTPUT INSERTED.trip_id
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{token_placeholder})
+                    """,
+                    trip.cost_center, trip.fiscal_year, trip.traveler_empcode, traveler_name, position,
+                    trip.destination, trip.country_group, trip.days, travel_months_csv, trip.purpose,
+                    trip.side, user_email, now, *token_params,
+                )
+                trip_id = cursor.fetchval()
+            except pyodbc.IntegrityError:
+                # True concurrent double-submit: both requests passed the
+                # dedup SELECT above before either inserted; the loser hits
+                # the filtered UNIQUE index on (client_token, _user). Discard
+                # the failed INSERT and return the winner's trip — idempotent
+                # 200, never a duplicate. Without a token (or if the token
+                # matches nothing) this is some OTHER integrity problem:
+                # re-raise, never swallow.
+                if trip.client_token is None:
+                    raise
+                conn.rollback()
+                winner = _lookup_trip_by_token(conn, trip.client_token, user_email)
+                if winner is None:
+                    raise
+                return _replay_trip_result(conn, winner)
         else:
             if trip.expected_updated_at is None:
                 raise InvalidRequestError("editing an existing trip requires expected_updated_at")

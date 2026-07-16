@@ -114,3 +114,18 @@ def test_departments_502_on_db_error(client):
         response = client.get("/scope/departments")
 
     assert response.status_code == 502
+
+
+def test_departments_db_error_during_scope_resolution_returns_502(client):
+    """A pyodbc.Error inside `resolve_scope` used to run outside the
+    try/except (HTTP 500) — a Fabric SQL failure on this read must be 502."""
+    import pyodbc
+
+    _override_auth("user@chememan.com")
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", side_effect=pyodbc.Error("08S01", "boom")
+    ):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/scope/departments")
+
+    assert response.status_code == 502

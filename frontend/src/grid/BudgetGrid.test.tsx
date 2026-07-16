@@ -214,6 +214,36 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
   })
 
+  it('derives the trip side at ฝ่าย grain: a CC with no own travel history inherits its sibling CC\'s side (locked for non-admin)', async () => {
+    const TRAVEL_GL_REF = [
+      { gl_code: '6210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem SGA', is_special: true },
+    ]
+    const TWO_CC_DEPT = [
+      { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
+      { cost_center: 'CC2', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(TWO_CC_DEPT)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+      makeRow('CC1', '6210400010'), // the trip CC — zero history of its own
+      makeRow('CC2', '6210400010', { sap: blankLayer({ m01: 100, total_year: 100 }) }), // sibling CC: SGA history
+    ])
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    fireEvent.click(await screen.findByTestId('open-subform-CC1-6210400010'))
+    expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+
+    const addBtn = await screen.findByRole('button', { name: /เพิ่มทริป/ })
+    await waitFor(() => expect(addBtn).toBeEnabled()) // disabled while the trip list loads
+    fireEvent.click(addBtn)
+    const select = screen.getByLabelText('side new-0')
+    expect(select).toHaveValue('SGA') // inherited from CC2, not a blind default
+    expect(select).toBeDisabled() // single side across the ฝ่าย + non-admin
+  })
+
   it('shows the no-scope empty state and never calls the budget/departments endpoints (A10 scope-role UX)', async () => {
     const NONE_SCOPE: ScopeState = { role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [], loading: false, error: null }
 

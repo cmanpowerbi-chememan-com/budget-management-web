@@ -36,15 +36,16 @@ describe('sideOfGl', () => {
 })
 
 describe('glMetaFor', () => {
-  it('resolves gl_group/gl_name/is_special from the reference list', () => {
+  it('resolves gl_group/gl_name/is_special from the reference list, flagged in_master', () => {
     const meta = glMetaFor('5211900030', GL_REF)
-    expect(meta).toEqual({ gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true })
+    expect(meta).toEqual({ gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true, in_master: true })
   })
 
-  it('falls back to an Uncategorized/non-special meta for an unknown GL (never crashes)', () => {
+  it('falls back to an Uncategorized/non-special/not-in-master meta for an unknown GL (never crashes)', () => {
     const meta = glMetaFor('0000000000', GL_REF)
     expect(meta.gl_group).toBe('Uncategorized')
     expect(meta.is_special).toBe(false)
+    expect(meta.in_master).toBe(false)
   })
 })
 
@@ -94,14 +95,17 @@ describe('sectionTotals — NEVER-CUT: COST and SGA totals never combined', () =
 })
 
 describe('isEditableCell', () => {
-  it('is editable when row.editable is true and the GL is not special', () => {
-    expect(isEditableCell(true, false)).toBe(true)
+  it('is editable when row.editable is true, the GL is not special, and the GL is in the master', () => {
+    expect(isEditableCell(true, false, true)).toBe(true)
   })
   it('is NEVER editable for a special-GL row even when row.editable is true', () => {
-    expect(isEditableCell(true, true)).toBe(false)
+    expect(isEditableCell(true, true, true)).toBe(false)
   })
   it('is not editable when row.editable is false', () => {
-    expect(isEditableCell(false, false)).toBe(false)
+    expect(isEditableCell(false, false, true)).toBe(false)
+  })
+  it('is NOT editable when the GL is not in the GL master (add-later policy), even when row.editable is true', () => {
+    expect(isEditableCell(true, false, false)).toBe(false)
   })
 })
 

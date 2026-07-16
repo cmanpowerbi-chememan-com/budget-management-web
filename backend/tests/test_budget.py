@@ -112,6 +112,23 @@ def test_budget_sap_failure_returns_502_not_a_silent_empty_grid(client):
     assert "grant revoked" not in response.text
 
 
+def test_budget_db_error_during_scope_resolution_returns_502_not_500(client):
+    """`resolve_scope` used to run OUTSIDE the try/except — a pyodbc.Error
+    while resolving RLS scope propagated uncaught (HTTP 500), violating the
+    read-path contract that any Fabric SQL failure on this read is a 502."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.budget.resolve_scope",
+        side_effect=pyodbc.Error("08S01", "connection reset during scope resolution"),
+    ):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget?year=2027")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == _GENERIC_502_DETAIL
+    assert "connection reset" not in response.text
+
+
 def test_budget_raw_pyodbc_error_also_returns_502_generic_detail(client):
     """A raw `pyodbc.Error` (not wrapped in `SapActualsFetchError`) reaching
     the handler — e.g. a connection drop inside the local board/pending

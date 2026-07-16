@@ -26,9 +26,14 @@ export interface GlMeta {
   gl_group: string
   gl_name: string | null
   is_special: boolean
+  /** false = the GL is not in the GL master (`GET /budget/gl-accounts`).
+   * Such rows are reference-only — not budgetable until an admin adds the
+   * GL via Edit GL Group (add-later policy); the flag flips automatically
+   * on the next master load, no special-casing. */
+  in_master: boolean
 }
 
-const UNCATEGORIZED: GlMeta = { gl_group: 'Uncategorized', gl_name: null, is_special: false }
+const UNCATEGORIZED: GlMeta = { gl_group: 'Uncategorized', gl_name: null, is_special: false, in_master: false }
 
 /** Resolves a GL account's group/name/special-flag from the reference
  * list fetched from `GET /budget/gl-accounts` — the single source of
@@ -40,7 +45,7 @@ const UNCATEGORIZED: GlMeta = { gl_group: 'Uncategorized', gl_name: null, is_spe
 export function glMetaFor(glAccount: string, glRef: GlAccount[]): GlMeta {
   const found = glRef.find((g) => g.gl_code === glAccount)
   if (!found) return UNCATEGORIZED
-  return { gl_group: found.gl_group ?? 'Uncategorized', gl_name: found.gl_name, is_special: found.is_special }
+  return { gl_group: found.gl_group ?? 'Uncategorized', gl_name: found.gl_name, is_special: found.is_special, in_master: true }
 }
 
 export interface GlGroupSection {
@@ -116,10 +121,14 @@ export function groupAndSortBySide(
 /** A month cell is editable only when the row itself is in the caller's
  * Fill scope (`row.editable`, from A3/A4 RLS) AND the GL is not one of
  * the 6 special groups — those always route through their subform (A9),
- * never a direct main-page cell edit, even when the row is otherwise
- * editable. */
-export function isEditableCell(rowEditable: boolean, isSpecialGl: boolean): boolean {
-  return rowEditable && !isSpecialGl
+ * never a direct main-page cell edit — AND the GL is in the GL master
+ * (`glInMaster`). A GL outside the master is deliberately not budgetable
+ * (add-later policy): the server would 400 any `PUT /budget/rows` for it
+ * ("not a recognised GL account"), so rendering an input would be a trap.
+ * Once an admin adds the GL via Edit GL Group, the freshly-loaded master
+ * makes the row editable automatically. */
+export function isEditableCell(rowEditable: boolean, isSpecialGl: boolean, glInMaster: boolean): boolean {
+  return rowEditable && !isSpecialGl && glInMaster
 }
 
 /** Pure: returns a NEW row with one Pending month cell updated and

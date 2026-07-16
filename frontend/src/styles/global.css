@@ -529,6 +529,16 @@ input:focus-visible {
   color: var(--special-edge);
   margin-top: 3px;
 }
+/* Fill-scope row whose GL is outside the GL master (add-later policy) —
+   read-only reference marker; same visual language as .special-hint but
+   muted, it is informational, not a special-GL accent. */
+.reference-hint {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 3px;
+}
 .month-cell {
   text-align: right;
 }

@@ -130,4 +130,126 @@ describe('apiFetch', () => {
       message: 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ',
     })
   })
+
+  // FIX #3 — a FastAPI/Pydantic 422 carries `detail` as an ARRAY of
+  // {loc, msg, type, ctx} entries; render field + Thai reason instead of
+  // the bare "คำขอไม่สำเร็จ (HTTP 422)".
+  describe('422 Pydantic validation mapping', () => {
+    it('maps a ge=0 violation to a Thai message naming the field (body prefix dropped)', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [
+              {
+                loc: ['body', 'days'],
+                msg: 'Input should be greater than or equal to 0',
+                type: 'greater_than_equal',
+                ctx: { ge: 0 },
+              },
+            ],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: days — ต้องไม่ติดลบ',
+      })
+    })
+
+    it('maps a missing required field to จำเป็นต้องระบุ', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [{ loc: ['body', 'traveler_empcode'], msg: 'Field required', type: 'missing' }],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: traveler_empcode — จำเป็นต้องระบุ',
+      })
+    })
+
+    it('maps a month over-limit (lt bound) to ค่าเกินกำหนด with the bound', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [
+              {
+                loc: ['body', 'm01'],
+                msg: 'Input should be less than 100000000000',
+                type: 'less_than',
+                ctx: { lt: 100000000000 },
+              },
+            ],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: m01 — ค่าเกินกำหนด (ต้องน้อยกว่า 100000000000)',
+      })
+    })
+
+    it('falls back to the entry\'s own msg for an unmapped validation type (still names the field)', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [{ loc: ['body', 'side'], msg: 'Value error, side must be COST or SGA', type: 'value_error' }],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: side — Value error, side must be COST or SGA',
+      })
+    })
+
+    it('summarizes only the first 2 entries and counts the rest', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [
+              { loc: ['body', 'days'], msg: 'Input should be greater than or equal to 0', type: 'greater_than_equal', ctx: { ge: 0 } },
+              { loc: ['body', 'country_group'], msg: 'Input should be less than or equal to 3', type: 'less_than_equal', ctx: { le: 3 } },
+              { loc: ['body', 'traveler_empcode'], msg: 'Field required', type: 'missing' },
+            ],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: days — ต้องไม่ติดลบ · country_group — ต้องไม่เกิน 3 และอีก 1 รายการ',
+      })
+    })
+
+    it('keeps the generic message when a 422 has no usable detail (absent or unparseable)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(422, {})))
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'คำขอไม่สำเร็จ (HTTP 422)',
+      })
+    })
+
+    it('keeps the generic message for a 422 whose detail is a plain string (detail still captured)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(422, { detail: 'manual 422 string' })))
+
+      await expect(apiFetch('/budget/trip')).rejects.toMatchObject({
+        status: 422,
+        message: 'คำขอไม่สำเร็จ (HTTP 422)',
+        detail: 'manual 422 string',
+      })
+    })
+  })
 })

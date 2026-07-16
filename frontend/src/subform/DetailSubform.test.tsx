@@ -62,6 +62,38 @@ describe('DetailSubform', () => {
     expect(screen.getByRole('button', { name: /เพิ่มรายการ/ })).toBeInTheDocument()
   })
 
+  // FIX #2 — a click on "+ เพิ่มรายการ" DURING the initial load used to be
+  // silently lost: load()'s setRows(...) replaces the array, discarding the
+  // just-added blank row. The button must be disabled until the data lands.
+  it('disables "+ เพิ่มรายการ" while the initial load is in-flight, then a post-load click adds a row that survives', async () => {
+    let resolveLoad!: (lines: DetailLineState[]) => void
+    vi.mocked(subformApi.fetchDetailLines).mockImplementation(
+      () =>
+        new Promise<DetailLineState[]>((resolve) => {
+          resolveLoad = resolve
+        }),
+    )
+    render(
+      <DetailSubform
+        costCenter="CC1"
+        glAccount="5211900030"
+        glGroup="Entertainment"
+        glName={null}
+        fiscalYear={2027}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    )
+    const addBtn = screen.getByRole('button', { name: /เพิ่มรายการ/ })
+    expect(addBtn).toBeDisabled()
+
+    resolveLoad([])
+    await waitFor(() => expect(addBtn).toBeEnabled())
+
+    fireEvent.click(addBtn)
+    expect(screen.getByTestId('detail-row-new-0')).toBeInTheDocument()
+  })
+
   it('shows an error state with retry on fetch failure', async () => {
     vi.mocked(subformApi.fetchDetailLines)
       .mockRejectedValueOnce(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง'))

@@ -300,7 +300,9 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
         <div className="modal-foot">
           <div className="modal-foot-info">รายการ: {rows.length}</div>
           <div className="modal-actions">
-            <button type="button" className="btn" onClick={addRow}>
+            {/* Disabled while load() is in-flight — its setRows(...) REPLACES the
+             * array, so a row added before the data lands would be silently lost. */}
+            <button type="button" className="btn" disabled={loading} onClick={addRow}>
               + เพิ่มรายการ
             </button>
             <button type="button" className="btn" onClick={onClose}>

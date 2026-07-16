@@ -88,14 +88,19 @@ def get_detail_lines(
     fiscal_year: int = Query(...),
     email: str = Depends(get_current_user_email),
 ) -> list[DetailLineRow]:
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        _ensure_read_scope(cost_center, scope)
-        try:
+    try:
+        # Connection-open AND resolve_scope inside the try: a DB failure at
+        # open time (driver pyodbc.Error, or msal token failure —
+        # DbConnectionError, a pyodbc.Error subclass) or during scope
+        # resolution is a 502, never an uncaught 500. The 403 HTTPException
+        # from _ensure_read_scope is not a pyodbc.Error — passes through.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            _ensure_read_scope(cost_center, scope)
             rows = fetch_detail_lines(conn, cost_center, gl_account, fiscal_year)
-        except pyodbc.Error as exc:
-            logger.exception("fetch_detail_lines failed for %s/%s", cost_center, gl_account)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("fetch_detail_lines failed for %s/%s", cost_center, gl_account)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     return [DetailLineRow(**r) for r in rows]
 
 
@@ -105,12 +110,13 @@ def get_trips(
     fiscal_year: int = Query(...),
     email: str = Depends(get_current_user_email),
 ) -> list[TripRow]:
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn)
-        _ensure_read_scope(cost_center, scope)
-        try:
+    try:
+        # Same contract as get_detail_lines above (incl. connection-open).
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            _ensure_read_scope(cost_center, scope)
             rows = fetch_trips(conn, cost_center, fiscal_year)
-        except pyodbc.Error as exc:
-            logger.exception("fetch_trips failed for %s", cost_center)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("fetch_trips failed for %s", cost_center)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     return [TripRow(**r) for r in rows]

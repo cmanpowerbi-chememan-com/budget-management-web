@@ -42,12 +42,15 @@ class DepartmentRow(BaseModel):
 
 @router.get("/budget/gl-accounts", response_model=list[GlAccount])
 def gl_accounts(email: str = Depends(get_current_user_email)) -> list[GlAccount]:
-    with get_fabric_conn() as conn:
-        try:
+    try:
+        # Connection-open inside the try: an open-time failure (driver
+        # pyodbc.Error, or msal token failure — DbConnectionError, a
+        # pyodbc.Error subclass) → 502, same as a query-time failure.
+        with get_fabric_conn() as conn:
             rows = fetch_gl_accounts(conn)
-        except pyodbc.Error as exc:
-            logger.exception("fetch_gl_accounts failed for %s", email)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("fetch_gl_accounts failed for %s", email)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     return [GlAccount(**r) for r in rows]
 
 
@@ -56,13 +59,16 @@ def departments(
     admin_view_enabled: bool = Query(default=False),
     email: str = Depends(get_current_user_email),
 ) -> list[DepartmentRow]:
-    with get_fabric_conn() as conn:
-        scope = resolve_scope(email, conn, admin_view_enabled=admin_view_enabled)
-        admin_wide = scope.is_admin and admin_view_enabled
-        cost_centers = None if admin_wide else scope.see_cost_centers
-        try:
+    try:
+        # Connection-open AND resolve_scope inside the try: a DB blip at open
+        # time or during scope resolution is a 502, never an uncaught 500.
+        # Admin-bypass logic unchanged.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn, admin_view_enabled=admin_view_enabled)
+            admin_wide = scope.is_admin and admin_view_enabled
+            cost_centers = None if admin_wide else scope.see_cost_centers
             rows = fetch_departments(conn, cost_centers)
-        except pyodbc.Error as exc:
-            logger.exception("fetch_departments failed for %s", email)
-            raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    except pyodbc.Error as exc:
+        logger.exception("fetch_departments failed for %s", email)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     return [DepartmentRow(**r) for r in rows]

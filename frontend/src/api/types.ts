@@ -183,6 +183,10 @@ export interface TripInput {
   purpose: string | null
   side: 'COST' | 'SGA'
   expected_updated_at: string | null
+  /** Idempotency token for CREATE only (one per new-trip intent) — a
+   * network retry / double-click with the same token returns the existing
+   * trip instead of a duplicate. Ignored by the server on update. */
+  client_token: string | null
 }
 
 /** `POST|PUT /budget/trip` success response (`write_model.TripState`).

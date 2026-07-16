@@ -1069,6 +1069,36 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
     assert 99 in update_detail_params  # targets the existing line by its detail_id, not a blind insert
 
 
+def test_per_diem_line_label_is_bound_as_a_parameter_never_a_varchar_sql_literal():
+    """Live-DB confirmed corruption (2026-07-16): the Thai label embedded as a
+    plain (non-N-prefixed) SQL literal is converted through the DB's default
+    code page on INSERT — every Thai char persisted as '?', so every auto-calc
+    per-diem line showed '??????????? · Per Diem' in the subform UI (the '·'
+    U+00B7 survived, it's in Latin1). The label must reach cursor.execute as a
+    BOUND parameter (pyodbc sends NVARCHAR — collation can never touch it) and
+    the SQL text itself must stay pure ASCII."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = None  # no existing per-diem line -> INSERT path
+    from app.write_model import MONTH_COLUMNS, _upsert_trip_detail_line
+
+    months = {m: 0.0 for m in MONTH_COLUMNS} | {"m03": 5000.0}
+    _upsert_trip_detail_line(
+        conn, 42, "CC1", "5210400010", 2027, months, "filler@chememan.com",
+        datetime(2026, 7, 16, tzinfo=timezone.utc),
+    )
+    insert_sql, insert_params = next(
+        (c.args[0], c.args[1:]) for c in cursor.execute.call_args_list
+        if "INSERT INTO budget.pending_budget_detail" in c.args[0]
+    )
+    assert "เบี้ยเลี้ยง · Per Diem" in insert_params, (
+        "per-diem line_label must be passed as a bound parameter, codepoint-for-codepoint"
+    )
+    assert insert_sql.isascii(), (
+        "non-ASCII embedded in the SQL string -> varchar literal -> code-page corruption"
+    )
+
+
 def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
     """A5 gate MUST-FIX 4 + D8 (NEVER-CUT COST/SGA + parent==SUM): updating a
     trip's side (COST->SGA) changes its per-diem GL AND must re-home the 3
@@ -1672,3 +1702,234 @@ def test_delete_trip_admin_bypasses_department_lock_and_never_queries_it():
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("approval_status" in s for s in executed_sql)
     assert not any("submission_deadline" in s for s in executed_sql)
+
+
+# ---------------------------------------------------------------------------
+# client_token idempotency (POST /budget/trip create path only) — a network
+# retry / double-click must NEVER create a duplicate trip or double-count its
+# per-diem into the parent cell. Dedup key = (client_token, _user) ONLY — a
+# hard unique on trip content is wrong (two genuinely-identical trips are
+# legitimate business data).
+# ---------------------------------------------------------------------------
+
+_STORED_TRIP_ROW = (
+    42,                # trip_id
+    "CC1",             # cost_center
+    2027,              # fiscal_year
+    "E1",              # traveler_empcode
+    "Somchai",         # traveler_name
+    "Manager",         # position
+    "Bangkok",         # destination
+    1,                 # country_group
+    10,                # days
+    "03",              # travel_months CSV
+    "site visit",      # purpose
+    "COST",            # side
+    STALE,             # _updated_at
+)
+
+
+def test_trip_input_accepts_client_token_defaulting_to_none():
+    assert _trip().client_token is None
+    assert _trip(client_token="a" * 64).client_token == "a" * 64
+
+
+def test_trip_input_rejects_client_token_over_64_chars():
+    with pytest.raises(ValidationError):
+        _trip(client_token="a" * 65)
+
+
+def test_trip_create_same_token_replays_existing_trip_no_insert_no_per_diem_readd():
+    """Retry-after-lost-response: the token already has a row for this user ->
+    return THAT trip (200), never a second row, never a per-diem re-add (the
+    parent cell keeps the original single amount)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _STORED_TRIP_ROW,   # dedup SELECT by (client_token, _user) -> HIT
+        (500, None, None),   # per_diem_rate lookup for the replay recompute
+    ]
+    scope = _scope()
+    results = save_trip(conn, [_trip(client_token="tok-1", days=10)], "filler@chememan.com", scope)
+    result = results[0]
+    assert result.ok is True
+    assert result.trip.trip_id == 42  # the ORIGINAL trip, not a new one
+    assert result.trip.per_diem_months["m03"] == 5000.0  # 10 days x 500 THB, single month
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("INSERT INTO budget.budget_trip" in s for s in executed_sql)
+    assert not any("pending_budget" in s for s in executed_sql)  # no per-diem line, no parent recompute
+    conn.commit.assert_not_called()  # replay is a pure read
+
+
+def test_trip_create_replay_returns_the_stored_values_not_the_retry_payload():
+    """If the user edited fields between the lost response and the retry, the
+    reply must reflect the STORED row — edits go through a normal PUT using
+    the lock token this response provides."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_STORED_TRIP_ROW, (500, None, None)]
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(client_token="tok-1", days=7, destination="Chiangmai")], "filler@chememan.com", scope
+    )
+    trip = results[0].trip
+    assert trip.days == 10                 # stored, not the retry's 7
+    assert trip.destination == "Bangkok"   # stored, not the retry's edit
+    assert trip.updated_at == STALE        # the stored lock token, usable for a follow-up PUT
+
+
+def test_trip_create_with_token_miss_inserts_with_the_token():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,                      # dedup SELECT -> no row yet
+        ("Somchai", "Manager"),    # traveler lookup
+        (500, None, None),          # per_diem_rate
+        ("deptA", "divA", "clA"),   # cc_dims for department-lock check
+        None,                       # department-lock check -> not locked
+        None,                       # deadline check -> open
+        None,                       # existing trip-detail lookup -> INSERT
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (0, 0, 5000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    ]
+    cursor.fetchval.return_value = 43
+    scope = _scope()
+    results = save_trip(conn, [_trip(client_token="tok-2")], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    insert_calls = [c for c in cursor.execute.call_args_list if "INSERT INTO budget.budget_trip" in c.args[0]]
+    assert len(insert_calls) == 1
+    assert "client_token" in insert_calls[0].args[0]
+    assert "tok-2" in insert_calls[0].args[1:]
+
+
+def test_trip_create_without_token_keeps_the_legacy_insert_shape():
+    """No token (older client / null) -> byte-identical legacy INSERT: no
+    client_token column referenced anywhere, current behavior preserved
+    (works against the un-migrated live table)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"), (500, None, None),
+        ("deptA", "divA", "clA"), None, None, None,
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (0,) * 12,
+    ]
+    cursor.fetchval.return_value = 44
+    scope = _scope()
+    results = save_trip(conn, [_trip()], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("client_token" in s for s in executed_sql)
+
+
+def test_trip_create_concurrent_unique_violation_returns_the_existing_trip():
+    """True concurrent double-submit: both requests pass the dedup SELECT
+    before either inserts; the loser's INSERT hits the filtered UNIQUE index
+    -> catch, re-SELECT by token, return the winner's trip (200)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,                      # dedup SELECT -> no row yet (both raced past this)
+        ("Somchai", "Manager"),    # traveler lookup
+        (500, None, None),          # per_diem_rate
+        ("deptA", "divA", "clA"),   # cc_dims for department-lock check
+        None,                       # department-lock check -> not locked
+        None,                       # deadline check -> open
+        _STORED_TRIP_ROW,           # re-SELECT by token after the violation -> winner's row
+        (500, None, None),          # per_diem_rate for the replay recompute
+    ]
+
+    def _execute_side_effect(sql, *params):
+        if "INSERT INTO budget.budget_trip" in sql:
+            raise pyodbc.IntegrityError("23000", "unique index ux_trip_client_token_user violation")
+        return None
+
+    cursor.execute.side_effect = _execute_side_effect
+    scope = _scope()
+    results = save_trip(conn, [_trip(client_token="tok-1", days=10)], "filler@chememan.com", scope)
+    result = results[0]
+    assert result.ok is True
+    assert result.trip.trip_id == 42
+    conn.rollback.assert_called()   # failed INSERT discarded before the re-SELECT
+    conn.commit.assert_not_called()
+
+
+def test_trip_create_integrity_error_reraised_when_token_lookup_finds_nothing():
+    """An IntegrityError that is NOT the token dedup (re-SELECT finds no row)
+    must propagate — never silently swallowed as a fake success."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None, ("Somchai", "Manager"), (500, None, None),
+        ("deptA", "divA", "clA"), None, None,
+        None,  # re-SELECT by token after the violation -> still nothing
+    ]
+
+    def _execute_side_effect(sql, *params):
+        if "INSERT INTO budget.budget_trip" in sql:
+            raise pyodbc.IntegrityError("23000", "some other constraint")
+        return None
+
+    cursor.execute.side_effect = _execute_side_effect
+    scope = _scope()
+    with pytest.raises(pyodbc.IntegrityError):
+        save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
+
+
+def test_trip_create_integrity_error_without_token_propagates_uncaught():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"), (500, None, None),
+        ("deptA", "divA", "clA"), None, None,
+    ]
+
+    def _execute_side_effect(sql, *params):
+        if "INSERT INTO budget.budget_trip" in sql:
+            raise pyodbc.IntegrityError("23000", "PK violation")
+        return None
+
+    cursor.execute.side_effect = _execute_side_effect
+    scope = _scope()
+    with pytest.raises(pyodbc.IntegrityError):
+        save_trip(conn, [_trip()], "filler@chememan.com", scope)
+
+
+def test_trip_token_dedup_select_is_scoped_to_the_calling_user():
+    """Cross-user guard: the dedup SELECT must filter on _user as well — one
+    user's token can never return (or block on) another user's trip."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_STORED_TRIP_ROW, (500, None, None)]
+    scope = _scope()
+    save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
+    dedup_sql, dedup_params = cursor.execute.call_args_list[0].args[0], cursor.execute.call_args_list[0].args[1:]
+    assert "client_token = ?" in dedup_sql
+    assert "_user = ?" in dedup_sql
+    assert "tok-1" in dedup_params
+    assert "filler@chememan.com" in dedup_params
+
+
+def test_trip_update_ignores_client_token_never_dedups_an_edit():
+    """PUT (trip_id set) must never dedup: an edit with a token neither runs
+    the dedup SELECT nor writes client_token."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"), (500, None, None),
+        ("CC1", "COST", 2027),      # old-trip lookup (side-flip capture)
+        ("deptA", "divA", "clA"),   # cc_dims for department-lock check
+        None,                        # department-lock check -> not locked
+        None,                        # deadline check -> open
+        None,                        # existing trip-detail lookup -> INSERT
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (0,) * 12,
+    ]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, client_token="tok-1", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("client_token" in s for s in executed_sql)

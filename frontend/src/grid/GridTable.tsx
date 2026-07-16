@@ -32,6 +32,11 @@ const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
 
 const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
 
+/** Fill-scope row whose GL is outside the GL master (add-later policy):
+ * shown as read-only reference until an admin adds the GL via Edit GL
+ * Group — never an input the server would 400. */
+const NOT_IN_MASTER_HINT = 'อ้างอิง — ยังไม่เปิดให้ตั้งงบ'
+
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
 }
@@ -61,12 +66,12 @@ function MonthCells({
 function PendingCells({
   row,
   editable,
-  isSpecial,
+  disabledReason,
   onCommitMonth,
 }: {
   row: BudgetRow
   editable: boolean
-  isSpecial: boolean
+  disabledReason?: string
   onCommitMonth: GridTableProps['onCommitMonth']
 }) {
   const { cost_center: cc, gl_account: gl } = row
@@ -78,7 +83,7 @@ function PendingCells({
             value={row.pending[m]}
             editable={editable}
             label={`Pending ${m} ${cc} ${gl}`}
-            disabledReason={isSpecial ? SPECIAL_GL_TOOLTIP : undefined}
+            disabledReason={disabledReason}
             testId={editable ? `pending-input-${cc}-${gl}-${m}` : undefined}
             onCommit={(value) => onCommitMonth(row, m, value)}
           />
@@ -102,7 +107,10 @@ function TxnBlock({
   onOpenSpecial?: GridTableProps['onOpenSpecial']
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
-  const editable = isEditableCell(row.editable, meta.is_special)
+  const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
+  // Marker only when NOT-in-master is the reason the cells are read-only
+  // (Fill-scope row) — a See-only row stays unmarked, read-only as before.
+  const showReferenceHint = row.editable && !meta.in_master
   const cc = row.cost_center
   const gl = row.gl_account
 
@@ -141,8 +149,18 @@ function TxnBlock({
           {meta.is_special && !(row.editable && onOpenSpecial) && (
             <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
           )}
+          {showReferenceHint && (
+            <span className="reference-hint" data-testid={`reference-hint-${cc}-${gl}`}>
+              {NOT_IN_MASTER_HINT}
+            </span>
+          )}
         </td>
-        <PendingCells row={row} editable={editable} isSpecial={meta.is_special} onCommitMonth={onCommitMonth} />
+        <PendingCells
+          row={row}
+          editable={editable}
+          disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : showReferenceHint ? NOT_IN_MASTER_HINT : undefined}
+          onCommitMonth={onCommitMonth}
+        />
       </tr>
       {message && (
         <tr className="txn-row-message">

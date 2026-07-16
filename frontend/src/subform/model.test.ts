@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DetailLineState, TripListItem } from '../api/types'
 import { MONTH_KEYS } from '../grid/model'
-import { blankLayer } from '../grid/testUtils'
+import { blankLayer, makeRow } from '../grid/testUtils'
 import {
   blankDetailDraft,
   blankManualLineDraft,
@@ -9,6 +9,7 @@ import {
   buildDetailLinePayload,
   buildManualLinePayload,
   buildTripPayload,
+  deriveTravelSideHistory,
   detailFieldsFor,
   detailLineTotal,
   draftFromServerLine,
@@ -119,10 +120,15 @@ describe('detail line draft <-> payload round trip', () => {
 
 describe('trip draft <-> payload round trip', () => {
   it('blankTripDraft starts empty with no trip_id (create path)', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     expect(draft.trip_id).toBeNull()
     expect(draft.expected_updated_at).toBeNull()
     expect(draft.travel_months).toEqual([])
+  })
+
+  it('blankTripDraft no longer hard-codes SGA — the side comes from the caller (ฝ่าย history)', () => {
+    expect(blankTripDraft('CC1', 2027, 'COST').side).toBe('COST')
+    expect(blankTripDraft('CC1', 2027, null).side).toBeNull()
   })
 
   it('draftFromTripListItem carries over every field for editing an existing trip', () => {
@@ -141,7 +147,7 @@ describe('trip draft <-> payload round trip', () => {
   })
 
   it('buildTripPayload maps the draft into the POST|PUT /budget/trip shape', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.days = 5
     draft.travel_months = ['03']
@@ -151,36 +157,131 @@ describe('trip draft <-> payload round trip', () => {
     expect(payload.traveler_empcode).toBe('E1')
     expect(payload.travel_months).toEqual(['03'])
   })
+
+  it('buildTripPayload refuses an unset side (validateTripDraft guards the UI path)', () => {
+    expect(() => buildTripPayload(blankTripDraft('CC1', 2027, null))).toThrow()
+  })
+
+  it('blankTripDraft generates a fresh client_token per new-trip intent (idempotent create)', () => {
+    const a = blankTripDraft('CC1', 2027, 'SGA')
+    const b = blankTripDraft('CC1', 2027, 'SGA')
+    expect(a.client_token).toBeTruthy()
+    expect(b.client_token).toBeTruthy()
+    expect(a.client_token).not.toBe(b.client_token)
+  })
+
+  it('draftFromTripListItem carries NO client_token (an existing trip never dedups an edit)', () => {
+    const item: TripListItem = {
+      trip_id: 10, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E1',
+      traveler_name: 'สมชาย', position: 'Supervisor', destination: 'Japan',
+      country_group: 2, days: 5, travel_months: ['02', '03'], purpose: 'visit',
+      side: 'COST', updated_at: '2026-01-01T00:00:00',
+      per_diem_months: { m02: 1000, m03: 1000 } as Record<string, number>, per_diem_error: null,
+    }
+    expect(draftFromTripListItem(item).client_token).toBeNull()
+  })
+
+  it('buildTripPayload includes the client_token so the server can dedup a retry', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    expect(buildTripPayload(draft).client_token).toBe(draft.client_token)
+  })
 })
 
 describe('validateTripDraft', () => {
   it('rejects a blank traveler', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.days = 5
     draft.travel_months = ['03']
     expect(validateTripDraft(draft).ok).toBe(false)
   })
 
   it('rejects zero days', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.travel_months = ['03']
     expect(validateTripDraft(draft).ok).toBe(false)
   })
 
   it('rejects no selected months', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.days = 5
     expect(validateTripDraft(draft).ok).toBe(false)
   })
 
+  it('rejects an unset side (no-history ฝ่าย, user has not picked yet)', () => {
+    const draft = blankTripDraft('CC1', 2027, null)
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาเลือกฝั่งบัญชี')
+  })
+
   it('accepts a fully filled draft', () => {
-    const draft = blankTripDraft('CC1', 2027)
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.days = 5
     draft.travel_months = ['03']
     expect(validateTripDraft(draft).ok).toBe(true)
+  })
+})
+
+describe('deriveTravelSideHistory (ฝ่าย grain — decided 2026-07-16)', () => {
+  const CCS = ['CC1', 'CC2'] // the ฝ่าย's cost centers; CC1 is the trip CC
+
+  it('SGA-only history across the ฝ่าย → single side, defaults SGA', () => {
+    const rows = [makeRow({ cost_center: 'CC1', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) })]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['SGA'], defaultSide: 'SGA' })
+  })
+
+  it('COST-only history → single side, defaults COST', () => {
+    const rows = [makeRow({ cost_center: 'CC1', gl_account: '5210400020', board: { ...makeRow({ cost_center: 'x', gl_account: 'y' }).board, m03: 50, total_year: 50 } })]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST'], defaultSide: 'COST' })
+  })
+
+  it('a CC with no travel history of its OWN inherits the side its ฝ่าย siblings use', () => {
+    const rows = [
+      makeRow({ cost_center: 'CC1', gl_account: '6210400010' }), // trip CC — all zero
+      makeRow({ cost_center: 'CC2', gl_account: '6210400030', sap: blankLayer({ m05: 900, total_year: 900 }) }),
+    ]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['SGA'], defaultSide: 'SGA' })
+  })
+
+  it('both sides in the ฝ่าย → both offered, default = larger summed total (sap+board)', () => {
+    const rows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5210400010', sap: blankLayer({ m01: 2000, total_year: 2000 }) }),
+      makeRow({ cost_center: 'CC2', gl_account: '6210400010', sap: blankLayer({ m01: 577263, total_year: 577263 }) }),
+    ]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST', 'SGA'], defaultSide: 'SGA' })
+  })
+
+  it('both sides, COST larger → default COST', () => {
+    const rows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5210400999', sap: blankLayer({ m01: 9000, total_year: 9000 }) }),
+      makeRow({ cost_center: 'CC2', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) }),
+    ]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST', 'SGA'], defaultSide: 'COST' })
+  })
+
+  it('no travel history anywhere in the ฝ่าย → no sides, no default (user must pick)', () => {
+    const rows = [
+      makeRow({ cost_center: 'CC1', gl_account: '6210400010' }), // travel GL, zero history
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', sap: blankLayer({ m01: 999, total_year: 999 }) }), // non-travel GL — irrelevant
+    ]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
+  })
+
+  it('pending-only amounts are NOT history (only sap/board count)', () => {
+    const base = makeRow({ cost_center: 'CC1', gl_account: '6210400010' })
+    const rows = [{ ...base, pending: { ...base.pending, m01: 500, total_year: 500 } }]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
+  })
+
+  it("rows of another ฝ่าย's CC are excluded from the aggregation", () => {
+    const rows = [makeRow({ cost_center: 'CC9', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) })]
+    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
   })
 })
 
