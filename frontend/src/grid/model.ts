@@ -35,6 +35,28 @@ export interface GlMeta {
 
 const UNCATEGORIZED: GlMeta = { gl_group: 'Uncategorized', gl_name: null, is_special: false, in_master: false }
 
+/** Group name -> color-chip class, ported verbatim from the mockup's
+ * `GROUP_CHIP_CLASS` (0002.3budget-export.html lines 1437-1444). Deliberately
+ * keyed by GROUP NAME, not the per-GL `is_special` flag: a fixture/live GL can
+ * carry `is_special:false` while still belonging to one of the 6 special
+ * groups (e.g. a Travelling Expense GL not yet flagged), which would leave
+ * some rows in the same group un-chipped. Gating on the group name instead
+ * guarantees every row in a chipped group renders the same color. */
+const GROUP_CHIP_CLASS: Record<string, string> = {
+  Entertainment: 'gl-yellow',
+  'Lease & Rental': 'gl-pink',
+  'Professional & Legal Fee': 'gl-purple',
+  'Public Relation & Donation': 'gl-orange',
+  'Training & Seminar': 'gl-blue',
+  'Travelling Expense': 'gl-green',
+}
+
+/** Returns the color-chip class for a GL group name, or '' when the group
+ * is not one of the 6 special groups (plain text, no chip). */
+export function groupChipClass(glGroup: string): string {
+  return GROUP_CHIP_CLASS[glGroup] ?? ''
+}
+
 /** Resolves a GL account's group/name/special-flag from the reference
  * list fetched from `GET /budget/gl-accounts` — the single source of
  * truth for GL metadata, used for EVERY row regardless of which layer

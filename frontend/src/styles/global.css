@@ -753,6 +753,58 @@ input:focus-visible {
   font-size: 11px;
   margin-top: 2px;
 }
+/* GL Group chip — solid color per special group (mockup 0002.3budget-export.html
+   lines 476-499/1437-1444), ported verbatim (literal parity is the target
+   here). The one place saturated color is allowed in this otherwise neutral
+   grid; only the 6 special GL groups get a chip (groupChipClass), everything
+   else stays plain text in the frozen white .gl-group-cell band. */
+.gl-group-cell .gl-chip.special-gl-group {
+  --chip-bg: #888;
+  --chip-fg: #fff;
+  --chip-glow: rgba(0, 0, 0, 0.25);
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-weight: 700;
+  font-size: 11.5px;
+  display: inline-block;
+  letter-spacing: -0.005em;
+  box-shadow: 0 0 12px var(--chip-glow), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+.gl-group-cell .gl-chip.gl-yellow {
+  --chip-bg: #f2b705;
+  --chip-fg: #3a2e00;
+  --chip-glow: rgba(242, 183, 5, 0.5);
+  text-shadow: none;
+}
+.gl-group-cell .gl-chip.gl-pink {
+  --chip-bg: #ec4899;
+  --chip-fg: #fff;
+  --chip-glow: rgba(236, 72, 153, 0.5);
+}
+.gl-group-cell .gl-chip.gl-purple {
+  --chip-bg: #845ef7;
+  --chip-fg: #fff;
+  --chip-glow: rgba(132, 94, 247, 0.5);
+}
+.gl-group-cell .gl-chip.gl-orange {
+  --chip-bg: #f97316;
+  --chip-fg: #fff;
+  --chip-glow: rgba(249, 115, 22, 0.5);
+}
+.gl-group-cell .gl-chip.gl-blue {
+  --chip-bg: #3b82f6;
+  --chip-fg: #fff;
+  --chip-glow: rgba(59, 130, 246, 0.5);
+}
+.gl-group-cell .gl-chip.gl-green {
+  --chip-bg: #22c55e;
+  --chip-fg: #fff;
+  --chip-glow: rgba(34, 197, 94, 0.5);
+}
 .status-cell {
   font-family: var(--mono);
   font-size: 10.5px;

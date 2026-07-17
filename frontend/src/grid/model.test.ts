@@ -7,6 +7,7 @@ import {
   formatThb,
   glMetaFor,
   groupAndSortBySide,
+  groupChipClass,
   isEditableCell,
   mergeSavedRow,
   sectionTotals,
@@ -208,6 +209,22 @@ describe('buildNewRowPayload', () => {
     expect(payload.cost_center).toBe('CC1')
     expect(payload.gl_account).toBe('5210400010')
     expect(payload.fiscal_year).toBe(2027)
+  })
+})
+
+describe('groupChipClass', () => {
+  it('maps each of the 6 special groups to its mockup color class', () => {
+    expect(groupChipClass('Entertainment')).toBe('gl-yellow')
+    expect(groupChipClass('Lease & Rental')).toBe('gl-pink')
+    expect(groupChipClass('Professional & Legal Fee')).toBe('gl-purple')
+    expect(groupChipClass('Public Relation & Donation')).toBe('gl-orange')
+    expect(groupChipClass('Training & Seminar')).toBe('gl-blue')
+    expect(groupChipClass('Travelling Expense')).toBe('gl-green')
+  })
+
+  it('returns an empty string for a non-special group (plain text, no chip)', () => {
+    expect(groupChipClass('Office expenses')).toBe('')
+    expect(groupChipClass('Uncategorized')).toBe('')
   })
 })
 

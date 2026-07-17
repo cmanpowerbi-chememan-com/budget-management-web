@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { MonthCell } from './MonthCell'
-import { formatThb, glMetaFor, groupAndSortBySide, isEditableCell, MONTH_KEYS, sectionTotals, type MonthKey } from './model'
+import { formatThb, glMetaFor, groupAndSortBySide, groupChipClass, isEditableCell, MONTH_KEYS, sectionTotals, type MonthKey } from './model'
 
 export interface RowMessage {
   kind: 'error' | 'saving' | 'saved'
@@ -117,6 +117,11 @@ function TxnBlock({
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
+  // Chip is gated on the GROUP NAME (one of the 6 special-GL groups), never
+  // on meta.is_special — a fixture/live GL can be is_special:false while
+  // still belonging to a chipped group, which would leave some rows in the
+  // same group un-chipped. See model.ts groupChipClass for the rationale.
+  const chipClass = groupChipClass(meta.gl_group)
   // Marker only when NOT-in-master is the reason the cells are read-only
   // (Fill-scope row) — a See-only row stays unmarked, read-only as before.
   const showReferenceHint = row.editable && !meta.in_master
@@ -131,7 +136,9 @@ function TxnBlock({
           {gl}
           <div className="gl-name">{meta.gl_name ?? '—'}</div>
         </td>
-        <td className="gl-group-cell frz frz-3">{meta.gl_group}</td>
+        <td className="gl-group-cell frz frz-3">
+          {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{meta.gl_group}</span> : meta.gl_group}
+        </td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
         <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} />
       </tr>
