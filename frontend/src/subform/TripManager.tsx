@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from '../api/client'
+import { fetchCountries, fetchTravelers } from '../api/reference'
 import { createTrip, deleteTrip, fetchDetailLines, fetchTrips, saveDetailLine, updateTrip } from '../api/subform'
-import type { DetailLineState, TripListItem } from '../api/types'
+import type { DetailLineState, TravelerOption, TripListItem } from '../api/types'
 import { formatThb, MONTH_KEYS, type MonthKey } from '../grid/model'
 import {
   MANUAL_TRAVEL_TYPES,
@@ -14,12 +15,16 @@ import {
   blankTripDraft,
   buildManualLinePayload,
   buildTripPayload,
+  countryGroupFor,
+  countryOptionsWithOther,
   draftFromTripListItem,
   indexDetailLinesByTrip,
   isTripMonthActive,
   manualLineDraftFromServerLine,
   manualLineTotal,
+  resolveTravelerDisplay,
   validateTripDraft,
+  type DestinationOption,
   type ManualLineDraft,
   type TravelSideHistory,
   type TripDraft,
@@ -49,6 +54,10 @@ interface TripCardState {
   localId: string
   draft: TripDraft
   dirty: boolean
+  /** The trip response's own traveler identity — display fallback when the
+   * stored empcode is no longer in the `/reference/travelers` list (left the
+   * company, moved CC). `null` for a brand-new card. */
+  serverTraveler: TravelerOption | null
   perDiemMonths: Record<string, number> | null
   perDiemError: string | null
   status: Status
@@ -87,6 +96,7 @@ function cardFromServerTrip(
     localId: `existing-${trip.trip_id}`,
     draft: draftFromTripListItem(trip),
     dirty: false,
+    serverTraveler: { empcode: trip.traveler_empcode, name: trip.traveler_name, position: trip.position },
     perDiemMonths: trip.per_diem_months,
     perDiemError: trip.per_diem_error,
     status: 'idle',
@@ -116,6 +126,8 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
   const [loadError, setLoadError] = useState<string | null>(null)
   const [newTripCounter, setNewTripCounter] = useState(0)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
+  const [travelers, setTravelers] = useState<TravelerOption[]>([])
+  const [destinationOptions, setDestinationOptions] = useState<DestinationOption[]>([])
 
   // Exactly one side in the ฝ่าย's real history → non-admins cannot
   // mis-book to the side the ฝ่าย never uses. Both sides / no history →
@@ -126,12 +138,16 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
     setLoading(true)
     setLoadError(null)
     try {
-      const [trips, manualLines] = await Promise.all([
+      const [trips, manualLines, travelerList, countryList] = await Promise.all([
         fetchTrips(costCenter, fiscalYear),
         fetchAllManualLines(costCenter, fiscalYear),
+        fetchTravelers(costCenter),
+        fetchCountries(),
       ])
       const index = indexDetailLinesByTrip(manualLines)
       setCards(trips.map((t) => cardFromServerTrip(t, index)))
+      setTravelers(travelerList)
+      setDestinationOptions(countryOptionsWithOther(countryList))
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : 'โหลดข้อมูลทริปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
@@ -153,6 +169,7 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
         localId,
         draft: blankTripDraft(costCenter, fiscalYear, sideHistory.defaultSide),
         dirty: false,
+        serverTraveler: null,
         perDiemMonths: null,
         perDiemError: null,
         status: 'idle',
@@ -195,6 +212,7 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                 localId: `existing-${saved.trip_id}`,
                 draft: { ...card.draft, trip_id: saved.trip_id, side: saved.side, expected_updated_at: saved.updated_at },
                 dirty: false,
+                serverTraveler: { empcode: saved.traveler_empcode, name: saved.traveler_name, position: saved.position },
                 perDiemMonths: saved.per_diem_months,
                 perDiemError: null,
                 status: 'idle',
@@ -342,11 +360,24 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
 
           {!loading &&
             !loadError &&
-            cards.map((card, idx) => (
+            cards.map((card, idx) => {
+              const traveler = resolveTravelerDisplay(card.draft.traveler_empcode, travelers, card.serverTraveler)
+              // A stored traveler/destination missing from the current master
+              // still needs a visible option — data must never vanish from an
+              // existing trip just because the master moved on.
+              const travelerFallback =
+                card.draft.traveler_empcode !== '' && !travelers.some((t) => t.empcode === card.draft.traveler_empcode)
+                  ? card.serverTraveler
+                  : null
+              const destinationFallback =
+                card.draft.destination !== null && !destinationOptions.some((o) => o.country === card.draft.destination)
+                  ? card.draft.destination
+                  : null
+              return (
               <div key={card.localId} className="trip-card" data-testid={`trip-card-${card.localId}`}>
                 <div className="trip-card-head">
                   <span className="trip-idx">{String(idx + 1).padStart(2, '0')}</span>
-                  <span>{card.draft.traveler_empcode || 'ผู้เดินทางใหม่'}</span>
+                  <span>{traveler.name ?? 'ผู้เดินทางใหม่'}</span>
                   <button
                     type="button"
                     className="action-btn"
@@ -360,33 +391,60 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                 <div className="trip-card-body">
                   <div className="trip-field-grid">
                     <label>
-                      รหัสพนักงานผู้เดินทาง
-                      <input
+                      ผู้เดินทาง
+                      <select
                         aria-label={`traveler_empcode ${card.localId}`}
                         value={card.draft.traveler_empcode}
                         onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, traveler_empcode: e.target.value }))}
-                      />
+                      >
+                        {card.draft.traveler_empcode === '' && (
+                          <option value="" disabled>
+                            — เลือกผู้เดินทาง —
+                          </option>
+                        )}
+                        {travelerFallback && <option value={travelerFallback.empcode}>{travelerFallback.name}</option>}
+                        {travelers.map((t) => (
+                          <option key={t.empcode} value={t.empcode}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      ตำแหน่ง
+                      {/* Read-only by design: position comes from the traveler
+                        * master / trip response and drives per-diem server-side. */}
+                      <span className="trip-readonly" data-testid={`position-${card.localId}`}>
+                        {traveler.position ?? '—'}
+                      </span>
                     </label>
                     <label>
                       ปลายทาง
-                      <input
+                      {/* Picking a country ALSO sets country_group (1/2/3) — the
+                        * old manual group select is gone: a hand-picked wrong
+                        * group meant a wrong per-diem rate. A legacy free-typed
+                        * destination keeps its stored group until re-picked. */}
+                      <select
                         aria-label={`destination ${card.localId}`}
                         value={card.draft.destination ?? ''}
-                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, destination: e.target.value || null }))}
-                      />
-                    </label>
-                    <label>
-                      กลุ่มปลายทาง
-                      <select
-                        aria-label={`country_group ${card.localId}`}
-                        value={card.draft.country_group}
                         onChange={(e) =>
-                          updateTripField(card.localId, (d) => ({ ...d, country_group: Number(e.target.value) as 1 | 2 | 3 }))
+                          updateTripField(card.localId, (d) => {
+                            const group = countryGroupFor(destinationOptions, e.target.value)
+                            return { ...d, destination: e.target.value || null, country_group: group ?? d.country_group }
+                          })
                         }
                       >
-                        <option value={1}>ในประเทศ</option>
-                        <option value={2}>ต่างประเทศ · อาเซียน</option>
-                        <option value={3}>ต่างประเทศ · อื่นๆ</option>
+                        {card.draft.destination === null && (
+                          <option value="" disabled>
+                            — เลือกปลายทาง —
+                          </option>
+                        )}
+                        {destinationFallback && <option value={destinationFallback}>{destinationFallback}</option>}
+                        {destinationOptions.map((o) => (
+                          <option key={o.country} value={o.country}>
+                            {o.country}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <label>
@@ -417,6 +475,22 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                         <option value="COST">ฝั่งผลิต / ต้นทุน (5xxx)</option>
                         <option value="SGA">ฝั่งบริหาร / ขาย · SG&A (6xxx)</option>
                       </select>
+                    </label>
+                    <label>
+                      Project
+                      <input
+                        aria-label={`project ${card.localId}`}
+                        value={card.draft.project ?? ''}
+                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, project: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      วัตถุประสงค์
+                      <input
+                        aria-label={`purpose ${card.localId}`}
+                        value={card.draft.purpose ?? ''}
+                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, purpose: e.target.value || null }))}
+                      />
                     </label>
                   </div>
 
@@ -524,7 +598,8 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
         </div>
 
         <div className="modal-foot">

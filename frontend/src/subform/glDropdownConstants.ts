@@ -29,8 +29,13 @@ export const LEASE_MACHINERY_TYPES = [
 ] as const
 export const LEASE_PLANTS = ['BK', 'TK', 'KK', 'PB', 'RY'] as const
 export const LEASE_PLATES = [
-  '6ขผ-3918', '1นจ-3508', '6ขจ-3513', '5ขง-5712', '1นจ-1468', '6ขผ-8150', '7ขถ-9660', 'ไม่ระบุ',
+  '6ขผ-3918', '1นจ-3508', '6ขจ-3513', '5ขง-5712', '1นจ-1468', '6ขผ-8150', '7ขถ-9660', 'อื่นๆ',
 ] as const
+/** Picking this plate option reveals a REQUIRED free-text input — the typed
+ * plate is what gets sent, never the literal 'อื่นๆ' (renamed from ไม่ระบุ,
+ * jakkaritw 2026-07-17). The 7-plate list is a convenience shortcut, not an
+ * allowlist: the backend accepts an arbitrary plate string. */
+export const LEASE_PLATE_OTHER = 'อื่นๆ'
 
 /** UI-only — not backend-validated (see file docstring). */
 export const TRAINING_METHOD_VALUES = ['Inhouse', 'Public'] as const

@@ -203,6 +203,78 @@ describe('DetailSubform', () => {
     await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
   })
 
+  describe('Lease & Rental vehicle plate — อื่นๆ reveals a required free-text plate (2026-07-17)', () => {
+    const VEHICLE_GL = '5211200060'
+
+    function vehicleLine(overrides: Partial<DetailLineState> = {}): DetailLineState {
+      return blankLine({ gl_account: VEHICLE_GL, gl_group: 'Lease & Rental', ...overrides })
+    }
+
+    function renderVehicle() {
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount={VEHICLE_GL}
+          glGroup="Lease & Rental"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+    }
+
+    it('a listed plate is sent as-is and shows no free-text input', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(vehicleLine({ meta_json: { ทะเบียนรถ: '6ขผ-3918' } }))
+      renderVehicle()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
+      expect(screen.queryByPlaceholderText('พิมพ์ทะเบียนรถ')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ทะเบียนรถ).toBe('6ขผ-3918')
+    })
+
+    it('picking อื่นๆ reveals a REQUIRED free-text plate input — saving while blank is blocked, no API call', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
+      renderVehicle()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
+      expect(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+      await waitFor(() => expect(screen.getByText('กรุณาพิมพ์ทะเบียนรถ')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('the typed plate is what gets sent — never the literal อื่นๆ', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(vehicleLine({ meta_json: { ทะเบียนรถ: 'กข-1234' } }))
+      renderVehicle()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
+      fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'กข-1234' } })
+      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ทะเบียนรถ).toBe('กข-1234')
+    })
+
+    it('re-opening a line whose plate is NOT in the 7-list shows อื่นๆ + the plate pre-filled', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine({ meta_json: { ทะเบียนรถ: 'ชล-9999' } })])
+      renderVehicle()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      expect((screen.getByLabelText('ทะเบียนรถ') as HTMLSelectElement).value).toBe('อื่นๆ')
+      expect((screen.getByPlaceholderText('พิมพ์ทะเบียนรถ') as HTMLInputElement).value).toBe('ชล-9999')
+    })
+  })
+
   describe('delete', () => {
     beforeEach(() => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)

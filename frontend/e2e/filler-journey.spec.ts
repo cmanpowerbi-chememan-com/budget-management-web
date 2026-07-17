@@ -256,7 +256,8 @@ test.describe('filler journey', () => {
       saveTripQueue: [
         ok({
           trip_id: 501, cost_center: CC, fiscal_year: PLANNING_YEAR, traveler_empcode: '100123', traveler_name: 'สมชาย ทดสอบ',
-          position: 'Officer', destination: null, country_group: 2, days: 5, travel_months: ['03', '04'], purpose: null, side: 'COST',
+          position: 'Officer', destination: 'ญี่ปุ่น', country_group: 2, days: 5, travel_months: ['03', '04'],
+          project: null, purpose: null, side: 'COST',
           updated_at: 'TRIP-TOKEN-1', per_diem_months: { m03: 3000, m04: 3000 },
         }),
       ],
@@ -271,8 +272,13 @@ test.describe('filler journey', () => {
     const card = page.getByTestId('trip-card-new-0')
     await expect(card).toContainText('เบี้ยเลี้ยง: ระบบจะคำนวณให้หลังกดบันทึก')
 
-    await card.getByLabel('traveler_empcode new-0').fill('100123')
-    await card.getByLabel('country_group new-0').selectOption('2')
+    // traveler = dropdown from /reference/travelers (value=empcode); position
+    // auto-displays read-only; destination dropdown AUTO-SETS country_group
+    // (ญี่ปุ่น → 2) — the manual group select no longer exists.
+    await card.getByLabel('traveler_empcode new-0').selectOption('100123')
+    await expect(card.getByTestId('position-new-0')).toHaveText('Officer')
+    expect(await card.getByLabel('country_group new-0').count()).toBe(0)
+    await card.getByLabel('destination new-0').selectOption('ญี่ปุ่น')
     await card.getByLabel('days new-0').fill('5')
     await card.getByRole('button', { name: 'm03', exact: true }).click()
     await card.getByRole('button', { name: 'm04', exact: true }).click()
@@ -284,6 +290,7 @@ test.describe('filler journey', () => {
       cost_center: CC,
       fiscal_year: PLANNING_YEAR,
       traveler_empcode: '100123',
+      destination: 'ญี่ปุ่น',
       country_group: 2,
       days: 5,
       travel_months: ['03', '04'],

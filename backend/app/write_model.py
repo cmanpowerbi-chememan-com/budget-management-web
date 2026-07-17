@@ -108,6 +108,7 @@ _MAX_LEN_LINE_LABEL = 300   # pending_budget_detail.line_label
 _MAX_LEN_DESTINATION = 200  # budget_trip.destination
 _MAX_LEN_TRAVEL_MONTHS_CSV = 40  # budget_trip.travel_months (joined CSV)
 _MAX_LEN_CLIENT_TOKEN = 64       # budget_trip.client_token (idempotency, NVARCHAR(64))
+_MAX_LEN_PROJECT = 200           # budget_trip.project (NVARCHAR(200), added by setup/migrate_budget_trip_project.py)
 # DECIMAL(18,2) max magnitude is 9,999,999,999,999,999.99 (16 integer digits);
 # 1e16 is a clean, safely-below-max bound for the Pydantic guard.
 _MAX_MONTH_AMOUNT = 1e16
@@ -702,6 +703,23 @@ def _lookup_trip(conn: pyodbc.Connection, trip_id: int) -> tuple[str, str, int] 
     return (row[0], row[1], row[2]) if row else None
 
 
+def _lookup_trip_project(conn: pyodbc.Connection, trip_id: int) -> str | None:
+    """The CURRENTLY STORED `project` value for trip_id. Used ONLY to echo
+    the actually-persisted value in the immediate save response when an
+    UPDATE's project column was left untouched (request sent None = "leave
+    as-is") — echoing the request's None back would otherwise lie about a
+    still-present stored value. Unconditional SELECT of `project`, same
+    accepted migration-before-deploy dependency as subform_read.fetch_trips
+    (see docs/specs/budget-transactional-data-model.md)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT project FROM budget.budget_trip WHERE trip_id = ?", trip_id)
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return row[0] if row else None
+
+
 def _lookup_detail_owner(conn: pyodbc.Connection, detail_id: int) -> tuple[str, str, int] | None:
     """Returns the CURRENT (cost_center, gl_account, fiscal_year) actually
     stored for `detail_id`, or None if it no longer exists. Read BEFORE any
@@ -979,6 +997,14 @@ class TripInput(BaseModel):
     days: int = Field(ge=0)
     travel_months: list[str]
     purpose: str | None = Field(default=None, max_length=_MAX_LEN_REMARK)
+    # Free-text project name (Excel template col F). Persisted with the same
+    # conditional-column trick as client_token below: the SQL references the
+    # column ONLY when a non-null value is supplied, so a project-less
+    # request stays byte-identical to the pre-migration statement (deploy-
+    # safe before setup/migrate_budget_trip_project.py runs). Consequence:
+    # None on an UPDATE means "leave the stored value untouched" — a client
+    # that wants to CLEAR a project sends "" (stored as '').
+    project: str | None = Field(default=None, max_length=_MAX_LEN_PROJECT)
     side: Literal["COST", "SGA"]
     expected_updated_at: datetime | None = None
     # Idempotency token for the CREATE path only (one per new-trip intent,
@@ -1030,6 +1056,7 @@ class TripState(BaseModel):
     days: int
     travel_months: list[str]
     purpose: str | None
+    project: str | None = None
     side: str
     updated_at: datetime
     per_diem_months: dict[str, float]  # DERIVED, informational — never stored as authoritative (ADR-0015)
@@ -1172,10 +1199,12 @@ def _delete_trip_detail_line(conn: pyodbc.Connection, trip_id: int, gl_account: 
 
 
 # Full row needed to rebuild a TripState for an idempotent replay (same order
-# as the SELECT in _lookup_trip_by_token).
+# as the SELECT in _lookup_trip_by_token). Referencing `project` here is
+# pre-migration-safe: this SELECT only ever runs on the client_token path,
+# which already requires the same migration-added columns to exist.
 _TRIP_REPLAY_COLUMNS: tuple[str, ...] = (
     "trip_id", "cost_center", "fiscal_year", "traveler_empcode", "traveler_name", "position",
-    "destination", "country_group", "days", "travel_months", "purpose", "side", "_updated_at",
+    "destination", "country_group", "days", "travel_months", "purpose", "project", "side", "_updated_at",
 )
 
 
@@ -1227,7 +1256,8 @@ def _replay_trip_result(conn: pyodbc.Connection, row: dict) -> TripSaveResult:
             trip_id=row["trip_id"], cost_center=row["cost_center"], fiscal_year=row["fiscal_year"],
             traveler_empcode=row["traveler_empcode"], traveler_name=row["traveler_name"],
             position=row["position"], destination=row["destination"], country_group=row["country_group"],
-            days=row["days"], travel_months=travel_months, purpose=row["purpose"], side=row["side"],
+            days=row["days"], travel_months=travel_months, purpose=row["purpose"],
+            project=row["project"], side=row["side"],
             updated_at=row["_updated_at"], per_diem_months=per_diem_months,
         ),
     )
@@ -1287,25 +1317,34 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         if trip.trip_id is None:
             if trip.expected_updated_at is not None:
                 raise InvalidRequestError("a new trip must not carry expected_updated_at")
-            # client_token column only when a token was sent — a token-less
-            # INSERT stays byte-identical to the pre-migration statement
-            # (works against a live table that has not run
+            # project / client_token columns only when a value was sent — a
+            # value-less INSERT stays byte-identical to the pre-migration
+            # statement (works against a live table that has not run
+            # setup/migrate_budget_trip_project.py /
             # setup/migrate_budget_trip_client_token.py yet).
-            token_column = ", client_token" if trip.client_token is not None else ""
-            token_placeholder = ", ?" if trip.client_token is not None else ""
-            token_params = (trip.client_token,) if trip.client_token is not None else ()
+            extra_columns = ""
+            extra_placeholders = ""
+            extra_params: tuple = ()
+            if trip.project is not None:
+                extra_columns += ", project"
+                extra_placeholders += ", ?"
+                extra_params += (trip.project,)
+            if trip.client_token is not None:
+                extra_columns += ", client_token"
+                extra_placeholders += ", ?"
+                extra_params += (trip.client_token,)
             try:
                 cursor.execute(
                     f"""
                     INSERT INTO budget.budget_trip
                         (cost_center, fiscal_year, traveler_empcode, traveler_name, position,
-                         destination, country_group, days, travel_months, purpose, side, _user, _updated_at{token_column})
+                         destination, country_group, days, travel_months, purpose, side, _user, _updated_at{extra_columns})
                     OUTPUT INSERTED.trip_id
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{token_placeholder})
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{extra_placeholders})
                     """,
                     trip.cost_center, trip.fiscal_year, trip.traveler_empcode, traveler_name, position,
                     trip.destination, trip.country_group, trip.days, travel_months_csv, trip.purpose,
-                    trip.side, user_email, now, *token_params,
+                    trip.side, user_email, now, *extra_params,
                 )
                 trip_id = cursor.fetchval()
             except pyodbc.IntegrityError:
@@ -1326,16 +1365,21 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         else:
             if trip.expected_updated_at is None:
                 raise InvalidRequestError("editing an existing trip requires expected_updated_at")
+            # `project = ?` only when a value was sent (None = leave the
+            # stored value untouched; send "" to clear) — a project-less
+            # UPDATE stays byte-identical to the pre-migration statement.
+            project_set = "project = ?, " if trip.project is not None else ""
+            project_params = (trip.project,) if trip.project is not None else ()
             cursor.execute(
-                """
+                f"""
                 UPDATE budget.budget_trip
                 SET traveler_empcode = ?, traveler_name = ?, position = ?, destination = ?,
-                    country_group = ?, days = ?, travel_months = ?, purpose = ?, side = ?,
+                    country_group = ?, days = ?, travel_months = ?, purpose = ?, {project_set}side = ?,
                     _user = ?, _updated_at = ?
                 WHERE trip_id = ? AND cost_center = ? AND fiscal_year = ? AND _updated_at = ?
                 """,
                 trip.traveler_empcode, traveler_name, position, trip.destination,
-                trip.country_group, trip.days, travel_months_csv, trip.purpose, trip.side,
+                trip.country_group, trip.days, travel_months_csv, trip.purpose, *project_params, trip.side,
                 user_email, now,
                 trip.trip_id, trip.cost_center, trip.fiscal_year, trip.expected_updated_at,
             )
@@ -1379,13 +1423,24 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
 
     conn.commit()
 
+    # Echo the ACTUALLY-PERSISTED project value, not just the request's —
+    # a project-less UPDATE (trip.project is None) leaves the column
+    # untouched, so the request value ("None") would misreport a still-
+    # present stored value as cleared. Only look it up when it's actually
+    # needed (None on an existing trip): a project-less CREATE never wrote
+    # the column at all, so None is already correct there with no read.
+    persisted_project = trip.project
+    if trip.project is None and trip.trip_id is not None:
+        persisted_project = _lookup_trip_project(conn, trip_id)
+
     return TripSaveResult(
         cost_center=trip.cost_center, fiscal_year=trip.fiscal_year, traveler_empcode=trip.traveler_empcode, ok=True,
         trip=TripState(
             trip_id=trip_id, cost_center=trip.cost_center, fiscal_year=trip.fiscal_year,
             traveler_empcode=trip.traveler_empcode, traveler_name=traveler_name, position=position,
             destination=trip.destination, country_group=trip.country_group, days=trip.days,
-            travel_months=sorted(trip.travel_months, key=int), purpose=trip.purpose, side=trip.side,
+            travel_months=sorted(trip.travel_months, key=int), purpose=trip.purpose,
+            project=persisted_project, side=trip.side,
             updated_at=now, per_diem_months=per_diem_months,
         ),
     )

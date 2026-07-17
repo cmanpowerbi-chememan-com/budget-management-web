@@ -1,8 +1,19 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-16T18:50:57+0700",
+  "updated": "2026-07-17T11:09:49+0700",
   "tasks": [
+    {
+      "id": "special-group-completeness",
+      "state": "doing",
+      "created": "2026-07-17T00:03:25+0700",
+      "updated": "2026-07-17T11:09:49+0700",
+      "agent": "",
+      "skills": [],
+      "files": [],
+      "ai": "Both agents DONE on merged tree: backend 595 pass (+32), frontend 319 pass (+28). Contract deltas cross-checked (fixture parity, project in trip responses, traveler view shared with validate). Combined gate agent dispatched. CRITICAL ordering: migrate_budget_trip_project.py must run BEFORE next backend deploy (fetch_trips selects project unconditionally). Next: gate verdict -> selective commit (feature files only, tree has unrelated churn) -> migrations -> staging rebuild+deploy -> verify.",
+      "human": "-"
+    },
     {
       "id": "ent-prd-mockup-sample-data",
       "state": "doing",
@@ -16,13 +27,13 @@
     },
     {
       "id": "gl-not-in-master-readonly",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-16T16:52:22+0700",
-      "updated": "2026-07-16T16:57:54+0700",
+      "updated": "2026-07-16T23:41:04+0700",
       "agent": "",
       "skills": [],
       "files": [],
-      "ai": "ข.3 rule finalized (jakkaritw): pending cell editable IFF (cc in fill-scope, existing server 'editable' flag) AND (gl_account in 142-master from /budget/gl-accounts). Else read-only: show sap/board reference + Thai marker 'ยังไม่เปิดให้ตั้งงบ', no input. Dynamic - admin adds GL to master -> row editable auto (add-later policy). 106 GL/884 cells/200.1M fy2026 outside master. 1xxx/9xxx already not rendered. Frontend-only, reuse loaded gl-accounts master + existing read-only styling. 05 fable implementing TDD.",
+      "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged.",
       "human": "-"
     },
     {

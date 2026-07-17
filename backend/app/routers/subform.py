@@ -72,6 +72,7 @@ class TripRow(BaseModel):
     days: int
     travel_months: list[str]
     purpose: str | None
+    project: str | None = None
     side: str
     updated_at: datetime
     # Recomputed on every read (ADR-0015) — `None` + `per_diem_error` set

@@ -118,3 +118,46 @@ def test_lease_unrecognised_suffix_raises():
 def test_lease_meta_with_no_values_yet_is_valid_all_none():
     cleaned = validate_lease_meta("5211200060", {})
     assert cleaned == {"สถานที่ใช้งาน": None, "กิจกรรม": None, "ประเภทรถ": None, "ทะเบียนรถ": None}
+
+
+# ---------------------------------------------------------------------------
+# Lease & Rental — ทะเบียนรถ is FREE TEXT (jakkaritw 2026-07-17): the 7 known
+# plates are a convenience dropdown, NOT an allowlist. Picking the "อื่นๆ"
+# sentinel opens a free-text input and the TYPED plate is what persists —
+# the sentinel strings themselves ("อื่นๆ", legacy "ไม่ระบุ") must never be
+# stored as a plate.
+# ---------------------------------------------------------------------------
+
+def test_lease_vehicle_plate_accepts_free_text_outside_the_known_list():
+    cleaned = validate_lease_meta("5211200060", {"ทะเบียนรถ": "9กท-1234"})
+    assert cleaned["ทะเบียนรถ"] == "9กท-1234"
+
+
+def test_lease_vehicle_plate_still_accepts_the_known_dropdown_plates():
+    for plate in ("6ขผ-3918", "1นจ-3508", "7ขถ-9660"):
+        cleaned = validate_lease_meta("5211200060", {"ทะเบียนรถ": plate})
+        assert cleaned["ทะเบียนรถ"] == plate
+
+
+def test_lease_vehicle_plate_rejects_dropdown_sentinel_strings():
+    """"อื่นๆ" (and legacy "ไม่ระบุ") mean the user picked the free-text
+    option but never typed the real plate — reject, never persist."""
+    for sentinel in ("อื่นๆ", "ไม่ระบุ", " อื่นๆ "):
+        with pytest.raises(MetaValidationError):
+            validate_lease_meta("5211200060", {"ทะเบียนรถ": sentinel})
+
+
+def test_lease_vehicle_plate_rejects_empty_and_whitespace_only():
+    for bad in ("", "   "):
+        with pytest.raises(MetaValidationError):
+            validate_lease_meta("5211200060", {"ทะเบียนรถ": bad})
+
+
+def test_lease_vehicle_plate_rejects_over_max_length():
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200060", {"ทะเบียนรถ": "ก" * 51})
+
+
+def test_lease_vehicle_plate_rejects_non_string():
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200060", {"ทะเบียนรถ": 1234})

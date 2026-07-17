@@ -67,14 +67,18 @@ def test_fetch_detail_lines_closes_cursor():
 # ---------------------------------------------------------------------------
 
 def _trip_row(**overrides):
+    """Build the tuple in whatever order `_TRIP_COLUMNS` declares — robust
+    to column additions (e.g. `project`)."""
+    from app.subform_read import _TRIP_COLUMNS
+
     base = dict(
         trip_id=10, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
         traveler_name="สมชาย ใจดี", position="Supervisor", destination="Japan",
         country_group=2, days=5, travel_months="02,03", purpose="visit",
-        side="COST", updated_at="2026-01-01T00:00:00",
+        project=None, side="COST", _updated_at="2026-01-01T00:00:00",
     )
     base.update(overrides)
-    return tuple(base.values())
+    return tuple(base[c] for c in _TRIP_COLUMNS)
 
 
 def test_fetch_trips_recomputes_per_diem_domestic_no_fx_needed(monkeypatch):
@@ -155,6 +159,23 @@ def test_fetch_trips_one_bad_trip_never_blocks_the_others(monkeypatch):
     assert len(rows) == 2
     assert rows[0]["per_diem_error"] is not None  # trip 1: other, no FX -> error
     assert rows[1]["per_diem_error"] is None  # trip 2: domestic, no FX needed -> fine
+
+
+def test_fetch_trips_returns_project(monkeypatch):
+    """`project` (trip header free text) must come back on every read —
+    the subform edit form re-populates from this."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        _trip_row(country_group=1, travel_months="03", project="ERP rollout"),
+    ]
+    monkeypatch.setattr(
+        "app.subform_read._lookup_per_diem_rate",
+        lambda c, position: {"rate_domestic": 300, "rate_asian": None, "rate_other": None},
+    )
+
+    rows = fetch_trips(conn, "CC1", 2027)
+
+    assert rows[0]["project"] == "ERP rollout"
 
 
 def test_fetch_trips_scopes_by_cc_fiscal_year():

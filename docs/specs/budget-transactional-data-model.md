@@ -291,6 +291,7 @@ erDiagram
         int days
         nvarchar travel_months "selected months"
         nvarchar purpose
+        nvarchar project "free-text project name (template col F)"
         nvarchar client_token "idempotent create dedup, per (token,_user)"
         nvarchar control_user "_user"
         datetime2 control_updated_at "_updated_at"
@@ -441,6 +442,8 @@ Table budget.budget_trip {
   days             int          [not null, default: 0]
   travel_months    nvarchar(40) [not null]   // comma list of selected months e.g. 03,09
   purpose          nvarchar(500)
+  project          nvarchar(200)             // free-text project name (Travelling template col F); added to a
+                                              // live table via setup/migrate_budget_trip_project.py
   client_token     nvarchar(64)              // idempotency token for POST create (client-generated, one per
                                               // new-trip intent); repeated POST with the same token returns the
                                               // existing trip. Dedup key = (client_token, _user) ONLY — never
@@ -454,6 +457,13 @@ Table budget.budget_trip {
     (client_token, _user) [unique, name: ux_trip_client_token_user]  // FILTERED: WHERE client_token IS NOT NULL (DBML cannot express the filter; see db/ddl/budget_transactional_tables.sql)
   }
 }
+
+// Deploy-ordering constraint: `setup/migrate_budget_trip_project.py` (and the
+// same-shape `setup/migrate_budget_trip_client_token.py`) MUST run against the
+// live table BEFORE deploying a backend build containing the `project` field —
+// `subform_read.fetch_trips` and `write_model`'s echo-fix read-back both SELECT
+// `project` unconditionally, so an un-migrated table makes GET /budget/trip and
+// PUT /budget/trip (on an existing trip with no `project` in the request) 502.
 
 Table budget.approval_status {
   department            nvarchar(150) [not null]  // ฝ่าย — approval unit key (ADR-0008); CC resolves to ฝ่าย via the CC↔Filler map

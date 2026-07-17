@@ -815,6 +815,21 @@ input:focus-visible {
   color: var(--ink);
   font-size: 12.5px;
 }
+/* Read-only auto-derived field (ตำแหน่ง) — dashed border says "shown, not
+   editable" without pretending to be an input. */
+.trip-field-grid .trip-readonly {
+  padding: 7px 9px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  min-height: 1.2em;
+}
+/* The revealed required plate box under the อื่นๆ select. */
+.free-text-input {
+  margin-top: 4px;
+}
 .trip-months-label {
   font-family: var(--mono);
   font-size: 10.5px;

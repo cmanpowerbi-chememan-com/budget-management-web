@@ -1,17 +1,31 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
+import * as referenceApi from '../api/reference'
 import * as subformApi from '../api/subform'
 import type { DetailLineState, TripListItem } from '../api/types'
 import type { TravelSideHistory } from './model'
 import { TripManager } from './TripManager'
 
 vi.mock('../api/subform')
+vi.mock('../api/reference')
 
 /** Default fixture = a ฝ่าย with history on BOTH sides (SGA the larger) —
  * the select stays enabled and new trips default to SGA, preserving the
  * behavior every pre-existing test in this file was written against. */
 const BOTH_SIDES: TravelSideHistory = { sides: ['COST', 'SGA'], defaultSide: 'SGA' }
+
+/** Default reference masters — every test needs these resolved (the modal
+ * loads them alongside the trips). E1 matches `tripItem()`'s traveler. */
+const TRAVELERS = [
+  { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor' },
+  { empcode: 'E7', name: 'สมปอง ขยัน', position: 'Officer' },
+  { empcode: 'E9', name: 'ใหม่ ทดสอบ', position: 'Manager' },
+]
+const COUNTRIES: { country: string; country_group: 1 | 2 }[] = [
+  { country: 'ประเทศไทย', country_group: 1 },
+  { country: 'ญี่ปุ่น', country_group: 2 },
+]
 
 function blankMonths(): Record<string, number> {
   return Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`m${String(i + 1).padStart(2, '0')}`, 0]))
@@ -29,6 +43,7 @@ function tripItem(overrides: Partial<TripListItem> = {}): TripListItem {
     country_group: 2,
     days: 5,
     travel_months: ['02', '03'],
+    project: null,
     purpose: null,
     side: 'COST',
     updated_at: '2026-01-01T00:00:00',
@@ -36,6 +51,16 @@ function tripItem(overrides: Partial<TripListItem> = {}): TripListItem {
     per_diem_error: null,
     ...overrides,
   }
+}
+
+/** New-trip happy-path prerequisites: traveler + days + a month + destination
+ * (ประเทศไทย → group 1). Tests asserting a specific field override after.
+ * `monthButtonIndex` = which card's m05 toggle (multi-card tests). */
+function fillNewTripBasics(localId = 'new-0', monthButtonIndex = 0) {
+  fireEvent.change(screen.getByLabelText(`traveler_empcode ${localId}`), { target: { value: 'E9' } })
+  fireEvent.change(screen.getByLabelText(`days ${localId}`), { target: { value: '3' } })
+  fireEvent.click(screen.getAllByRole('button', { name: 'm05' })[monthButtonIndex])
+  fireEvent.change(screen.getByLabelText(`destination ${localId}`), { target: { value: 'ประเทศไทย' } })
 }
 
 function detailLine(overrides: Partial<DetailLineState> = {}): DetailLineState {
@@ -60,6 +85,11 @@ function mockNoManualLines() {
 }
 
 describe('TripManager', () => {
+  beforeEach(() => {
+    // Reference masters load alongside the trip list on every mount.
+    vi.mocked(referenceApi.fetchTravelers).mockResolvedValue(TRAVELERS)
+    vi.mocked(referenceApi.fetchCountries).mockResolvedValue(COUNTRIES)
+  })
   afterEach(() => vi.resetAllMocks())
 
   it('shows a loading state then the existing trips', async () => {
@@ -148,11 +178,12 @@ describe('TripManager', () => {
       fiscal_year: 2027,
       traveler_empcode: 'E9',
       traveler_name: 'ใหม่ ทดสอบ',
-      position: 'Supervisor',
-      destination: null,
+      position: 'Manager',
+      destination: 'ประเทศไทย',
       country_group: 1,
       days: 3,
       travel_months: ['05'],
+      project: null,
       purpose: null,
       side: 'SGA',
       updated_at: '2026-01-02T00:00:00',
@@ -163,15 +194,15 @@ describe('TripManager', () => {
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+    fillNewTripBasics()
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
 
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
     const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
     expect(payload.traveler_empcode).toBe('E9')
     expect(payload.travel_months).toEqual(['05'])
+    expect(payload.destination).toBe('ประเทศไทย')
+    expect(payload.country_group).toBe(1) // derived from ประเทศไทย, never hand-picked
     expect(onSaved).toHaveBeenCalled()
     await waitFor(() => expect(screen.getByText(/900/)).toBeInTheDocument())
   })
@@ -183,17 +214,15 @@ describe('TripManager', () => {
       .mockRejectedValueOnce(new Error('network down')) // lost response — the classic retry case
       .mockResolvedValueOnce({
         trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
-        traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
-        country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+        traveler_name: 'ใหม่ ทดสอบ', position: 'Manager', destination: 'ประเทศไทย',
+        country_group: 1, days: 3, travel_months: ['05'], project: null, purpose: null, side: 'SGA',
         updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
       })
     render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+    fillNewTripBasics()
 
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
     await waitFor(() => expect(screen.getByText('บันทึกทริปไม่สำเร็จ')).toBeInTheDocument())
@@ -213,17 +242,15 @@ describe('TripManager', () => {
     vi.mocked(subformApi.createTrip).mockImplementation(async (payload) => ({
       trip_id: payload.traveler_empcode === 'E9' ? 99 : 100,
       cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: payload.traveler_empcode,
-      traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
-      country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+      traveler_name: 'ใหม่ ทดสอบ', position: 'Manager', destination: 'ประเทศไทย',
+      country_group: 1, days: 3, travel_months: ['05'], project: null, purpose: null, side: 'SGA',
       updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
     }))
     render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-    fireEvent.click(screen.getAllByRole('button', { name: 'm05' })[0])
+    fillNewTripBasics('new-0', 0)
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(1))
 
@@ -231,6 +258,7 @@ describe('TripManager', () => {
     fireEvent.change(screen.getByLabelText('traveler_empcode new-1'), { target: { value: 'E7' } })
     fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '4' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'm05' })[1])
+    fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ญี่ปุ่น' } })
     fireEvent.click(screen.getByTestId('save-trip-new-1'))
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(2))
 
@@ -252,9 +280,7 @@ describe('TripManager', () => {
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+    fillNewTripBasics()
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
 
     await waitFor(() => expect(screen.getByTestId('save-trip-new-0')).toBeDisabled())
@@ -263,8 +289,8 @@ describe('TripManager', () => {
 
     resolveCreate({
       trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
-      traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
-      country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'SGA',
+      traveler_name: 'ใหม่ ทดสอบ', position: 'Manager', destination: 'ประเทศไทย',
+      country_group: 1, days: 3, travel_months: ['05'], project: null, purpose: null, side: 'SGA',
       updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
     })
     await waitFor(() => expect(screen.getByTestId('save-trip-existing-99')).toBeEnabled())
@@ -301,6 +327,23 @@ describe('TripManager', () => {
     expect(payload.trip_id).toBe(10)
   })
 
+  it('clearing the project input on an EXISTING trip sends "" (not null) — null would tell the backend to leave the old value untouched', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ project: 'Alpha' })])
+    mockNoManualLines()
+    vi.mocked(subformApi.updateTrip).mockResolvedValue({ ...tripItem(), project: '' } as never)
+    render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+    expect(screen.getByLabelText('project existing-10')).toHaveValue('Alpha')
+
+    fireEvent.change(screen.getByLabelText('project existing-10'), { target: { value: '' } })
+    fireEvent.click(screen.getByTestId('save-trip-existing-10'))
+
+    await waitFor(() => expect(subformApi.updateTrip).toHaveBeenCalled())
+    const payload = vi.mocked(subformApi.updateTrip).mock.calls[0][0]
+    expect(payload.project).toBe('')
+    expect(payload.project).not.toBeNull()
+  })
+
   it('shows a 500-class error as a clear "ไม่สามารถคำนวณเบี้ยเลี้ยงได้" message, never a silent fallback', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     mockNoManualLines()
@@ -310,9 +353,7 @@ describe('TripManager', () => {
     render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-    fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+    fillNewTripBasics()
     fireEvent.click(screen.getByTestId('save-trip-new-0'))
 
     await waitFor(() => expect(screen.getByText(/ไม่สามารถคำนวณเบี้ยเลี้ยงได้/)).toBeInTheDocument())
@@ -341,6 +382,123 @@ describe('TripManager', () => {
     expect(payload.gl_account).toBe('5210400020') // transport, COST (this trip's side)
     expect(payload.m02).toBe(1000)
     expect(onSaved).toHaveBeenCalled()
+  })
+
+  describe('traveler + destination dropdowns (2026-07-17)', () => {
+    function mockCreateOk() {
+      vi.mocked(subformApi.createTrip).mockResolvedValue({
+        trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
+        traveler_name: 'ใหม่ ทดสอบ', position: 'Manager', destination: 'ประเทศไทย',
+        country_group: 1, days: 3, travel_months: ['05'], project: null, purpose: null, side: 'SGA',
+        updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
+      })
+    }
+
+    async function renderEmpty() {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+    }
+
+    it('traveler is a dropdown of names from /reference/travelers with the placeholder — no free-typed empcode', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      const select = screen.getByLabelText('traveler_empcode new-0') as HTMLSelectElement
+      expect(select.tagName).toBe('SELECT')
+      expect(referenceApi.fetchTravelers).toHaveBeenCalledWith('CC1')
+      expect(screen.getByRole('option', { name: '— เลือกผู้เดินทาง —' })).toBeInTheDocument()
+      // label = ชื่อ, value = empcode
+      const somchai = screen.getByRole('option', { name: 'สมชาย ใจดี' }) as HTMLOptionElement
+      expect(somchai.value).toBe('E1')
+    })
+
+    it('selecting a traveler auto-displays the read-only position (no position input exists)', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      expect(screen.getByTestId('position-new-0')).toHaveTextContent('—')
+      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+      expect(screen.getByTestId('position-new-0')).toHaveTextContent('Manager')
+      expect(screen.queryByLabelText('position new-0')).not.toBeInTheDocument()
+    })
+
+    it('an existing trip shows its response traveler name + position even when absent from the current list', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([
+        tripItem({ traveler_empcode: 'EGONE', traveler_name: 'อดีต พนักงาน', position: 'Director' }),
+      ])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      expect(screen.getByTestId('position-existing-10')).toHaveTextContent('Director')
+      // the select still displays the stored traveler via a fallback option
+      const fallback = screen.getByRole('option', { name: 'อดีต พนักงาน' }) as HTMLOptionElement
+      expect(fallback.value).toBe('EGONE')
+      expect((screen.getByLabelText('traveler_empcode existing-10') as HTMLSelectElement).value).toBe('EGONE')
+    })
+
+    it('the manual กลุ่มปลายทาง select is GONE; picking ญี่ปุ่น auto-sets country_group 2', async () => {
+      mockCreateOk()
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      expect(screen.queryByLabelText('country_group new-0')).not.toBeInTheDocument()
+
+      fillNewTripBasics()
+      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'ญี่ปุ่น' } })
+      fireEvent.click(screen.getByTestId('save-trip-new-0'))
+
+      await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
+      const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
+      expect(payload.destination).toBe('ญี่ปุ่น')
+      expect(payload.country_group).toBe(2)
+    })
+
+    it('picking อื่นๆ (Other) auto-sets country_group 3', async () => {
+      mockCreateOk()
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      fillNewTripBasics()
+      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'อื่นๆ (Other)' } })
+      fireEvent.click(screen.getByTestId('save-trip-new-0'))
+
+      await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
+      const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
+      expect(payload.destination).toBe('อื่นๆ (Other)')
+      expect(payload.country_group).toBe(3)
+    })
+
+    it('project and purpose inputs are included in the payload', async () => {
+      mockCreateOk()
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      fillNewTripBasics()
+      fireEvent.change(screen.getByLabelText('project new-0'), { target: { value: 'PRJ-X' } })
+      fireEvent.change(screen.getByLabelText('purpose new-0'), { target: { value: 'ประชุมลูกค้า' } })
+      fireEvent.click(screen.getByTestId('save-trip-new-0'))
+
+      await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
+      const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
+      expect(payload.project).toBe('PRJ-X')
+      expect(payload.purpose).toBe('ประชุมลูกค้า')
+    })
+
+    it('save is blocked with a Thai message until a destination is picked (group derives from it)', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+      fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+      fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+      fireEvent.click(screen.getByTestId('save-trip-new-0'))
+
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกปลายทาง')).toBeInTheDocument())
+      expect(subformApi.createTrip).not.toHaveBeenCalled()
+    })
   })
 
   describe('delete trip', () => {
@@ -474,8 +632,8 @@ describe('TripManager', () => {
       mockNoManualLines()
       vi.mocked(subformApi.createTrip).mockResolvedValue({
         trip_id: 99, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E9',
-        traveler_name: 'ใหม่ ทดสอบ', position: 'Supervisor', destination: null,
-        country_group: 1, days: 3, travel_months: ['05'], purpose: null, side: 'COST',
+        traveler_name: 'ใหม่ ทดสอบ', position: 'Manager', destination: 'ประเทศไทย',
+        country_group: 1, days: 3, travel_months: ['05'], project: null, purpose: null, side: 'COST',
         updated_at: '2026-01-02T00:00:00', per_diem_months: { ...blankMonths(), m05: 900 },
       })
       render(
@@ -484,9 +642,7 @@ describe('TripManager', () => {
       await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
-      fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
-      fireEvent.click(screen.getByRole('button', { name: 'm05' }))
+      fillNewTripBasics()
 
       const select = screen.getByLabelText('side new-0')
       expect(select).toBeEnabled() // nothing to lock to — the user decides

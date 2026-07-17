@@ -129,3 +129,137 @@ def test_departments_db_error_during_scope_resolution_returns_502(client):
         response = client.get("/scope/departments")
 
     assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# GET /reference/countries — identity-only auth (like /budget/gl-accounts)
+# ---------------------------------------------------------------------------
+
+def test_countries_401_without_auth_header(client):
+    response = client.get("/reference/countries")
+    assert response.status_code == 401
+
+
+def test_countries_returns_list_without_scope_resolution(client):
+    """Identity-only auth: a shared reference list, never RLS-scoped —
+    resolve_scope must not even be called."""
+    _override_auth("user@chememan.com")
+    fake_rows = [{"country": "Thailand", "country_group": 1}]
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.fetch_countries", return_value=fake_rows
+    ), patch("app.routers.reference.resolve_scope") as mock_scope:
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/countries")
+
+    assert response.status_code == 200
+    assert response.json() == fake_rows
+    mock_scope.assert_not_called()
+
+
+def test_countries_502_on_db_error(client):
+    import pyodbc
+
+    _override_auth("user@chememan.com")
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.fetch_countries", side_effect=pyodbc.Error("boom")
+    ):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/countries")
+
+    assert response.status_code == 502
+
+
+# ---------------------------------------------------------------------------
+# GET /reference/travelers — See-scope gated per cost_center (admin bypass)
+# ---------------------------------------------------------------------------
+
+_TRAVELER_ROWS = [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"}]
+
+
+def test_travelers_401_without_auth_header(client):
+    response = client.get("/reference/travelers?cost_center=CC1")
+    assert response.status_code == 401
+
+
+def test_travelers_requires_cost_center_param(client):
+    _override_auth("user@chememan.com")
+    response = client.get("/reference/travelers")
+    assert response.status_code == 422
+
+
+def test_travelers_in_see_scope_returns_list(client):
+    _override_auth("filler@chememan.com")
+    fake_scope = Scope(
+        email="filler@chememan.com", is_admin=False, role="filler",
+        fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"],
+    )
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", return_value=fake_scope
+    ), patch("app.routers.reference.fetch_travelers", return_value=_TRAVELER_ROWS):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/travelers?cost_center=CC2")
+
+    assert response.status_code == 200
+    assert response.json() == _TRAVELER_ROWS
+
+
+def test_travelers_outside_see_scope_403_and_never_queries_roster(client):
+    _override_auth("filler@chememan.com")
+    fake_scope = Scope(
+        email="filler@chememan.com", is_admin=False, role="filler",
+        fill_cost_centers=["CC1"], see_cost_centers=["CC1"],
+    )
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", return_value=fake_scope
+    ), patch("app.routers.reference.fetch_travelers", return_value=_TRAVELER_ROWS) as mock_fetch:
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/travelers?cost_center=CC9")
+
+    assert response.status_code == 403
+    mock_fetch.assert_not_called()
+
+
+def test_travelers_admin_bypasses_see_scope(client):
+    _override_auth("admin@chememan.com")
+    fake_scope = Scope(
+        email="admin@chememan.com", is_admin=True, role="admin",
+        fill_cost_centers=[], see_cost_centers=[],
+    )
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", return_value=fake_scope
+    ), patch("app.routers.reference.fetch_travelers", return_value=_TRAVELER_ROWS):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/travelers?cost_center=CC9")
+
+    assert response.status_code == 200
+    assert response.json() == _TRAVELER_ROWS
+
+
+def test_travelers_502_on_db_error(client):
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    fake_scope = Scope(
+        email="filler@chememan.com", is_admin=False, role="filler",
+        fill_cost_centers=["CC1"], see_cost_centers=["CC1"],
+    )
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", return_value=fake_scope
+    ), patch("app.routers.reference.fetch_travelers", side_effect=pyodbc.Error("boom")):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/travelers?cost_center=CC1")
+
+    assert response.status_code == 502
+
+
+def test_travelers_502_on_scope_resolution_db_error(client):
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
+        "app.routers.reference.resolve_scope", side_effect=pyodbc.Error("08S01", "boom")
+    ):
+        mock_fabric.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/reference/travelers?cost_center=CC1")
+
+    assert response.status_code == 502

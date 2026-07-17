@@ -1050,7 +1050,7 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
         None,  # deadline check -> no row, open
         (99,),  # an existing per-diem detail line already exists (detail_id=99) — its OLD amount is never read
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (0, 0, 7000.0, 0, 0, 0, 0, 0, 0, 0, 0, 0),  # recompute SUM reflects the freshly-written amount
+        (None,),  # echo fix: project not sent -> read back the actually-stored value (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -1712,21 +1712,22 @@ def test_delete_trip_admin_bypasses_department_lock_and_never_queries_it():
 # legitimate business data).
 # ---------------------------------------------------------------------------
 
-_STORED_TRIP_ROW = (
-    42,                # trip_id
-    "CC1",             # cost_center
-    2027,              # fiscal_year
-    "E1",              # traveler_empcode
-    "Somchai",         # traveler_name
-    "Manager",         # position
-    "Bangkok",         # destination
-    1,                 # country_group
-    10,                # days
-    "03",              # travel_months CSV
-    "site visit",      # purpose
-    "COST",            # side
-    STALE,             # _updated_at
-)
+def _stored_trip_row(**overrides):
+    """Build the replay row in whatever order `_TRIP_REPLAY_COLUMNS`
+    declares — robust to column additions (e.g. `project`)."""
+    from app.write_model import _TRIP_REPLAY_COLUMNS
+
+    base = dict(
+        trip_id=42, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
+        traveler_name="Somchai", position="Manager", destination="Bangkok",
+        country_group=1, days=10, travel_months="03", purpose="site visit",
+        project=None, side="COST", _updated_at=STALE,
+    )
+    base.update(overrides)
+    return tuple(base[c] for c in _TRIP_REPLAY_COLUMNS)
+
+
+_STORED_TRIP_ROW = _stored_trip_row()
 
 
 def test_trip_input_accepts_client_token_defaulting_to_none():
@@ -1923,7 +1924,7 @@ def test_trip_update_ignores_client_token_never_dedups_an_edit():
         None,                        # deadline check -> open
         None,                        # existing trip-detail lookup -> INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (0,) * 12,
+        (None,),                     # echo fix: project not sent -> read back the actually-stored value (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -1933,3 +1934,152 @@ def test_trip_update_ignores_client_token_never_dedups_an_edit():
     assert results[0].ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("client_token" in s for s in executed_sql)
+
+
+# ---------------------------------------------------------------------------
+# TripInput.project — free-text project name on the trip header (Excel
+# template col F). Persisted with the client_token conditional-column trick:
+# the column is referenced ONLY when a non-null value is supplied, so a
+# project-less request stays byte-identical to the pre-migration SQL
+# (deploy-safe before setup/migrate_budget_trip_project.py runs).
+# ---------------------------------------------------------------------------
+
+def test_trip_input_accepts_project_defaulting_to_none():
+    assert _trip().project is None
+    assert _trip(project="ERP rollout").project == "ERP rollout"
+
+
+def test_trip_input_rejects_project_over_200_chars():
+    with pytest.raises(ValidationError):
+        _trip(project="a" * 201)
+
+
+def _trip_create_fetchone_sequence():
+    """The legacy (token-less, project-less) create path's mock sequence —
+    same shape as test_trip_create_without_token_keeps_the_legacy_insert_shape."""
+    return [
+        ("Somchai", "Manager"), (500, None, None),
+        ("deptA", "divA", "clA"), None, None, None,
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (0,) * 12,
+    ]
+
+
+def test_trip_create_with_project_includes_project_column():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_create_fetchone_sequence()
+    cursor.fetchval.return_value = 45
+    scope = _scope()
+    results = save_trip(conn, [_trip(project="ERP rollout")], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    insert_calls = [c for c in cursor.execute.call_args_list if "INSERT INTO budget.budget_trip" in c.args[0]]
+    assert len(insert_calls) == 1
+    assert "project" in insert_calls[0].args[0]
+    assert "ERP rollout" in insert_calls[0].args[1:]
+    assert results[0].trip.project == "ERP rollout"
+
+
+def test_trip_create_without_project_keeps_the_legacy_insert_shape():
+    """No project -> NO 'project' referenced in ANY SQL (works against the
+    un-migrated live table)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_create_fetchone_sequence()
+    cursor.fetchval.return_value = 46
+    scope = _scope()
+    results = save_trip(conn, [_trip()], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].trip.project is None
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("project" in s for s in executed_sql)
+
+
+def _trip_update_fetchone_sequence():
+    """The update path's mock sequence — same shape as
+    test_trip_update_ignores_client_token_never_dedups_an_edit. Ends right
+    after the parent-cell recompute (which never issues its own SELECT when
+    `cursor.rowcount` mocks a matched row) — callers append one more item
+    only if their scenario triggers an extra read after that (e.g. the
+    project echo-fix lookup when `project` is None)."""
+    return [
+        ("Somchai", "Manager"), (500, None, None),
+        ("CC1", "COST", 2027),      # old-trip lookup (side-flip capture)
+        ("deptA", "divA", "clA"),   # cc_dims for department-lock check
+        None,                        # department-lock check -> not locked
+        None,                        # deadline check -> open
+        None,                        # existing trip-detail lookup -> INSERT
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+    ]
+
+
+def test_trip_update_with_project_sets_project_column():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence()
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, project="ERP rollout", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "project = ?" in update_calls[0].args[0]
+    assert "ERP rollout" in update_calls[0].args[1:]
+    assert results[0].trip.project == "ERP rollout"
+
+
+def test_trip_update_with_empty_project_clears_the_column():
+    """Explicit "" (NOT None) means "clear the field" — distinct from
+    omitting the field (None = leave untouched). The frontend now always
+    sends a concrete string when the user edits the project input, never
+    null (see TripManager.tsx), so this is the normal "user cleared it"
+    request shape."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence()
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, project="", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "project = ?" in update_calls[0].args[0]
+    assert "" in update_calls[0].args[1:]
+    assert results[0].trip.project == ""
+
+
+def test_trip_update_without_project_keeps_the_legacy_update_shape():
+    """No project sent (None) -> the WRITE itself stays legacy-shaped (never
+    references `project`, pre-migration-safe) — but the echoed TripState
+    must still reflect the ACTUAL stored value, not just parrot back the
+    request's None (that used to lie: DB kept "Legacy Project", response
+    claimed null)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project",)]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "project" not in update_calls[0].args[0]
+    assert results[0].trip.project == "Legacy Project"
+
+
+def test_trip_create_replay_returns_stored_project():
+    """A token replay must return the STORED project (like every other
+    stored field), and _TRIP_REPLAY_COLUMNS must therefore carry it."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_stored_trip_row(project="ERP rollout"), (500, None, None)]
+    scope = _scope()
+    results = save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].trip.project == "ERP rollout"

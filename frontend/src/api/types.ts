@@ -92,6 +92,22 @@ export interface DepartmentRow {
   c_level: string | null
 }
 
+/** `GET /reference/travelers?cost_center=` — Fill-scope traveler picklist for
+ * the Trip Manager (full roster of that CC, `position` drives per-diem). */
+export interface TravelerOption {
+  empcode: string
+  name: string
+  position: string
+}
+
+/** `GET /reference/countries` — destination master. The API returns groups
+ * 1 (domestic) and 2 (asian) ONLY; the UI appends its own "อื่นๆ (Other)"
+ * → group 3 entry (see `subform/model.countryOptionsWithOther`). */
+export interface CountryOption {
+  country: string
+  country_group: 1 | 2
+}
+
 /** `PUT /budget/rows` request body (`write_model.PendingRowInput`). All 12
  * months are always sent — the endpoint replaces the whole row, it does not
  * patch individual months. `expected_updated_at: null` = create a new row. */
@@ -180,6 +196,7 @@ export interface TripInput {
   country_group: 1 | 2 | 3
   days: number
   travel_months: string[]
+  project: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   expected_updated_at: string | null
@@ -202,6 +219,7 @@ export interface TripState {
   country_group: 1 | 2 | 3
   days: number
   travel_months: string[]
+  project: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   updated_at: string
@@ -223,6 +241,7 @@ export interface TripListItem {
   country_group: 1 | 2 | 3
   days: number
   travel_months: string[]
+  project: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   updated_at: string

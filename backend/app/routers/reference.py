@@ -1,4 +1,4 @@
-"""Reference-data endpoints for the A8 frontend pickers:
+"""Reference-data endpoints for the frontend pickers:
 
 - `GET /budget/gl-accounts` — full GL master, flagged `is_special` so the
   "+ เพิ่ม transaction" picker can offer only normal (non-special) GLs.
@@ -6,8 +6,12 @@
   division, c_level) rows, scoped like `GET /budget` (See-scope, or
   admin-wide when `admin_view_enabled=True` AND the caller is admin) — feeds
   the ฝ่าย picker's สายงาน›ฝ่าย›CC hierarchy (ADR-0019).
+- `GET /reference/travelers` — Trip Manager's traveler picker (full roster;
+  See-scope gated on the requested cost_center, admin bypass).
+- `GET /reference/countries` — Trip Manager's destination-country picker
+  (identity-only auth, like /budget/gl-accounts).
 
-Both are read-only, no write path, no approval concern (A5/A6 untouched).
+All are read-only, no write path, no approval concern (A5/A6 untouched).
 """
 import logging
 
@@ -17,8 +21,8 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user_email
 from app.db import get_fabric_conn
-from app.reference_data import fetch_departments, fetch_gl_accounts
-from app.rls import resolve_scope
+from app.reference_data import fetch_countries, fetch_departments, fetch_gl_accounts, fetch_travelers
+from app.rls import Scope, resolve_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,6 +42,29 @@ class DepartmentRow(BaseModel):
     department: str | None = None
     division: str | None = None
     c_level: str | None = None
+
+
+class TravelerRow(BaseModel):
+    empcode: str
+    name: str
+    position: str
+
+
+class CountryRow(BaseModel):
+    country: str
+    # 1 = domestic, 2 = asian (mapped from dbo.country_group's stored NAMES).
+    # Group 3 ("other") is a FRONTEND-ADDED choice — every country outside
+    # this master list — so it never appears in this response.
+    country_group: int
+
+
+def _ensure_see_scope(cost_center: str, scope: Scope) -> None:
+    """Same read-RLS rule as routers/subform.py: the caller must See the
+    cost_center, admin bypasses (ADR-0019)."""
+    if scope.is_admin:
+        return
+    if cost_center not in scope.see_cost_centers:
+        raise HTTPException(status_code=403, detail=f"{cost_center} is not in your See scope")
 
 
 @router.get("/budget/gl-accounts", response_model=list[GlAccount])
@@ -72,3 +99,35 @@ def departments(
         logger.exception("fetch_departments failed for %s", email)
         raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
     return [DepartmentRow(**r) for r in rows]
+
+
+@router.get("/reference/travelers", response_model=list[TravelerRow])
+def travelers(
+    cost_center: str = Query(...),
+    email: str = Depends(get_current_user_email),
+) -> list[TravelerRow]:
+    try:
+        # Connection-open AND resolve_scope inside the try: a DB blip at open
+        # time or during scope resolution is a 502, never an uncaught 500.
+        # The 403 HTTPException from _ensure_see_scope passes through.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            _ensure_see_scope(cost_center, scope)
+            rows = fetch_travelers(conn)
+    except pyodbc.Error as exc:
+        logger.exception("fetch_travelers failed for %s", email)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    return [TravelerRow(**r) for r in rows]
+
+
+@router.get("/reference/countries", response_model=list[CountryRow])
+def countries(email: str = Depends(get_current_user_email)) -> list[CountryRow]:
+    try:
+        # Identity-only auth (like /budget/gl-accounts) — a shared reference
+        # list, never RLS-scoped.
+        with get_fabric_conn() as conn:
+            rows = fetch_countries(conn)
+    except pyodbc.Error as exc:
+        logger.exception("fetch_countries failed for %s", email)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    return [CountryRow(**r) for r in rows]

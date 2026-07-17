@@ -3,7 +3,7 @@
  * GL-conditional validation exactly (parity-tested against the shared
  * fixture in `glDropdownConstants.test.ts`), so the UI never offers/submits
  * a value the server will reject (A9 never-cut). */
-import type { BudgetRow, DetailLineInput, DetailLineState, TripInput, TripListItem } from '../api/types'
+import type { BudgetRow, CountryOption, DetailLineInput, DetailLineState, TravelerOption, TripInput, TripListItem } from '../api/types'
 import { MONTH_KEYS, type MonthKey } from '../grid/model'
 import {
   ENTERTAINMENT_EXTERNAL_VALUES,
@@ -11,6 +11,7 @@ import {
   LEASE_MACHINERY_SUFFIX,
   LEASE_MACHINERY_TYPES,
   LEASE_PLANTS,
+  LEASE_PLATE_OTHER,
   LEASE_PLATES,
   LEASE_VEHICLE_SUFFIX,
   LEASE_VEHICLE_TYPES,
@@ -37,6 +38,12 @@ export interface DetailFieldSpec {
   key: string
   kind: DetailFieldKind
   options?: readonly string[]
+  /** A select option that, when chosen, reveals a REQUIRED free-text input
+   * whose typed value is what actually gets stored/sent (ทะเบียนรถ อื่นๆ →
+   * custom plate; the literal trigger is never sent). The trigger itself is
+   * stored only while the box is empty — `firstBlankFreeTextField` blocks
+   * saving in that state. */
+  freeTextOption?: string
 }
 
 const ENTERTAINMENT_INTERNAL_GL_SUFFIX = '900031'
@@ -59,7 +66,7 @@ export function detailFieldsFor(glGroup: string, glAccount: string): DetailField
     let plateField: DetailFieldSpec
     if (suffix === LEASE_VEHICLE_SUFFIX) {
       typeField = { key: 'ประเภทรถ', kind: 'select', options: LEASE_VEHICLE_TYPES }
-      plateField = { key: 'ทะเบียนรถ', kind: 'select', options: LEASE_PLATES }
+      plateField = { key: 'ทะเบียนรถ', kind: 'select', options: LEASE_PLATES, freeTextOption: LEASE_PLATE_OTHER }
     } else if (suffix === LEASE_MACHINERY_SUFFIX) {
       typeField = { key: 'ประเภทรถ', kind: 'select', options: LEASE_MACHINERY_TYPES }
       plateField = { key: 'ทะเบียนรถ', kind: 'locked' }
@@ -90,6 +97,85 @@ export function detailFieldsFor(glGroup: string, glAccount: string): DetailField
     ]
   }
   return []
+}
+
+/** What the SELECT of a `freeTextOption` field should show for a stored
+ * value: a listed option shows itself; anything else (a custom plate typed
+ * earlier) shows the trigger option, with the actual value living in the
+ * companion free-text box. Fields without `freeTextOption` pass through. */
+export function fieldSelectValue(spec: DetailFieldSpec, value: string | null): string {
+  if (value == null || value === '') return ''
+  if (!spec.freeTextOption) return value
+  return spec.options?.includes(value) ? value : spec.freeTextOption
+}
+
+/** The companion free-text box's content: the stored custom value, or empty
+ * when a listed option is stored (incl. the bare trigger — nothing typed yet). */
+export function fieldFreeText(spec: DetailFieldSpec, value: string | null): string {
+  if (value == null || value === spec.freeTextOption || spec.options?.includes(value)) return ''
+  return value
+}
+
+/** The free-text input is REQUIRED once its trigger option is picked — the
+ * literal trigger ('อื่นๆ') must never be sent as the value. Returns the
+ * first offending field key so the caller can block the save with a message
+ * naming it, or `null` when every free-text field is satisfied. */
+export function firstBlankFreeTextField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): string | null {
+  const offending = fields.find((f) => f.freeTextOption !== undefined && meta[f.key] === f.freeTextOption)
+  return offending?.key ?? null
+}
+
+// ---------------------------------------------------------------------------
+// Destination country options (Trip Manager) — country_group is DERIVED from
+// the picked country, never chosen by hand (wrong group = wrong per-diem).
+// ---------------------------------------------------------------------------
+
+/** The one client-side extra destination — the API only serves groups 1
+ * (domestic) and 2 (asian); anywhere else books at the group-3 rate. */
+export const OTHER_COUNTRY_OPTION = 'อื่นๆ (Other)'
+
+export interface DestinationOption {
+  country: string
+  country_group: 1 | 2 | 3
+}
+
+/** The full destination dropdown = the API's country master + อื่นๆ (Other). */
+export function countryOptionsWithOther(countries: readonly CountryOption[]): DestinationOption[] {
+  return [...countries, { country: OTHER_COUNTRY_OPTION, country_group: 3 }]
+}
+
+/** Resolves the per-diem country group for a picked destination; `null` for
+ * a name outside the list (a legacy free-typed destination on an existing
+ * trip — its stored group is kept until the user re-picks). */
+export function countryGroupFor(options: readonly DestinationOption[], country: string): 1 | 2 | 3 | null {
+  return options.find((o) => o.country === country)?.country_group ?? null
+}
+
+// ---------------------------------------------------------------------------
+// Traveler display (Trip Manager) — name + position are shown from the
+// traveler master; position is read-only (it drives per-diem server-side).
+// ---------------------------------------------------------------------------
+
+export interface TravelerDisplay {
+  name: string | null
+  position: string | null
+}
+
+/** Resolves the display name/position for a traveler empcode: the current
+ * `/reference/travelers` list wins; an existing trip whose traveler is no
+ * longer listed (left the company, changed CC) falls back to the values the
+ * trip response itself carries — but ONLY while the empcode is unchanged. */
+export function resolveTravelerDisplay(
+  empcode: string,
+  travelers: readonly TravelerOption[],
+  serverTraveler: TravelerOption | null,
+): TravelerDisplay {
+  const listed = travelers.find((t) => t.empcode === empcode)
+  if (listed) return { name: listed.name, position: listed.position }
+  if (serverTraveler && empcode === serverTraveler.empcode) {
+    return { name: serverTraveler.name, position: serverTraveler.position }
+  }
+  return { name: null, position: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +301,7 @@ export interface TripDraft {
   client_token: string | null
   days: number
   travel_months: string[]
+  project: string | null
   purpose: string | null
   /** null = the ฝ่าย has no travel history and the user has not picked yet
    * — save is blocked until set (never a silent default). */
@@ -236,6 +323,7 @@ export function blankTripDraft(costCenter: string, fiscalYear: number, side: Tri
     country_group: 1,
     days: 0,
     travel_months: [],
+    project: null,
     purpose: null,
     side,
     expected_updated_at: null,
@@ -253,6 +341,7 @@ export function draftFromTripListItem(item: TripListItem): TripDraft {
     country_group: item.country_group,
     days: item.days,
     travel_months: item.travel_months,
+    project: item.project ?? null,
     purpose: item.purpose,
     side: item.side,
     expected_updated_at: item.updated_at,
@@ -278,6 +367,10 @@ export function validateTripDraft(draft: TripDraft): TripValidationResult {
   if (draft.days <= 0) return { ok: false, errorTh: 'จำนวนวันต้องมากกว่า 0' }
   if (draft.travel_months.length === 0) return { ok: false, errorTh: 'กรุณาเลือกเดือนที่เดินทางอย่างน้อย 1 เดือน' }
   if (draft.side === null) return { ok: false, errorTh: 'กรุณาเลือกฝั่งบัญชี' }
+  // country_group is derived from the picked destination (the manual group
+  // select is gone) — a blank destination would silently book the domestic
+  // per-diem rate, the exact wrong-group bug this dropdown exists to prevent.
+  if (!draft.destination) return { ok: false, errorTh: 'กรุณาเลือกปลายทาง' }
   return { ok: true }
 }
 

@@ -37,19 +37,19 @@
   .fbtn.active{background:#334155;border-color:#94a3b8;color:#f8fafc}
 </style></head><body>
   <h1>📋 PENDING — Budget management web</h1>
-  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 16 July 2026 6:50 PM &bull; rendered: 16 July 2026 6:50 PM</div>
-  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (49)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 4</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 45</button></div>
+  <div class="meta">project: <b>04.budget_management_web</b> &bull; updated: 17 July 2026 11:09 AM &bull; rendered: 17 July 2026 11:09 AM</div>
+  <div class="filters"><button class="fbtn active" data-f="all">ทั้งหมด (50)</button><button class="fbtn" data-f="doing" style="color:#f59e0b">● DOING: 4</button><button class="fbtn" data-f="willdo" style="color:#3b82f6">○ WILL DO: 0</button><button class="fbtn" data-f="done" style="color:#22c55e">✓ DONE: 46</button></div>
   
     <div class="card latest" data-state="doing" style="border-left:4px solid #f59e0b">
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
         <span class="newest">✨ ล่าสุด</span>
-        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#ent-prd-mockup-sample-data</span>
-        <span class="dt">16 July 2026 5:30 PM &rarr; 16 July 2026 6:50 PM</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#special-group-completeness</span>
+        <span class="dt">17 July 2026 12:03 AM &rarr; 17 July 2026 11:09 AM</span>
       </div>
-      <div class="id">ent-prd-mockup-sample-data</div>
-      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -&gt; each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet &#x27;GL Acct &amp; Group  &#x27; cell E34 + 13Template Special/Public Relation &amp; Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -&gt; switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review.</code></div>
+      <div class="id">special-group-completeness</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>Both agents DONE on merged tree: backend 595 pass (+32), frontend 319 pass (+28). Contract deltas cross-checked (fixture parity, project in trip responses, traveler view shared with validate). Combined gate agent dispatched. CRITICAL ordering: migrate_budget_trip_project.py must run BEFORE next backend deploy (fetch_trips selects project unconditionally). Next: gate verdict -&gt; selective commit (feature files only, tree has unrelated churn) -&gt; migrations -&gt; staging rebuild+deploy -&gt; verify.</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
       
     </div>
@@ -58,12 +58,12 @@
       <div class="top">
         <span class="badge" style="color:#f59e0b;background:#3b2f1c;border-color:#f59e0b55">● DOING</span>
         
-        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#gl-not-in-master-readonly</span>
-        <span class="dt">16 July 2026 4:52 PM &rarr; 16 July 2026 4:57 PM</span>
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#ent-prd-mockup-sample-data</span>
+        <span class="dt">16 July 2026 5:30 PM &rarr; 16 July 2026 6:50 PM</span>
       </div>
-      <div class="id">gl-not-in-master-readonly</div>
-      
-      <div class="block ai"><span class="lbl">🤖 AI</span><code>ข.3 rule finalized (jakkaritw): pending cell editable IFF (cc in fill-scope, existing server &#x27;editable&#x27; flag) AND (gl_account in 142-master from /budget/gl-accounts). Else read-only: show sap/board reference + Thai marker &#x27;ยังไม่เปิดให้ตั้งงบ&#x27;, no input. Dynamic - admin adds GL to master -&gt; row editable auto (add-later policy). 106 GL/884 cells/200.1M fy2026 outside master. 1xxx/9xxx already not rendered. Frontend-only, reuse loaded gl-accounts master + existing read-only styling. 05 fable implementing TDD.</code></div>
+      <div class="id">ent-prd-mockup-sample-data</div>
+      <div class="who"><span class="tag agent">🤖 05-software-developer</span></div>
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -&gt; each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet &#x27;GL Acct &amp; Group  &#x27; cell E34 + 13Template Special/Public Relation &amp; Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -&gt; switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review.</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
       
     </div>
@@ -93,6 +93,20 @@
       <div class="who"><span class="tag agent">🤖 04-data-engineer</span></div>
       <div class="block ai"><span class="lbl">🤖 AI</span><code>BLOCKED on permissions: SP cman-fabric-write (de4b353f, same SP in budget+DW .env) has no grant on workspace 302668d3 (cman_dw_wh_gold). REST 403, OneLake 403, SQL 18456; sanity connect to cman-dw-ws OK so recipe correct. Endpoint host derived offline (base32 trick, saved to memory). Probe script ready in scratchpad (probe_fact_gl_trans.py, 16 probes). Next: user grants Viewer/ReadData in portal -&gt; rerun probe -&gt; resume workflow wf_4a5c10c5-155 (author+verify phases).</code></div>
       <div class="block hu"><span class="lbl">👤 คน</span><span>งานสร้าง view ติดเรื่องสิทธิ์เข้าถึงข้อมูลชั่วคราว — ตัว service principal (บัญชีโปรแกรมชื่อ cman-fabric-write ที่ระบบใช้ต่อฐานข้อมูล) ยังไม่มีสิทธิ์เข้า workspace ที่เก็บตาราง fact_gl_trans จึงยัง probe ข้อมูลจริงไม่ได้ สิ่งที่ต้องทำ: เข้า Fabric portal แล้วให้สิทธิ์ Viewer กับ cman-fabric-write บน workspace นั้น (สิทธิ์นี้ backend ของแอปงบประมาณต้องใช้อยู่แล้วตอนดึงยอดใช้จริงขึ้นเว็บ ไม่ใช่สิทธิ์เกินจำเป็น) พอให้สิทธิ์แล้วบอก ผมจะ probe ต่อและส่ง SQL สร้าง view ที่ตรวจแล้วให้รัน</span></div>
+      
+    </div>
+
+    <div class="card" data-state="done" style="border-left:4px solid #22c55e">
+      <div class="top">
+        <span class="badge" style="color:#22c55e;background:#16271c;border-color:#22c55e55">✓ DONE</span>
+        
+        <span class="ref" title="อ้างอิง task นี้เวลาคุยกับ CC">#gl-not-in-master-readonly</span>
+        <span class="dt">16 July 2026 4:52 PM &rarr; 16 July 2026 11:41 PM</span>
+      </div>
+      <div class="id">gl-not-in-master-readonly</div>
+      
+      <div class="block ai"><span class="lbl">🤖 AI</span><code>DONE+verified (291 vitest, predicate row.editable &amp;&amp; !is_special &amp;&amp; in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged.</code></div>
+      <div class="block hu"><span class="lbl">👤 คน</span><span>-</span></div>
       
     </div>
 

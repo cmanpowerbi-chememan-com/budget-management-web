@@ -18,6 +18,7 @@ import type {
   AttachmentInfo,
   BoardLayer,
   BudgetRow,
+  CountryOption,
   DepartmentRow,
   DetailLineState,
   GlAccount,
@@ -27,6 +28,7 @@ import type {
   PendingRowState,
   SapLayer,
   ScopeResponse,
+  TravelerOption,
   TripListItem,
   TripState,
 } from '../src/api/types'
@@ -221,6 +223,11 @@ export interface World {
   saveTripQueue: Result<TripState>[]
   deleteTripQueue: Result<{ ok: true }>[]
 
+  /** Mutable, not queues — GET /reference/* fires from Trip Manager's mount
+   * effect (same StrictMode double-read reasoning as `approvalStatusByDept`). */
+  travelers: TravelerOption[]
+  countries: CountryOption[]
+
   /** Keyed by department name — the CURRENT status for that department
    * (mutable, not a queue: GET /approval/status is mount-triggered, so a
    * queue would be silently double-drained by React StrictMode's dev-only
@@ -285,6 +292,12 @@ export function createWorld(overrides: Partial<World> = {}): World {
     tripsQueue: [[]],
     saveTripQueue: [],
     deleteTripQueue: [],
+
+    travelers: [{ empcode: '100123', name: 'สมชาย ทดสอบ', position: 'Officer' }],
+    countries: [
+      { country: 'ประเทศไทย', country_group: 1 },
+      { country: 'ญี่ปุ่น', country_group: 2 },
+    ],
 
     approvalStatusByDept: {},
     submitQueue: [],
@@ -370,7 +383,7 @@ export function noScopeWorld(overrides: Partial<World> = {}): World {
 // namespaces (matches vite.config.ts's dev proxy list); everything else
 // (Vite's own JS/CSS/HMR) is passed through untouched via `route.continue()`.
 // ---------------------------------------------------------------------------
-const API_PREFIXES = ['/me', '/scope', '/budget', '/approval', '/attachments']
+const API_PREFIXES = ['/me', '/scope', '/budget', '/approval', '/attachments', '/reference']
 
 function isApiPath(pathname: string): boolean {
   return API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
@@ -480,6 +493,14 @@ export async function installMocks(page: Page, world: World): Promise<void> {
       next.onServed?.()
       if (next.status === 'error') return fulfillJson(route, next.httpStatus, { detail: next.detail })
       return fulfillJson(route, 200, next.body)
+    }
+
+    if (path === '/reference/travelers' && method === 'GET') {
+      return fulfillJson(route, 200, world.travelers)
+    }
+
+    if (path === '/reference/countries' && method === 'GET') {
+      return fulfillJson(route, 200, world.countries)
     }
 
     if (path === '/approval/status' && method === 'GET') {

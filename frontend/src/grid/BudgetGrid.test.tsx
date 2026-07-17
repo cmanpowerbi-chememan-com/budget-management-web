@@ -5,6 +5,7 @@ import type { ScopeState } from '../auth/useScope'
 import { ApiError } from '../api/client'
 import * as approvalApi from '../api/approval'
 import * as budgetApi from '../api/budget'
+import * as referenceApi from '../api/reference'
 import * as subformApi from '../api/subform'
 import { BudgetGrid } from './BudgetGrid'
 import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
@@ -12,6 +13,7 @@ import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
 vi.mock('../api/budget')
 vi.mock('../api/subform')
 vi.mock('../api/approval')
+vi.mock('../api/reference')
 
 function makeRow(cc: string, gl: string, overrides: Partial<BudgetRow> = {}): BudgetRow {
   return makeRowFromOverrides({ cost_center: cc, gl_account: gl, editable: true, ...overrides })
@@ -40,6 +42,10 @@ describe('BudgetGrid', () => {
     // change, so every test needs a default (most tests are not testing
     // the badge itself and just need this to resolve quietly).
     vi.mocked(approvalApi.fetchPendingForMe).mockResolvedValue({ departments: [] })
+    // Trip Manager loads these reference masters whenever it opens — the two
+    // trip tests here only need them to resolve quietly.
+    vi.mocked(referenceApi.fetchTravelers).mockResolvedValue([])
+    vi.mocked(referenceApi.fetchCountries).mockResolvedValue([])
   })
 
   afterEach(() => {

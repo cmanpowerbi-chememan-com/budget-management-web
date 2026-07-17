@@ -9,6 +9,9 @@ import {
   detailFieldsFor,
   detailLineTotal,
   draftFromServerLine,
+  fieldFreeText,
+  fieldSelectValue,
+  firstBlankFreeTextField,
   type DetailLineDraft,
 } from './model'
 
@@ -95,6 +98,15 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
   async function saveRow(localId: string) {
     const row = rows.find((r) => r.localId === localId)
     if (!row) return
+    // A free-text trigger option ('อื่นๆ') with nothing typed must never be
+    // sent — the API expects the actual plate, not the trigger literal.
+    const blankFreeText = firstBlankFreeTextField(fields, row.draft.meta)
+    if (blankFreeText) {
+      setRows((prev) =>
+        prev.map((r) => (r.localId === localId ? { ...r, status: 'error', errorText: `กรุณาพิมพ์${blankFreeText}` } : r)),
+      )
+      return
+    }
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'saving', errorText: undefined } : r)))
     try {
       const saved = await saveDetailLine(buildDetailLinePayload(row.draft))
@@ -219,12 +231,15 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                         )
                       }
                       if (f.kind === 'select') {
+                        const storedValue = row.draft.meta[f.key] ?? null
+                        const selectValue = fieldSelectValue(f, storedValue)
+                        const showFreeText = f.freeTextOption !== undefined && selectValue === f.freeTextOption
                         return (
                           <td key={f.key} className="special-col-cell">
                             <select
                               aria-label={f.key}
                               className="detail-input"
-                              value={row.draft.meta[f.key] ?? ''}
+                              value={selectValue}
                               onChange={(e) => setMeta(row.localId, f.key, e.target.value)}
                             >
                               <option value="">— เลือก —</option>
@@ -234,6 +249,19 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                                 </option>
                               ))}
                             </select>
+                            {showFreeText && (
+                              <input
+                                aria-label={`${f.key} กำหนดเอง`}
+                                className="detail-input free-text-input"
+                                placeholder={`พิมพ์${f.key}`}
+                                value={fieldFreeText(f, storedValue)}
+                                onChange={(e) =>
+                                  // Empty box falls back to the trigger literal so the
+                                  // select stays on อื่นๆ; save is blocked in that state.
+                                  setMeta(row.localId, f.key, e.target.value.trim() ? e.target.value : f.freeTextOption!)
+                                }
+                              />
+                            )}
                           </td>
                         )
                       }

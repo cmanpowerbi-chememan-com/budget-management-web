@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DetailLineState, TripListItem } from '../api/types'
+import type { CountryOption, DetailLineState, TripListItem } from '../api/types'
 import { MONTH_KEYS } from '../grid/model'
 import { blankLayer, makeRow } from '../grid/testUtils'
 import {
@@ -9,17 +9,25 @@ import {
   buildDetailLinePayload,
   buildManualLinePayload,
   buildTripPayload,
+  countryGroupFor,
+  countryOptionsWithOther,
   deriveTravelSideHistory,
   detailFieldsFor,
   detailLineTotal,
   draftFromServerLine,
   draftFromTripListItem,
+  fieldFreeText,
+  fieldSelectValue,
+  firstBlankFreeTextField,
   indexDetailLinesByTrip,
   isTripMonthActive,
   manualLineDraftFromServerLine,
   manualLineTotal,
   manualTravelTypeForGl,
+  OTHER_COUNTRY_OPTION,
+  resolveTravelerDisplay,
   validateTripDraft,
+  type DetailFieldSpec,
 } from './model'
 
 describe('detailFieldsFor', () => {
@@ -41,6 +49,12 @@ describe('detailFieldsFor', () => {
     const fields = detailFieldsFor('Lease & Rental', '6211200060')
     expect(fields.find((f) => f.key === 'ประเภทรถ')?.kind).toBe('select')
     expect(fields.find((f) => f.key === 'ทะเบียนรถ')?.kind).toBe('select')
+  })
+
+  it('Lease & Rental vehicle ทะเบียนรถ carries freeTextOption อื่นๆ (custom plate); ประเภทรถ does not', () => {
+    const fields = detailFieldsFor('Lease & Rental', '6211200060')
+    expect(fields.find((f) => f.key === 'ทะเบียนรถ')?.freeTextOption).toBe('อื่นๆ')
+    expect(fields.find((f) => f.key === 'ประเภทรถ')?.freeTextOption).toBeUndefined()
   })
 
   it('Lease & Rental machinery suffix (…030) greys out ทะเบียนรถ only', () => {
@@ -78,6 +92,91 @@ describe('detailFieldsFor', () => {
 
   it('returns an empty list for an unrecognised group', () => {
     expect(detailFieldsFor('Office Expenses', '6211800030')).toEqual([])
+  })
+})
+
+describe('free-text plate helpers (ทะเบียนรถ อื่นๆ)', () => {
+  const plateSpec: DetailFieldSpec = {
+    key: 'ทะเบียนรถ',
+    kind: 'select',
+    options: ['6ขผ-3918', 'อื่นๆ'],
+    freeTextOption: 'อื่นๆ',
+  }
+
+  it('a listed plate keeps the select on that plate with no free text', () => {
+    expect(fieldSelectValue(plateSpec, '6ขผ-3918')).toBe('6ขผ-3918')
+    expect(fieldFreeText(plateSpec, '6ขผ-3918')).toBe('')
+  })
+
+  it('อื่นๆ itself selects อื่นๆ with an empty free-text box', () => {
+    expect(fieldSelectValue(plateSpec, 'อื่นๆ')).toBe('อื่นๆ')
+    expect(fieldFreeText(plateSpec, 'อื่นๆ')).toBe('')
+  })
+
+  it('a custom plate (not in the list) round-trips as อื่นๆ + the plate in the free-text box', () => {
+    expect(fieldSelectValue(plateSpec, 'กข-1234')).toBe('อื่นๆ')
+    expect(fieldFreeText(plateSpec, 'กข-1234')).toBe('กข-1234')
+  })
+
+  it('an unset value shows the empty placeholder, and a spec WITHOUT freeTextOption passes values through', () => {
+    expect(fieldSelectValue(plateSpec, null)).toBe('')
+    const plainSpec: DetailFieldSpec = { key: 'สถานที่ใช้งาน', kind: 'select', options: ['BK'] }
+    expect(fieldSelectValue(plainSpec, 'BK')).toBe('BK')
+    expect(fieldSelectValue(plainSpec, null)).toBe('')
+  })
+
+  it('firstBlankFreeTextField blocks the bare อื่นๆ (nothing typed) and passes a typed plate / listed plate / unset', () => {
+    const fields = [plateSpec, { key: 'กิจกรรม', kind: 'text' } as DetailFieldSpec]
+    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: 'อื่นๆ' })).toBe('ทะเบียนรถ')
+    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: 'กข-1234' })).toBeNull()
+    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: '6ขผ-3918' })).toBeNull()
+    expect(firstBlankFreeTextField(fields, {})).toBeNull()
+  })
+})
+
+describe('destination country options (auto country_group)', () => {
+  const API_COUNTRIES: CountryOption[] = [
+    { country: 'ประเทศไทย', country_group: 1 },
+    { country: 'ญี่ปุ่น', country_group: 2 },
+  ]
+
+  it('appends อื่นๆ (Other) as group 3 after the API list, preserving order', () => {
+    const options = countryOptionsWithOther(API_COUNTRIES)
+    expect(options).toEqual([
+      { country: 'ประเทศไทย', country_group: 1 },
+      { country: 'ญี่ปุ่น', country_group: 2 },
+      { country: OTHER_COUNTRY_OPTION, country_group: 3 },
+    ])
+  })
+
+  it('countryGroupFor resolves 1/2/3 by country name and null for an unknown (legacy) name', () => {
+    const options = countryOptionsWithOther(API_COUNTRIES)
+    expect(countryGroupFor(options, 'ประเทศไทย')).toBe(1)
+    expect(countryGroupFor(options, 'ญี่ปุ่น')).toBe(2)
+    expect(countryGroupFor(options, OTHER_COUNTRY_OPTION)).toBe(3)
+    expect(countryGroupFor(options, 'Japan')).toBeNull()
+  })
+})
+
+describe('resolveTravelerDisplay', () => {
+  const TRAVELERS = [
+    { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor' },
+    { empcode: 'E2', name: 'สมหญิง มั่นคง', position: 'Manager' },
+  ]
+
+  it('resolves name + position from the traveler list when the empcode is listed', () => {
+    expect(resolveTravelerDisplay('E2', TRAVELERS, null)).toEqual({ name: 'สมหญิง มั่นคง', position: 'Manager' })
+  })
+
+  it('falls back to the trip response values for an empcode no longer in the list', () => {
+    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer' }
+    expect(resolveTravelerDisplay('E9', TRAVELERS, server)).toEqual({ name: 'อดีตพนักงาน', position: 'Officer' })
+  })
+
+  it('returns nulls when nothing matches (blank pick, or empcode changed away from the server one)', () => {
+    expect(resolveTravelerDisplay('', TRAVELERS, null)).toEqual({ name: null, position: null })
+    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer' }
+    expect(resolveTravelerDisplay('E8', TRAVELERS, server)).toEqual({ name: null, position: null })
   })
 })
 
@@ -135,7 +234,7 @@ describe('trip draft <-> payload round trip', () => {
     const item: TripListItem = {
       trip_id: 10, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E1',
       traveler_name: 'สมชาย', position: 'Supervisor', destination: 'Japan',
-      country_group: 2, days: 5, travel_months: ['02', '03'], purpose: 'visit',
+      country_group: 2, days: 5, travel_months: ['02', '03'], project: 'PRJ-A', purpose: 'visit',
       side: 'COST', updated_at: '2026-01-01T00:00:00',
       per_diem_months: { m02: 1000, m03: 1000 } as Record<string, number>, per_diem_error: null,
     }
@@ -144,6 +243,8 @@ describe('trip draft <-> payload round trip', () => {
     expect(draft.expected_updated_at).toBe('2026-01-01T00:00:00')
     expect(draft.side).toBe('COST')
     expect(draft.travel_months).toEqual(['02', '03'])
+    expect(draft.project).toBe('PRJ-A')
+    expect(draft.purpose).toBe('visit')
   })
 
   it('buildTripPayload maps the draft into the POST|PUT /budget/trip shape', () => {
@@ -156,6 +257,17 @@ describe('trip draft <-> payload round trip', () => {
     expect(payload.cost_center).toBe('CC1')
     expect(payload.traveler_empcode).toBe('E1')
     expect(payload.travel_months).toEqual(['03'])
+  })
+
+  it('blankTripDraft starts with project null and buildTripPayload carries project + purpose', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    expect(draft.project).toBeNull()
+    draft.traveler_empcode = 'E1'
+    draft.project = 'โครงการ A'
+    draft.purpose = 'เยี่ยมลูกค้า'
+    const payload = buildTripPayload(draft)
+    expect(payload.project).toBe('โครงการ A')
+    expect(payload.purpose).toBe('เยี่ยมลูกค้า')
   })
 
   it('buildTripPayload refuses an unset side (validateTripDraft guards the UI path)', () => {
@@ -174,7 +286,7 @@ describe('trip draft <-> payload round trip', () => {
     const item: TripListItem = {
       trip_id: 10, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E1',
       traveler_name: 'สมชาย', position: 'Supervisor', destination: 'Japan',
-      country_group: 2, days: 5, travel_months: ['02', '03'], purpose: 'visit',
+      country_group: 2, days: 5, travel_months: ['02', '03'], project: null, purpose: 'visit',
       side: 'COST', updated_at: '2026-01-01T00:00:00',
       per_diem_months: { m02: 1000, m03: 1000 } as Record<string, number>, per_diem_error: null,
     }
@@ -219,11 +331,22 @@ describe('validateTripDraft', () => {
     expect(result.errorTh).toBe('กรุณาเลือกฝั่งบัญชี')
   })
 
+  it('rejects a missing destination — country_group is derived from it, so it can no longer be blank', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาเลือกปลายทาง')
+  })
+
   it('accepts a fully filled draft', () => {
     const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.days = 5
     draft.travel_months = ['03']
+    draft.destination = 'ประเทศไทย'
     expect(validateTripDraft(draft).ok).toBe(true)
   })
 })

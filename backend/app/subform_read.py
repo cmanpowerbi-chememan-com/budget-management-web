@@ -35,9 +35,12 @@ _DETAIL_LINE_COLUMNS: tuple[str, ...] = (
     *MONTH_COLUMNS, "total_year", "meta_json", "_updated_at",
 )
 
+# ⚠ `project` was added by setup/migrate_budget_trip_project.py — this SELECT
+# requires that migration on the live table (same rule as client_token: run
+# the migration before deploying this backend, or every GET /budget/trip 502s).
 _TRIP_COLUMNS: tuple[str, ...] = (
     "trip_id", "cost_center", "fiscal_year", "traveler_empcode", "traveler_name", "position",
-    "destination", "country_group", "days", "travel_months", "purpose", "side", "_updated_at",
+    "destination", "country_group", "days", "travel_months", "purpose", "project", "side", "_updated_at",
 )
 
 

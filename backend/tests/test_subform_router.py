@@ -51,6 +51,24 @@ def test_trip_row_accepts_real_datetime_updated_at():
     assert row.model_dump(mode="json")["updated_at"] == "2026-07-15T10:30:00"
 
 
+def test_trip_row_carries_project():
+    """`project` (trip header free text, migrate_budget_trip_project.py)
+    must survive the response model — a silently-dropped extra key is the
+    failure mode Pydantic's default extra='ignore' would give."""
+    from app.routers.subform import TripRow
+
+    row = TripRow(
+        trip_id=10, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
+        traveler_name="สมชาย", position="Supervisor", destination="Japan",
+        country_group=2, days=5, travel_months=["02", "03"], purpose=None,
+        project="ERP rollout", side="COST",
+        updated_at=datetime(2026, 7, 15, 10, 30, 0),
+        per_diem_months=None, per_diem_error=None,
+    )
+
+    assert row.model_dump(mode="json")["project"] == "ERP rollout"
+
+
 # ---------------------------------------------------------------------------
 # GET /budget/detail
 # ---------------------------------------------------------------------------

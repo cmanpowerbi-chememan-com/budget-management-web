@@ -135,6 +135,7 @@ CREATE TABLE budget.budget_trip (
     [days]              INT            NOT NULL DEFAULT 0,
     [travel_months]     NVARCHAR(40)   NOT NULL,   -- comma list of months e.g. 03,09
     [purpose]           NVARCHAR(500)  NULL,
+    [project]           NVARCHAR(200)  NULL,   -- free-text project name (template col F); added to a live table via setup/migrate_budget_trip_project.py
     [side]              NVARCHAR(4)    NOT NULL,   -- COST | SGA (one side per trip, spec §4a)
     [client_token]      NVARCHAR(64)   NULL,   -- idempotency token for POST create (one per new-trip intent, client-generated); NULL = legacy/token-less create, unconstrained
     [_user]             NVARCHAR(150)  NOT NULL,
