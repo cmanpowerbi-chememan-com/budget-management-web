@@ -304,6 +304,21 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeInTheDocument())
   })
 
+  it('shows the status legend with SAP/Approved at year-1 and Pending at the selected year (they disambiguate the prior-year baseline)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const legend = await screen.findByTestId('status-legend')
+    const items = legend.querySelectorAll('.legend-item')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveTextContent('SAP · ใช้จริง (2026)')
+    expect(items[1]).toHaveTextContent('Approved · งบอนุมัติ (2026)')
+    expect(items[2]).toHaveTextContent('Pending · งบรออนุมัติ (2027)')
+  })
+
   it('a non-admin, non-dual-role user never sees the admin-mode toggle', async () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)

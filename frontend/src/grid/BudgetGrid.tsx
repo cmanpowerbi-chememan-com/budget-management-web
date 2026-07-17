@@ -272,6 +272,20 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           </button>
         )}
         {isDualRoleAdmin && <AdminModeToggle enabled={adminModeOn} onChange={handleAdminModeToggle} />}
+        <div className="legend" data-testid="status-legend">
+          <span className="legend-item">
+            <span className="legend-dot sap" />
+            SAP · ใช้จริง ({year - 1})
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot approved" />
+            Approved · งบอนุมัติ ({year - 1})
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot pending" />
+            Pending · งบรออนุมัติ ({year})
+          </span>
+        </div>
       </div>
 
       {department && (
