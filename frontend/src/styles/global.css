@@ -862,13 +862,30 @@ input:focus-visible {
   --chip-fg: #fff;
   --chip-glow: rgba(34, 197, 94, 0.5);
 }
+/* Status indicator — swatch + text, never color alone (mockup 0002.3
+   lines 457-466). display:flex + flex-wrap:wrap lets the swatch+label sit
+   on one row while .special-hint/.reference-hint (flex-basis:100% below)
+   wrap onto their own full-width line underneath; .special-open-btn stays
+   a normal (non-full-width) flex item next to the label. */
 .status-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+  color: var(--ink-3);
+}
+.status-cell::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  background: currentColor;
 }
 .status-cell.sap {
   color: var(--status-sap);
@@ -881,6 +898,7 @@ input:focus-visible {
 }
 .special-hint {
   display: block;
+  flex-basis: 100%;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--special-edge);
@@ -891,6 +909,7 @@ input:focus-visible {
    muted, it is informational, not a special-GL accent. */
 .reference-hint {
   display: block;
+  flex-basis: 100%;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--ink-3);
