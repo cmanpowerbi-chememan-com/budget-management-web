@@ -117,22 +117,22 @@ function TxnBlock({
   return (
     <tbody className="txn-block" data-testid={`txn-${cc}-${gl}`}>
       <tr className="txn-row first" data-status="sap">
-        <td className="idx-cell">{cc}</td>
-        <td className="gl-cell">
+        <td className="idx-cell frz frz-1">{cc}</td>
+        <td className="gl-cell frz frz-2">
           {gl}
           <div className="gl-name">{meta.gl_name ?? '—'}</div>
         </td>
-        <td className="gl-group-cell">{meta.gl_group}</td>
+        <td className="gl-group-cell frz frz-3">{meta.gl_group}</td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
         <MonthCells values={row.sap} layerTestId="sap-value" cc={cc} gl={gl} />
       </tr>
       <tr className="txn-row" data-status="approved">
-        <td colSpan={3} />
+        <td colSpan={3} className="frz frz-1 frz-edge" />
         <td className="status-cell approved">Approved · งบ</td>
         <MonthCells values={row.board} layerTestId="board-value" cc={cc} gl={gl} />
       </tr>
       <tr className="txn-row last" data-status="pending">
-        <td colSpan={3} />
+        <td colSpan={3} className="frz frz-1 frz-edge" />
         <td className="status-cell pending">
           Pending · รออนุมัติ
           {meta.is_special && row.editable && onOpenSpecial && (
@@ -177,7 +177,12 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
   return (
     <tbody>
       <tr className="subtotal-row">
-        <td colSpan={4}>{label}</td>
+        {/* colSpan=4 covers the 3 frozen identity cols + Status — frozen at
+           left:0 (not left-unfrozen) so the label never scrolls out of view
+           under the horizontally-scrolled month columns (verified point 1). */}
+        <td colSpan={4} className="frz frz-1 frz-edge">
+          {label}
+        </td>
         {MONTH_KEYS.map((m) => (
           <td key={m} className="month-cell">
             {formatThb(totals.pending[m])}
@@ -200,44 +205,54 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   const sections = groupAndSortBySide(rows, glRef)
 
   return (
-    <div className="table-panel">
+    <div className="grid-sides">
       {(['COST', 'SGA'] as const).map((side) => {
         const groups = sections[side]
         if (groups.length === 0) return null
         return (
           <div key={side} className="side-section" data-testid={`side-section-${side}`}>
             <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Cost Center</th>
-                  <th>GL Code</th>
-                  <th>GL Group</th>
-                  <th>Status</th>
-                  {MONTH_KEYS.map((m) => (
-                    <th key={m} className="month-col">
-                      {m}
-                    </th>
+            {/* .table-panel = bordered frame (border/radius live here, not on
+               .data-table, so the sticky header isn't clipped); .table-wrap =
+               the actual vertical+horizontal scroll container. */}
+            <div className="table-panel">
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th className="frz frz-1">Cost Center</th>
+                      <th className="frz frz-2">GL Code</th>
+                      <th className="frz frz-3">GL Group</th>
+                      <th>Status</th>
+                      {MONTH_KEYS.map((m) => (
+                        <th key={m} className="month-col">
+                          {m}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  {groups.map((group) => (
+                    <Fragment key={group.glGroup}>
+                      {group.rows.map((row) => (
+                        <TxnBlock
+                          key={rowKey(row.cost_center, row.gl_account)}
+                          row={row}
+                          glRef={glRef}
+                          onCommitMonth={onCommitMonth}
+                          message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
+                          onOpenSpecial={onOpenSpecial}
+                        />
+                      ))}
+                      <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
+                    </Fragment>
                   ))}
-                </tr>
-              </thead>
-              {groups.map((group) => (
-                <Fragment key={group.glGroup}>
-                  {group.rows.map((row) => (
-                    <TxnBlock
-                      key={rowKey(row.cost_center, row.gl_account)}
-                      row={row}
-                      glRef={glRef}
-                      onCommitMonth={onCommitMonth}
-                      message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
-                      onOpenSpecial={onOpenSpecial}
-                    />
-                  ))}
-                  <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
-                </Fragment>
-              ))}
-              <SubtotalRow label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`} totals={sectionTotals(groups.flatMap((g) => g.rows))} />
-            </table>
+                  <SubtotalRow
+                    label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`}
+                    totals={sectionTotals(groups.flatMap((g) => g.rows))}
+                  />
+                </table>
+              </div>
+            </div>
           </div>
         )
       })}

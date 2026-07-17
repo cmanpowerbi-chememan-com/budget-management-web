@@ -620,17 +620,43 @@ input:focus-visible {
   color: var(--ink);
   margin-bottom: 8px;
 }
-.data-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 12.5px;
+/* Bordered frame per side-table — border/radius live here, not on
+   .data-table, so border-radius + overflow:hidden never clip the sticky
+   header (mockup pattern, 0002.3budget-export.html lines 378-383). */
+.table-panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
   overflow: hidden;
 }
+/* The actual scroll container: vertical scroll keeps the sticky header
+   pinned, horizontal scroll keeps the frozen identity columns pinned. */
+.table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 380px);
+  min-height: 480px;
+}
+.data-table {
+  width: 100%;
+  /* Forces horizontal scroll inside .table-wrap once the viewport is
+     narrower than this — 16 cols (3 frozen + Status + 12 months) need room
+     to stay readable rather than being auto-crushed. */
+  min-width: 1500px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  background: var(--surface);
+  /* Static left offsets for the 3 frozen identity columns — explicit px,
+     not JS-measured (unlike the mockup), since these columns have fixed
+     widths in the React grid (no column-resize feature here). */
+  --frz1: 0px;
+  --frz2: 130px;
+  --frz3: 280px;
+}
 .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: var(--paper-2);
   font-weight: 600;
   color: var(--ink-2);
@@ -641,6 +667,52 @@ input:focus-visible {
   text-align: left;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
+}
+/* Freeze the 3 identity columns (Cost Center / GL Code / GL Group) to the
+   left; Status + the 12 month columns scroll underneath. */
+.data-table th.frz,
+.data-table td.frz {
+  position: sticky;
+  z-index: 5;
+  background: var(--surface);
+}
+/* Corner cells (frozen AND sticky-top) must out-rank both the plain
+   sticky-top header (z10) and the sticky-left body cells (z5). */
+.data-table thead th.frz {
+  z-index: 16;
+  background: var(--paper-2);
+}
+.data-table .frz-1 {
+  left: var(--frz1);
+}
+.data-table .frz-2 {
+  left: var(--frz2);
+}
+.data-table .frz-3 {
+  left: var(--frz3);
+}
+/* Edge shadow = scroll cue at the right boundary of the frozen region.
+   .frz-edge is a separate class (not folded into .frz-3) because the 3
+   stacked rows/subtotal per transaction use a single spanned cell (left:0,
+   width = all 3 identity columns) rather than the 3 individual columns. */
+.data-table .frz-3,
+.data-table .frz-edge {
+  box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.28);
+}
+/* Explicit column widths (header row only — auto table-layout applies them
+   to the whole column, including the colSpan=3/4 merged cells below). */
+.data-table thead th.frz-1 {
+  width: 130px;
+}
+.data-table thead th.frz-2,
+.data-table thead th.frz-3 {
+  width: 150px;
+}
+/* Keep the subtotal row's paper-2 shading opaque on its frozen label cell —
+   .data-table td.frz's background:var(--surface) would otherwise win on
+   specificity over .subtotal-row td's background:var(--paper-2). */
+.data-table .subtotal-row td.frz {
+  background: var(--paper-2);
 }
 .data-table th.month-col {
   text-align: right;
