@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     attachments_library_name: str = "Budgeting and Management"
     attachments_root_folder: str = "เอกสาร ฝ่าย"
 
+    # GL `edit_by` admin-only lock (design v2, 2026-07-17) — OFF by default:
+    # while False, no code path in this app ever SELECTs `dbo.gl_group.edit_by`
+    # or changes behavior at all. jakkaritw flips this on when ready to go
+    # live with the 13 secret admin-only GLs (Insurance Premium, Employee
+    # benefits severance, Depreciation).
+    gl_edit_by_enabled: bool = False
+
     # A14 — built SPA location (`frontend/dist`), ONE Container App serves
     # both API + frontend. In the container this will be an absolute path
     # (e.g. /app/static); unset locally, where it falls back to the sibling

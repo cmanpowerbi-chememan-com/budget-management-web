@@ -84,6 +84,7 @@ export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd
           {nonSpecialGls.map((g) => (
             <option key={g.gl_code} value={g.gl_code}>
               {g.gl_code} — {g.gl_name ?? g.gl_group}
+              {g.edit_by === 'admin' ? ' (เฉพาะแอดมิน)' : ''}
             </option>
           ))}
         </select>

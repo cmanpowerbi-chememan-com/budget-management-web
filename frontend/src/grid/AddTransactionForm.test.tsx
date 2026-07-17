@@ -37,6 +37,19 @@ describe('AddTransactionForm', () => {
     expect(glSelect).not.toHaveTextContent('5211900030')
   })
 
+  it('marks an admin-only GL with a badge in the picker label (GL edit_by lock, design v2)', () => {
+    const glRefWithAdminGl: GlAccount[] = [
+      ...GL_REF,
+      { gl_code: '5210100010', gl_group: 'Insurance Premium', gl_name: 'Ins Premium', is_special: false, edit_by: 'admin' },
+    ]
+    render(<AddTransactionForm fillCostCenters={['CC1']} glRef={glRefWithAdminGl} existingRows={[]} onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    const glSelect = screen.getByLabelText('GL Code')
+    expect(glSelect).toHaveTextContent('5210100010 — Ins Premium (เฉพาะแอดมิน)')
+    // a normal GL (edit_by absent, or 'user') never gets the badge
+    expect(glSelect).not.toHaveTextContent('5211800030 — Office COST (เฉพาะแอดมิน)')
+  })
+
   it('shows a validation error and does not call onAdd for a duplicate (CC, GL) row', () => {
     const onAdd = vi.fn()
     render(

@@ -32,7 +32,9 @@ from datetime import datetime, timezone
 import pyodbc
 from pydantic import BaseModel
 
+from app.config import Settings, get_settings
 from app.deadline import PastDeadlineError, bangkok_today as _bangkok_today, is_post_deadline as _is_post_deadline
+from app.gl_access import department_has_pending_admin_gl_rows
 from app.rls import Scope
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,19 @@ class AdminCannotSubmitInCycleError(PermissionError):
     submitter's behalf."""
 
 
+class AdminGlInNormalSubmitError(PermissionError):
+    """GL edit_by admin-only lock (design v2, rule 3, flag-gated): admin-GL
+    rows must never enter the normal approval chain — the approver can never
+    see them (rule 1: stripped from every read for a non-admin, including an
+    approver), so they would stick at whatever PENDING_* step forever with
+    no reviewer able to act. Raised when an admin who ALSO Fills this
+    department (so `submit_department` would otherwise route through the
+    normal chain) tries to submit while the department has admin-GL pending
+    rows — they must use the admin direct-approve door instead (ADR-0012).
+    Only ever raised when `Settings.gl_edit_by_enabled` is True; flag OFF
+    never checks this at all."""
+
+
 class MidChainAdminOverwriteError(PermissionError):
     """B2 gate fix — fail-closed guard (default policy until jakkaritw
     confirms otherwise, see final report): the ADMIN_SUBMIT (Template-2
@@ -156,6 +171,7 @@ class ConcurrentApprovalError(RuntimeError):
 ERROR_HTTP_STATUS: dict[str, int] = {
     "not_filler_of_department": 403,
     "admin_cannot_submit_in_cycle": 403,
+    "admin_gl_in_normal_submit": 403,
     "mid_chain_admin_overwrite": 409,
     "past_deadline": 403,
     "invalid_approval_state": 409,
@@ -169,6 +185,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
 ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     NotFillerOfDepartmentError: "not_filler_of_department",
     AdminCannotSubmitInCycleError: "admin_cannot_submit_in_cycle",
+    AdminGlInNormalSubmitError: "admin_gl_in_normal_submit",
     MidChainAdminOverwriteError: "mid_chain_admin_overwrite",
     PastDeadlineError: "past_deadline",
     InvalidApprovalStateError: "invalid_approval_state",
@@ -426,7 +443,8 @@ def _ensure_admin_overwrite_allowed(existing: dict | None, department: str, fisc
 
 
 def submit_department(
-    conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, scope: Scope
+    conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, scope: Scope,
+    settings: Settings | None = None,
 ) -> ApprovalStatusState:
     """Submit `(department, fiscal_year)`.
 
@@ -441,13 +459,30 @@ def submit_department(
     B2 gate fix: the ADMIN_SUBMIT and orphan branches are fail-closed —
     `_ensure_admin_overwrite_allowed` blocks them from overwriting a
     mid-chain/APPROVED record. The post-deadline branch is exempt (ADR-0012:
-    admin may override ANY status once the cycle has closed)."""
+    admin may override ANY status once the cycle has closed).
+
+    GL edit_by admin-only lock (design v2, rule 3, flag-gated): an admin who
+    Fills this department (so the branch above would apply) is blocked from
+    a NORMAL submit while the department has admin-GL pending rows — those
+    must go through the admin direct-approve door instead, never the normal
+    chain (the approver can never see them, rule 1 — they would stick
+    forever). Flag OFF never runs this check at all."""
+    settings = settings or get_settings()
     existing = _fetch_row(conn, department, fiscal_year)
     dept_ccs = _department_cost_centers(conn, department)
     is_filler = bool(dept_ccs & set(scope.fill_cost_centers))
     now = _now()
 
     if is_filler:
+        if (
+            scope.is_admin
+            and settings.gl_edit_by_enabled
+            and department_has_pending_admin_gl_rows(conn, department, fiscal_year)
+        ):
+            raise AdminGlInNormalSubmitError(
+                f"{department}/{fiscal_year} has admin-only GL lines pending — "
+                "submit those via the admin direct-approve action instead of the normal chain"
+            )
         return _submit_normal_chain(conn, department, fiscal_year, submitter_email, existing, now)
 
     if not scope.is_admin:

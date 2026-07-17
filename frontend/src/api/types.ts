@@ -75,12 +75,19 @@ export interface BudgetRow {
 }
 
 /** `GET /budget/gl-accounts` — the GL master, flagged `is_special` so the
- * "+ เพิ่ม transaction" picker can exclude the 6 special groups (ADR-0005). */
+ * "+ เพิ่ม transaction" picker can exclude the 6 special groups (ADR-0005).
+ *
+ * `edit_by` (GL edit_by admin-only lock, design v2, flag-gated): only
+ * present when the backend flag is on. A non-admin caller never receives a
+ * row where this would be `'admin'` — those GLs are stripped server-side
+ * (secret), so no frontend hiding logic is needed; only an admin caller
+ * ever sees `'admin'` here. */
 export interface GlAccount {
   gl_code: string
   gl_group: string | null
   gl_name: string | null
   is_special: boolean
+  edit_by?: 'user' | 'admin'
 }
 
 /** `GET /scope/departments` — one row per Cost Center in the caller's scope,

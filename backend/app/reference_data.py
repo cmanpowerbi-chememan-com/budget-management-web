@@ -26,6 +26,7 @@ import logging
 
 import pyodbc
 
+from app.gl_access import normalize_edit_by
 from app.special_gl import classify_special_gl
 
 logger = logging.getLogger(__name__)
@@ -37,24 +38,43 @@ logger = logging.getLogger(__name__)
 _COUNTRY_GROUP_BY_NAME: dict[str, int] = {"domestic": 1, "asian": 2}
 
 
-def fetch_gl_accounts(conn: pyodbc.Connection) -> list[dict]:
+def fetch_gl_accounts(conn: pyodbc.Connection, *, include_edit_by: bool = False, is_admin: bool = False) -> list[dict]:
     """Full GL master, one row per GL account. No RLS — GL codes are a
-    shared reference list, not scoped per user."""
+    shared reference list, not scoped per user (EXCEPT the 13 admin-only
+    GLs, design v2 — SECRET from a non-admin caller: they never appear in
+    this list at all, not just their amounts).
+
+    `include_edit_by=False` (the flag-OFF default): identical query/shape to
+    before this feature — never selects `edit_by`, zero behavior change.
+    `include_edit_by=True`: also selects `edit_by`; a row normalizing to
+    'admin' is DROPPED entirely for a non-admin caller (`is_admin=False`) —
+    not just its `edit_by` field, the whole row — and every remaining row
+    carries a normalized `edit_by` ('user'/'admin')."""
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT gl_code, gl_group, gl_name FROM dbo.gl_group ORDER BY gl_group, gl_code")
+        if include_edit_by:
+            cursor.execute("SELECT gl_code, gl_group, gl_name, edit_by FROM dbo.gl_group ORDER BY gl_group, gl_code")
+        else:
+            cursor.execute("SELECT gl_code, gl_group, gl_name FROM dbo.gl_group ORDER BY gl_group, gl_code")
         rows = cursor.fetchall()
     finally:
         cursor.close()
-    return [
-        {
+
+    result: list[dict] = []
+    for r in rows:
+        item = {
             "gl_code": r[0],
             "gl_group": r[1],
             "gl_name": r[2],
             "is_special": classify_special_gl(r[1]) is not None,
         }
-        for r in rows
-    ]
+        if include_edit_by:
+            edit_by = normalize_edit_by(r[3])
+            if edit_by == "admin" and not is_admin:
+                continue  # SECRET GL — non-admin never sees this row exists
+            item["edit_by"] = edit_by
+        result.append(item)
+    return result
 
 
 def fetch_departments(conn: pyodbc.Connection, cost_centers: list[str] | None) -> list[dict]:

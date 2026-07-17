@@ -18,7 +18,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user_email
+from app.config import get_settings
 from app.db import get_fabric_conn
+from app.gl_access import is_admin_only_gl
 from app.rls import Scope, resolve_scope
 from app.subform_read import fetch_detail_lines, fetch_trips
 
@@ -89,6 +91,7 @@ def get_detail_lines(
     fiscal_year: int = Query(...),
     email: str = Depends(get_current_user_email),
 ) -> list[DetailLineRow]:
+    settings = get_settings()
     try:
         # Connection-open AND resolve_scope inside the try: a DB failure at
         # open time (driver pyodbc.Error, or msal token failure —
@@ -98,6 +101,14 @@ def get_detail_lines(
         with get_fabric_conn() as conn:
             scope = resolve_scope(email, conn)
             _ensure_read_scope(cost_center, scope)
+            # GL edit_by admin-only lock (design v2, flag-gated) — cheap
+            # defensive guard: an admin-only GL is never one of the 6
+            # special groups, so this endpoint would never actually return
+            # admin-GL data in practice, but a non-admin addressing one
+            # directly is still blocked rather than silently returning an
+            # (always-empty) list.
+            if settings.gl_edit_by_enabled and not scope.is_admin and is_admin_only_gl(conn, gl_account):
+                raise HTTPException(status_code=403, detail=f"{gl_account} is an admin-only GL account")
             rows = fetch_detail_lines(conn, cost_center, gl_account, fiscal_year)
     except pyodbc.Error as exc:
         logger.exception("fetch_detail_lines failed for %s/%s", cost_center, gl_account)

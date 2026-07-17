@@ -64,7 +64,9 @@ import pyodbc
 from pydantic import BaseModel, Field, field_validator
 
 from app.approval import APPROVED, PENDING_STATUSES
+from app.config import Settings, get_settings
 from app.deadline import PastDeadlineError, is_post_deadline
+from app.gl_access import normalize_edit_by
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError, derive_per_diem
 from app.rls import Scope
 from app.special_gl import (
@@ -190,6 +192,17 @@ class DataOverflowError(ValueError):
     surface as an uncaught 500 or block the rest of the batch)."""
 
 
+class AdminOnlyGlError(PermissionError):
+    """GL `edit_by` admin-only lock (design v2, flag-gated, rule 4 — defense
+    in depth): a non-admin tried to write a cell whose GL is locked to
+    `edit_by='admin'` on `dbo.gl_group`. Only ever raised when
+    `Settings.gl_edit_by_enabled` is True; flag OFF never checks this at
+    all. In practice unreachable via the normal UI for a non-admin (the GL
+    never appears in their `GET /budget/gl-accounts` list at all — see
+    `reference_data.fetch_gl_accounts`), but this is the single write-side
+    choke point so a crafted request is blocked too."""
+
+
 class DepartmentLockedError(PermissionError):
     """A10 gap close (ADR-0006/0008/0012/0013): a non-admin tried to edit a
     row whose `(department, fiscal_year)` is currently mid-approval
@@ -208,6 +221,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "excluded_cost_center": 400,
     "unknown_cost_center": 400,
     "unknown_gl_account": 400,
+    "admin_only_gl": 403,
     "special_gl_direct_edit": 400,
     "not_special_gl": 400,
     "per_diem_direct_edit": 400,
@@ -230,6 +244,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     ExcludedCostCenterError: "excluded_cost_center",
     UnknownCostCenterError: "unknown_cost_center",
     UnknownGlAccountError: "unknown_gl_account",
+    AdminOnlyGlError: "admin_only_gl",
     SpecialGlDirectEditError: "special_gl_direct_edit",
     NotSpecialGlError: "not_special_gl",
     PerDiemDirectEditError: "per_diem_direct_edit",
@@ -330,16 +345,26 @@ def _ensure_no_negative_months(months: list[Decimal]) -> None:
         raise NegativeMonthError("month amounts must be >= 0")
 
 
-def _lookup_gl_group(conn: pyodbc.Connection, gl_account: str) -> tuple[str, str | None]:
-    """Returns (gl_group, gl_name). Verified against the live table
+def _lookup_gl_group(
+    conn: pyodbc.Connection, gl_account: str, *, include_edit_by: bool = False
+) -> tuple[str, str | None, str | None]:
+    """Returns (gl_group, gl_name, edit_by). Verified against the live table
     2026-07-15 (integration test): both the group/category value and the
     account's display name live directly on `dbo.gl_group` as `gl_group` and
     `gl_name` (not `group_name` — the old assumed column name was never
     checked against the real synced table and would have raised "Invalid
-    column name 'group_name'" on first live call)."""
+    column name 'group_name'" on first live call).
+
+    `include_edit_by=False` (the flag-OFF default): identical query to
+    before this feature — never selects `edit_by`; `edit_by` in the return
+    is always `None`. `include_edit_by=True`: also selects `edit_by`,
+    normalized (GL edit_by admin-only lock, design v2)."""
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT gl_group, gl_name FROM dbo.gl_group WHERE gl_code = ?", gl_account)
+        if include_edit_by:
+            cursor.execute("SELECT gl_group, gl_name, edit_by FROM dbo.gl_group WHERE gl_code = ?", gl_account)
+        else:
+            cursor.execute("SELECT gl_group, gl_name FROM dbo.gl_group WHERE gl_code = ?", gl_account)
         row = cursor.fetchone()
     finally:
         cursor.close()
@@ -347,7 +372,8 @@ def _lookup_gl_group(conn: pyodbc.Connection, gl_account: str) -> tuple[str, str
         # D13: never echo the internal table name to the client — this
         # message flows straight into the HTTP error body via `detail`.
         raise UnknownGlAccountError(f"gl_account {gl_account} is not a recognised GL account")
-    return row[0], row[1]
+    edit_by = normalize_edit_by(row[2]) if include_edit_by else None
+    return row[0], row[1], edit_by
 
 
 def _lookup_cc_dims(conn: pyodbc.Connection, cost_center: str) -> dict[str, str | None]:
@@ -371,13 +397,24 @@ def _lookup_cc_dims(conn: pyodbc.Connection, cost_center: str) -> dict[str, str 
     return {"department": row[0], "division": row[1], "c_level": row[2]}
 
 
-def _derive_dim_snapshot(conn: pyodbc.Connection, cost_center: str, gl_account: str) -> dict[str, str | None]:
+def _derive_dim_snapshot(
+    conn: pyodbc.Connection, cost_center: str, gl_account: str, *, include_edit_by: bool = False
+) -> dict[str, str | None]:
     """Re-derive the snapshot dims stored on pending_budget (spec §4):
     `gl_name` + `gl_group` resolve from `dbo.gl_group`, `c_level`/`division`/
-    `department` resolve from `dbo.cc_filler_map`."""
-    gl_group, gl_name = _lookup_gl_group(conn, gl_account)
+    `department` resolve from `dbo.cc_filler_map`. `edit_by` is always a key
+    of the returned dict (`None` unless `include_edit_by=True` — GL edit_by
+    admin-only lock, design v2, flag-gated)."""
+    gl_group, gl_name, edit_by = _lookup_gl_group(conn, gl_account, include_edit_by=include_edit_by)
     dims = _lookup_cc_dims(conn, cost_center)
-    return {"gl_name": gl_name, "gl_group": gl_group, **dims}
+    return {"gl_name": gl_name, "gl_group": gl_group, "edit_by": edit_by, **dims}
+
+
+def _ensure_not_admin_only_gl(dims: dict[str, str | None], gl_account: str, scope: Scope, settings: Settings) -> None:
+    """GL edit_by admin-only lock (design v2, rule 4 — defense in depth):
+    flag OFF never checks this at all (zero behavior change)."""
+    if settings.gl_edit_by_enabled and dims.get("edit_by") == "admin" and not scope.is_admin:
+        raise AdminOnlyGlError(f"{gl_account} is an admin-only GL account — only admins may edit it")
 
 
 # Locked once a department's approval record has left DRAFT/REJECTED for this
@@ -540,13 +577,17 @@ class RowSaveResult(BaseModel):
     row: PendingRowState | None = None
 
 
-def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_email: str, scope: Scope) -> RowSaveResult:
+def _save_one_pending_row(
+    conn: pyodbc.Connection, row: PendingRowInput, user_email: str, scope: Scope, settings: Settings | None = None
+) -> RowSaveResult:
+    settings = settings or get_settings()
     _ensure_not_excluded(row.cost_center)
     _ensure_write_scope(row.cost_center, scope, conn)
     months = [_quantize_month(getattr(row, m)) for m in MONTH_COLUMNS]
     _ensure_no_negative_months(months)
 
-    dims = _derive_dim_snapshot(conn, row.cost_center, row.gl_account)
+    dims = _derive_dim_snapshot(conn, row.cost_center, row.gl_account, include_edit_by=settings.gl_edit_by_enabled)
+    _ensure_not_admin_only_gl(dims, row.gl_account, scope, settings)
     if classify_special_gl(dims["gl_group"]) is not None:
         raise SpecialGlDirectEditError(
             f"{row.gl_account} ({dims['gl_group']}) is a special GL — edit via its detail subform, not /budget/rows"
@@ -617,17 +658,19 @@ def _save_one_pending_row(conn: pyodbc.Connection, row: PendingRowInput, user_em
 
 
 def save_pending_rows(
-    conn: pyodbc.Connection, rows: list[PendingRowInput], user_email: str, scope: Scope
+    conn: pyodbc.Connection, rows: list[PendingRowInput], user_email: str, scope: Scope, settings: Settings | None = None
 ) -> list[RowSaveResult]:
     """Upsert each row of `rows` independently (never-cut: one row's 403/400/409
     never blocks another — multi-Filler CCs are common, spec §4)."""
+    settings = settings or get_settings()
+
     def _fail(row: PendingRowInput, exc: Exception) -> RowSaveResult:
         return RowSaveResult(
             cost_center=row.cost_center, gl_account=row.gl_account, fiscal_year=row.fiscal_year,
             ok=False, error=_ERROR_CODE_BY_EXCEPTION[type(exc)], detail=str(exc),
         )
 
-    return _run_per_item(conn, rows, lambda r: _save_one_pending_row(conn, r, user_email, scope), _fail)
+    return _run_per_item(conn, rows, lambda r: _save_one_pending_row(conn, r, user_email, scope, settings), _fail)
 
 
 # ---------------------------------------------------------------------------
@@ -835,7 +878,10 @@ def _recompute_parent_cell(
         cursor.close()
 
 
-def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_email: str, scope: Scope) -> DetailLineSaveResult:
+def _save_one_detail_line(
+    conn: pyodbc.Connection, line: DetailLineInput, user_email: str, scope: Scope, settings: Settings | None = None
+) -> DetailLineSaveResult:
+    settings = settings or get_settings()
     if line.detail_id is not None:
         # IDOR fix (D3/D4): authorize an EXISTING line against its ACTUAL
         # owner, read fresh from the DB — never the payload's own
@@ -862,7 +908,8 @@ def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_e
     months = [_quantize_month(getattr(line, m)) for m in MONTH_COLUMNS]
     _ensure_no_negative_months(months)
 
-    dims = _derive_dim_snapshot(conn, line.cost_center, line.gl_account)
+    dims = _derive_dim_snapshot(conn, line.cost_center, line.gl_account, include_edit_by=settings.gl_edit_by_enabled)
+    _ensure_not_admin_only_gl(dims, line.gl_account, scope, settings)
     gl_group = classify_special_gl(dims["gl_group"])
     if gl_group is None:
         raise NotSpecialGlError(f"{line.gl_account} ({dims['gl_group']}) is not a special-GL detail account")
@@ -971,16 +1018,18 @@ def _save_one_detail_line(conn: pyodbc.Connection, line: DetailLineInput, user_e
 
 
 def save_detail_lines(
-    conn: pyodbc.Connection, lines: list[DetailLineInput], user_email: str, scope: Scope
+    conn: pyodbc.Connection, lines: list[DetailLineInput], user_email: str, scope: Scope, settings: Settings | None = None
 ) -> list[DetailLineSaveResult]:
     """Upsert each special-GL detail line of `lines` independently."""
+    settings = settings or get_settings()
+
     def _fail(line: DetailLineInput, exc: Exception) -> DetailLineSaveResult:
         return DetailLineSaveResult(
             cost_center=line.cost_center, gl_account=line.gl_account, fiscal_year=line.fiscal_year,
             ok=False, error=_ERROR_CODE_BY_EXCEPTION[type(exc)], detail=str(exc),
         )
 
-    return _run_per_item(conn, lines, lambda l: _save_one_detail_line(conn, l, user_email, scope), _fail)
+    return _run_per_item(conn, lines, lambda l: _save_one_detail_line(conn, l, user_email, scope, settings), _fail)
 
 
 # ---------------------------------------------------------------------------

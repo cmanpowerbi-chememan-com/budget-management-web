@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user_email
+from app.config import get_settings
 from app.db import get_fabric_conn
 from app.reference_data import fetch_countries, fetch_departments, fetch_gl_accounts, fetch_travelers
 from app.rls import Scope, resolve_scope
@@ -35,6 +36,10 @@ class GlAccount(BaseModel):
     gl_group: str | None = None
     gl_name: str | None = None
     is_special: bool = False
+    # Design v2 (2026-07-17), flag-gated: only present when
+    # `Settings.gl_edit_by_enabled` is True. A non-admin caller never
+    # receives a row where this would be 'admin' — see fetch_gl_accounts.
+    edit_by: str | None = None
 
 
 class DepartmentRow(BaseModel):
@@ -69,12 +74,22 @@ def _ensure_see_scope(cost_center: str, scope: Scope) -> None:
 
 @router.get("/budget/gl-accounts", response_model=list[GlAccount])
 def gl_accounts(email: str = Depends(get_current_user_email)) -> list[GlAccount]:
+    settings = get_settings()
     try:
         # Connection-open inside the try: an open-time failure (driver
         # pyodbc.Error, or msal token failure — DbConnectionError, a
         # pyodbc.Error subclass) → 502, same as a query-time failure.
         with get_fabric_conn() as conn:
-            rows = fetch_gl_accounts(conn)
+            # Flag OFF (default): identity stays unresolved, `edit_by` is
+            # never selected — zero behavior change from before this
+            # feature. Flag ON: resolve_scope only to learn `is_admin`
+            # (needed to decide which rows to drop), not for CC scoping —
+            # this list has never been RLS-scoped by cost center.
+            is_admin = False
+            if settings.gl_edit_by_enabled:
+                scope = resolve_scope(email, conn)
+                is_admin = scope.is_admin
+            rows = fetch_gl_accounts(conn, include_edit_by=settings.gl_edit_by_enabled, is_admin=is_admin)
     except pyodbc.Error as exc:
         logger.exception("fetch_gl_accounts failed for %s", email)
         raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
