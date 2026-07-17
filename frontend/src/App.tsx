@@ -63,7 +63,7 @@ function App() {
         <header className="page-head">
           <UserBar email={email} authLoading={authLoading} authError={authError} scope={scope} />
           <div className="page-title-row">
-            <h1 className="page-title">OPEX Management</h1>
+            <h1 className="page-title glassy">OPEX <em>Management.</em></h1>
           </div>
         </header>
 

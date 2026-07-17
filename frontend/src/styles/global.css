@@ -118,11 +118,34 @@ input:focus-visible {
 }
 .page-title {
   font-family: var(--serif);
-  font-size: clamp(36px, 6vw, 64px);
-  line-height: 1;
+  font-size: clamp(48px, 7vw, 86px);
+  line-height: 0.98;
   letter-spacing: -0.025em;
   font-weight: 400;
   color: var(--accent);
+}
+.page-title em {
+  font-style: italic;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* ─── Gridgeist flat title (mockup 0002.3 lines 1020-1037 — the glassy
+   gradient at the top of the stylesheet is superseded by this later,
+   unconditional block; ported to match what the mockup actually renders) ─── */
+.glassy,
+.glassy em {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+  color: var(--accent);
+  filter: none;
+  text-shadow: none;
+}
+.glassy em {
+  font-style: italic;
+  color: var(--ink);
 }
 
 /* ─── Logged-in user bar ─── */
