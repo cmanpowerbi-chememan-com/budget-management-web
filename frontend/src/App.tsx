@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './auth/useAuth'
-import { useScope, type ScopeState } from './auth/useScope'
-import type { ScopeRole } from './api/types'
+import { useScope } from './auth/useScope'
 import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
+import { UserBar } from './userbar/UserBar'
 import './styles/global.css'
 
 const THEME_STORAGE_KEY = 'budget-theme'
@@ -33,83 +33,6 @@ function ThemeToggle() {
     >
       {theme === 'light' ? '🌙' : '☀️'}
     </button>
-  )
-}
-
-function roleLabel(role: ScopeRole | null): string {
-  switch (role) {
-    case 'admin':
-      return 'ผู้ดูแลระบบ'
-    case 'filler':
-      return 'ผู้กรอกงบประมาณ'
-    case 'see_only':
-      return 'ดูอย่างเดียว'
-    case 'none':
-      return 'ไม่มีสิทธิ์เข้าถึง'
-    default:
-      return '—'
-  }
-}
-
-interface UserBarProps {
-  email: string | null
-  authLoading: boolean
-  authError: string | null
-  scope: ScopeState
-}
-
-/** Login-bar area: who am I + what can I access (ADR-0004/0019). The ฝ่าย
- * picker itself (สายงาน›ฝ่าย›CC, counts) is `BudgetGrid`'s `DeptPicker`
- * (A8) — this bar only surfaces identity + scope counts. Takes
- * auth/scope as props (resolved once in `App`) rather than calling the
- * hooks again, so the page fires one `/me` + one `/scope` request, not two. */
-function UserBar({ email, authLoading, authError, scope }: UserBarProps) {
-  if (authLoading || scope.loading) {
-    return (
-      <section className="user-bar" data-testid="user-bar">
-        <span className="user-bar-status">กำลังโหลดข้อมูลผู้ใช้…</span>
-      </section>
-    )
-  }
-
-  if (authError) {
-    return (
-      <section className="user-bar" data-testid="user-bar">
-        <span className="user-bar-status user-bar-error">
-          โหลดข้อมูลผู้ใช้ไม่สำเร็จ — กรุณาลองรีเฟรชหน้าใหม่
-        </span>
-      </section>
-    )
-  }
-
-  if (scope.error) {
-    return (
-      <section className="user-bar" data-testid="user-bar">
-        <span className="user-bar-status user-bar-error">
-          โหลดข้อมูลสิทธิ์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง
-        </span>
-      </section>
-    )
-  }
-
-  return (
-    <section className="user-bar" data-testid="user-bar">
-      <div className="user-id">
-        <span className="user-email">{email}</span>
-        {scope.isAdmin && <span className="role-badge admin">Admin</span>}
-        <span className="role-badge">{roleLabel(scope.role)}</span>
-      </div>
-      <div className="user-chips">
-        <span className="user-chip" title="Cost Center ที่กรอกงบประมาณได้ (Fill scope)">
-          <span className="k">Fill</span>
-          <span className="v">{scope.fillCostCenters.length} CC</span>
-        </span>
-        <span className="user-chip" title="Cost Center ที่ดูได้ทั้งหมด (See scope)">
-          <span className="k">See</span>
-          <span className="v">{scope.seeCostCenters.length} CC</span>
-        </span>
-      </div>
-    </section>
   )
 }
 

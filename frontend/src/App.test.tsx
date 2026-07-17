@@ -73,12 +73,17 @@ describe('App shell + budget grid (A7/A8)', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'ฝ่ายบัญชี' })).toBeInTheDocument())
   })
 
-  it('shows the resolved user email and Fill/See CC counts once loaded', async () => {
+  it('shows the resolved user email, name, and Fill scope (division/ฝ่าย/CC pill) in the V3 header', async () => {
     render(<App />)
 
     await waitFor(() => expect(screen.getByText('user@chememan.com')).toBeInTheDocument())
-    expect(screen.getByText('1 CC')).toBeInTheDocument()
-    expect(screen.getByText('2 CC')).toBeInTheDocument()
+    expect(screen.getByText('user')).toBeInTheDocument() // name = email local-part
+    await waitFor(() => expect(screen.getByText('Div A')).toBeInTheDocument()) // สายงาน from /scope/departments
+    expect(screen.getByText('ฝ่ายบัญชี')).toBeInTheDocument()
+    expect(screen.getByText('Cost Centers')).toBeInTheDocument()
+    // Fill CC pill = 1 (fill_cost_centers), never a See count anywhere in the header.
+    expect(screen.getByTestId('v3-cc-count')).toHaveTextContent('1')
+    expect(screen.queryByText('See')).not.toBeInTheDocument()
   })
 
   it('shows a Thai error banner (and no grid) when /me succeeds but /scope fails', async () => {
