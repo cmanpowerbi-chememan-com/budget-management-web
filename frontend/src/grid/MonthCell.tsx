@@ -32,8 +32,9 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
   }, [value])
 
   if (!editable) {
+    const className = `month-value pending-readonly${value === 0 ? ' zero' : ''}`
     return (
-      <span className="month-value" title={disabledReason} aria-label={label} data-testid={testId}>
+      <span className={className} title={disabledReason} aria-label={label} data-testid={testId}>
         {formatThb(value)}
       </span>
     )

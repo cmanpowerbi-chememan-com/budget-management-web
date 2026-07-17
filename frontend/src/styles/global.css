@@ -790,12 +790,48 @@ input:focus-visible {
 .month-cell {
   text-align: right;
 }
+/* Base pill shape (mockup 0002.3budget-export.html). .month-input (the
+   editable input) shares this class but redeclares every property it needs
+   its own value for below (width/padding/border/background/font-weight) —
+   those input-specific declarations come later in the file so they win the
+   cascade on equal specificity; min-width/text-align/font-family/font-size
+   are harmless to share since the input's own explicit width (78px) already
+   exceeds this min-width. */
 .month-value {
   font-family: var(--mono);
   font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: var(--r);
   display: inline-block;
-  min-width: 56px;
+  min-width: 60px;
   text-align: right;
+}
+/* Data-layer pill colors — SAP = green, Approved (board, read-only) = blue,
+   pending read-only = neutral ink chip. Backgrounds color-mix into
+   `transparent` (not `--surface`) so the row-tint wash from point 2 shows
+   through-blended rather than the pill looking muddy/opaque. */
+.month-value.sap {
+  color: var(--status-sap);
+  background: color-mix(in oklab, var(--status-sap) 10%, transparent);
+}
+.month-value.approved-ro {
+  color: var(--status-approved);
+  background: color-mix(in oklab, var(--status-approved) 10%, transparent);
+}
+.month-value.pending-readonly {
+  color: var(--ink);
+  background: var(--paper-2);
+  font-weight: 600;
+}
+/* Zero value always mutes the pill, regardless of which layer it belongs
+   to — must stay LAST so it overrides .sap/.approved-ro/.pending-readonly
+   on equal specificity (cascade order, not just source position). */
+.month-value.zero {
+  color: var(--ink-3);
+  background: transparent;
+  font-weight: 400;
+  opacity: 0.6;
 }
 .month-input {
   width: 78px;

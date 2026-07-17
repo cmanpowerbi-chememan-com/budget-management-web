@@ -44,21 +44,30 @@ function rowKey(cc: string, gl: string): string {
 function MonthCells({
   values,
   layerTestId,
+  variant,
   cc,
   gl,
 }: {
   values: Record<MonthKey, number>
   layerTestId: 'sap-value' | 'board-value'
+  /** Data-layer pill color (mockup 0002.3budget-export.html) — SAP = green,
+   * Approved (board, read-only) = blue. A zero value always mutes the pill
+   * regardless of layer. */
+  variant: 'sap' | 'approved-ro'
   cc: string
   gl: string
 }) {
   return (
     <>
-      {MONTH_KEYS.map((m) => (
-        <td key={m} className="month-cell" data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
-          {formatThb(values[m])}
-        </td>
-      ))}
+      {MONTH_KEYS.map((m) => {
+        const value = values[m]
+        const className = `month-value ${variant}${value === 0 ? ' zero' : ''}`
+        return (
+          <td key={m} className="month-cell" data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
+            <span className={className}>{formatThb(value)}</span>
+          </td>
+        )
+      })}
     </>
   )
 }
@@ -124,12 +133,12 @@ function TxnBlock({
         </td>
         <td className="gl-group-cell frz frz-3">{meta.gl_group}</td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
-        <MonthCells values={row.sap} layerTestId="sap-value" cc={cc} gl={gl} />
+        <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} />
       </tr>
       <tr className="txn-row" data-status="approved">
         <td colSpan={3} className="frz frz-1 frz-edge" />
         <td className="status-cell approved">Approved · งบ</td>
-        <MonthCells values={row.board} layerTestId="board-value" cc={cc} gl={gl} />
+        <MonthCells values={row.board} layerTestId="board-value" variant="approved-ro" cc={cc} gl={gl} />
       </tr>
       <tr className="txn-row last" data-status="pending">
         <td colSpan={3} className="frz frz-1 frz-edge" />
