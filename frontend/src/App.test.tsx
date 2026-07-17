@@ -61,7 +61,7 @@ describe('App shell + budget grid (A7/A8)', () => {
     render(<App />)
 
     await waitFor(() => expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeInTheDocument())
-    expect(screen.getByRole('combobox', { name: /ปีงบประมาณ/ })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /ปีฐาน/ })).toBeInTheDocument()
   })
 
   it('pre-fills the ฝ่าย picker from the ADR-0016 deep-link when the department is in the caller\'s scope', async () => {
@@ -106,6 +106,6 @@ describe('App shell + budget grid (A7/A8)', () => {
     await waitFor(() =>
       expect(screen.getByText('โหลดข้อมูลสิทธิ์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')).toBeInTheDocument(),
     )
-    expect(screen.queryByRole('combobox', { name: /ปีงบประมาณ/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /ปีฐาน/ })).not.toBeInTheDocument()
   })
 })
