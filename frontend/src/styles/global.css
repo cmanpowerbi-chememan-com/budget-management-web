@@ -714,6 +714,25 @@ input:focus-visible {
 .data-table .subtotal-row td.frz {
   background: var(--paper-2);
 }
+/* Row tinting by status layer (mockup 0002.3budget-export.html lines
+   574-577) — specificity (0,3,2) beats .data-table td.frz (0,2,1) above, so
+   the 3 frozen identity cells pick up the same wash as the rest of the row
+   instead of leaving an untinted stripe. color-mix of 2-3% into the opaque
+   --surface stays fully opaque, so the frozen cells still block scrolled
+   content behind them. Subtotal rows carry no data-status and stay
+   untinted (.subtotal-row's own paper-2 bg), matching the mockup. */
+/* Frozen identity columns (CC / GL Code / GL Group) stay on the plain base
+   surface — excluded from the status wash so they read as a clean white
+   frozen band (user preference, deviates from the mockup which tints them). */
+.data-table tr[data-status='sap'] td:not(.shared):not(.frz) {
+  background: color-mix(in oklab, var(--status-sap) 9%, var(--surface));
+}
+.data-table tr[data-status='approved'] td:not(.shared):not(.frz) {
+  background: color-mix(in oklab, var(--status-approved) 9%, var(--surface));
+}
+.data-table tr[data-status='pending'] td:not(.shared):not(.frz) {
+  background: color-mix(in oklab, var(--ink) 9%, var(--surface));
+}
 .data-table th.month-col {
   text-align: right;
 }
