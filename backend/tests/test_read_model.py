@@ -403,6 +403,54 @@ def test_department_filter_without_cc_dims_still_drops_sap_led_row():
     assert rows == []
 
 
+# ---------------------------------------------------------------------------
+# merge_budget_rows — GL edit_by admin-only lock (design v2, flag-gated)
+# ---------------------------------------------------------------------------
+
+def test_admin_gl_codes_none_default_strips_nothing():
+    """Backward-compatible default: admin_gl_codes=None (the caller never
+    passed it, e.g. flag OFF) never strips anything."""
+    join_rows = [_blank_join_row("CC1", "GL-ADMIN", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert [r.gl_account for r in rows] == ["GL-ADMIN"]
+
+
+def test_admin_gl_row_stripped_entirely_for_non_admin():
+    join_rows = [
+        _blank_join_row("CC1", "GL-ADMIN", pending_cost_center="CC1"),
+        _blank_join_row("CC1", "GL-NORMAL", pending_cost_center="CC1"),
+    ]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, admin_gl_codes=frozenset({"GL-ADMIN"}))
+
+    assert [r.gl_account for r in rows] == ["GL-NORMAL"]
+
+
+def test_admin_gl_row_visible_for_admin_caller():
+    join_rows = [_blank_join_row("CC1", "GL-ADMIN", pending_cost_center="CC1")]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(join_rows, {}, scope, admin_view_enabled=True, admin_gl_codes=frozenset({"GL-ADMIN"}))
+
+    assert [r.gl_account for r in rows] == ["GL-ADMIN"]
+
+
+def test_admin_gl_row_stripped_for_approver_context_too():
+    """Rule 1: a See-only caller (e.g. an approver reviewing a department
+    via the manager-add See rule) must not receive admin-GL data either —
+    the strip is keyed on scope.is_admin, not Fill/editable."""
+    join_rows = [_blank_join_row("CC2", "GL-ADMIN", pending_cost_center="CC2")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, admin_gl_codes=frozenset({"GL-ADMIN"}))
+
+    assert rows == []
+
+
 def test_rows_sorted_by_cost_center_then_gl_account():
     join_rows = [
         _blank_join_row("CC2", "GL1", pending_cost_center="CC2"),
@@ -531,6 +579,66 @@ def test_get_budget_grid_admin_without_toggle_still_passes_see_cost_centers_filt
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=False)
 
     assert captured["cost_centers"] == ["CC1"]
+
+
+# ---------------------------------------------------------------------------
+# get_budget_grid — GL edit_by admin-only lock (design v2, flag-gated)
+# ---------------------------------------------------------------------------
+
+def test_get_budget_grid_flag_off_never_fetches_admin_gl_codes(monkeypatch):
+    """Flag OFF (default Settings) — zero behavior change: the extra query
+    must never run."""
+    calls = {"n": 0}
+
+    def fake_fetch_admin_gl_codes(conn):
+        calls["n"] += 1
+        return frozenset()
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+    assert calls["n"] == 0
+
+
+def test_get_budget_grid_flag_on_non_admin_fetches_admin_gl_codes(monkeypatch):
+    from app.config import Settings
+
+    calls = {"n": 0}
+
+    def fake_fetch_admin_gl_codes(conn):
+        calls["n"] += 1
+        return frozenset({"GL-ADMIN"})
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+
+    settings = Settings(_env_file=None, gl_edit_by_enabled=True)
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope(), settings=settings)
+    assert calls["n"] == 1
+
+
+def test_get_budget_grid_flag_on_admin_caller_never_fetches_admin_gl_codes(monkeypatch):
+    """An admin caller never needs the admin-GL set (nothing gets stripped
+    for them) — skip the extra query even with the flag on."""
+    from app.config import Settings
+
+    calls = {"n": 0}
+
+    def fake_fetch_admin_gl_codes(conn):
+        calls["n"] += 1
+        return frozenset()
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+
+    settings = Settings(_env_file=None, gl_edit_by_enabled=True)
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, settings=settings)
+    assert calls["n"] == 0
 
 
 # =========================================================================

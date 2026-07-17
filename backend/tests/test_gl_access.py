@@ -1,12 +1,13 @@
 """Unit tests for app.gl_access — the GL `edit_by` admin-only lock (design
 v2, flag-gated). Shared by reference_data.py (list), read_model.py (row
-strip), write_model.py (write-time 403), and approval.py (submit guard) so
-all 4 call sites can never disagree on what counts as an admin GL (same
-extraction rationale as app/deadline.py). DB always mocked, no live
+strip), and write_model.py (write-time 403) so all 3 call sites can never
+disagree on what counts as an admin GL (same extraction rationale as
+app/deadline.py). Admin-GL rows never enter `budget.approval_status`
+(ADR-0024) — approval.py has no call site here. DB always mocked, no live
 connection."""
 from unittest.mock import MagicMock
 
-from app.gl_access import department_has_pending_admin_gl_rows, fetch_admin_gl_codes, is_admin_only_gl, normalize_edit_by
+from app.gl_access import fetch_admin_gl_codes, is_admin_only_gl, normalize_edit_by
 
 
 # ---------------------------------------------------------------------------
@@ -105,39 +106,4 @@ def test_is_admin_only_gl_closes_cursor():
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = None
     is_admin_only_gl(conn, "GL1")
-    conn.cursor.return_value.close.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# department_has_pending_admin_gl_rows — approval.py submit-guard support
-# ---------------------------------------------------------------------------
-
-def test_department_has_pending_admin_gl_rows_true():
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = (1,)
-    assert department_has_pending_admin_gl_rows(conn, "ฝ่ายบัญชี", 2027) is True
-
-
-def test_department_has_pending_admin_gl_rows_false():
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = None
-    assert department_has_pending_admin_gl_rows(conn, "ฝ่ายบัญชี", 2027) is False
-
-
-def test_department_has_pending_admin_gl_rows_query_shape():
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = None
-    department_has_pending_admin_gl_rows(conn, "ฝ่ายบัญชี", 2027)
-    call = conn.cursor.return_value.execute.call_args
-    sql_text = call.args[0]
-    assert "budget.pending_budget" in sql_text
-    assert "dbo.gl_group" in sql_text
-    assert call.args[1] == "ฝ่ายบัญชี"
-    assert call.args[2] == 2027
-
-
-def test_department_has_pending_admin_gl_rows_closes_cursor():
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = None
-    department_has_pending_admin_gl_rows(conn, "ฝ่ายบัญชี", 2027)
     conn.cursor.return_value.close.assert_called_once()

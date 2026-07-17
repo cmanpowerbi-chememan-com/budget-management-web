@@ -24,9 +24,11 @@ import pytest
 from pydantic import ValidationError
 
 from app.approval import APPROVED, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3, REJECTED
+from app.config import Settings
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError
 from app.rls import Scope
 from app.write_model import (
+    AdminOnlyGlError,
     DepartmentLockedError,
     DetailLineInput,
     ExcludedCostCenterError,
@@ -62,6 +64,12 @@ def _scope(**overrides) -> Scope:
 
 def _admin_scope() -> Scope:
     return Scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+
+def _flag_on() -> Settings:
+    """GL edit_by admin-only lock (design v2) flag ON, for tests exercising
+    that path — never mutates the process-wide cached get_settings()."""
+    return Settings(_env_file=None, gl_edit_by_enabled=True)
 
 
 def _row(**overrides) -> PendingRowInput:
@@ -163,6 +171,62 @@ def test_special_gl_cell_cannot_be_edited_directly():
     scope = _scope()
     results = save_pending_rows(conn, [_row(gl_account="5211900030")], "filler@chememan.com", scope)
     assert results[0].error == "special_gl_direct_edit"
+
+
+# ---------------------------------------------------------------------------
+# GL edit_by admin-only lock (design v2, flag-gated) — pending row
+# ---------------------------------------------------------------------------
+
+def test_pending_row_flag_off_never_selects_edit_by():
+    """Flag OFF (default, no settings passed): the gl_group lookup must stay
+    a plain 2-tuple query — zero behavior/SQL change from before this
+    feature."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, None]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100)], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    gl_lookup_sql = cursor.execute.call_args_list[0].args[0]
+    assert "edit_by" not in gl_lookup_sql
+
+
+def test_pending_row_admin_only_gl_rejected_for_non_admin_when_flag_enabled():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Insurance Premium", "ค่าเบี้ยประกันภัย", "admin"), ("deptA", "divA", "clA")]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(gl_account="5210100010")], "filler@chememan.com", scope, settings=_flag_on())
+    assert results[0].error == "admin_only_gl"
+    conn.commit.assert_not_called()
+
+
+def test_pending_row_admin_only_gl_allowed_for_admin_when_flag_enabled():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        (1,),  # CC-existence check (admin bypass)
+        ("Insurance Premium", "ค่าเบี้ยประกันภัย", "admin"),
+        ("deptA", "divA", "clA"),
+        None, None,
+    ]
+    scope = _admin_scope()
+    results = save_pending_rows(
+        conn, [_row(cost_center="ANY-CC", gl_account="5210100010", m01=100)], "admin@chememan.com", scope,
+        settings=_flag_on(),
+    )
+    assert results[0].ok is True
+
+
+def test_pending_row_normal_gl_still_succeeds_when_flag_enabled():
+    """Flag ON but the GL is a normal (non-admin) GL — must behave exactly
+    like flag OFF."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee", "user"), ("deptA", "divA", "clA"), None, None]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100)], "filler@chememan.com", scope, settings=_flag_on())
+    assert results[0].ok is True
 
 
 def test_new_row_insert_succeeds_and_total_year_is_sum_of_months():
@@ -454,6 +518,32 @@ def test_detail_line_on_a_normal_gl_group_is_rejected():
     scope = _scope()
     results = save_detail_lines(conn, [_detail(gl_account="NORMALGL")], "filler@chememan.com", scope)
     assert results[0].error == "not_special_gl"
+
+
+def test_detail_line_admin_only_gl_rejected_for_non_admin_when_flag_enabled():
+    """Defense in depth (rule 4): an admin-only GL is also never a special
+    GL, so this would already be rejected as not_special_gl — but the
+    admin_only_gl choke point sits before that classification, so a
+    non-admin gets the more accurate error."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee", "admin"), ("deptA", "divA", "clA")]
+    scope = _scope()
+    results = save_detail_lines(
+        conn, [_detail(gl_account="5210100010")], "filler@chememan.com", scope, settings=_flag_on()
+    )
+    assert results[0].error == "admin_only_gl"
+
+
+def test_detail_line_flag_off_never_selects_edit_by():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    scope = _scope()
+    results = save_detail_lines(conn, [_detail(gl_account="NORMALGL")], "filler@chememan.com", scope)
+    assert results[0].error == "not_special_gl"
+    gl_lookup_sql = cursor.execute.call_args_list[0].args[0]
+    assert "edit_by" not in gl_lookup_sql
 
 
 def test_entertainment_detail_line_insert_succeeds():

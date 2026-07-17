@@ -47,6 +47,60 @@ def test_fetch_gl_accounts_closes_cursor():
 
 
 # ---------------------------------------------------------------------------
+# fetch_gl_accounts — GL edit_by admin-only lock (design v2, flag-gated)
+# ---------------------------------------------------------------------------
+
+def test_fetch_gl_accounts_default_never_selects_edit_by():
+    """Flag OFF (default param) — identical SQL to before this feature."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_gl_accounts(conn)
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "edit_by" not in sql_text
+
+
+def test_fetch_gl_accounts_include_edit_by_selects_the_column():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_gl_accounts(conn, include_edit_by=True, is_admin=True)
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "edit_by" in sql_text
+
+
+def test_fetch_gl_accounts_admin_caller_sees_admin_gl_with_normalized_field():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        ("6211800030", "Office expenses", "อุปกรณ์และเครื่องใช้สำนักงาน", "user"),
+        ("5210100010", "Insurance Premium", "ค่าเบี้ยประกันภัย", "Admin"),
+    ]
+    rows = fetch_gl_accounts(conn, include_edit_by=True, is_admin=True)
+    assert len(rows) == 2
+    by_code = {r["gl_code"]: r for r in rows}
+    assert by_code["6211800030"]["edit_by"] == "user"
+    assert by_code["5210100010"]["edit_by"] == "admin"
+
+
+def test_fetch_gl_accounts_non_admin_caller_never_sees_admin_gl_row_at_all():
+    """SECRET (design v2): the admin GL is dropped entirely, not just its
+    edit_by field — a non-admin must never learn the row even exists."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        ("6211800030", "Office expenses", "อุปกรณ์และเครื่องใช้สำนักงาน", "user"),
+        ("5210100010", "Insurance Premium", "ค่าเบี้ยประกันภัย", "admin"),
+    ]
+    rows = fetch_gl_accounts(conn, include_edit_by=True, is_admin=False)
+    assert [r["gl_code"] for r in rows] == ["6211800030"]
+    assert rows[0]["edit_by"] == "user"
+
+
+def test_fetch_gl_accounts_garbage_edit_by_normalizes_to_user_and_is_visible():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [("GL1", "Office expenses", "x", None)]
+    rows = fetch_gl_accounts(conn, include_edit_by=True, is_admin=False)
+    assert rows == [{"gl_code": "GL1", "gl_group": "Office expenses", "gl_name": "x", "is_special": False, "edit_by": "user"}]
+
+
+# ---------------------------------------------------------------------------
 # fetch_departments
 # ---------------------------------------------------------------------------
 

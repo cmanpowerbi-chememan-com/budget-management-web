@@ -4,10 +4,12 @@
 13 live GLs on `dbo.gl_group` carry `edit_by='admin'` (Insurance Premium,
 Employee benefits severance, Depreciation) and must never be visible to a
 non-admin in any API response, and never writable by a non-admin. Extracted
-to its own module (same rationale as `app/deadline.py`) so the 4 call sites —
+to its own module (same rationale as `app/deadline.py`) so the 3 call sites —
 `reference_data.fetch_gl_accounts` (list), `read_model.merge_budget_rows`
-(row strip), `write_model.py` (write-time 403), `approval.submit_department`
-(normal-chain guard) — can never disagree on what counts as an admin GL.
+(row strip), `write_model.py` (write-time 403) — can never disagree on what
+counts as an admin GL. Admin-GL rows are approved-on-save (ADR-0024) and
+never enter `budget.approval_status` at all, so `approval.py` has no call
+site here.
 """
 from typing import Literal
 
@@ -51,29 +53,3 @@ def is_admin_only_gl(conn: pyodbc.Connection, gl_account: str) -> bool:
     finally:
         cursor.close()
     return row is not None and normalize_edit_by(row[0]) == "admin"
-
-
-def department_has_pending_admin_gl_rows(conn: pyodbc.Connection, department: str, fiscal_year: int) -> bool:
-    """True when `budget.pending_budget` has any row for `(department,
-    fiscal_year)` whose GL is admin-only. Used by
-    `approval.submit_department`'s normal-chain guard: admin-GL rows must
-    never enter the normal approval chain (the approver can never see them,
-    per rule 1 — they would stick forever with no reviewer able to act on
-    them); they must go through the admin direct-approve door instead
-    (ADR-0012)."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            SELECT TOP 1 1
-            FROM budget.pending_budget pb
-            JOIN dbo.gl_group g ON pb.gl_account = g.gl_code
-            WHERE pb.department = ? AND pb.fiscal_year = ?
-                AND LOWER(LTRIM(RTRIM(g.edit_by))) = 'admin'
-            """,
-            department, fiscal_year,
-        )
-        row = cursor.fetchone()
-    finally:
-        cursor.close()
-    return row is not None

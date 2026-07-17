@@ -175,6 +175,60 @@ def test_submit_first_time_full_chain():
     conn.commit.assert_called_once()
 
 
+# ---------------------------------------------------------------------------
+# submit_department — admin-GL rows (dbo.gl_group.edit_by='admin') never
+# gate the normal chain (ADR-0024). Replaces the removed
+# AdminGlInNormalSubmitError guard, which forced an admin-who-Fills into
+# _admin_direct_approve whenever the department held an admin-GL pending
+# row — stamping the WHOLE department APPROVED and bypassing the real
+# approver on the legitimate user-GL rows. Admin-GL rows are approved-on-save
+# the instant the admin (Budget dept) saves them (A5's write path) and never
+# enter budget.approval_status at all, so submit_department has nothing to
+# check about them regardless of `Settings.gl_edit_by_enabled` — a normal
+# submit governs only the department's user-GL rows, for BOTH an admin
+# filler and a plain non-admin filler.
+# ---------------------------------------------------------------------------
+
+def test_submit_admin_filler_routes_normal_chain_admin_gl_rows_never_block_it():
+    """An admin who also Fills the department routes through the normal
+    chain exactly like any other filler, whether or not the department holds
+    pending admin-GL rows — those rows are invisible to this function (it
+    never queries budget.pending_budget for GL info at all)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,             # _fetch_row -> no existing record
+        None,             # _is_post_deadline -> no deadline row configured
+        ("999", "200"),   # resolve_submitter
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
+
+    result = submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope(fill_cost_centers=["CC1"]))
+
+    assert result.status == PENDING_APPROVER1
+    conn.commit.assert_called_once()
+
+
+def test_submit_non_admin_filler_routes_normal_chain_unaffected():
+    """A plain non-admin filler submitting a department is unaffected —
+    admin-GL rows can never be theirs to begin with (rule 4: only an admin
+    may write one), and submit_department treats them the same as any other
+    filler submission either way."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,             # _fetch_row -> no existing record
+        None,             # _is_post_deadline -> no deadline row configured
+        ("999", "200"),   # resolve_submitter
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
+
+    result = submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.status == PENDING_APPROVER1
+    conn.commit.assert_called_once()
+
+
 def test_submit_first_time_concurrent_insert_race_raises_conflict_not_raw_502():
     """S2 gate fix: two concurrent first-time submits for the same
     (department, fiscal_year) race the PK on the INSERT — the loser must get

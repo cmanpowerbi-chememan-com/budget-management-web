@@ -96,6 +96,55 @@ def test_get_detail_lines_returns_list(client):
     assert response.json()[0]["detail_id"] == 1
 
 
+def test_get_detail_lines_flag_off_never_checks_admin_only_gl(client):
+    """Flag OFF (default): the defensive guard must not even query
+    is_admin_only_gl — zero behavior change from before this feature."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(
+        "app.routers.subform.resolve_scope", return_value=_scope()
+    ), patch("app.routers.subform.fetch_detail_lines", return_value=[]), patch(
+        "app.routers.subform.is_admin_only_gl"
+    ) as mock_is_admin_only:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/detail", params={"cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027})
+
+    assert response.status_code == 200
+    mock_is_admin_only.assert_not_called()
+
+
+def test_get_detail_lines_flag_on_non_admin_admin_only_gl_403(client):
+    from app.config import Settings
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.subform.get_settings", return_value=Settings(_env_file=None, gl_edit_by_enabled=True)), patch(
+        "app.routers.subform.get_fabric_conn"
+    ) as mock_conn, patch("app.routers.subform.resolve_scope", return_value=_scope()), patch(
+        "app.routers.subform.is_admin_only_gl", return_value=True
+    ), patch("app.routers.subform.fetch_detail_lines") as mock_fetch:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/detail", params={"cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027})
+
+    assert response.status_code == 403
+    mock_fetch.assert_not_called()
+
+
+def test_get_detail_lines_flag_on_admin_bypasses_admin_only_gl_check(client):
+    from app.config import Settings
+
+    _override_auth("admin@chememan.com")
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+    with patch("app.routers.subform.get_settings", return_value=Settings(_env_file=None, gl_edit_by_enabled=True)), patch(
+        "app.routers.subform.get_fabric_conn"
+    ) as mock_conn, patch("app.routers.subform.resolve_scope", return_value=admin_scope), patch(
+        "app.routers.subform.is_admin_only_gl"
+    ) as mock_is_admin_only, patch("app.routers.subform.fetch_detail_lines", return_value=[]):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/detail", params={"cost_center": "CC1", "gl_account": "GL1", "fiscal_year": 2027})
+
+    assert response.status_code == 200
+    mock_is_admin_only.assert_not_called()  # admin short-circuits before the check
+
+
 def test_get_detail_lines_403_out_of_see_scope(client):
     _override_auth("outsider@chememan.com")
     with patch("app.routers.subform.get_fabric_conn") as mock_conn, patch(

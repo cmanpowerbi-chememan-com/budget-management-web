@@ -83,6 +83,13 @@ def test_attachments_settings_default_to_the_confirmed_sharepoint_location():
     assert settings.attachments_root_folder == "เอกสาร ฝ่าย"
 
 
+def test_gl_edit_by_enabled_defaults_false():
+    """Never-cut safety default (GL edit_by lock design v2): must be an
+    explicit, deliberate flip, never the out-of-the-box value."""
+    settings = Settings(_env_file=None)
+    assert settings.gl_edit_by_enabled is False
+
+
 def test_get_settings_reads_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("FABRIC_SQL_SERVER", "example.database.fabric.microsoft.com")

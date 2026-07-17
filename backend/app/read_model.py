@@ -33,6 +33,8 @@ from datetime import datetime
 from pydantic import BaseModel
 import pyodbc
 
+from app.config import Settings, get_settings
+from app.gl_access import fetch_admin_gl_codes
 from app.rls import Scope
 from app.sap import MONTH_COLUMNS, fetch_sap_actuals
 
@@ -278,6 +280,7 @@ def merge_budget_rows(
     cost_center_filter: str | None = None,
     department_filter: str | None = None,
     cc_dims: dict[str, dict[str, str | None]] | None = None,
+    admin_gl_codes: frozenset[str] | None = None,
 ) -> list[BudgetRow]:
     """Pure merge: board+pending join rows + SAP dict + RLS scope -> the final
     visible/editable row list. No I/O (aside from the optional pre-fetched
@@ -298,6 +301,16 @@ def merge_budget_rows(
     re-checks `scope.is_admin` again as defense-in-depth). `editable` is true
     for a Fill-scope cost_center, or for every row when the admin-wide bypass
     is active (admin edits any Pending freely, ADR-0012).
+
+    `admin_gl_codes` (GL `edit_by` admin-only lock, design v2, flag-gated):
+    when supplied (the caller — `get_budget_grid` — only does so when
+    `Settings.gl_edit_by_enabled` is True AND `scope.is_admin` is False), any
+    row whose `gl_account` is in this set is DROPPED entirely for a
+    non-admin caller — not just its amounts, the whole row (rule 1: secret
+    GL data must never reach a non-admin, including an approver reviewing a
+    department). Re-checks `scope.is_admin` here too as defense-in-depth,
+    same style as the `admin_wide` re-check above. `None` (the default)
+    preserves old behavior for callers that don't pass it.
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
@@ -324,6 +337,8 @@ def merge_budget_rows(
     for (cc, gl), row in merged.items():
         if visible_ccs is not None and cc not in visible_ccs:
             continue
+        if admin_gl_codes is not None and gl in admin_gl_codes and not scope.is_admin:
+            continue
         if cost_center_filter is not None and cc != cost_center_filter:
             continue
         if department_filter is not None:
@@ -346,6 +361,7 @@ def get_budget_grid(
     admin_view_enabled: bool = False,
     cost_center_filter: str | None = None,
     department_filter: str | None = None,
+    settings: Settings | None = None,
 ) -> list[BudgetRow]:
     """Orchestrator: board_year = planning_year - 1 (SAP + Approved both use
     the standing/current year; only Pending uses the planning year itself,
@@ -356,7 +372,14 @@ def get_budget_grid(
     non-admin (or an admin without the toggle) ALWAYS gets their own
     `see_cost_centers` list pushed into the SQL — this function is the only
     place allowed to pass `cost_centers=None` (admin-wide bypass), and only
-    when `scope.is_admin AND admin_view_enabled` are both true."""
+    when `scope.is_admin AND admin_view_enabled` are both true.
+
+    GL `edit_by` admin-only lock (design v2, flag-gated): only fetches the
+    admin-GL set (one extra query) when `Settings.gl_edit_by_enabled` is True
+    AND the caller is NOT admin — an admin never needs the set (nothing gets
+    stripped for them), and the flag-OFF default never runs this query at
+    all (zero behavior change)."""
+    settings = settings or get_settings()
     board_year = planning_year - 1
     admin_wide = scope.is_admin and admin_view_enabled
     see_cost_centers_filter = None if admin_wide else list(scope.see_cost_centers)
@@ -373,6 +396,10 @@ def get_budget_grid(
         all_ccs = {jr["cost_center"] for jr in join_rows} | {key[0] for key in sap_actuals}
         cc_dims = fetch_cc_dims(fabric_conn, sorted(all_ccs))
 
+    admin_gl_codes = None
+    if settings.gl_edit_by_enabled and not scope.is_admin:
+        admin_gl_codes = fetch_admin_gl_codes(fabric_conn)
+
     return merge_budget_rows(
         join_rows,
         sap_actuals,
@@ -381,4 +408,5 @@ def get_budget_grid(
         cost_center_filter=cost_center_filter,
         department_filter=department_filter,
         cc_dims=cc_dims,
+        admin_gl_codes=admin_gl_codes,
     )

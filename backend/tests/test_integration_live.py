@@ -2308,3 +2308,53 @@ def test_a13_pending_row_persists_across_reconnect_live() -> None:
     finally:
         with get_fabric_conn() as cleanup_conn:
             _cleanup_approval_lifecycle_sentinel_year(cleanup_conn)
+
+
+# =========================================================================
+# GL edit_by admin-only lock (design v2, 2026-07-17) — READ-ONLY, no writes
+# =========================================================================
+# The DW sync is already deployed + verified live (per the task brief):
+# `dbo.gl_group.edit_by` is populated, 13 admin / 133 user / 0 NULL. This
+# proves app.gl_access's flag-ON code path against the REAL column, while
+# the feature itself still ships flag OFF (Settings.gl_edit_by_enabled).
+
+@pytest.mark.integration
+def test_gl_group_edit_by_live_counts_match_the_confirmed_13_admin_133_user() -> None:
+    from app.gl_access import fetch_admin_gl_codes, normalize_edit_by
+
+    with get_fabric_conn() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT gl_code, edit_by FROM dbo.gl_group")
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+        admin_codes = fetch_admin_gl_codes(conn)
+
+    assert len(rows) == 146, f"expected 133 user + 13 admin = 146 GL rows, found {len(rows)}"
+    normalized_counts: dict[str, int] = {"user": 0, "admin": 0}
+    for _, edit_by in rows:
+        normalized_counts[normalize_edit_by(edit_by)] += 1
+    assert normalized_counts == {"user": 133, "admin": 13}
+    assert len(admin_codes) == 13
+    assert None not in (edit_by for _, edit_by in rows), "0 NULL edit_by expected per the task brief"
+
+
+@pytest.mark.integration
+def test_reference_data_fetch_gl_accounts_excludes_admin_gls_for_non_admin_live() -> None:
+    """Proves the SECRET rule end-to-end against the real table: a
+    non-admin caller's gl-accounts list never contains any of the 13
+    admin-only GLs, an admin caller's list contains all of them."""
+    from app.gl_access import fetch_admin_gl_codes
+    from app.reference_data import fetch_gl_accounts
+
+    with get_fabric_conn() as conn:
+        admin_codes = fetch_admin_gl_codes(conn)
+        non_admin_rows = fetch_gl_accounts(conn, include_edit_by=True, is_admin=False)
+        admin_rows = fetch_gl_accounts(conn, include_edit_by=True, is_admin=True)
+
+    non_admin_codes = {r["gl_code"] for r in non_admin_rows}
+    admin_view_codes = {r["gl_code"] for r in admin_rows}
+    assert non_admin_codes.isdisjoint(admin_codes), "non-admin must never see an admin-only GL row"
+    assert admin_codes <= admin_view_codes, "admin caller must see every admin-only GL"
+    assert all(r["edit_by"] == "user" for r in non_admin_rows)
