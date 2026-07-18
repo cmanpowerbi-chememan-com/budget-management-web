@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
+import { DEFAULT_COLUMN_WIDTHS } from './model'
 import { GridTable } from './GridTable'
 import { blankLayer, makeRow } from './testUtils'
 
@@ -247,6 +248,118 @@ describe('GridTable', () => {
       const monthThs = colRow.querySelectorAll('th.month-col')
       expect(monthThs).toHaveLength(12)
       monthThs.forEach((th) => expect(th.querySelector('.col-filter-spacer')).toBeInTheDocument())
+    })
+  })
+
+  describe('column resize & reset (UI-parity point 8c)', () => {
+    afterEach(() => {
+      window.localStorage.clear()
+    })
+
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }),
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
+    ]
+
+    function getTable(testId: string): HTMLTableElement {
+      return screen.getByTestId(testId).querySelector('table.data-table') as HTMLTableElement
+    }
+
+    function getIdentityThs(table: HTMLTableElement): HTMLTableCellElement[] {
+      const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
+      return [...colRow.querySelectorAll('th.frz')] as HTMLTableCellElement[]
+    }
+
+    it('renders a drag handle on each of the 3 identity columns, in both side-tables', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getAllByTestId('col-resize-cc')).toHaveLength(2) // COST + SGA tables
+      expect(screen.getAllByTestId('col-resize-gl')).toHaveLength(2)
+      expect(screen.getAllByTestId('col-resize-glgroup')).toHaveLength(2)
+    })
+
+    it('dragging the Cost Center handle widens the column, updates --frz2/--frz3, and keeps both tables aligned', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+
+      fireEvent.mouseDown(handle, { clientX: 100 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 150, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 150, bubbles: true }))
+
+      const costTable = getTable('side-section-COST')
+      const sgaTable = getTable('side-section-SGA')
+      const costCcTh = getIdentityThs(costTable)[0]
+      const sgaCcTh = getIdentityThs(sgaTable)[0]
+
+      expect(costCcTh.style.width).toBe('180px') // 130 default + 50px drag
+      expect(sgaCcTh.style.width).toBe('180px') // shared state — both tables stay aligned
+      expect(costTable.style.getPropertyValue('--frz2')).toBe('180px')
+      expect(costTable.style.getPropertyValue('--frz3')).toBe('330px') // 180 + gl(150)
+      expect(sgaTable.style.getPropertyValue('--frz2')).toBe('180px')
+      expect(sgaTable.style.getPropertyValue('--frz3')).toBe('330px')
+    })
+
+    it('clamps a huge drag to the 800px maximum and a large-negative drag to the 60px minimum', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 5000, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 5000, bubbles: true }))
+      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('800px')
+
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: -5000, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: -5000, bubbles: true }))
+      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('60px')
+    })
+
+    it('"Reset columns" restores the defaults, incl. --frz2 back to 130', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 300, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 300, bubbles: true }))
+      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('430px')
+
+      fireEvent.click(screen.getByTestId('reset-columns-btn'))
+
+      const costTable = getTable('side-section-COST')
+      expect(getIdentityThs(costTable)[0].style.width).toBe(`${DEFAULT_COLUMN_WIDTHS.cc}px`)
+      expect(costTable.style.getPropertyValue('--frz2')).toBe(`${DEFAULT_COLUMN_WIDTHS.cc}px`)
+    })
+
+    it('adds is-dragging to ONLY the handle being dragged (mockup accent-hairline parity)', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const ccHandle = screen.getAllByTestId('col-resize-cc')[0]
+      const glHandle = screen.getAllByTestId('col-resize-gl')[0]
+
+      fireEvent.mouseDown(ccHandle, { clientX: 0 })
+      expect(ccHandle).toHaveClass('is-dragging')
+      expect(glHandle).not.toHaveClass('is-dragging')
+
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 0, bubbles: true }))
+      expect(ccHandle).not.toHaveClass('is-dragging')
+    })
+
+    it('adds body.col-dragging while a drag is in flight and removes it on mouseup', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      expect(document.body.classList.contains('col-dragging')).toBe(true)
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 0, bubbles: true }))
+      expect(document.body.classList.contains('col-dragging')).toBe(false)
+    })
+
+    it('does not leak window-level drag listeners after unmount mid-drag', () => {
+      const removeSpy = vi.spyOn(window, 'removeEventListener')
+      const { unmount } = render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+      fireEvent.mouseDown(handle, { clientX: 0 }) // start a drag, never fire mouseup
+      unmount()
+      const removedTypes = removeSpy.mock.calls.map((call) => call[0])
+      expect(removedTypes).toEqual(expect.arrayContaining(['mousemove', 'mouseup']))
+      expect(document.body.classList.contains('col-dragging')).toBe(false)
+      removeSpy.mockRestore()
     })
   })
 })

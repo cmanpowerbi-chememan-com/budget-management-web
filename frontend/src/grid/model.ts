@@ -98,6 +98,85 @@ export interface ColumnFilters {
 
 export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '' }
 
+/** Identity-column widths (UI-parity point 8c) — replaces point 1's STATIC
+ * freeze offsets (fixed `--frz1/2/3` px in CSS) with state-derived offsets,
+ * so a column resize keeps the frozen band's left position correct. Only
+ * the 3 identity columns are resizable — Status and the 12 month columns
+ * are out of this feature's scope. */
+export interface ColumnWidths {
+  cc: number
+  gl: number
+  glGroup: number
+}
+
+export type ColumnWidthKey = keyof ColumnWidths
+
+/** Matches point-1's static offsets exactly (frz2=130, frz3=130+150=280) so
+ * first-load/reset renders pixel-identical to before this feature. */
+export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = { cc: 130, gl: 150, glGroup: 150 }
+
+export const COLUMN_WIDTH_MIN = 60
+export const COLUMN_WIDTH_MAX = 800
+
+/** Clamp a dragged width to a sane range (mockup 0002.3budget-export.html
+ * `initColumnResize`'s `Math.max(60, Math.min(800, ...))`). */
+export function clampColumnWidth(width: number): number {
+  return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width))
+}
+
+/** localStorage key for persisting column widths across sessions/reloads
+ * (UI-parity point 8c, matches the mockup's persistence intent). One flat
+ * object for the 3 fixed keys — the mockup's per-index scheme doesn't apply
+ * here since our identity-column set is fixed, not dynamic. */
+export const COLUMN_WIDTHS_STORAGE_KEY = 'budgetGridColWidths'
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/** Reads persisted column widths from localStorage. Guarded end-to-end: a
+ * disabled/unavailable localStorage, corrupted JSON, or a missing/
+ * non-numeric field each fall back to `DEFAULT_COLUMN_WIDTHS` (per-key, not
+ * all-or-nothing) rather than throwing or producing a broken layout. Every
+ * value is re-clamped in case a stale localStorage entry predates a range
+ * change. */
+export function loadStoredColumnWidths(): ColumnWidths {
+  try {
+    const raw = window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)
+    if (!raw) return DEFAULT_COLUMN_WIDTHS
+    const parsed = JSON.parse(raw) as Partial<Record<ColumnWidthKey, unknown>>
+    return {
+      cc: clampColumnWidth(isFiniteNumber(parsed.cc) ? parsed.cc : DEFAULT_COLUMN_WIDTHS.cc),
+      gl: clampColumnWidth(isFiniteNumber(parsed.gl) ? parsed.gl : DEFAULT_COLUMN_WIDTHS.gl),
+      glGroup: clampColumnWidth(isFiniteNumber(parsed.glGroup) ? parsed.glGroup : DEFAULT_COLUMN_WIDTHS.glGroup),
+    }
+  } catch {
+    return DEFAULT_COLUMN_WIDTHS
+  }
+}
+
+/** Persists column widths — called after a drag ends or on Reset, never on
+ * every intermediate drag frame (keeps writes cheap). Guarded the same way
+ * as `loadStoredColumnWidths`: a quota-exceeded/disabled localStorage never
+ * breaks the resize interaction itself, it just won't survive a reload. */
+export function persistColumnWidths(widths: ColumnWidths): void {
+  try {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widths))
+  } catch {
+    // localStorage unavailable — resize still works for the session.
+  }
+}
+
+/** Derives the 3 frozen-column left offsets from the CURRENT widths — no
+ * DOM measurement (unlike the mockup's `applyFreeze()`, which reads real
+ * header `getBoundingClientRect()`s). Both side-tables (COST/SGA) read the
+ * SAME `colWidths` state and call this same pure function, so they stay
+ * pixel-aligned by construction rather than by re-measuring two separate
+ * DOM trees. */
+export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number } {
+  return { frz1: 0, frz2: widths.cc, frz3: widths.cc + widths.gl }
+}
+
 function matchesFilter(value: string, filter: string): boolean {
   const trimmed = filter.trim()
   if (!trimmed) return true

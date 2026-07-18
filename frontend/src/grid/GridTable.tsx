@@ -1,19 +1,35 @@
-import { Fragment, useState, type ChangeEvent } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { MonthCell } from './MonthCell'
 import {
   BLANK_COLUMN_FILTERS,
+  clampColumnWidth,
+  DEFAULT_COLUMN_WIDTHS,
   filterRows,
   formatThb,
+  freezeOffsets,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
   isEditableCell,
+  loadStoredColumnWidths,
   MONTH_KEYS,
   MONTH_LABELS,
   nowMonthKey,
+  persistColumnWidths,
   sectionTotals,
   type ColumnFilters,
+  type ColumnWidthKey,
+  type ColumnWidths,
   type MonthKey,
 } from './model'
 
@@ -162,7 +178,7 @@ function TxnBlock({
       <tr className="txn-row first" data-status="sap">
         <td className="idx-cell frz frz-1">{cc}</td>
         <td className="gl-cell frz frz-2">
-          {gl}
+          <span className="gl-code-text">{gl}</span>
           <div className="gl-name">{meta.gl_name ?? '—'}</div>
         </td>
         <td className="gl-group-cell frz frz-3">
@@ -250,6 +266,94 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   // so typing in either table's input keeps them in sync by construction.
   const [colFilters, setColFilters] = useState<ColumnFilters>(BLANK_COLUMN_FILTERS)
 
+  // Identity-column widths (UI-parity point 8c) — held LOCALLY, same
+  // reasoning as colFilters: both side-tables live inside this one
+  // component and must share ONE set of widths so they stay pixel-aligned.
+  // Initial value is read from localStorage once (lazy initializer), never
+  // re-read after mount.
+  const [colWidths, setColWidths] = useState<ColumnWidths>(() => loadStoredColumnWidths())
+  // Which handle is CURRENTLY being dragged, purely for the accent-hairline
+  // visual state (mockup `.col-resize.is-dragging::after`) — `null` when no
+  // drag is active. Separate from `dragStateRef` below (that ref drives the
+  // actual math and must never trigger a re-render on every drag frame).
+  const [draggingKey, setDraggingKey] = useState<ColumnWidthKey | null>(null)
+
+  // In-flight drag bookkeeping. `dragStateRef` is the single source of truth
+  // for "is a drag active, and which column" — read inside the window-level
+  // listeners via closure-free ref access (never stale). `dragListenersRef`
+  // holds the exact function references passed to addEventListener so they
+  // can be removed with a matching removeEventListener call, both on a
+  // normal mouseup/touchend AND on unmount (a component can unmount mid-drag
+  // — e.g. navigating away — and must never leave a window-level listener
+  // running against an unmounted component).
+  const dragStateRef = useRef<{ key: ColumnWidthKey; startX: number; startWidth: number } | null>(null)
+  const dragListenersRef = useRef<{ move: (e: MouseEvent | TouchEvent) => void; up: () => void } | null>(null)
+
+  function detachDragListeners() {
+    const listeners = dragListenersRef.current
+    if (!listeners) return
+    window.removeEventListener('mousemove', listeners.move)
+    window.removeEventListener('mouseup', listeners.up)
+    window.removeEventListener('touchmove', listeners.move)
+    window.removeEventListener('touchend', listeners.up)
+    dragListenersRef.current = null
+  }
+
+  useEffect(() => {
+    // Unmount safety net — if a drag is in flight when this component
+    // unmounts, clear the body-wide dragging cursor/no-select state and
+    // detach the window listeners so nothing lingers against a dead
+    // component.
+    return () => {
+      if (dragStateRef.current) {
+        document.body.classList.remove('col-dragging')
+      }
+      detachDragListeners()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function startColumnResize(key: ColumnWidthKey) {
+    return (e: ReactMouseEvent | ReactTouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation() // never let the drag reach/blur the 8b filter input sharing this th
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+      dragStateRef.current = { key, startX: clientX, startWidth: colWidths[key] }
+      document.body.classList.add('col-dragging')
+      setDraggingKey(key)
+
+      const onMove = (ev: MouseEvent | TouchEvent) => {
+        const drag = dragStateRef.current
+        if (!drag) return
+        const x = 'touches' in ev ? ev.touches[0].clientX : ev.clientX
+        const next = clampColumnWidth(drag.startWidth + (x - drag.startX))
+        setColWidths((prev) => ({ ...prev, [drag.key]: next }))
+      }
+      const onUp = () => {
+        if (!dragStateRef.current) return
+        dragStateRef.current = null
+        document.body.classList.remove('col-dragging')
+        setDraggingKey(null)
+        detachDragListeners()
+        // Persist the FINAL width only (not every intermediate frame).
+        setColWidths((prev) => {
+          persistColumnWidths(prev)
+          return prev
+        })
+      }
+      dragListenersRef.current = { move: onMove, up: onUp }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+      window.addEventListener('touchmove', onMove, { passive: false })
+      window.addEventListener('touchend', onUp)
+    }
+  }
+
+  function handleResetColumns() {
+    setColWidths(DEFAULT_COLUMN_WIDTHS)
+    persistColumnWidths(DEFAULT_COLUMN_WIDTHS)
+  }
+
   // Unfiltered emptiness is unrelated to the filter feature (no data at all
   // for this scope/year) — keep the original plain empty state, no headers,
   // nothing to filter.
@@ -268,14 +372,42 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   const sidesWithData = groupAndSortBySide(rows, glRef)
   const nowMonth = nowMonthKey()
 
+  // Frozen-column left offsets derived from the CURRENT widths (UI-parity
+  // point 8c) — no DOM measurement, both side-tables read this SAME object
+  // so they stay pixel-aligned by construction. Applied as inline CSS custom
+  // properties; the existing `.frz-1/2/3 { left: var(--frzN) }` rules in
+  // global.css then just work, same as the old static values did.
+  const { frz1, frz2, frz3 } = freezeOffsets(colWidths)
+  const freezeStyle = { '--frz1': `${frz1}px`, '--frz2': `${frz2}px`, '--frz3': `${frz3}px` } as CSSProperties
+
   const updateFilter =
     (key: keyof ColumnFilters) =>
     (e: ChangeEvent<HTMLInputElement>) =>
       setColFilters((f) => ({ ...f, [key]: e.target.value }))
 
   return (
-    <div className="grid-sides">
-      {(['COST', 'SGA'] as const).map((side) => {
+    <>
+      {/* Small right-aligned control row (UI-parity point 8c) — kept OUTSIDE
+         .grid-sides since it applies to both side-tables at once; state
+         (colWidths) is local to this component, so the button lives here
+         rather than in BudgetGrid's toolbar. */}
+      <div className="grid-column-controls">
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          onClick={handleResetColumns}
+          title="รีเซ็ตความกว้างคอลัมน์ทั้งหมด"
+          data-testid="reset-columns-btn"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+          Reset columns
+        </button>
+      </div>
+      <div className="grid-sides">
+        {(['COST', 'SGA'] as const).map((side) => {
         if (sidesWithData[side].length === 0) return null
         const groups = sections[side]
         return (
@@ -286,7 +418,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                the actual vertical+horizontal scroll container. */}
             <div className="table-panel">
               <div className="table-wrap">
-                <table className="data-table">
+                <table className="data-table" style={freezeStyle}>
                   <thead>
                     {/* Group-head row (UI-parity point 8a): identity+Status
                        merge into one blank band, the 12 month columns get a
@@ -312,7 +444,11 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                        component, not per-table), so typing here also
                        filters the other side. */}
                     <tr className="col-row">
-                      <th className="frz frz-1">
+                      {/* Explicit width+minWidth (UI-parity point 8c) — header-row-only,
+                         auto table-layout propagates it to the whole column (incl. the
+                         colSpan=3/4 merged cells above/below). Both side-tables read the
+                         SAME `colWidths` state, so they stay aligned. */}
+                      <th className="frz frz-1" style={{ width: colWidths.cc, minWidth: colWidths.cc }}>
                         <span className="th-label">Cost Center</span>
                         <input
                           type="text"
@@ -322,8 +458,18 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           value={colFilters.cc}
                           onChange={updateFilter('cc')}
                         />
+                        <div
+                          className={`col-resize${draggingKey === 'cc' ? ' is-dragging' : ''}`}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="ปรับความกว้างคอลัมน์ Cost Center"
+                          title="ลากเพื่อปรับความกว้าง"
+                          data-testid="col-resize-cc"
+                          onMouseDown={startColumnResize('cc')}
+                          onTouchStart={startColumnResize('cc')}
+                        />
                       </th>
-                      <th className="frz frz-2">
+                      <th className="frz frz-2" style={{ width: colWidths.gl, minWidth: colWidths.gl }}>
                         <span className="th-label">GL Code</span>
                         <input
                           type="text"
@@ -333,8 +479,18 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           value={colFilters.gl}
                           onChange={updateFilter('gl')}
                         />
+                        <div
+                          className={`col-resize${draggingKey === 'gl' ? ' is-dragging' : ''}`}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="ปรับความกว้างคอลัมน์ GL Code"
+                          title="ลากเพื่อปรับความกว้าง"
+                          data-testid="col-resize-gl"
+                          onMouseDown={startColumnResize('gl')}
+                          onTouchStart={startColumnResize('gl')}
+                        />
                       </th>
-                      <th className="frz frz-3">
+                      <th className="frz frz-3" style={{ width: colWidths.glGroup, minWidth: colWidths.glGroup }}>
                         <span className="th-label">GL Group</span>
                         <input
                           type="text"
@@ -343,6 +499,16 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           data-testid="filter-glgroup"
                           value={colFilters.glGroup}
                           onChange={updateFilter('glGroup')}
+                        />
+                        <div
+                          className={`col-resize${draggingKey === 'glGroup' ? ' is-dragging' : ''}`}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="ปรับความกว้างคอลัมน์ GL Group"
+                          title="ลากเพื่อปรับความกว้าง"
+                          data-testid="col-resize-glgroup"
+                          onMouseDown={startColumnResize('glGroup')}
+                          onTouchStart={startColumnResize('glGroup')}
                         />
                       </th>
                       <th>
@@ -394,7 +560,8 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
             </div>
           </div>
         )
-      })}
-    </div>
+        })}
+      </div>
+    </>
   )
 }

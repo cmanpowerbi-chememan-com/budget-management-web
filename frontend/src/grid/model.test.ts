@@ -1,19 +1,25 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlAccount, PendingRowState } from '../api/types'
 import {
   applyMonthEdit,
   BLANK_COLUMN_FILTERS,
   buildNewRowPayload,
   buildSavePayload,
+  clampColumnWidth,
+  COLUMN_WIDTHS_STORAGE_KEY,
+  DEFAULT_COLUMN_WIDTHS,
   filterRows,
   formatThb,
+  freezeOffsets,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
   isEditableCell,
+  loadStoredColumnWidths,
   mergeSavedRow,
   MONTH_LABELS,
   nowMonthKey,
+  persistColumnWidths,
   sectionTotals,
   sideOfGl,
   validateNewTransaction,
@@ -297,5 +303,65 @@ describe('formatThb', () => {
   })
   it('formats zero as a dash placeholder', () => {
     expect(formatThb(0)).toBe('—')
+  })
+})
+
+describe('clampColumnWidth (UI-parity point 8c)', () => {
+  it('passes a value already inside the range through unchanged', () => {
+    expect(clampColumnWidth(200)).toBe(200)
+  })
+  it('floors a too-small width to the minimum (60)', () => {
+    expect(clampColumnWidth(10)).toBe(60)
+    expect(clampColumnWidth(-500)).toBe(60)
+  })
+  it('caps a too-large width to the maximum (800)', () => {
+    expect(clampColumnWidth(5000)).toBe(800)
+  })
+})
+
+describe('freezeOffsets (UI-parity point 8c)', () => {
+  it('derives frz1/frz2/frz3 from the current widths with no DOM measurement', () => {
+    expect(freezeOffsets({ cc: 130, gl: 150, glGroup: 150 })).toEqual({ frz1: 0, frz2: 130, frz3: 280 })
+  })
+  it('reflects a resized cc column in frz2 and frz3', () => {
+    expect(freezeOffsets({ cc: 200, gl: 150, glGroup: 150 })).toEqual({ frz1: 0, frz2: 200, frz3: 350 })
+  })
+})
+
+describe('loadStoredColumnWidths / persistColumnWidths (UI-parity point 8c)', () => {
+  afterEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('returns the defaults when nothing is stored', () => {
+    expect(loadStoredColumnWidths()).toEqual(DEFAULT_COLUMN_WIDTHS)
+  })
+
+  it('round-trips a persisted value', () => {
+    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160 })
+    expect(loadStoredColumnWidths()).toEqual({ cc: 200, gl: 175, glGroup: 160 })
+  })
+
+  it('falls back to defaults for a corrupted stored value (never crashes)', () => {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, 'not json')
+    expect(loadStoredColumnWidths()).toEqual(DEFAULT_COLUMN_WIDTHS)
+  })
+
+  it('clamps a stored value that is out of range', () => {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 5000, gl: 10, glGroup: 150 }))
+    expect(loadStoredColumnWidths()).toEqual({ cc: 800, gl: 60, glGroup: 150 })
+  })
+
+  it('ignores a missing/non-numeric field and falls back to its default', () => {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 200 }))
+    expect(loadStoredColumnWidths()).toEqual({ cc: 200, gl: DEFAULT_COLUMN_WIDTHS.gl, glGroup: DEFAULT_COLUMN_WIDTHS.glGroup })
+  })
+
+  it('does not throw when localStorage.setItem fails (guarded)', () => {
+    const spy = vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded')
+    })
+    expect(() => persistColumnWidths(DEFAULT_COLUMN_WIDTHS)).not.toThrow()
+    spy.mockRestore()
   })
 })

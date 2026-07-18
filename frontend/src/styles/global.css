@@ -440,6 +440,23 @@ input:focus-visible {
   background: #8f3216;
   border-color: #8f3216;
 }
+/* Small ghost variant (mockup 0002.3budget-export.html lines 166-168) —
+   used by the "Reset columns" control (UI-parity point 8c); no other
+   button needed it before now. */
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 12px;
+  border-radius: var(--r);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+.btn-ghost:hover {
+  color: var(--ink);
+  background: transparent;
+}
 
 /* ─── A8 budget grid toolbar ─── */
 .budget-grid {
@@ -666,6 +683,16 @@ input:focus-visible {
   font-size: 13.5px;
 }
 
+/* "Reset columns" control row (UI-parity point 8c) — sits above both
+   side-tables since colWidths state is shared/local to GridTable, not the
+   BudgetGrid toolbar. Small + right-aligned so it reads as a grid control,
+   not a primary action. */
+.grid-column-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
 /* ─── Grid table (3-layer transactions, COST/SGA sections) ─── */
 .side-section {
   margin-bottom: 28px;
@@ -703,12 +730,11 @@ input:focus-visible {
   border-spacing: 0;
   font-size: 12.5px;
   background: var(--surface);
-  /* Static left offsets for the 3 frozen identity columns — explicit px,
-     not JS-measured (unlike the mockup), since these columns have fixed
-     widths in the React grid (no column-resize feature here). */
-  --frz1: 0px;
-  --frz2: 130px;
-  --frz3: 280px;
+  /* --frz1/2/3 (frozen-column left offsets) are set INLINE from React state
+     (UI-parity point 8c, `GridTable.tsx`'s `colWidths` + `freezeOffsets()`)
+     — no static default here, since a resize must move them. Both
+     side-tables (COST/SGA) receive the same computed values so they stay
+     pixel-aligned. */
 }
 .data-table thead th {
   position: sticky;
@@ -728,6 +754,22 @@ input:focus-visible {
 .data-table thead th .th-label {
   display: block;
   line-height: 1.2;
+}
+/* The 3 resizable identity labels (Cost Center / GL Code / GL Group, UI-
+   parity point 8c) must be able to shrink below their own text's natural
+   width — the inherited `white-space: nowrap` above forces "Cost Center"
+   to a content-driven floor ABOVE the resize feature's 60px minimum, which
+   would silently desync the rendered column from the JS-computed
+   `--frz2`/`--frz3` offset (the next frozen column's left edge would then
+   overlap the wider-than-expected actual column). Ellipsis (not wrap) is
+   used deliberately: a wrapped 2-line label still gets stuck on its
+   longest UNBREAKABLE word ("Center" alone still needs ~69px) — only
+   `overflow: hidden` actually lets automatic table sizing shrink below the
+   text's natural size. Scoped to col-row's frz labels only — Status/month
+   headers are untouched, still nowrap/unclipped. */
+.data-table thead tr.col-row th.frz .th-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Group-head row (UI-parity point 8a, mockup 0002.3budget-export.html
    lines 392-400) — sits ABOVE the existing column-label row, both sticky so
@@ -846,14 +888,80 @@ input:focus-visible {
 .data-table .frz-edge {
   box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.28);
 }
-/* Explicit column widths (header row only — auto table-layout applies them
-   to the whole column, including the colSpan=3/4 merged cells below). */
-.data-table thead th.frz-1 {
-  width: 130px;
+/* Column widths (header row only — auto table-layout applies them to the
+   whole column, including the colSpan=3/4 merged cells below) are now set
+   INLINE from React state (UI-parity point 8c, `GridTable.tsx`), driven by
+   drag or Reset — no static width here (superseded, was 130px/150px/150px). */
+
+/* Column resize handles need their OWN `<th>` to out-rank the NEXT identity
+   column (UI-parity point 8c). A `.col-resize` handle's z-index:20 only
+   competes WITHIN its own `th`'s stacking context — `th.frz` already
+   establishes one via `position: sticky` + `z-index` above — so it cannot
+   escape to paint above a SIBLING `th`, no matter how high its own z-index
+   is. The handle's hit-box spills ~3px into the next column by design
+   (`right: -3px` below, mockup-verbatim), so without this rule the right
+   half of every handle is unclickable: a real mousedown/Playwright
+   `elementFromPoint` there resolves to the NEXT column's `<th>`, and the
+   drag never starts (confirmed live, same bug exists in the mockup HTML —
+   not introduced by this port). Fix: the left-hand identity column must
+   outrank its immediate right neighbor. GL Group (`.frz-3`) needs no bump —
+   its right neighbor is the plain Status `<th>` (z-index 10), already below
+   the shared `th.frz` z-index (16). Must come AFTER the shared `th.frz`
+   z-index rule above (same specificity, 0,2,2 vs 0,2,2) to win by source
+   order; the more specific `tr.group-head-row th.frz` rule (0,3,3) is
+   unaffected either way. */
+.data-table thead tr.col-row th.frz-1 {
+  z-index: 18;
 }
-.data-table thead th.frz-2,
-.data-table thead th.frz-3 {
-  width: 150px;
+.data-table thead tr.col-row th.frz-2 {
+  z-index: 17;
+}
+
+/* Column resize handle (UI-parity point 8c, mockup 0002.3budget-export.html
+   lines 422-435, ported verbatim) — one per identity `<th>` (Cost Center /
+   GL Code / GL Group), positioned at the column's right edge. The parent
+   `th.frz` is already `position: sticky` (below), which establishes a
+   containing block for this `position: absolute` handle same as `relative`
+   would. z-index 20 keeps it above the 8b `.col-filter` input sharing the
+   same `<th>` so a drag never focuses/blocks the filter. */
+.col-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 20;
+  user-select: none;
+  background: transparent;
+  transition: background 140ms ease;
+}
+.col-resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: var(--line);
+  transition:
+    background 140ms ease,
+    width 140ms ease;
+}
+.col-resize:hover::after,
+.col-resize.is-dragging::after {
+  background: var(--accent);
+  width: 2px;
+  right: 2.5px;
+}
+/* Whole-page cursor + no-select while a drag is in flight (GridTable.tsx
+   toggles this class on document.body from mousedown to mouseup/unmount). */
+body.col-dragging {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.col-dragging * {
+  cursor: col-resize !important;
 }
 /* Keep the subtotal row's paper-2 shading opaque on its frozen label cell —
    .data-table td.frz's background:var(--surface) would otherwise win on
@@ -935,13 +1043,32 @@ input:focus-visible {
 .txn-row.first td {
   border-top: 2px solid var(--line);
 }
+/* overflow:hidden + text-overflow:ellipsis (UI-parity point 8c) — without
+   this, an unbreakable Cost Center code (no whitespace to wrap at) forces a
+   content-driven minimum width ABOVE the resize feature's 60px floor, which
+   desyncs the actual rendered column from the JS-computed `--frz2` offset
+   (a real overlap: the next frozen column renders at the SMALLER
+   state-derived offset while this column is actually wider). Ellipsis lets
+   the browser honor an intentionally-narrow drag instead. */
 .idx-cell {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gl-name {
   color: var(--ink-3);
   font-size: 11px;
   margin-top: 2px;
+}
+/* Same reasoning as .idx-cell above, scoped to just the GL code text (not
+   `.gl-name` below it, which wraps normally — GL names contain spaces) —
+   keeps frz3 (cc+gl) accurate at a small dragged GL Code width too. */
+.gl-code-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* GL Group chip — solid color per special group (mockup 0002.3budget-export.html
    lines 476-499/1437-1444), ported verbatim (literal parity is the target
