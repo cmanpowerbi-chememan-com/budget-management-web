@@ -86,6 +86,41 @@ export function glMetaFor(glAccount: string, glRef: GlAccount[]): GlMeta {
   return { gl_group: found.gl_group ?? 'Uncategorized', gl_name: found.gl_name, is_special: found.is_special, in_master: true }
 }
 
+/** Shared per-column text filters (UI-parity point 8b) — one filter string
+ * per identity column, applied across BOTH side-tables (COST/SGA) so a
+ * split view stays in sync rather than drifting into two independent
+ * searches. */
+export interface ColumnFilters {
+  cc: string
+  gl: string
+  glGroup: string
+}
+
+export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '' }
+
+function matchesFilter(value: string, filter: string): boolean {
+  const trimmed = filter.trim()
+  if (!trimmed) return true
+  return value.toLowerCase().includes(trimmed.toLowerCase())
+}
+
+/** Filters rows BEFORE grouping (`groupAndSortBySide`) so both side-tables
+ * and their subtotals only ever reflect matching rows — case-insensitive
+ * substring match, empty filter = matches everything. `gl_group` is
+ * resolved via `glMetaFor` (never `row.gl_group`, which doesn't exist on
+ * `BudgetRow` — group membership always comes from the GL master). */
+export function filterRows(rows: BudgetRow[], glRef: GlAccount[], filters: ColumnFilters): BudgetRow[] {
+  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim()) return rows
+  return rows.filter((r) => {
+    const meta = glMetaFor(r.gl_account, glRef)
+    return (
+      matchesFilter(r.cost_center, filters.cc) &&
+      matchesFilter(r.gl_account, filters.gl) &&
+      matchesFilter(meta.gl_group, filters.glGroup)
+    )
+  })
+}
+
 export interface GlGroupSection {
   glGroup: string
   rows: BudgetRow[]

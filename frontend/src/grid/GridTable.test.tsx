@@ -155,4 +155,98 @@ describe('GridTable', () => {
     expect(nowHeaders).toHaveLength(1)
     expect([...monthHeaders].indexOf(nowHeaders[0] as Element)).toBe(new Date().getMonth())
   })
+
+  describe('column filters (UI-parity point 8b)', () => {
+    const filterRows = [
+      makeRow({ cost_center: 'CC1-North', gl_account: '5211800030', editable: true }),
+      makeRow({ cost_center: 'CC2-South', gl_account: '5211900030', editable: true }),
+    ]
+
+    it('reduces the visible transaction rows to only the matching cost center', () => {
+      render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getByTestId('txn-CC1-North-5211800030')).toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-South-5211900030')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByTestId('filter-cc'), { target: { value: 'North' } })
+
+      expect(screen.getByTestId('txn-CC1-North-5211800030')).toBeInTheDocument()
+      expect(screen.queryByTestId('txn-CC2-South-5211900030')).not.toBeInTheDocument()
+    })
+
+    it('filters by gl_group and clearing the filter restores all rows', () => {
+      render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      fireEvent.change(screen.getByTestId('filter-glgroup'), { target: { value: 'Entertainment' } })
+      expect(screen.queryByTestId('txn-CC1-North-5211800030')).not.toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-South-5211900030')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByTestId('filter-glgroup'), { target: { value: '' } })
+      expect(screen.getByTestId('txn-CC1-North-5211800030')).toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-South-5211900030')).toBeInTheDocument()
+    })
+
+    it('recomputes the subtotal for the filtered set', () => {
+      const twoInSameGroup = [
+        makeRow({
+          cost_center: 'CC1', gl_account: '5211800030', editable: true,
+          pending: { ...blankLayer({ m01: 100, total_year: 100 }), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+        }),
+        makeRow({
+          cost_center: 'CC2', gl_account: '5211800030', editable: true,
+          pending: { ...blankLayer({ m01: 900, total_year: 900 }), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+        }),
+      ]
+      render(<GridTable rows={twoInSameGroup} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const costSection = screen.getByTestId('side-section-COST')
+      expect(costSection).toHaveTextContent('1,000') // both rows, subtotal = 100 + 900
+
+      fireEvent.change(screen.getByTestId('filter-cc'), { target: { value: 'CC1' } })
+      expect(costSection).not.toHaveTextContent('1,000')
+      expect(costSection).toHaveTextContent('100')
+    })
+
+    it('shows an empty-filtered message and keeps the filter input editable when nothing matches', () => {
+      render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      fireEvent.change(screen.getByTestId('filter-cc'), { target: { value: 'no-such-cc' } })
+
+      expect(screen.getAllByText('ไม่มีรายการที่ตรงกับตัวกรอง').length).toBeGreaterThan(0)
+      const ccInput = screen.getByTestId('filter-cc') as HTMLInputElement
+      expect(ccInput).toBeInTheDocument()
+      expect(ccInput.value).toBe('no-such-cc')
+
+      fireEvent.change(ccInput, { target: { value: '' } })
+      expect(screen.getByTestId('txn-CC1-North-5211800030')).toBeInTheDocument()
+    })
+
+    it('applies the same shared filter to both the COST and SGA tables', () => {
+      const bothSides = [
+        makeRow({ cost_center: 'CC1-North', gl_account: '5211800030', editable: true }),
+        makeRow({ cost_center: 'CC1-North', gl_account: '6211800030', editable: true }),
+        makeRow({ cost_center: 'CC2-South', gl_account: '5211900030', editable: true }),
+      ]
+      render(<GridTable rows={bothSides} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      // Both side-tables render their own `filter-cc` input (one per table),
+      // but both are bound to the SAME `colFilters` state — changing either
+      // one filters both tables identically.
+      fireEvent.change(screen.getAllByTestId('filter-cc')[0], { target: { value: 'North' } })
+
+      expect(screen.getByTestId('txn-CC1-North-5211800030')).toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC1-North-6211800030')).toBeInTheDocument()
+      expect(screen.queryByTestId('txn-CC2-South-5211900030')).not.toBeInTheDocument()
+    })
+
+    it('renders a col-filter-spacer under the Status th and every month th', () => {
+      render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
+      const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
+      const ths = [...colRow.querySelectorAll('th')]
+      const statusTh = ths.find((th) => th.querySelector('.th-label')?.textContent === 'Status')
+      expect(statusTh?.querySelector('.col-filter-spacer')).toBeInTheDocument()
+      const monthThs = colRow.querySelectorAll('th.month-col')
+      expect(monthThs).toHaveLength(12)
+      monthThs.forEach((th) => expect(th.querySelector('.col-filter-spacer')).toBeInTheDocument())
+    })
+  })
 })

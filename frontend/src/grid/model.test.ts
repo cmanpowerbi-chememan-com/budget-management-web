@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { GlAccount, PendingRowState } from '../api/types'
 import {
   applyMonthEdit,
+  BLANK_COLUMN_FILTERS,
   buildNewRowPayload,
   buildSavePayload,
+  filterRows,
   formatThb,
   glMetaFor,
   groupAndSortBySide,
@@ -247,6 +249,45 @@ describe('nowMonthKey', () => {
   it('defaults to the real system clock when no Date is passed', () => {
     const expected = `m${String(new Date().getMonth() + 1).padStart(2, '0')}`
     expect(nowMonthKey()).toBe(expected)
+  })
+})
+
+describe('filterRows', () => {
+  const rows = [
+    row({ cost_center: 'CC1-North', gl_account: '5211800030' }),
+    row({ cost_center: 'CC2-South', gl_account: '5211900030' }),
+    row({ cost_center: 'CC1-North', gl_account: '6211800030' }),
+  ]
+
+  it('returns all rows unchanged when every filter is blank', () => {
+    expect(filterRows(rows, GL_REF, BLANK_COLUMN_FILTERS)).toEqual(rows)
+  })
+
+  it('matches cost_center case-insensitively by substring', () => {
+    const result = filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, cc: 'north' })
+    expect(result).toHaveLength(2)
+    expect(result.every((r) => r.cost_center === 'CC1-North')).toBe(true)
+  })
+
+  it('matches gl_account by substring', () => {
+    const result = filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, gl: '5211900030' })
+    expect(result).toEqual([rows[1]])
+  })
+
+  it('matches the resolved gl_group (from glMetaFor, not a field on BudgetRow)', () => {
+    const result = filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, glGroup: 'entertainment' })
+    expect(result).toEqual([rows[1]])
+  })
+
+  it('combines multiple column filters with AND', () => {
+    // Both rows[0] and rows[2] are CC1-North + "Office expenses" — only the
+    // gl_account filter narrows it down to the single COST-side row.
+    const result = filterRows(rows, GL_REF, { cc: 'CC1', gl: '5211', glGroup: 'office' })
+    expect(result).toEqual([rows[0]])
+  })
+
+  it('returns an empty array when nothing matches', () => {
+    expect(filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, cc: 'no-such-cc' })).toEqual([])
   })
 })
 

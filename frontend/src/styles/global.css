@@ -770,6 +770,51 @@ input:focus-visible {
 .data-table thead tr.col-row th {
   top: 22px;
 }
+/* Per-column filter inputs (UI-parity point 8b, mockup 0002.3budget-export.html
+   lines 411-420) — ported verbatim. `.col-filter` sits under the 3 filterable
+   identity columns (Cost Center / GL Code / GL Group); `.col-filter-spacer`
+   keeps Status + every month `<th>` the same height as the filterable ones
+   so the header row doesn't ragged-edge. Both live inside `.col-row th`, so
+   they inherit that row's sticky `top: 22px` (scroll-freeze together with
+   the frozen columns). */
+.col-filter {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.col-filter:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.col-filter::placeholder {
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+.col-filter-spacer {
+  height: 27px;
+  margin-top: 6px;
+}
+/* Zero-match empty state (point 8b) — table keeps its header (with the
+   filter inputs still editable) so the user can clear the filter without
+   the whole table disappearing. */
+.grid-empty-row {
+  text-align: center;
+  padding: 24px 10px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
 /* Freeze the 3 identity columns (Cost Center / GL Code / GL Group) to the
    left; Status + the 12 month columns scroll underneath. */
 .data-table th.frz,

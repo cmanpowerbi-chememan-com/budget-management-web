@@ -1,7 +1,9 @@
-import { Fragment } from 'react'
+import { Fragment, useState, type ChangeEvent } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { MonthCell } from './MonthCell'
 import {
+  BLANK_COLUMN_FILTERS,
+  filterRows,
   formatThb,
   glMetaFor,
   groupAndSortBySide,
@@ -11,6 +13,7 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   sectionTotals,
+  type ColumnFilters,
   type MonthKey,
 } from './model'
 
@@ -241,18 +244,40 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
  * by gl_group with a subtotal row, 3 layers per transaction. Pure
  * presentational component — all state/API calls live in `BudgetGrid`. */
 export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpenSpecial }: GridTableProps) {
+  // Shared per-column filter state (UI-parity point 8b) — held LOCALLY here
+  // (not lifted to BudgetGrid) since both side-tables live inside this one
+  // component; one filter string per column applies to both tables at once,
+  // so typing in either table's input keeps them in sync by construction.
+  const [colFilters, setColFilters] = useState<ColumnFilters>(BLANK_COLUMN_FILTERS)
+
+  // Unfiltered emptiness is unrelated to the filter feature (no data at all
+  // for this scope/year) — keep the original plain empty state, no headers,
+  // nothing to filter.
   if (rows.length === 0) {
     return <div className="grid-empty">ไม่มีรายการที่ตรงกับตัวกรองนี้</div>
   }
 
-  const sections = groupAndSortBySide(rows, glRef)
+  // Filter BEFORE grouping so both side-tables and their subtotals reflect
+  // only the matching rows (sectionTotals runs on the filtered set).
+  const filteredRows = filterRows(rows, glRef, colFilters)
+  const sections = groupAndSortBySide(filteredRows, glRef)
+  // Which sides exist AT ALL (ignoring the filter) — decides whether a side
+  // renders its table+header, same as before this feature existed. A side
+  // that legitimately has zero groups pre-filter (e.g. no SG&A rows in this
+  // scope) still renders nothing, unchanged.
+  const sidesWithData = groupAndSortBySide(rows, glRef)
   const nowMonth = nowMonthKey()
+
+  const updateFilter =
+    (key: keyof ColumnFilters) =>
+    (e: ChangeEvent<HTMLInputElement>) =>
+      setColFilters((f) => ({ ...f, [key]: e.target.value }))
 
   return (
     <div className="grid-sides">
       {(['COST', 'SGA'] as const).map((side) => {
+        if (sidesWithData[side].length === 0) return null
         const groups = sections[side]
-        if (groups.length === 0) return null
         return (
           <div key={side} className="side-section" data-testid={`side-section-${side}`}>
             <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
@@ -277,46 +302,93 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                         <span className="th-label">งบประมาณรายเดือน (บาท)</span>
                       </th>
                     </tr>
+                    {/* Column-filter row (UI-parity point 8b, mockup
+                       col-filter-row): every `.th-label` keeps its spot, a
+                       `.col-filter` input sits below the 3 filterable
+                       identity columns, a same-height `.col-filter-spacer`
+                       below Status + each month so every header cell in the
+                       row stays the same height. State is shared with the
+                       OTHER side-table (`colFilters` lives in this
+                       component, not per-table), so typing here also
+                       filters the other side. */}
                     <tr className="col-row">
                       <th className="frz frz-1">
                         <span className="th-label">Cost Center</span>
+                        <input
+                          type="text"
+                          className="col-filter"
+                          placeholder="กรอง…"
+                          data-testid="filter-cc"
+                          value={colFilters.cc}
+                          onChange={updateFilter('cc')}
+                        />
                       </th>
                       <th className="frz frz-2">
                         <span className="th-label">GL Code</span>
+                        <input
+                          type="text"
+                          className="col-filter"
+                          placeholder="กรอง…"
+                          data-testid="filter-gl"
+                          value={colFilters.gl}
+                          onChange={updateFilter('gl')}
+                        />
                       </th>
                       <th className="frz frz-3">
                         <span className="th-label">GL Group</span>
+                        <input
+                          type="text"
+                          className="col-filter"
+                          placeholder="กรอง…"
+                          data-testid="filter-glgroup"
+                          value={colFilters.glGroup}
+                          onChange={updateFilter('glGroup')}
+                        />
                       </th>
                       <th>
                         <span className="th-label">Status</span>
+                        <div className="col-filter-spacer" />
                       </th>
                       {MONTH_KEYS.map((m) => (
                         <th key={m} className={`month-col${m === nowMonth ? ' now' : ''}`}>
                           <span className="th-label">{MONTH_LABELS[m]}</span>
+                          <div className="col-filter-spacer" />
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  {groups.map((group) => (
-                    <Fragment key={group.glGroup}>
-                      {group.rows.map((row) => (
-                        <TxnBlock
-                          key={rowKey(row.cost_center, row.gl_account)}
-                          row={row}
-                          glRef={glRef}
-                          onCommitMonth={onCommitMonth}
-                          message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
-                          onOpenSpecial={onOpenSpecial}
-                          nowMonth={nowMonth}
-                        />
+                  {groups.length === 0 ? (
+                    <tbody>
+                      <tr>
+                        <td colSpan={16} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
+                          ไม่มีรายการที่ตรงกับตัวกรอง
+                        </td>
+                      </tr>
+                    </tbody>
+                  ) : (
+                    <>
+                      {groups.map((group) => (
+                        <Fragment key={group.glGroup}>
+                          {group.rows.map((row) => (
+                            <TxnBlock
+                              key={rowKey(row.cost_center, row.gl_account)}
+                              row={row}
+                              glRef={glRef}
+                              onCommitMonth={onCommitMonth}
+                              message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
+                              onOpenSpecial={onOpenSpecial}
+                              nowMonth={nowMonth}
+                            />
+                          ))}
+                          <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
+                        </Fragment>
                       ))}
-                      <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
-                    </Fragment>
-                  ))}
-                  <SubtotalRow
-                    label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`}
-                    totals={sectionTotals(groups.flatMap((g) => g.rows))}
-                  />
+                      <SubtotalRow
+                        label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`}
+                        totals={sectionTotals(groups.flatMap((g) => g.rows))}
+                      />
+                    </>
+                  )}
                 </table>
               </div>
             </div>
