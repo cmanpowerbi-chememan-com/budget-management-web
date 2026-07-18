@@ -484,13 +484,22 @@ input:focus-visible {
   border-radius: var(--r);
 }
 .year-select {
-  padding: 9px 14px;
+  padding: 9px 30px 9px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 120px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.year-select:hover {
+  border-color: var(--ink);
 }
 
 /* Status legend (mirrors mockup 0002.3 lines 367-373) — the year labels are
