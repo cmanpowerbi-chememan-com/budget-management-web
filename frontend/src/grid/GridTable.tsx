@@ -1,7 +1,18 @@
 import { Fragment } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { MonthCell } from './MonthCell'
-import { formatThb, glMetaFor, groupAndSortBySide, groupChipClass, isEditableCell, MONTH_KEYS, sectionTotals, type MonthKey } from './model'
+import {
+  formatThb,
+  glMetaFor,
+  groupAndSortBySide,
+  groupChipClass,
+  isEditableCell,
+  MONTH_KEYS,
+  MONTH_LABELS,
+  nowMonthKey,
+  sectionTotals,
+  type MonthKey,
+} from './model'
 
 export interface RowMessage {
   kind: 'error' | 'saving' | 'saved'
@@ -47,6 +58,7 @@ function MonthCells({
   variant,
   cc,
   gl,
+  nowMonth,
 }: {
   values: Record<MonthKey, number>
   layerTestId: 'sap-value' | 'board-value'
@@ -56,14 +68,18 @@ function MonthCells({
   variant: 'sap' | 'approved-ro'
   cc: string
   gl: string
+  /** Current-month key (UI-parity point 8a) — matching cell gets `.now` so
+   * the whole column reads as "today" alongside the header highlight. */
+  nowMonth: MonthKey
 }) {
   return (
     <>
       {MONTH_KEYS.map((m) => {
         const value = values[m]
         const className = `month-value ${variant}${value === 0 ? ' zero' : ''}`
+        const tdClassName = `month-cell${m === nowMonth ? ' now' : ''}`
         return (
-          <td key={m} className="month-cell" data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
+          <td key={m} className={tdClassName} data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
             <span className={className}>{formatThb(value)}</span>
           </td>
         )
@@ -77,17 +93,24 @@ function PendingCells({
   editable,
   disabledReason,
   onCommitMonth,
+  nowMonth,
 }: {
   row: BudgetRow
   editable: boolean
   disabledReason?: string
   onCommitMonth: GridTableProps['onCommitMonth']
+  /** Current-month key (UI-parity point 8a). */
+  nowMonth: MonthKey
 }) {
   const { cost_center: cc, gl_account: gl } = row
   return (
     <>
       {MONTH_KEYS.map((m) => (
-        <td key={m} className="month-cell" data-testid={`pending-cell-${cc}-${gl}-${m}`}>
+        <td
+          key={m}
+          className={`month-cell${m === nowMonth ? ' now' : ''}`}
+          data-testid={`pending-cell-${cc}-${gl}-${m}`}
+        >
           <MonthCell
             value={row.pending[m]}
             editable={editable}
@@ -108,12 +131,15 @@ function TxnBlock({
   onCommitMonth,
   message,
   onOpenSpecial,
+  nowMonth,
 }: {
   row: BudgetRow
   glRef: GlAccount[]
   onCommitMonth: GridTableProps['onCommitMonth']
   message?: RowMessage
   onOpenSpecial?: GridTableProps['onOpenSpecial']
+  /** Current-month key (UI-parity point 8a). */
+  nowMonth: MonthKey
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
@@ -140,12 +166,12 @@ function TxnBlock({
           {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{meta.gl_group}</span> : meta.gl_group}
         </td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
-        <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} />
+        <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
       </tr>
       <tr className="txn-row" data-status="approved">
         <td colSpan={3} className="frz frz-1 frz-edge" />
         <td className="status-cell approved">Approved · งบ</td>
-        <MonthCells values={row.board} layerTestId="board-value" variant="approved-ro" cc={cc} gl={gl} />
+        <MonthCells values={row.board} layerTestId="board-value" variant="approved-ro" cc={cc} gl={gl} nowMonth={nowMonth} />
       </tr>
       <tr className="txn-row last" data-status="pending">
         <td colSpan={3} className="frz frz-1 frz-edge" />
@@ -176,6 +202,7 @@ function TxnBlock({
           editable={editable}
           disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : showReferenceHint ? NOT_IN_MASTER_HINT : undefined}
           onCommitMonth={onCommitMonth}
+          nowMonth={nowMonth}
         />
       </tr>
       {message && (
@@ -219,6 +246,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   }
 
   const sections = groupAndSortBySide(rows, glRef)
+  const nowMonth = nowMonthKey()
 
   return (
     <div className="grid-sides">
@@ -235,14 +263,36 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
-                    <tr>
-                      <th className="frz frz-1">Cost Center</th>
-                      <th className="frz frz-2">GL Code</th>
-                      <th className="frz frz-3">GL Group</th>
-                      <th>Status</th>
+                    {/* Group-head row (UI-parity point 8a): identity+Status
+                       merge into one blank band, the 12 month columns get a
+                       neutral serif label. Deliberately NOT a bare year —
+                       the month columns mix SAP/Approved (year-1) and
+                       Pending (year), a single year label here would
+                       reintroduce that exact year confusion (see the
+                       legend, point 6, for the per-layer years). */}
+                    <tr className="group-head-row">
+                      <th colSpan={3} className="frz frz-1 frz-edge" />
+                      <th />
+                      <th colSpan={12} className="month-group-label">
+                        <span className="th-label">งบประมาณรายเดือน (บาท)</span>
+                      </th>
+                    </tr>
+                    <tr className="col-row">
+                      <th className="frz frz-1">
+                        <span className="th-label">Cost Center</span>
+                      </th>
+                      <th className="frz frz-2">
+                        <span className="th-label">GL Code</span>
+                      </th>
+                      <th className="frz frz-3">
+                        <span className="th-label">GL Group</span>
+                      </th>
+                      <th>
+                        <span className="th-label">Status</span>
+                      </th>
                       {MONTH_KEYS.map((m) => (
-                        <th key={m} className="month-col">
-                          {m}
+                        <th key={m} className={`month-col${m === nowMonth ? ' now' : ''}`}>
+                          <span className="th-label">{MONTH_LABELS[m]}</span>
                         </th>
                       ))}
                     </tr>
@@ -257,6 +307,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           onCommitMonth={onCommitMonth}
                           message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
                           onOpenSpecial={onOpenSpecial}
+                          nowMonth={nowMonth}
                         />
                       ))}
                       <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />

@@ -10,6 +10,8 @@ import {
   groupChipClass,
   isEditableCell,
   mergeSavedRow,
+  MONTH_LABELS,
+  nowMonthKey,
   sectionTotals,
   sideOfGl,
   validateNewTransaction,
@@ -225,6 +227,26 @@ describe('groupChipClass', () => {
   it('returns an empty string for a non-special group (plain text, no chip)', () => {
     expect(groupChipClass('Office expenses')).toBe('')
     expect(groupChipClass('Uncategorized')).toBe('')
+  })
+})
+
+describe('MONTH_LABELS', () => {
+  it('maps every MonthKey to its real English month name (mockup MONTHS_EN)', () => {
+    expect(MONTH_LABELS.m01).toBe('Jan')
+    expect(MONTH_LABELS.m06).toBe('Jun')
+    expect(MONTH_LABELS.m12).toBe('Dec')
+  })
+})
+
+describe('nowMonthKey', () => {
+  it('resolves the MonthKey for a given Date, 0-indexed (Jan -> m01, Dec -> m12)', () => {
+    expect(nowMonthKey(new Date(2026, 0, 15))).toBe('m01')
+    expect(nowMonthKey(new Date(2026, 11, 1))).toBe('m12')
+  })
+
+  it('defaults to the real system clock when no Date is passed', () => {
+    const expected = `m${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    expect(nowMonthKey()).toBe(expected)
   })
 })
 

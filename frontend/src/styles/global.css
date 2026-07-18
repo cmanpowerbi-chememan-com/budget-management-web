@@ -725,6 +725,51 @@ input:focus-visible {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+.data-table thead th .th-label {
+  display: block;
+  line-height: 1.2;
+}
+/* Group-head row (UI-parity point 8a, mockup 0002.3budget-export.html
+   lines 392-400) — sits ABOVE the existing column-label row, both sticky so
+   they pin together on vertical scroll. Height 22px (border-box, matches
+   the mockup) is what `.col-row th`'s `top: 22px` below stacks against. */
+.data-table thead tr.group-head-row th {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+  height: 22px;
+  padding: 5px 10px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.data-table thead tr.group-head-row th.frz {
+  text-align: left;
+  z-index: 17;
+}
+/* Neutral serif label over the 12 month columns — deliberately NOT a bare
+   year: the month columns mix SAP/Approved (year-1) and Pending (year), see
+   the inline comment at the call site in GridTable.tsx. */
+.data-table thead tr.group-head-row th.month-group-label {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--ink);
+}
+/* Existing column-label row (Cost Center / GL Code / GL Group / Status /
+   month names) now sits BELOW the group-head row instead of at top:0. */
+.data-table thead tr.col-row th {
+  top: 22px;
+}
 /* Freeze the 3 identity columns (Cost Center / GL Code / GL Group) to the
    left; Status + the 12 month columns scroll underneath. */
 .data-table th.frz,
@@ -792,6 +837,49 @@ input:focus-visible {
 }
 .data-table th.month-col {
   text-align: right;
+}
+/* Larger month labels (UI-parity point 8a, mockup lines 438-440) — the
+   header row's own uppercase/10.5px base is meant for short column names
+   ("Status" etc.); month names read better bigger, normal case. */
+.data-table thead th.month-col .th-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+/* Current-month highlight (UI-parity point 8a, mockup lines 444-448) — a
+   tinted header cell + gold dot/underline mark "today" so users don't have
+   to count columns to find the current month. */
+.data-table thead th.month-col.now {
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, var(--paper-2));
+}
+.data-table thead th.month-col.now .th-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  line-height: 1.2;
+}
+.data-table thead th.month-col.now .th-label::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-gold);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--c-gold) 25%, transparent);
+  flex-shrink: 0;
+}
+.data-table thead th.month-col.now .th-label::after {
+  content: '';
+  width: 20px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.data-table td.month-cell.now {
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
 }
 .data-table td {
   padding: 7px 10px;

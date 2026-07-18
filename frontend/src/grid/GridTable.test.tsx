@@ -134,4 +134,25 @@ describe('GridTable', () => {
     )
     expect(screen.getByText('ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น')).toBeInTheDocument()
   })
+
+  it('renders real month names in the header, a group-head row above it, and a single now-month highlight (UI-parity 8a)', () => {
+    const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+    render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+    const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
+    const rowsEls = table.querySelectorAll('thead tr')
+    expect(rowsEls).toHaveLength(2)
+    expect(rowsEls[0]).toHaveClass('group-head-row')
+    const monthGroupCell = rowsEls[0].querySelector('th[colspan="12"]')
+    expect(monthGroupCell).not.toBeNull()
+
+    const monthHeaders = rowsEls[1].querySelectorAll('th.month-col')
+    expect(monthHeaders).toHaveLength(12)
+    expect(monthHeaders[0].querySelector('.th-label')).toHaveTextContent('Jan')
+    expect(monthHeaders[11].querySelector('.th-label')).toHaveTextContent('Dec')
+
+    const nowHeaders = rowsEls[1].querySelectorAll('th.month-col.now')
+    expect(nowHeaders).toHaveLength(1)
+    expect([...monthHeaders].indexOf(nowHeaders[0] as Element)).toBe(new Date().getMonth())
+  })
 })

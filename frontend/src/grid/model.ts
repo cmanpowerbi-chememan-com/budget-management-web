@@ -10,6 +10,22 @@ export const MONTH_KEYS = [
 ] as const
 export type MonthKey = (typeof MONTH_KEYS)[number]
 
+/** Real month names for the grid header (mockup 0002.3budget-export.html
+ * `MONTHS_EN`, line 1932) — the header previously rendered the raw
+ * `MonthKey` ('m01'..'m12'), which is a storage key, not a label. */
+export const MONTH_LABELS: Record<MonthKey, string> = {
+  m01: 'Jan', m02: 'Feb', m03: 'Mar', m04: 'Apr', m05: 'May', m06: 'Jun',
+  m07: 'Jul', m08: 'Aug', m09: 'Sep', m10: 'Oct', m11: 'Nov', m12: 'Dec',
+}
+
+/** Current-month key for the header/body "now" highlight (UI-parity point
+ * 8a). Takes an optional `Date` so it is unit-testable without depending on
+ * the real system clock; defaults to `new Date()` at call time — the
+ * intended behavior in the running app. */
+export function nowMonthKey(date: Date = new Date()): MonthKey {
+  return MONTH_KEYS[date.getMonth()]
+}
+
 export type Side = 'COST' | 'SGA' | 'OTHER'
 
 /** GL account prefix decides the accounting side (5=COST/ผลิต·ต้นทุน,
