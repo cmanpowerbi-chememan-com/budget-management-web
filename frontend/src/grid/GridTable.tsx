@@ -1,11 +1,14 @@
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type RefObject,
   type TouchEvent as ReactTouchEvent,
 } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
@@ -13,13 +16,16 @@ import { MonthCell } from './MonthCell'
 import {
   BLANK_COLUMN_FILTERS,
   clampColumnWidth,
+  clearStoredColumnWidths,
   DEFAULT_COLUMN_WIDTHS,
   filterRows,
+  fitColumnWidth,
   formatThb,
   freezeOffsets,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
+  hasStoredColumnWidthsOverride,
   isEditableCell,
   loadStoredColumnWidths,
   MONTH_KEYS,
@@ -27,6 +33,7 @@ import {
   nowMonthKey,
   persistColumnWidths,
   sectionTotals,
+  selectMeasureCandidates,
   type ColumnFilters,
   type ColumnWidthKey,
   type ColumnWidths,
@@ -69,6 +76,89 @@ const NOT_IN_MASTER_HINT = 'อ้างอิง — ยังไม่เป�
 
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
+}
+
+/** Reads the hidden measurement pass (see `<ColumnWidthMeasurer>` below) and
+ * derives fit-to-content widths: max natural content width per identity
+ * column (header label candidates included), converted via `fitColumnWidth`
+ * (padding allowance + clamp). Pure DOM read, no side effects — safe to call
+ * both from the auto-fit layout effect and synchronously from the
+ * Reset-columns click handler. Falls back to `DEFAULT_COLUMN_WIDTHS` only
+ * when the container ref isn't mounted yet (defensive, not expected in
+ * practice since the measurer renders unconditionally alongside the grid). */
+function measureColumnWidths(container: HTMLElement | null): ColumnWidths {
+  if (!container) return DEFAULT_COLUMN_WIDTHS
+  const maxWidth = (key: ColumnWidthKey): number => {
+    const nodes = container.querySelectorAll<HTMLElement>(`[data-measure-col="${key}"]`)
+    let max = 0
+    nodes.forEach((node) => {
+      max = Math.max(max, node.getBoundingClientRect().width)
+    })
+    return max
+  }
+  return {
+    cc: fitColumnWidth(maxWidth('cc')),
+    gl: fitColumnWidth(maxWidth('gl')),
+    glGroup: fitColumnWidth(maxWidth('glGroup')),
+  }
+}
+
+/** Hidden (visually, not `display:none` — that would report 0 widths in a
+ * real browser too) DOM measurement pass for the 3 identity columns
+ * (UI-parity point 8d — fit-to-content default). Renders each header label +
+ * bounded candidate list with the SAME classNames as the real cells
+ * (`idx-cell` / `gl-code-text` / the GL-group chip) so font/weight match;
+ * `getBoundingClientRect().width` per node then reflects real content
+ * width — `measureColumnWidths` above takes the max per column. Absolutely
+ * positioned off-screen + `visibility:hidden` so it never paints or affects
+ * layout/scroll of the real grid, while still participating in real layout
+ * (unlike `display:none`, which every browser reports as 0×0). */
+function ColumnWidthMeasurer({
+  containerRef,
+  candidates,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>
+  candidates: ReturnType<typeof selectMeasureCandidates>
+}) {
+  const headerLabelStyle: CSSProperties = {
+    display: 'inline-block',
+    whiteSpace: 'nowrap',
+    fontSize: 10.5,
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+  }
+  return (
+    <div
+      ref={containerRef}
+      aria-hidden="true"
+      data-testid="col-width-measurer"
+      className="data-table"
+      style={{ position: 'absolute', top: -9999, left: -9999, visibility: 'hidden', width: 'auto', minWidth: 0 }}
+    >
+      <span data-measure-col="cc" style={headerLabelStyle}>Cost Center</span>
+      {candidates.cc.map((v) => (
+        <span key={`cc-${v}`} className="idx-cell" data-measure-col="cc" style={{ display: 'inline-block' }}>
+          {v}
+        </span>
+      ))}
+      <span data-measure-col="gl" style={headerLabelStyle}>GL Code</span>
+      {candidates.gl.map((v) => (
+        <span key={`gl-${v}`} className="gl-code-text" data-measure-col="gl" style={{ display: 'inline-block' }}>
+          {v}
+        </span>
+      ))}
+      <span data-measure-col="glGroup" style={headerLabelStyle}>GL Group</span>
+      {candidates.glGroup.map((g) => {
+        const chipClass = groupChipClass(g)
+        return (
+          <span key={`glGroup-${g}`} data-measure-col="glGroup" style={{ display: 'inline-block' }}>
+            {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{g}</span> : g}
+          </span>
+        )
+      })}
+    </div>
+  )
 }
 
 function MonthCells({
@@ -272,6 +362,41 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   // Initial value is read from localStorage once (lazy initializer), never
   // re-read after mount.
   const [colWidths, setColWidths] = useState<ColumnWidths>(() => loadStoredColumnWidths())
+
+  // Fit-to-content default (UI-parity point 8d) — `hasOverrideRef` decides
+  // whether the measurement effect below is even allowed to touch
+  // `colWidths`: a saved localStorage width (checked once at mount, same
+  // timing as the lazy initializer above) or a manual drag THIS session both
+  // set it permanently true, so the user's explicit choice always wins over
+  // re-measuring. Reset-columns clears it back to false.
+  const hasOverrideRef = useRef<boolean>(hasStoredColumnWidthsOverride())
+  // Hidden measurement-pass container (see `<ColumnWidthMeasurer>`) — a DOM
+  // read target for `measureColumnWidths`, shared by the auto-fit effect AND
+  // the Reset-columns click handler.
+  const measureContainerRef = useRef<HTMLDivElement | null>(null)
+  // Bounded candidate strings per column, recomputed only when the
+  // underlying DATA identity changes (`rows`/`glRef`) — never depends on
+  // `colWidths` itself, which is what keeps the measurement effect below
+  // from ever re-triggering itself (no loop).
+  const measureCandidates = useMemo(() => selectMeasureCandidates(rows, glRef), [rows, glRef])
+
+  useLayoutEffect(() => {
+    // Guard: no rows means nothing rendered to measure (this component
+    // itself short-circuits to the plain empty state below when
+    // `rows.length === 0`) — keep whatever `colWidths` already holds rather
+    // than collapsing every column to the padding-only minimum.
+    if (rows.length === 0) return
+    // A user/localStorage override always wins — never clobber an explicit
+    // choice with a re-measured fit just because the data changed.
+    if (hasOverrideRef.current) return
+    setColWidths(measureColumnWidths(measureContainerRef.current))
+    // Deliberately NOT depending on colWidths/hasOverrideRef — this effect
+    // reacts to DATA changes only, before paint (useLayoutEffect), so the
+    // first real paint already shows the fitted widths, no flash of the
+    // pre-measurement placeholder.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, glRef])
+
   // Which handle is CURRENTLY being dragged, purely for the accent-hairline
   // visual state (mockup `.col-resize.is-dragging::after`) — `null` when no
   // drag is active. Separate from `dragStateRef` below (that ref drives the
@@ -317,6 +442,9 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
     return (e: ReactMouseEvent | ReactTouchEvent) => {
       e.preventDefault()
       e.stopPropagation() // never let the drag reach/blur the 8b filter input sharing this th
+      // A manual resize is an explicit user choice — from now on the
+      // fit-to-content effect must never overwrite it on a later data change.
+      hasOverrideRef.current = true
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
       dragStateRef.current = { key, startX: clientX, startWidth: colWidths[key] }
       document.body.classList.add('col-dragging')
@@ -350,8 +478,14 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   }
 
   function handleResetColumns() {
-    setColWidths(DEFAULT_COLUMN_WIDTHS)
-    persistColumnWidths(DEFAULT_COLUMN_WIDTHS)
+    // "Reset" means "go back to fit-to-content", not "go back to a fixed
+    // 130/150/150" — clear BOTH the in-session override flag and the
+    // persisted localStorage entry so a later data change keeps auto-fitting
+    // too, then re-measure immediately from the (already-mounted) hidden
+    // measurement pass so the click has no visible delay.
+    hasOverrideRef.current = false
+    clearStoredColumnWidths()
+    setColWidths(measureColumnWidths(measureContainerRef.current))
   }
 
   // Unfiltered emptiness is unrelated to the filter feature (no data at all
@@ -387,6 +521,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
 
   return (
     <>
+      <ColumnWidthMeasurer containerRef={measureContainerRef} candidates={measureCandidates} />
       {/* Small right-aligned control row (UI-parity point 8c) — kept OUTSIDE
          .grid-sides since it applies to both side-tables at once; state
          (colWidths) is local to this component, so the button lives here
@@ -396,7 +531,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
           type="button"
           className="btn btn-sm btn-ghost"
           onClick={handleResetColumns}
-          title="รีเซ็ตความกว้างคอลัมน์ทั้งหมด"
+          title="รีเซ็ตความกว้างคอลัมน์ให้พอดีเนื้อหา"
           data-testid="reset-columns-btn"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -419,6 +554,25 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
             <div className="table-panel">
               <div className="table-wrap">
                 <table className="data-table" style={freezeStyle}>
+                  {/* Column widths live on the <colgroup> (fixed layout) —
+                     the 3 identity cols come from the SAME shared `colWidths`
+                     state, Status + the 12 month cols from fixed CSS classes
+                     (.status-col/.m-col in global.css), so BOTH side-tables
+                     render an identical colgroup and every column stays
+                     pixel-aligned across COST/SGA. Auto table-layout could
+                     never promise that: its widths are content-driven, so a
+                     long reference-hint in one table widened its Status
+                     column and shifted all its month columns vs the other
+                     table (measured: Jan off by ~147px). */}
+                  <colgroup>
+                    <col style={{ width: colWidths.cc }} />
+                    <col style={{ width: colWidths.gl }} />
+                    <col style={{ width: colWidths.glGroup }} />
+                    <col className="status-col" />
+                    {MONTH_KEYS.map((m) => (
+                      <col key={m} className="m-col" />
+                    ))}
+                  </colgroup>
                   <thead>
                     {/* Group-head row (UI-parity point 8a): identity+Status
                        merge into one blank band, the 12 month columns get a
@@ -444,11 +598,11 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                        component, not per-table), so typing here also
                        filters the other side. */}
                     <tr className="col-row">
-                      {/* Explicit width+minWidth (UI-parity point 8c) — header-row-only,
-                         auto table-layout propagates it to the whole column (incl. the
-                         colSpan=3/4 merged cells above/below). Both side-tables read the
-                         SAME `colWidths` state, so they stay aligned. */}
-                      <th className="frz frz-1" style={{ width: colWidths.cc, minWidth: colWidths.cc }}>
+                      {/* Identity widths are NOT set here — they live on the
+                         <colgroup> above (fixed layout sizes columns from
+                         <col> elements + the first row only; a width on this
+                         second-row th would be ignored). */}
+                      <th className="frz frz-1">
                         <span className="th-label">Cost Center</span>
                         <input
                           type="text"
@@ -469,7 +623,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           onTouchStart={startColumnResize('cc')}
                         />
                       </th>
-                      <th className="frz frz-2" style={{ width: colWidths.gl, minWidth: colWidths.gl }}>
+                      <th className="frz frz-2">
                         <span className="th-label">GL Code</span>
                         <input
                           type="text"
@@ -490,7 +644,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           onTouchStart={startColumnResize('gl')}
                         />
                       </th>
-                      <th className="frz frz-3" style={{ width: colWidths.glGroup, minWidth: colWidths.glGroup }}>
+                      <th className="frz frz-3">
                         <span className="th-label">GL Group</span>
                         <input
                           type="text"

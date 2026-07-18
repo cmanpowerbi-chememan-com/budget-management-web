@@ -6,14 +6,18 @@ import {
   buildNewRowPayload,
   buildSavePayload,
   clampColumnWidth,
+  clearStoredColumnWidths,
+  COLUMN_WIDTH_MIN,
   COLUMN_WIDTHS_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
   filterRows,
+  fitColumnWidth,
   formatThb,
   freezeOffsets,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
+  hasStoredColumnWidthsOverride,
   isEditableCell,
   loadStoredColumnWidths,
   mergeSavedRow,
@@ -21,6 +25,7 @@ import {
   nowMonthKey,
   persistColumnWidths,
   sectionTotals,
+  selectMeasureCandidates,
   sideOfGl,
   validateNewTransaction,
 } from './model'
@@ -363,5 +368,99 @@ describe('loadStoredColumnWidths / persistColumnWidths (UI-parity point 8c)', ()
     })
     expect(() => persistColumnWidths(DEFAULT_COLUMN_WIDTHS)).not.toThrow()
     spy.mockRestore()
+  })
+})
+
+describe('hasStoredColumnWidthsOverride / clearStoredColumnWidths (UI-parity point 8d)', () => {
+  afterEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('is false when nothing is stored', () => {
+    expect(hasStoredColumnWidthsOverride()).toBe(false)
+  })
+
+  it('is true once ANY value (even a corrupted one) is stored — presence, not validity, marks an override', () => {
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, 'not json')
+    expect(hasStoredColumnWidthsOverride()).toBe(true)
+  })
+
+  it('becomes false again after clearStoredColumnWidths removes the entry', () => {
+    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160 })
+    expect(hasStoredColumnWidthsOverride()).toBe(true)
+    clearStoredColumnWidths()
+    expect(hasStoredColumnWidthsOverride()).toBe(false)
+  })
+
+  it('does not throw when localStorage is unavailable (guarded)', () => {
+    const getSpy = vi.spyOn(window.localStorage.__proto__, 'getItem').mockImplementation(() => {
+      throw new Error('disabled')
+    })
+    expect(hasStoredColumnWidthsOverride()).toBe(false)
+    getSpy.mockRestore()
+
+    const removeSpy = vi.spyOn(window.localStorage.__proto__, 'removeItem').mockImplementation(() => {
+      throw new Error('disabled')
+    })
+    expect(() => clearStoredColumnWidths()).not.toThrow()
+    removeSpy.mockRestore()
+  })
+})
+
+describe('fitColumnWidth (UI-parity point 8d — fit-to-content default)', () => {
+  it('adds the padding allowance then clamps to the 60-800 range', () => {
+    expect(fitColumnWidth(50)).toBe(74) // 50 + 24px padding, already inside 60-800
+  })
+
+  it('floors a tiny/zero raw width (e.g. jsdom, which never lays out real text) to COLUMN_WIDTH_MIN', () => {
+    expect(fitColumnWidth(0)).toBe(COLUMN_WIDTH_MIN)
+  })
+
+  it('caps a huge raw width to the 800 maximum', () => {
+    expect(fitColumnWidth(5000)).toBe(800)
+  })
+
+  it('rounds up a fractional raw width before adding padding', () => {
+    expect(fitColumnWidth(100.2)).toBe(101 + 24)
+  })
+})
+
+describe('selectMeasureCandidates (UI-parity point 8d)', () => {
+  const glRef = [
+    { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+    { gl_code: '5211800030', gl_group: 'Office expenses', gl_name: 'Office COST', is_special: false },
+  ]
+
+  it('dedups repeated cost_center/gl_account values across rows', () => {
+    const rows = [
+      row({ cost_center: 'CC1', gl_account: '5211800030' }),
+      row({ cost_center: 'CC1', gl_account: '5211800030' }),
+      row({ cost_center: 'CC2', gl_account: '5211900030' }),
+    ]
+    const candidates = selectMeasureCandidates(rows, glRef)
+    expect(candidates.cc.sort()).toEqual(['CC1', 'CC2'])
+    expect(candidates.gl.sort()).toEqual(['5211800030', '5211900030'])
+  })
+
+  it('resolves glGroup via glMetaFor (never a raw field on BudgetRow) and dedups group names', () => {
+    const rows = [
+      row({ cost_center: 'CC1', gl_account: '5211800030' }),
+      row({ cost_center: 'CC2', gl_account: '5211900030' }),
+    ]
+    const candidates = selectMeasureCandidates(rows, glRef)
+    expect(candidates.glGroup.sort()).toEqual(['Entertainment', 'Office expenses'])
+  })
+
+  it('caps cc/gl candidates to the given limit, keeping the LONGEST values (those drive the max width)', () => {
+    const rows = [
+      row({ cost_center: 'SHORT', gl_account: '5211800030' }),
+      row({ cost_center: 'A-VERY-LONG-COST-CENTER-CODE', gl_account: '5211900030' }),
+    ]
+    const candidates = selectMeasureCandidates(rows, glRef, 1)
+    expect(candidates.cc).toEqual(['A-VERY-LONG-COST-CENTER-CODE'])
+  })
+
+  it('returns empty candidate lists for an empty row set', () => {
+    expect(selectMeasureCandidates([], glRef)).toEqual({ cc: [], gl: [], glGroup: [] })
   })
 })

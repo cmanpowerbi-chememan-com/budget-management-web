@@ -722,11 +722,12 @@ input:focus-visible {
   overflow: hidden;
 }
 /* The actual scroll container: vertical scroll keeps the sticky header
-   pinned, horizontal scroll keeps the frozen identity columns pinned. */
+   pinned, horizontal scroll keeps the frozen identity columns pinned.
+   No min-height — the panel hugs its rows (a fixed floor left a dead
+   white band under short tables); max-height alone bounds tall ones. */
 .table-wrap {
   overflow: auto;
   max-height: calc(100vh - 380px);
-  min-height: 480px;
 }
 .data-table {
   width: 100%;
@@ -734,6 +735,14 @@ input:focus-visible {
      narrower than this — 16 cols (3 frozen + Status + 12 months) need room
      to stay readable rather than being auto-crushed. */
   min-width: 1500px;
+  /* Fixed layout + the <colgroup> (GridTable.tsx): column widths come ONLY
+     from the <col> elements — identity cols from shared React state, Status
+     and the 12 months from the fixed constants below — never from cell
+     content. Both side-tables render an identical colgroup, so COST and SGA
+     columns stay pixel-aligned. (Auto layout sized columns per-table by
+     content: one long reference-hint stretched COST's Status column ~147px
+     wider than SGA's and shifted every month column with it.) */
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
@@ -743,6 +752,16 @@ input:focus-visible {
      — no static default here, since a resize must move them. Both
      side-tables (COST/SGA) receive the same computed values so they stay
      pixel-aligned. */
+}
+/* Status column: 180px fits the longest nowrap status label
+   (PENDING · รออนุมัติ ≈ 153px + 2×10px cell padding); hints wrap inside it
+   (see .special-hint/.reference-hint below). Month column: 98px = the 78px
+   .month-input + 2×10px cell padding, so editable cells never overflow. */
+.data-table col.status-col {
+  width: 180px;
+}
+.data-table col.m-col {
+  width: 98px;
 }
 .data-table thead th {
   position: sticky;
@@ -984,16 +1003,20 @@ body.col-dragging * {
    --surface stays fully opaque, so the frozen cells still block scrolled
    content behind them. Subtotal rows carry no data-status and stay
    untinted (.subtotal-row's own paper-2 bg), matching the mockup. */
-/* Frozen identity columns (CC / GL Code / GL Group) stay on the plain base
-   surface — excluded from the status wash so they read as a clean white
-   frozen band (user preference, deviates from the mockup which tints them). */
-.data-table tr[data-status='sap'] td:not(.shared):not(.frz) {
+/* Frozen identity columns (CC / GL Code / GL Group) AND the Status column
+   stay on the plain base surface — excluded from the status wash so the
+   white band reads as CC / GL Code / GL Group / Status together, and the
+   color wash only starts at the month columns (user preference, deviates
+   from the mockup which tints the frozen columns too). Status keeps its
+   own colored TEXT + swatch (`.status-cell.sap/.approved/.pending`,
+   point 7) — only the CELL BACKGROUND is excluded here. */
+.data-table tr[data-status='sap'] td:not(.shared):not(.frz):not(.status-cell) {
   background: color-mix(in oklab, var(--status-sap) 9%, var(--surface));
 }
-.data-table tr[data-status='approved'] td:not(.shared):not(.frz) {
+.data-table tr[data-status='approved'] td:not(.shared):not(.frz):not(.status-cell) {
   background: color-mix(in oklab, var(--status-approved) 9%, var(--surface));
 }
-.data-table tr[data-status='pending'] td:not(.shared):not(.frz) {
+.data-table tr[data-status='pending'] td:not(.shared):not(.frz):not(.status-cell) {
   background: color-mix(in oklab, var(--ink) 9%, var(--surface));
 }
 .data-table th.month-col {
@@ -1134,12 +1157,18 @@ body.col-dragging * {
    lines 457-466). display:flex + flex-wrap:wrap lets the swatch+label sit
    on one row while .special-hint/.reference-hint (flex-basis:100% below)
    wrap onto their own full-width line underneath; .special-open-btn stays
-   a normal (non-full-width) flex item next to the label. */
+   a normal (non-full-width) flex item next to the label. Explicit
+   `background: var(--surface)` (not left transparent) so the cell reads as
+   the SAME opaque white/cream band as the frozen identity columns, matching
+   the `:not(.status-cell)` exclusion on the row-tint selectors below —
+   otherwise it would only LOOK untinted by incidentally showing the
+   table's own background through, not by actually being on --surface. */
 .status-cell {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  background: var(--surface);
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 600;

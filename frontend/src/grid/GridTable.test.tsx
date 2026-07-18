@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
-import { DEFAULT_COLUMN_WIDTHS } from './model'
+import { COLUMN_WIDTH_MIN, COLUMN_WIDTHS_STORAGE_KEY } from './model'
 import { GridTable } from './GridTable'
 import { blankLayer, makeRow } from './testUtils'
 
@@ -10,6 +10,15 @@ const GL_REF: GlAccount[] = [
   { gl_code: '6211800030', gl_group: 'Office expenses', gl_name: 'Office SGA', is_special: false },
   { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
 ]
+
+function getTable(testId: string): HTMLTableElement {
+  return screen.getByTestId(testId).querySelector('table.data-table') as HTMLTableElement
+}
+
+function getIdentityThs(table: HTMLTableElement): HTMLTableCellElement[] {
+  const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
+  return [...colRow.querySelectorAll('th.frz')] as HTMLTableCellElement[]
+}
 
 describe('GridTable', () => {
   it('renders all 3 layers for a row (SAP/Approved/Pending)', () => {
@@ -251,7 +260,7 @@ describe('GridTable', () => {
     })
   })
 
-  describe('column resize & reset (UI-parity point 8c)', () => {
+  describe('fit-to-content default column widths (UI-parity point 8d)', () => {
     afterEach(() => {
       window.localStorage.clear()
     })
@@ -261,14 +270,62 @@ describe('GridTable', () => {
       makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
     ]
 
-    function getTable(testId: string): HTMLTableElement {
-      return screen.getByTestId(testId).querySelector('table.data-table') as HTMLTableElement
-    }
+    it('defaults the identity columns to a content-fitted width, not the old 130/150/150 — both tables aligned, frz tracking it', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const costTable = getTable('side-section-COST')
+      const sgaTable = getTable('side-section-SGA')
+      const [costCc, costGl] = getIdentityThs(costTable)
+      const [sgaCc, sgaGl] = getIdentityThs(sgaTable)
 
-    function getIdentityThs(table: HTMLTableElement): HTMLTableCellElement[] {
-      const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
-      return [...colRow.querySelectorAll('th.frz')] as HTMLTableCellElement[]
-    }
+      // jsdom never lays out real text (every measurement reads 0), so the
+      // fit-to-content pass deterministically floors to COLUMN_WIDTH_MIN —
+      // which is still strictly LESS than the old hardcoded 130px default,
+      // proving this is no longer a fixed constant. A real browser
+      // (Playwright verify) measures actual text and lands above this floor.
+      expect(parseInt(costCc.style.width, 10)).toBe(COLUMN_WIDTH_MIN)
+      expect(parseInt(costCc.style.width, 10)).toBeLessThan(130)
+      expect(costCc.style.width).toBe(sgaCc.style.width) // both tables agree
+      expect(costGl.style.width).toBe(sgaGl.style.width)
+
+      expect(costTable.style.getPropertyValue('--frz2')).toBe(costCc.style.width)
+      expect(costTable.style.getPropertyValue('--frz3')).toBe(
+        `${parseInt(costCc.style.width, 10) + parseInt(costGl.style.width, 10)}px`,
+      )
+    })
+
+    it('a saved localStorage width WINS over the fit-to-content default on mount (does not get auto-overwritten)', () => {
+      window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 222, gl: 111, glGroup: 99 }))
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const costCc = getIdentityThs(getTable('side-section-COST'))[0]
+      expect(costCc.style.width).toBe('222px')
+    })
+
+    it('a manual drag override is NOT clobbered by a later data change (rows prop changes)', () => {
+      const { rerender } = render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 275, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 275, bubbles: true }))
+      const draggedWidth = getIdentityThs(getTable('side-section-COST'))[0].style.width
+
+      // A brand-new rows array (new reference, as a real refetch would
+      // produce) must NOT trigger a re-measure that overwrites the user's
+      // explicit choice.
+      const newRows = [makeRow({ cost_center: 'CC-DIFFERENT', gl_account: '5211800030', editable: true })]
+      rerender(<GridTable rows={newRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe(draggedWidth)
+    })
+  })
+
+  describe('column resize & reset (UI-parity point 8c)', () => {
+    afterEach(() => {
+      window.localStorage.clear()
+    })
+
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }),
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
+    ]
 
     it('renders a drag handle on each of the 3 identity columns, in both side-tables', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
@@ -280,6 +337,11 @@ describe('GridTable', () => {
     it('dragging the Cost Center handle widens the column, updates --frz2/--frz3, and keeps both tables aligned', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const handle = screen.getAllByTestId('col-resize-cc')[0]
+      // Read the fit-to-content STARTING width dynamically (point 8d made
+      // this a measured default, not a hardcoded 130) — the drag delta is
+      // what this test actually cares about.
+      const startCc = parseInt(getIdentityThs(getTable('side-section-COST'))[0].style.width, 10)
+      const startGl = parseInt(getIdentityThs(getTable('side-section-COST'))[1].style.width, 10)
 
       fireEvent.mouseDown(handle, { clientX: 100 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 150, bubbles: true }))
@@ -290,12 +352,12 @@ describe('GridTable', () => {
       const costCcTh = getIdentityThs(costTable)[0]
       const sgaCcTh = getIdentityThs(sgaTable)[0]
 
-      expect(costCcTh.style.width).toBe('180px') // 130 default + 50px drag
-      expect(sgaCcTh.style.width).toBe('180px') // shared state — both tables stay aligned
-      expect(costTable.style.getPropertyValue('--frz2')).toBe('180px')
-      expect(costTable.style.getPropertyValue('--frz3')).toBe('330px') // 180 + gl(150)
-      expect(sgaTable.style.getPropertyValue('--frz2')).toBe('180px')
-      expect(sgaTable.style.getPropertyValue('--frz3')).toBe('330px')
+      expect(costCcTh.style.width).toBe(`${startCc + 50}px`) // +50px drag
+      expect(sgaCcTh.style.width).toBe(`${startCc + 50}px`) // shared state — both tables stay aligned
+      expect(costTable.style.getPropertyValue('--frz2')).toBe(`${startCc + 50}px`)
+      expect(costTable.style.getPropertyValue('--frz3')).toBe(`${startCc + 50 + startGl}px`)
+      expect(sgaTable.style.getPropertyValue('--frz2')).toBe(`${startCc + 50}px`)
+      expect(sgaTable.style.getPropertyValue('--frz3')).toBe(`${startCc + 50 + startGl}px`)
     })
 
     it('clamps a huge drag to the 800px maximum and a large-negative drag to the 60px minimum', () => {
@@ -313,19 +375,25 @@ describe('GridTable', () => {
       expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('60px')
     })
 
-    it('"Reset columns" restores the defaults, incl. --frz2 back to 130', () => {
+    it('"Reset columns" re-measures fit-to-content (NOT a hardcoded 130/150/150), incl. --frz2 tracking it, and clears the localStorage override', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const handle = screen.getAllByTestId('col-resize-cc')[0]
+      const startCc = parseInt(getIdentityThs(getTable('side-section-COST'))[0].style.width, 10)
       fireEvent.mouseDown(handle, { clientX: 0 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 300, bubbles: true }))
       fireEvent(window, new MouseEvent('mouseup', { clientX: 300, bubbles: true }))
-      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('430px')
+      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe(`${startCc + 300}px`)
+      expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).not.toBeNull() // drag persisted an override
 
       fireEvent.click(screen.getByTestId('reset-columns-btn'))
 
       const costTable = getTable('side-section-COST')
-      expect(getIdentityThs(costTable)[0].style.width).toBe(`${DEFAULT_COLUMN_WIDTHS.cc}px`)
-      expect(costTable.style.getPropertyValue('--frz2')).toBe(`${DEFAULT_COLUMN_WIDTHS.cc}px`)
+      // Re-measured fit-to-content — in jsdom (no real text layout) that is
+      // deterministically the padding-only floor, i.e. COLUMN_WIDTH_MIN; a
+      // real browser (Playwright verify) gets the true content-fitted value.
+      expect(getIdentityThs(costTable)[0].style.width).toBe(`${startCc}px`)
+      expect(costTable.style.getPropertyValue('--frz2')).toBe(`${startCc}px`)
+      expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).toBeNull() // override cleared, not re-saved
     })
 
     it('adds is-dragging to ONLY the handle being dragged (mockup accent-hairline parity)', () => {

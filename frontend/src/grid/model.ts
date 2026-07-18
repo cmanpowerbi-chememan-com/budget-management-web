@@ -111,8 +111,12 @@ export interface ColumnWidths {
 
 export type ColumnWidthKey = keyof ColumnWidths
 
-/** Matches point-1's static offsets exactly (frz2=130, frz3=130+150=280) so
- * first-load/reset renders pixel-identical to before this feature. */
+/** Pre-measurement placeholder only (point-1's original static offsets:
+ * frz2=130, frz3=130+150=280) — used for the very first paint before the
+ * fit-to-content measurement effect runs, and as `loadStoredColumnWidths`'s
+ * per-key fallback when a stored value is missing/corrupted. The REAL
+ * default width is fit-to-content (GridTable.tsx's measurement effect,
+ * point 8d) — this constant is not "the" default column width anymore. */
 export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = { cc: 130, gl: 150, glGroup: 150 }
 
 export const COLUMN_WIDTH_MIN = 60
@@ -167,6 +171,29 @@ export function persistColumnWidths(widths: ColumnWidths): void {
   }
 }
 
+/** True when a column-width entry already exists in localStorage — presence
+ * alone (not validity of its values) marks "the user/a previous session has
+ * an explicit width", which must win over the fit-to-content auto-default
+ * (see `GridTable.tsx`'s measurement effect). A corrupted entry is repaired
+ * per-key by `loadStoredColumnWidths`, not by pretending no override exists. */
+export function hasStoredColumnWidthsOverride(): boolean {
+  try {
+    return window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
+/** Removes the persisted override — called by "Reset columns" so the grid
+ * goes back to fit-to-content on the NEXT data change too, not just once. */
+export function clearStoredColumnWidths(): void {
+  try {
+    window.localStorage.removeItem(COLUMN_WIDTHS_STORAGE_KEY)
+  } catch {
+    // localStorage unavailable — nothing to clear, resize still works this session.
+  }
+}
+
 /** Derives the 3 frozen-column left offsets from the CURRENT widths — no
  * DOM measurement (unlike the mockup's `applyFreeze()`, which reads real
  * header `getBoundingClientRect()`s). Both side-tables (COST/SGA) read the
@@ -175,6 +202,56 @@ export function persistColumnWidths(widths: ColumnWidths): void {
  * DOM trees. */
 export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number } {
   return { frz1: 0, frz2: widths.cc, frz3: widths.cc + widths.gl }
+}
+
+/** Horizontal padding allowance added to a raw measured TEXT width to
+ * approximate the real cell's box size (`.data-table td`/`th` both use
+ * `padding: Npx 10px`, i.e. 20px of horizontal padding, plus a small buffer
+ * for the resize-handle hit strip and rounding). Used by `fitColumnWidth`
+ * (GridTable.tsx's DOM measurement pass feeds it raw text widths). */
+export const COLUMN_WIDTH_MEASURE_PADDING = 24
+
+/** Converts a raw measured text/content width into a usable column width:
+ * add the cell's own padding allowance, then clamp to the same 60-800 range
+ * as a manual drag. A raw width of 0 (e.g. jsdom, which never lays out real
+ * text) deterministically floors to `COLUMN_WIDTH_MIN` via the clamp. */
+export function fitColumnWidth(rawTextWidth: number): number {
+  return clampColumnWidth(Math.ceil(rawTextWidth) + COLUMN_WIDTH_MEASURE_PADDING)
+}
+
+/** Bounded set of "longest unique" candidate strings per identity column,
+ * fed to the hidden DOM measurement pass (GridTable.tsx). A column's natural
+ * fit width is driven by its LONGEST value, so measuring every row would be
+ * wasted DOM work for no better an answer — dedup + cap keeps the pass
+ * O(unique values, capped) instead of O(rows). `glGroup` cardinality is
+ * small and fixed (GL master group names) so it is never capped. */
+export interface ColumnMeasureCandidates {
+  cc: string[]
+  gl: string[]
+  glGroup: string[]
+}
+
+export const COLUMN_MEASURE_CANDIDATE_CAP = 30
+
+export function selectMeasureCandidates(
+  rows: BudgetRow[],
+  glRef: GlAccount[],
+  cap: number = COLUMN_MEASURE_CANDIDATE_CAP,
+): ColumnMeasureCandidates {
+  const ccSet = new Set<string>()
+  const glSet = new Set<string>()
+  const glGroupSet = new Set<string>()
+  rows.forEach((r) => {
+    ccSet.add(r.cost_center)
+    glSet.add(r.gl_account)
+    glGroupSet.add(glMetaFor(r.gl_account, glRef).gl_group)
+  })
+  const topLongest = (values: Set<string>) => [...values].sort((a, b) => b.length - a.length).slice(0, cap)
+  return {
+    cc: topLongest(ccSet),
+    gl: topLongest(glSet),
+    glGroup: [...glGroupSet],
+  }
 }
 
 function matchesFilter(value: string, filter: string): boolean {
