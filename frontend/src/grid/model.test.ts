@@ -461,6 +461,21 @@ describe('selectMeasureCandidates (UI-parity point 8d)', () => {
   })
 
   it('returns empty candidate lists for an empty row set', () => {
-    expect(selectMeasureCandidates([], glRef)).toEqual({ cc: [], gl: [], glGroup: [] })
+    expect(selectMeasureCandidates([], glRef)).toEqual({ cc: [], gl: [], glName: [], glGroup: [] })
+  })
+
+  it('collects GL names (the second line of the cell) so the column fits the wider of code or name', () => {
+    const rows = [
+      row({ cost_center: 'CC1', gl_account: '5211800030' }),
+      row({ cost_center: 'CC2', gl_account: '5211900030' }),
+    ]
+    const candidates = selectMeasureCandidates(rows, glRef)
+    // gl_name values come from glMetaFor, not a raw BudgetRow field.
+    const names = candidates.glName.sort()
+    expect(names.length).toBe(2)
+    names.forEach((n) => expect(typeof n).toBe('string'))
+    // never the literal "null" — rows whose GL has no name are skipped
+    expect(candidates.glName).not.toContain('null')
+    expect(candidates.glName).not.toContain(null)
   })
 })

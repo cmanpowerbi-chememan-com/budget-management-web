@@ -148,6 +148,13 @@ function ColumnWidthMeasurer({
           {v}
         </span>
       ))}
+      {/* GL names share the gl column — measured with the real .gl-name font so
+          the column fits max(widest code, widest name). */}
+      {candidates.glName.map((v) => (
+        <span key={`glName-${v}`} className="gl-name" data-measure-col="gl" style={{ display: 'inline-block' }}>
+          {v}
+        </span>
+      ))}
       <span data-measure-col="glGroup" style={headerLabelStyle}>GL Group</span>
       {candidates.glGroup.map((g) => {
         const chipClass = groupChipClass(g)

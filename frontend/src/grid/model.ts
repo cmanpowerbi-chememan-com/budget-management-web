@@ -233,7 +233,12 @@ export function fitColumnWidth(rawTextWidth: number): number {
  * small and fixed (GL master group names) so it is never capped. */
 export interface ColumnMeasureCandidates {
   cc: string[]
+  /** GL account codes (e.g. "6210900060"). */
   gl: string[]
+  /** GL account names (e.g. "ค่าซ่อมบำรุง - ซอฟต์แวร์") — the second line of
+   * the GL cell, often WIDER than the code, so the GL column's fit-to-content
+   * width must be max(widest code, widest name) or the name overflows. */
+  glName: string[]
   glGroup: string[]
 }
 
@@ -246,16 +251,22 @@ export function selectMeasureCandidates(
 ): ColumnMeasureCandidates {
   const ccSet = new Set<string>()
   const glSet = new Set<string>()
+  const glNameSet = new Set<string>()
   const glGroupSet = new Set<string>()
   rows.forEach((r) => {
+    const meta = glMetaFor(r.gl_account, glRef)
     ccSet.add(r.cost_center)
     glSet.add(r.gl_account)
-    glGroupSet.add(glMetaFor(r.gl_account, glRef).gl_group)
+    // The GL cell stacks the code + the name; the column must fit whichever is
+    // wider. Skip null names so the measurer never sizes to the literal "null".
+    if (meta.gl_name) glNameSet.add(meta.gl_name)
+    glGroupSet.add(meta.gl_group)
   })
   const topLongest = (values: Set<string>) => [...values].sort((a, b) => b.length - a.length).slice(0, cap)
   return {
     cc: topLongest(ccSet),
     gl: topLongest(glSet),
+    glName: topLongest(glNameSet),
     glGroup: [...glGroupSet],
   }
 }
