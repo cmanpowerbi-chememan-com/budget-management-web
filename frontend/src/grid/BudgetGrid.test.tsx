@@ -329,4 +329,34 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
     expect(screen.queryByTestId('admin-mode-checkbox')).not.toBeInTheDocument()
   })
+
+  it('shows the read-only "Approved · Admin" info strip for an admin scope, with the FX year one behind the selected planning year', async () => {
+    const ADMIN_SCOPE: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [], loading: false, error: null }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={ADMIN_SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const zone = await screen.findByTestId('admin-zone')
+    expect(zone).toHaveTextContent('งบอนุมัติ (Approved) · Admin')
+    expect(zone).toHaveTextContent('FY2026') // planning year 2027 - 1
+    expect(zone).toHaveTextContent('read-only')
+    expect(zone).toHaveTextContent('Budgeting and Management')
+    expect(zone.querySelector('button')).not.toBeInTheDocument()
+    const fxLink = zone.querySelector('a')
+    expect(fxLink).toHaveAttribute('target', '_blank')
+    expect(fxLink).toHaveAttribute('href', 'https://witty-meadow-01107f500.7.azurestaticapps.net/master-currency.html')
+  })
+
+  it('never shows the admin-only info strip for a non-admin scope', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
+    expect(screen.queryByTestId('admin-zone')).not.toBeInTheDocument()
+  })
 })

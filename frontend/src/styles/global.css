@@ -536,6 +536,57 @@ input:focus-visible {
   background: var(--status-pending);
 }
 
+/* Admin-only info strip — Approved (board_budget) layer is whole-company/
+   whole-year from a SharePoint Excel, independent of the view filters (mirrors
+   mockup 0002.3 lines 334-347 / 1123-1136). Read-only: no import/export here. */
+.admin-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 13px 16px;
+  margin-bottom: 18px;
+  border-radius: var(--r);
+  background: color-mix(in oklab, var(--status-approved) 7%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--status-approved) 32%, var(--line));
+  border-left: 4px solid var(--status-approved);
+}
+.admin-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-zone-ic {
+  width: 16px;
+  height: 16px;
+  color: var(--status-approved);
+  flex-shrink: 0;
+}
+.admin-zone-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: -0.005em;
+  color: var(--status-approved);
+}
+.admin-zone-note {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+.admin-zone-note b {
+  color: var(--status-approved);
+  font-weight: 700;
+}
+.admin-zone-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* ─── ฝ่าย picker ─── */
 .dept-picker {
   position: relative;
