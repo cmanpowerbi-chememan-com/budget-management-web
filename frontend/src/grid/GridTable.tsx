@@ -69,11 +69,6 @@ const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
 
 const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
 
-/** Fill-scope row whose GL is outside the GL master (add-later policy):
- * shown as read-only reference until an admin adds the GL via Edit GL
- * Group — never an input the server would 400. */
-const NOT_IN_MASTER_HINT = 'อ้างอิง — ยังไม่เปิดให้ตั้งงบ'
-
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
 }
@@ -264,9 +259,6 @@ function TxnBlock({
   // still belonging to a chipped group, which would leave some rows in the
   // same group un-chipped. See model.ts groupChipClass for the rationale.
   const chipClass = groupChipClass(meta.gl_group)
-  // Marker only when NOT-in-master is the reason the cells are read-only
-  // (Fill-scope row) — a See-only row stays unmarked, read-only as before.
-  const showReferenceHint = row.editable && !meta.in_master
   const cc = row.cost_center
   const gl = row.gl_account
 
@@ -307,16 +299,11 @@ function TxnBlock({
           {meta.is_special && !(row.editable && onOpenSpecial) && (
             <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
           )}
-          {showReferenceHint && (
-            <span className="reference-hint" data-testid={`reference-hint-${cc}-${gl}`}>
-              {NOT_IN_MASTER_HINT}
-            </span>
-          )}
         </td>
         <PendingCells
           row={row}
           editable={editable}
-          disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : showReferenceHint ? NOT_IN_MASTER_HINT : undefined}
+          disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : undefined}
           onCommitMonth={onCommitMonth}
           nowMonth={nowMonth}
         />

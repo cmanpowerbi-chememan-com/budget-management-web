@@ -465,6 +465,128 @@ def test_rows_sorted_by_cost_center_then_gl_account():
 
 
 # ---------------------------------------------------------------------------
+# merge_budget_rows — GL master-membership rule (2026-07-18 product decision
+# by jakkaritw: a GL not in dbo.gl_group is HIDDEN entirely, not shown as a
+# read-only reference — reverses the earlier add-later-reference behavior).
+# Composes with (but is independent of) the admin_gl_codes strip above: a row
+# is visible only if (gl in master) AND (gl not admin-locked OR caller admin).
+# ---------------------------------------------------------------------------
+
+def test_master_filter_none_default_strips_nothing():
+    """Backward-compatible default: master_gl_codes=None (caller never
+    passed it) never strips anything — existing callers unaffected."""
+    join_rows = [_blank_join_row("CC1", "GL-UNKNOWN", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert [r.gl_account for r in rows] == ["GL-UNKNOWN"]
+
+
+def test_non_master_gl_row_dropped_for_non_admin():
+    join_rows = [
+        _blank_join_row("CC1", "GL-MASTER", pending_cost_center="CC1"),
+        _blank_join_row("CC1", "GL-NOT-IN-MASTER", pending_cost_center="CC1"),
+    ]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, master_gl_codes=frozenset({"GL-MASTER"}))
+
+    assert [r.gl_account for r in rows] == ["GL-MASTER"]
+
+
+def test_non_master_gl_row_dropped_for_admin_too():
+    """Master-membership is NOT role-based — an admin never sees a
+    non-master GL row either (unlike the admin-GL strip, which only hides
+    FROM non-admins)."""
+    join_rows = [
+        _blank_join_row("CC1", "GL-MASTER", pending_cost_center="CC1"),
+        _blank_join_row("CC1", "GL-NOT-IN-MASTER", pending_cost_center="CC1"),
+    ]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(
+        join_rows, {}, scope, admin_view_enabled=True, master_gl_codes=frozenset({"GL-MASTER"})
+    )
+
+    assert [r.gl_account for r in rows] == ["GL-MASTER"]
+
+
+def test_master_gl_from_sap_only_row_kept():
+    """A SAP-only row (no board/pending yet) whose GL IS in the master must
+    still render — the master filter must not accidentally require a
+    board/pending presence."""
+    months = {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}
+    months["total_year"] = 300.0
+    sap_actuals = {("CC1", "GL-MASTER"): months}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows([], sap_actuals, scope, master_gl_codes=frozenset({"GL-MASTER"}))
+
+    assert [r.gl_account for r in rows] == ["GL-MASTER"]
+
+
+def test_sap_only_row_not_in_master_dropped():
+    months = {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}
+    months["total_year"] = 999.0
+    sap_actuals = {("CC1", "GL-NOT-IN-MASTER"): months}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows([], sap_actuals, scope, master_gl_codes=frozenset({"GL-MASTER"}))
+
+    assert rows == []
+
+
+def test_master_filter_composes_with_admin_gl_strip():
+    """A GL that IS in the master but IS admin-locked: still stripped for a
+    non-admin, still visible to an admin — the two rules compose, neither
+    shortcuts the other."""
+    join_rows = [_blank_join_row("CC1", "GL-ADMIN", pending_cost_center="CC1")]
+    non_admin_scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    non_admin_rows = merge_budget_rows(
+        join_rows, {}, non_admin_scope,
+        master_gl_codes=frozenset({"GL-ADMIN"}), admin_gl_codes=frozenset({"GL-ADMIN"}),
+    )
+    admin_rows = merge_budget_rows(
+        join_rows, {}, admin_scope, admin_view_enabled=True,
+        master_gl_codes=frozenset({"GL-ADMIN"}), admin_gl_codes=frozenset({"GL-ADMIN"}),
+    )
+
+    assert non_admin_rows == []
+    assert [r.gl_account for r in admin_rows] == ["GL-ADMIN"]
+
+
+def test_master_filter_subtotal_excludes_dropped_row_no_double_count():
+    """Financial-correctness guard: a subtotal computed over the rows the
+    merge RETURNS must equal the sum of only the master-GL rows — the
+    hidden (non-master) row's amount must never sneak into any downstream
+    total, and the master row's own total must not be affected either way."""
+    join_rows = [
+        _blank_join_row(
+            "CC1", "GL-MASTER", pending_cost_center="CC1",
+            pending_m01=1_000.0, pending_total_year=1_000.0,
+        ),
+        _blank_join_row(
+            "CC1", "GL-NOT-IN-MASTER", pending_cost_center="CC1",
+            pending_m01=500.0, pending_total_year=500.0,
+        ),
+    ]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    unfiltered = merge_budget_rows(join_rows, {}, scope)
+    filtered = merge_budget_rows(join_rows, {}, scope, master_gl_codes=frozenset({"GL-MASTER"}))
+
+    unfiltered_subtotal = sum(r.pending.total_year for r in unfiltered)
+    filtered_subtotal = sum(r.pending.total_year for r in filtered)
+
+    assert unfiltered_subtotal == 1_500.0  # before: both rows counted
+    assert filtered_subtotal == 1_000.0    # after: only the master row counted
+    assert len(filtered) == 1 and filtered[0].gl_account == "GL-MASTER"
+
+
+# ---------------------------------------------------------------------------
 # get_budget_grid — orchestrator
 # ---------------------------------------------------------------------------
 
@@ -482,6 +604,7 @@ def test_get_budget_grid_uses_planning_year_minus_1_for_board_and_sap(monkeypatc
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", fake_fetch_sap_actuals)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope()
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
@@ -517,6 +640,7 @@ def test_get_budget_grid_admin_wide_passes_no_cost_center_filter(monkeypatch):
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=True)
@@ -535,6 +659,7 @@ def test_get_budget_grid_non_admin_passes_see_cost_centers_as_filter(monkeypatch
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"])
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=False)
@@ -554,6 +679,7 @@ def test_get_budget_grid_fetches_cc_dims_only_when_department_filter_given(monke
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_cc_dims", fake_fetch_cc_dims)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope()
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
@@ -574,11 +700,67 @@ def test_get_budget_grid_admin_without_toggle_still_passes_see_cost_centers_filt
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope, admin_view_enabled=False)
 
     assert captured["cost_centers"] == ["CC1"]
+
+
+# ---------------------------------------------------------------------------
+# get_budget_grid — GL master-membership rule (2026-07-18, NOT flag-gated,
+# NOT role-based: always fetched, for every caller).
+# ---------------------------------------------------------------------------
+
+def test_get_budget_grid_always_fetches_master_gl_codes_non_admin(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_fetch_master_gl_codes(conn):
+        calls["n"] += 1
+        return frozenset({"GL1"})
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", fake_fetch_master_gl_codes)
+
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+    assert calls["n"] == 1
+
+
+def test_get_budget_grid_always_fetches_master_gl_codes_admin(monkeypatch):
+    """Unlike the flag-gated admin-GL strip, the master filter is NOT
+    role-based — an admin caller still gets it fetched and applied."""
+    calls = {"n": 0}
+
+    def fake_fetch_master_gl_codes(conn):
+        calls["n"] += 1
+        return frozenset({"GL1"})
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", fake_fetch_master_gl_codes)
+
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, admin_view_enabled=True)
+    assert calls["n"] == 1
+
+
+def test_get_budget_grid_master_filter_drops_non_master_row_end_to_end(monkeypatch):
+    """End-to-end: get_budget_grid actually applies the fetched master set,
+    not just calls the fetch function."""
+    join_rows = [
+        _blank_join_row("CC1", "GL-MASTER", pending_cost_center="CC1"),
+        _blank_join_row("CC1", "GL-NOT-IN-MASTER", pending_cost_center="CC1"),
+    ]
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL-MASTER"}))
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+
+    assert [r.gl_account for r in rows] == ["GL-MASTER"]
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +779,7 @@ def test_get_budget_grid_flag_off_never_fetches_admin_gl_codes(monkeypatch):
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
     assert calls["n"] == 0
@@ -614,6 +797,7 @@ def test_get_budget_grid_flag_on_non_admin_fetches_admin_gl_codes(monkeypatch):
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     settings = Settings(_env_file=None, gl_edit_by_enabled=True)
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope(), settings=settings)
@@ -634,6 +818,7 @@ def test_get_budget_grid_flag_on_admin_caller_never_fetches_admin_gl_codes(monke
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr("app.read_model.fetch_sap_actuals", lambda conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     settings = Settings(_env_file=None, gl_edit_by_enabled=True)
     admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])

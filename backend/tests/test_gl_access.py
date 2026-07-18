@@ -7,7 +7,7 @@ app/deadline.py). Admin-GL rows never enter `budget.approval_status`
 connection."""
 from unittest.mock import MagicMock
 
-from app.gl_access import fetch_admin_gl_codes, is_admin_only_gl, normalize_edit_by
+from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes, is_admin_only_gl, normalize_edit_by
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +78,42 @@ def test_fetch_admin_gl_codes_closes_cursor():
     conn.cursor.return_value.fetchall.return_value = []
     fetch_admin_gl_codes(conn)
     conn.cursor.return_value.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# fetch_master_gl_codes — GL master-membership rule (2026-07-18 product
+# decision by jakkaritw: a GL not in dbo.gl_group is HIDDEN entirely, not
+# shown as a read-only reference row — reverses the earlier add-later-
+# reference behavior). Role-independent: applies to admin AND non-admin.
+# ---------------------------------------------------------------------------
+
+def test_fetch_master_gl_codes_returns_all_gl_codes():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [("GL1",), ("GL2",), ("GL3",)]
+    codes = fetch_master_gl_codes(conn)
+    assert codes == frozenset({"GL1", "GL2", "GL3"})
+
+
+def test_fetch_master_gl_codes_queries_dbo_gl_group():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_master_gl_codes(conn)
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "dbo.gl_group" in sql_text
+    assert "gl_code" in sql_text
+
+
+def test_fetch_master_gl_codes_closes_cursor():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_master_gl_codes(conn)
+    conn.cursor.return_value.close.assert_called_once()
+
+
+def test_fetch_master_gl_codes_empty_master_returns_empty_set():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    assert fetch_master_gl_codes(conn) == frozenset()
 
 
 # ---------------------------------------------------------------------------

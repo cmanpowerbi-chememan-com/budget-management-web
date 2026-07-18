@@ -34,7 +34,7 @@ from pydantic import BaseModel
 import pyodbc
 
 from app.config import Settings, get_settings
-from app.gl_access import fetch_admin_gl_codes
+from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
 from app.rls import Scope
 from app.sap import MONTH_COLUMNS, fetch_sap_actuals
 
@@ -281,6 +281,7 @@ def merge_budget_rows(
     department_filter: str | None = None,
     cc_dims: dict[str, dict[str, str | None]] | None = None,
     admin_gl_codes: frozenset[str] | None = None,
+    master_gl_codes: frozenset[str] | None = None,
 ) -> list[BudgetRow]:
     """Pure merge: board+pending join rows + SAP dict + RLS scope -> the final
     visible/editable row list. No I/O (aside from the optional pre-fetched
@@ -311,6 +312,17 @@ def merge_budget_rows(
     department). Re-checks `scope.is_admin` here too as defense-in-depth,
     same style as the `admin_wide` re-check above. `None` (the default)
     preserves old behavior for callers that don't pass it.
+
+    `master_gl_codes` (GL master-membership rule, 2026-07-18 product
+    decision by jakkaritw): when supplied, any row whose `gl_account` is
+    NOT in this set is DROPPED entirely — for EVERY caller, admin or not
+    (unlike `admin_gl_codes`, this rule is not role-based; reverses the
+    earlier "add-later reference" behavior where such a row rendered
+    read-only). Composes independently with the `admin_gl_codes` strip: a
+    row survives only if (gl in master OR master_gl_codes is None) AND
+    (gl not admin-locked OR caller is admin OR admin_gl_codes is None).
+    `None` (the default) preserves old behavior for callers that don't
+    pass it (e.g. existing tests).
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
@@ -336,6 +348,8 @@ def merge_budget_rows(
     result: list[BudgetRow] = []
     for (cc, gl), row in merged.items():
         if visible_ccs is not None and cc not in visible_ccs:
+            continue
+        if master_gl_codes is not None and gl not in master_gl_codes:
             continue
         if admin_gl_codes is not None and gl in admin_gl_codes and not scope.is_admin:
             continue
@@ -378,7 +392,12 @@ def get_budget_grid(
     admin-GL set (one extra query) when `Settings.gl_edit_by_enabled` is True
     AND the caller is NOT admin — an admin never needs the set (nothing gets
     stripped for them), and the flag-OFF default never runs this query at
-    all (zero behavior change)."""
+    all (zero behavior change).
+
+    GL master-membership rule (2026-07-18, NOT flag-gated, NOT role-based):
+    always fetches `dbo.gl_group`'s gl_code set and passes it to the merge
+    so a GL absent from the master is hidden from EVERY caller, admin
+    included."""
     settings = settings or get_settings()
     board_year = planning_year - 1
     admin_wide = scope.is_admin and admin_view_enabled
@@ -400,6 +419,8 @@ def get_budget_grid(
     if settings.gl_edit_by_enabled and not scope.is_admin:
         admin_gl_codes = fetch_admin_gl_codes(fabric_conn)
 
+    master_gl_codes = fetch_master_gl_codes(fabric_conn)
+
     return merge_budget_rows(
         join_rows,
         sap_actuals,
@@ -409,4 +430,5 @@ def get_budget_grid(
         department_filter=department_filter,
         cc_dims=cc_dims,
         admin_gl_codes=admin_gl_codes,
+        master_gl_codes=master_gl_codes,
     )

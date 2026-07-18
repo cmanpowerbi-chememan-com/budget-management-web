@@ -97,10 +97,16 @@ describe('GridTable', () => {
     expect(screen.getByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).toBeInTheDocument()
   })
 
-  it('renders a not-in-master GL row as READ-ONLY reference with the Thai marker, even when editable is true', () => {
-    // Live trap this closes: SAP-led rows whose GL is outside the 142-account
-    // master come back editable=true from /budget, but PUT /budget/rows would
-    // 400 them ("not a recognised GL account") — they must render read-only.
+  it('renders a not-in-master GL row as READ-ONLY, with no reference marker (server now hides such rows entirely — 2026-07-18 GL-visibility rule)', () => {
+    // Historical trap this used to close: before the GL-visibility rule, a
+    // SAP-led row whose GL was outside the master could come back
+    // editable=true from /budget, and PUT /budget/rows would 400 it ("not a
+    // recognised GL account"). The backend now drops such rows from the API
+    // response entirely (read_model.merge_budget_rows' master_gl_codes
+    // filter), so this is only a defense-in-depth check on the component
+    // itself: `isEditableCell`'s glInMaster guard still blocks the input if
+    // such a row ever reaches GridTable, but the UI no longer shows the
+    // (now-unreachable) "อ้างอิง — ยังไม่เปิดให้ตั้งงบ" text for it.
     const rows = [
       makeRow({
         cost_center: 'CC1', gl_account: '5999999999', editable: true,
@@ -110,7 +116,7 @@ describe('GridTable', () => {
     render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
     expect(screen.queryByTestId('pending-input-CC1-5999999999-m01')).not.toBeInTheDocument()
     expect(screen.getByTestId('sap-value-CC1-5999999999-m01')).toHaveTextContent('500')
-    expect(screen.getByText('อ้างอิง — ยังไม่เปิดให้ตั้งงบ')).toBeInTheDocument()
+    expect(screen.queryByText('อ้างอิง — ยังไม่เปิดให้ตั้งงบ')).not.toBeInTheDocument()
   })
 
   it('a not-in-master row becomes editable automatically once the GL master gains the GL (dynamic, no special-casing)', () => {
@@ -124,14 +130,12 @@ describe('GridTable', () => {
     ]
     rerender(<GridTable rows={rows} glRef={grownRef} onCommitMonth={vi.fn()} />)
     expect(screen.getByTestId('pending-input-CC1-5999999999-m01')).toBeInTheDocument()
-    expect(screen.queryByText('อ้างอิง — ยังไม่เปิดให้ตั้งงบ')).not.toBeInTheDocument()
   })
 
-  it('does NOT show the reference marker on a See-only (editable=false) not-in-master row — read-only as before', () => {
+  it('a See-only (editable=false) not-in-master row also stays read-only', () => {
     const rows = [makeRow({ cost_center: 'CC1', gl_account: '5999999999', editable: false })]
     render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
     expect(screen.queryByTestId('pending-input-CC1-5999999999-m01')).not.toBeInTheDocument()
-    expect(screen.queryByText('อ้างอิง — ยังไม่เปิดให้ตั้งงบ')).not.toBeInTheDocument()
   })
 
   it('shows a per-row error message when rowMessages carries one', () => {
