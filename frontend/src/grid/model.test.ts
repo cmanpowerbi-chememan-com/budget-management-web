@@ -409,7 +409,7 @@ describe('hasStoredColumnWidthsOverride / clearStoredColumnWidths (UI-parity poi
 
 describe('fitColumnWidth (UI-parity point 8d — fit-to-content default)', () => {
   it('adds the padding allowance then clamps to the 60-800 range', () => {
-    expect(fitColumnWidth(50)).toBe(74) // 50 + 24px padding, already inside 60-800
+    expect(fitColumnWidth(50)).toBe(82) // 50 + 32px padding, already inside 60-800
   })
 
   it('floors a tiny/zero raw width (e.g. jsdom, which never lays out real text) to COLUMN_WIDTH_MIN', () => {
@@ -421,7 +421,7 @@ describe('fitColumnWidth (UI-parity point 8d — fit-to-content default)', () =>
   })
 
   it('rounds up a fractional raw width before adding padding', () => {
-    expect(fitColumnWidth(100.2)).toBe(101 + 24)
+    expect(fitColumnWidth(100.2)).toBe(101 + 32)
   })
 })
 

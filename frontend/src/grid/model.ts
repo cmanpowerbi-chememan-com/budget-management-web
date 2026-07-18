@@ -206,10 +206,16 @@ export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: numbe
 
 /** Horizontal padding allowance added to a raw measured TEXT width to
  * approximate the real cell's box size (`.data-table td`/`th` both use
- * `padding: Npx 10px`, i.e. 20px of horizontal padding, plus a small buffer
- * for the resize-handle hit strip and rounding). Used by `fitColumnWidth`
- * (GridTable.tsx's DOM measurement pass feeds it raw text widths). */
-export const COLUMN_WIDTH_MEASURE_PADDING = 24
+ * `padding: Npx 10px`, i.e. 20px of horizontal padding, plus a buffer for
+ * the resize-handle hit strip, sub-pixel rounding, and font-metric drift
+ * across machines). Used by `fitColumnWidth` (GridTable.tsx's DOM
+ * measurement pass feeds it raw text widths). Since the grid switched to
+ * FIXED table layout this allowance is no longer a mere floor that
+ * min-content sizing could backstop — it IS the rendered width, so a
+ * too-tight buffer visibly ellipsizes a header label that measured within
+ * a pixel of the content box ("Cost Center" measured 76px → 24px allowance
+ * left 0px of slack). 32 = 20px padding + 12px slack. */
+export const COLUMN_WIDTH_MEASURE_PADDING = 32
 
 /** Converts a raw measured text/content width into a usable column width:
  * add the cell's own padding allowance, then clamp to the same 60-800 range

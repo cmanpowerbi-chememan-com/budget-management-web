@@ -15,9 +15,11 @@ function getTable(testId: string): HTMLTableElement {
   return screen.getByTestId(testId).querySelector('table.data-table') as HTMLTableElement
 }
 
-function getIdentityThs(table: HTMLTableElement): HTMLTableCellElement[] {
-  const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
-  return [...colRow.querySelectorAll('th.frz')] as HTMLTableCellElement[]
+/** The identity-column widths live on the <colgroup>'s first 3 <col>
+ * elements (fixed table layout — a width on the col-row <th> is ignored),
+ * so that's where width assertions must read. */
+function getIdentityCols(table: HTMLTableElement): HTMLTableColElement[] {
+  return ([...table.querySelectorAll('colgroup col')] as HTMLTableColElement[]).slice(0, 3)
 }
 
 describe('GridTable', () => {
@@ -274,8 +276,8 @@ describe('GridTable', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const costTable = getTable('side-section-COST')
       const sgaTable = getTable('side-section-SGA')
-      const [costCc, costGl] = getIdentityThs(costTable)
-      const [sgaCc, sgaGl] = getIdentityThs(sgaTable)
+      const [costCc, costGl] = getIdentityCols(costTable)
+      const [sgaCc, sgaGl] = getIdentityCols(sgaTable)
 
       // jsdom never lays out real text (every measurement reads 0), so the
       // fit-to-content pass deterministically floors to COLUMN_WIDTH_MIN —
@@ -296,7 +298,7 @@ describe('GridTable', () => {
     it('a saved localStorage width WINS over the fit-to-content default on mount (does not get auto-overwritten)', () => {
       window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 222, gl: 111, glGroup: 99 }))
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
-      const costCc = getIdentityThs(getTable('side-section-COST'))[0]
+      const costCc = getIdentityCols(getTable('side-section-COST'))[0]
       expect(costCc.style.width).toBe('222px')
     })
 
@@ -306,14 +308,14 @@ describe('GridTable', () => {
       fireEvent.mouseDown(handle, { clientX: 0 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 275, bubbles: true }))
       fireEvent(window, new MouseEvent('mouseup', { clientX: 275, bubbles: true }))
-      const draggedWidth = getIdentityThs(getTable('side-section-COST'))[0].style.width
+      const draggedWidth = getIdentityCols(getTable('side-section-COST'))[0].style.width
 
       // A brand-new rows array (new reference, as a real refetch would
       // produce) must NOT trigger a re-measure that overwrites the user's
       // explicit choice.
       const newRows = [makeRow({ cost_center: 'CC-DIFFERENT', gl_account: '5211800030', editable: true })]
       rerender(<GridTable rows={newRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
-      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe(draggedWidth)
+      expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe(draggedWidth)
     })
   })
 
@@ -340,8 +342,8 @@ describe('GridTable', () => {
       // Read the fit-to-content STARTING width dynamically (point 8d made
       // this a measured default, not a hardcoded 130) — the drag delta is
       // what this test actually cares about.
-      const startCc = parseInt(getIdentityThs(getTable('side-section-COST'))[0].style.width, 10)
-      const startGl = parseInt(getIdentityThs(getTable('side-section-COST'))[1].style.width, 10)
+      const startCc = parseInt(getIdentityCols(getTable('side-section-COST'))[0].style.width, 10)
+      const startGl = parseInt(getIdentityCols(getTable('side-section-COST'))[1].style.width, 10)
 
       fireEvent.mouseDown(handle, { clientX: 100 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 150, bubbles: true }))
@@ -349,11 +351,11 @@ describe('GridTable', () => {
 
       const costTable = getTable('side-section-COST')
       const sgaTable = getTable('side-section-SGA')
-      const costCcTh = getIdentityThs(costTable)[0]
-      const sgaCcTh = getIdentityThs(sgaTable)[0]
+      const costCcCol = getIdentityCols(costTable)[0]
+      const sgaCcCol = getIdentityCols(sgaTable)[0]
 
-      expect(costCcTh.style.width).toBe(`${startCc + 50}px`) // +50px drag
-      expect(sgaCcTh.style.width).toBe(`${startCc + 50}px`) // shared state — both tables stay aligned
+      expect(costCcCol.style.width).toBe(`${startCc + 50}px`) // +50px drag
+      expect(sgaCcCol.style.width).toBe(`${startCc + 50}px`) // shared state — both tables stay aligned
       expect(costTable.style.getPropertyValue('--frz2')).toBe(`${startCc + 50}px`)
       expect(costTable.style.getPropertyValue('--frz3')).toBe(`${startCc + 50 + startGl}px`)
       expect(sgaTable.style.getPropertyValue('--frz2')).toBe(`${startCc + 50}px`)
@@ -367,22 +369,22 @@ describe('GridTable', () => {
       fireEvent.mouseDown(handle, { clientX: 0 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 5000, bubbles: true }))
       fireEvent(window, new MouseEvent('mouseup', { clientX: 5000, bubbles: true }))
-      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('800px')
+      expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe('800px')
 
       fireEvent.mouseDown(handle, { clientX: 0 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: -5000, bubbles: true }))
       fireEvent(window, new MouseEvent('mouseup', { clientX: -5000, bubbles: true }))
-      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe('60px')
+      expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe('60px')
     })
 
     it('"Reset columns" re-measures fit-to-content (NOT a hardcoded 130/150/150), incl. --frz2 tracking it, and clears the localStorage override', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const handle = screen.getAllByTestId('col-resize-cc')[0]
-      const startCc = parseInt(getIdentityThs(getTable('side-section-COST'))[0].style.width, 10)
+      const startCc = parseInt(getIdentityCols(getTable('side-section-COST'))[0].style.width, 10)
       fireEvent.mouseDown(handle, { clientX: 0 })
       fireEvent(window, new MouseEvent('mousemove', { clientX: 300, bubbles: true }))
       fireEvent(window, new MouseEvent('mouseup', { clientX: 300, bubbles: true }))
-      expect(getIdentityThs(getTable('side-section-COST'))[0].style.width).toBe(`${startCc + 300}px`)
+      expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe(`${startCc + 300}px`)
       expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).not.toBeNull() // drag persisted an override
 
       fireEvent.click(screen.getByTestId('reset-columns-btn'))
@@ -391,7 +393,7 @@ describe('GridTable', () => {
       // Re-measured fit-to-content — in jsdom (no real text layout) that is
       // deterministically the padding-only floor, i.e. COLUMN_WIDTH_MIN; a
       // real browser (Playwright verify) gets the true content-fitted value.
-      expect(getIdentityThs(costTable)[0].style.width).toBe(`${startCc}px`)
+      expect(getIdentityCols(costTable)[0].style.width).toBe(`${startCc}px`)
       expect(costTable.style.getPropertyValue('--frz2')).toBe(`${startCc}px`)
       expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).toBeNull() // override cleared, not re-saved
     })
