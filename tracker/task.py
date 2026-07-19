@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
-"""CLI for the project task ledger (tracker/pending.json).
+"""CLI for the project task ledger (tracker/pending.json) — AI-only, v2.
 
-Replaces hand-written throwaway scripts for updating the ledger. Every
-mutating command validates the whole ledger in memory before writing,
-writes atomically (temp file + os.replace), and re-renders
-tracker/PENDING.html afterwards unless --no-render is given.
+The ledger is the hand-over channel between AI tools (Claude Code / Kimi Code);
+session history is not shared, this file is. There is NO human view: the
+`human` field and PENDING.html/render_pending.py are retired and stripped.
+
+Every mutating command validates the whole ledger in memory before writing and
+writes atomically (temp file + os.replace). Every mutation also auto-housekeeps:
+  - dedups `log-<hash>` autolog entries once a real entry quotes the hash
+  - archives done tasks older than ARCHIVE_DAYS into pending_archive.json
+  - strips retired keys (`human`) and empty optional fields (agent/skills/files)
+
+Automation: `.git/hooks/post-commit` calls `task.py autolog <hash> <subject>`
+after every commit, so committed work always lands in the ledger even if the
+session forgets to log it.
 
 Examples:
-    python tracker/task.py add --id my-task --human "sugom Thai" --ai "english summary"
-    python tracker/task.py done --id my-task --human "finished, works"
+    python tracker/task.py add --id my-task --ai "english summary" --agent kimi
+    python tracker/task.py done --id my-task --ai "finished, commit 1a2b3c4, leftovers"
     python tracker/task.py update --id my-task --state willdo
-    python tracker/task.py archive --days 14
+    python tracker/task.py autolog 1a2b3c4d... "commit subject"   # called by git hook
+    python tracker/task.py check                                  # commits missing from ledger
+    python tracker/task.py compact                                # strip retired fields + archive stale
     python tracker/task.py list --state doing
     python tracker/task.py validate
 
-Long/multiline text (e.g. Thai) can be supplied from a UTF-8 file instead
-of a shell argument: --human "@path\\to\\file.txt".
+Long/multiline text can be supplied from a UTF-8 file instead of a shell
+argument: --ai "@path\\to\\file.txt".
 """
 from __future__ import annotations
 
@@ -33,7 +44,6 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 LEDGER_NAME = "pending.json"
 ARCHIVE_NAME = "pending_archive.json"
-RENDER_SCRIPT = HERE / "render_pending.py"
 
 STATES = ("doing", "willdo", "done")
 ICT_TZ = datetime.timezone(datetime.timedelta(hours=7))
@@ -41,6 +51,11 @@ TIMESTAMP_FMT = "%Y-%m-%dT%H:%M:%S"
 TIMESTAMP_PARSE_FMT = TIMESTAMP_FMT + "%z"
 SUGGESTION_COUNT = 5
 SUGGESTION_CUTOFF = 0.4  # difflib similarity ratio floor; keeps "Did you mean" to plausible typos only
+
+ARCHIVE_DAYS = 30          # done tasks older than this move to pending_archive.json on every write
+AUTOLOG_PREFIX = "log-"    # id prefix for hook-created entries: log-<short hash>
+RETIRED_KEYS = ("human",)  # stripped on every write
+OPTIONAL_KEYS = ("agent", "skills", "files")  # omitted from JSON when empty
 
 
 # ---- time helpers -----------------------------------------------------------
@@ -96,11 +111,116 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
+# ---- normalization / housekeeping --------------------------------------------
+
+
+def normalize_task(t: dict[str, Any]) -> None:
+    """In-place: drop retired keys (human) and empty optional fields (agent/skills/files)."""
+    for key in RETIRED_KEYS:
+        t.pop(key, None)
+    for key in OPTIONAL_KEYS:
+        if not t.get(key):
+            t.pop(key, None)
+
+
+def dedup_autolog(tasks: list[dict[str, Any]]) -> list[str]:
+    """Remove log-<hash> entries whose hash is quoted in any real entry's ai text.
+
+    Returns the list of removed autolog ids. Mutates `tasks` in place.
+    """
+    real_texts = [
+        str(t.get("ai", "")) for t in tasks
+        if not str(t.get("id", "")).startswith(AUTOLOG_PREFIX)
+    ]
+    removed: list[str] = []
+    kept: list[dict[str, Any]] = []
+    for t in tasks:
+        tid = str(t.get("id", ""))
+        if tid.startswith(AUTOLOG_PREFIX):
+            short = tid[len(AUTOLOG_PREFIX):]
+            if short and any(short in txt for txt in real_texts):
+                removed.append(tid)
+                continue
+        kept.append(t)
+    tasks[:] = kept
+    return removed
+
+
+def split_stale_done(tasks: list[dict[str, Any]], days: int) -> list[dict[str, Any]]:
+    """Move done tasks older than `days` out of `tasks` (in place); return them.
+
+    Tasks with unparseable timestamps are kept (never lose data).
+    """
+    cutoff = now_ict() - datetime.timedelta(days=days)
+    stale: list[dict[str, Any]] = []
+    remaining: list[dict[str, Any]] = []
+    for t in tasks:
+        if t.get("state") == "done":
+            try:
+                updated_dt = parse_ts(t.get("updated", ""))
+            except (ValueError, TypeError):
+                remaining.append(t)
+                continue
+            if updated_dt < cutoff:
+                stale.append(t)
+                continue
+        remaining.append(t)
+    tasks[:] = remaining
+    return stale
+
+
+def housekeep(data: dict[str, Any], dir_: Path) -> tuple[list[str], list[str]]:
+    """Normalize + dedup + archive stale done. Returns (deduped_ids, archived_ids).
+
+    Writes the archive file FIRST when needed: if the later main-ledger write
+    fails, a task may be duplicated (main + archive) but is never lost.
+    """
+    tasks = data.setdefault("tasks", [])
+    for t in tasks:
+        if isinstance(t, dict):
+            normalize_task(t)
+    deduped = dedup_autolog(tasks)
+    stale = split_stale_done(tasks, ARCHIVE_DAYS)
+    archived_ids: list[str] = []
+    if stale:
+        apath = archive_path(dir_)
+        if apath.exists():
+            archive_data = load_json(apath)
+        else:
+            archive_data = {
+                "project": data.get("project", ""),
+                "title": data.get("title", ""),
+                "updated": "",
+                "tasks": [],
+            }
+        archive_data.setdefault("tasks", []).extend(stale)
+        archive_data["updated"] = format_ts(now_ict())
+        if _validate_or_report(archive_data, "archive"):
+            raise ValueError("archive failed validation, not written")
+        atomic_write_json(apath, archive_data)
+        archived_ids = [str(t.get("id", "")) for t in stale]
+    return deduped, archived_ids
+
+
+def save_ledger(data: dict[str, Any], dir_: Path, housekeeping: tuple[list[str], list[str]]) -> int:
+    """Validate + write the main ledger; print housekeeping summary. Returns exit code."""
+    data["updated"] = format_ts(now_ict())
+    if _validate_or_report(data, "ledger"):
+        return 1
+    atomic_write_json(ledger_path(dir_), data)
+    deduped, archived = housekeeping
+    if deduped:
+        print(f"OK: deduped {len(deduped)} autolog entr(ies): {', '.join(deduped)}")
+    if archived:
+        print(f"OK: auto-archived {len(archived)} done task(s) older than {ARCHIVE_DAYS}d")
+    return 0
+
+
 # ---- validation ---------------------------------------------------------------
 
 
 def validate_ledger(data: Any) -> list[str]:
-    """Full schema check. Returns a list of human-readable error strings (empty = valid)."""
+    """Full schema check. Returns a list of readable error strings (empty = valid)."""
     errors: list[str] = []
     if not isinstance(data, dict):
         return ["ledger root must be a JSON object"]
@@ -136,10 +256,9 @@ def validate_ledger(data: Any) -> list[str]:
         if state not in STATES:
             errors.append(f"{prefix} ({tid}): state must be one of {STATES}, got {state!r}")
 
-        for field in ("human", "ai"):
-            val = t.get(field)
-            if not isinstance(val, str) or not val.strip():
-                errors.append(f"{prefix} ({tid}): {field} must be a non-empty string")
+        ai = t.get("ai")
+        if not isinstance(ai, str) or not ai.strip():
+            errors.append(f"{prefix} ({tid}): ai must be a non-empty string")
 
         for field in ("created", "updated"):
             val = t.get(field)
@@ -228,22 +347,6 @@ def suggest_ids(target: str, candidates: list[str], n: int = SUGGESTION_COUNT) -
     return difflib.get_close_matches(target, candidates, n=n, cutoff=SUGGESTION_CUTOFF)
 
 
-# ---- render ---------------------------------------------------------------
-
-
-def run_render(no_render: bool) -> None:
-    """Invoke render_pending.py to refresh PENDING.html; report failure, keep the JSON write."""
-    if no_render:
-        return
-    result = subprocess.run(
-        [sys.executable, str(RENDER_SCRIPT)],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(f"WARN: render_pending.py exited {result.returncode} (data saved, view not updated)")
-
-
 # ---- validate-then-write helper -------------------------------------------
 
 
@@ -262,8 +365,7 @@ def _validate_or_report(data: dict[str, Any], what: str) -> list[str]:
 
 def cmd_add(args: argparse.Namespace, dir_: Path) -> int:
     """Insert a new task at the top of tasks[]; fail if args.id already exists."""
-    path = ledger_path(dir_)
-    data = load_json(path)
+    data = load_json(ledger_path(dir_))
     tasks = data.setdefault("tasks", [])
 
     if any(t.get("id") == args.id for t in tasks):
@@ -271,27 +373,28 @@ def cmd_add(args: argparse.Namespace, dir_: Path) -> int:
         return 1
 
     ts = format_ts(now_ict())
-    new_task = {
+    new_task: dict[str, Any] = {
         "id": args.id,
         "state": args.state,
         "created": ts,
         "updated": ts,
-        "agent": args.agent or "",
-        "skills": parse_skills(args.skills),
-        "files": parse_files(args.file),
         "ai": resolve_value(args.ai),
-        "human": resolve_value(args.human),
     }
+    if args.agent:
+        new_task["agent"] = args.agent
+    skills = parse_skills(args.skills)
+    if skills:
+        new_task["skills"] = skills
+    files = parse_files(args.file)
+    if files:
+        new_task["files"] = files
     tasks.insert(0, new_task)
-    data["updated"] = ts
 
-    if _validate_or_report(data, "ledger"):
-        return 1
-
-    atomic_write_json(path, data)
-    print(f"OK: added task {args.id} (state={args.state})")
-    run_render(args.no_render)
-    return 0
+    hk = housekeep(data, dir_)
+    rc = save_ledger(data, dir_, hk)
+    if rc == 0:
+        print(f"OK: added task {args.id} (state={args.state})")
+    return rc
 
 
 def _apply_update(
@@ -299,16 +402,13 @@ def _apply_update(
     task_id: str,
     *,
     state: str | None = None,
-    human: str | None = None,
     ai: str | None = None,
     agent: str | None = None,
     skills: str | None = None,
     files: list[str] | None = None,
-    no_render: bool = False,
 ) -> int:
     """Shared core for update/done: change only the fields passed (not None)."""
-    path = ledger_path(dir_)
-    data = load_json(path)
+    data = load_json(ledger_path(dir_))
     tasks = data.get("tasks", [])
     t = next((x for x in tasks if x.get("id") == task_id), None)
 
@@ -324,8 +424,6 @@ def _apply_update(
 
     if state is not None:
         t["state"] = state
-    if human is not None:
-        t["human"] = resolve_value(human)
     if ai is not None:
         t["ai"] = resolve_value(ai)
     if agent is not None:
@@ -335,17 +433,13 @@ def _apply_update(
     if files is not None:
         t["files"] = parse_files(files)
 
-    ts = format_ts(now_ict())
-    t["updated"] = ts
-    data["updated"] = ts
+    t["updated"] = format_ts(now_ict())
 
-    if _validate_or_report(data, "ledger"):
-        return 1
-
-    atomic_write_json(path, data)
-    print(f"OK: updated task {task_id}")
-    run_render(no_render)
-    return 0
+    hk = housekeep(data, dir_)
+    rc = save_ledger(data, dir_, hk)
+    if rc == 0:
+        print(f"OK: updated task {task_id}")
+    return rc
 
 
 def cmd_update(args: argparse.Namespace, dir_: Path) -> int:
@@ -354,12 +448,10 @@ def cmd_update(args: argparse.Namespace, dir_: Path) -> int:
         dir_,
         args.id,
         state=args.state,
-        human=args.human,
         ai=args.ai,
         agent=args.agent,
         skills=args.skills,
         files=args.file,
-        no_render=args.no_render,
     )
 
 
@@ -369,48 +461,35 @@ def cmd_done(args: argparse.Namespace, dir_: Path) -> int:
         dir_,
         args.id,
         state="done",
-        human=args.human,
         ai=args.ai,
-        no_render=args.no_render,
     )
 
 
 def cmd_archive(args: argparse.Namespace, dir_: Path) -> int:
     """Move done tasks older than args.days into pending_archive.json. Never touches doing/willdo."""
-    path = ledger_path(dir_)
-    apath = archive_path(dir_)
-    data = load_json(path)
-
+    data = load_json(ledger_path(dir_))
     if _validate_or_report(data, "ledger"):
         return 1
 
     tasks = data.get("tasks", [])
-
-    cutoff = now_ict() - datetime.timedelta(days=args.days)
-    to_archive = []
-    remaining = []
-    for t in tasks:
-        if t.get("state") == "done":
-            try:
-                updated_dt = parse_ts(t.get("updated", ""))
-            except (ValueError, TypeError):
-                remaining.append(t)  # can't determine age -> never lose it
-                continue
-            if updated_dt < cutoff:
-                to_archive.append(t)
-                continue
-        remaining.append(t)
-
-    if not to_archive:
-        print("OK: 0 tasks archived")
-        return 0
-
     if args.dry_run:
-        print(f"DRY-RUN: would archive {len(to_archive)} task(s):")
-        for t in to_archive:
+        probe = [dict(t) for t in tasks]
+        stale = split_stale_done(probe, args.days)
+        if not stale:
+            print("OK: 0 tasks would be archived")
+            return 0
+        print(f"DRY-RUN: would archive {len(stale)} task(s):")
+        for t in stale:
             print(f"  - {t.get('id')}")
         return 0
 
+    stale = split_stale_done(tasks, args.days)
+    if not stale:
+        print("OK: 0 tasks archived")
+        return 0
+
+    # re-use housekeep's archive writer semantics manually (days overridden here)
+    apath = archive_path(dir_)
     if apath.exists():
         archive_data = load_json(apath)
     else:
@@ -420,32 +499,108 @@ def cmd_archive(args: argparse.Namespace, dir_: Path) -> int:
             "updated": "",
             "tasks": [],
         }
-    archive_data.setdefault("tasks", []).extend(to_archive)
-    ts = format_ts(now_ict())
-    archive_data["updated"] = ts
-
+    archive_data.setdefault("tasks", []).extend(stale)
+    archive_data["updated"] = format_ts(now_ict())
     if _validate_or_report(archive_data, "archive"):
         return 1
+    # write archive first: a crash after this duplicates (main + archive) but never loses
+    atomic_write_json(apath, archive_data)
 
-    data["tasks"] = remaining
-    data["updated"] = ts
+    rc = save_ledger(data, dir_, ([], [str(t.get("id", "")) for t in stale]))
+    if rc == 0:
+        print(f"OK: archived {len(stale)} task(s)")
+    return rc
 
-    if _validate_or_report(data, "ledger"):
+
+def cmd_compact(args: argparse.Namespace, dir_: Path) -> int:
+    """One-off/normalizing pass: strip retired fields, dedup autolog, archive stale done."""
+    data = load_json(ledger_path(dir_))
+    before = len(data.get("tasks", []))
+    hk = housekeep(data, dir_)
+    rc = save_ledger(data, dir_, hk)
+    if rc == 0:
+        after = len(data.get("tasks", []))
+        print(f"OK: compacted ledger {before} -> {after} task(s)")
+    return rc
+
+
+def cmd_autolog(args: argparse.Namespace, dir_: Path) -> int:
+    """Hook entry point: record a commit as log-<short> unless already referenced anywhere."""
+    full_hash = args.hash.strip()
+    short = full_hash[:7]
+    if not short:
+        print("ERROR: empty commit hash")
         return 1
 
-    # write archive first: if the second write fails, a task may be
-    # duplicated (still in main + in archive) but is never lost.
-    atomic_write_json(apath, archive_data)
-    atomic_write_json(path, data)
-    print(f"OK: archived {len(to_archive)} task(s)")
-    run_render(args.no_render)
-    return 0
+    data = load_json(ledger_path(dir_))
+    blob = json.dumps(data.get("tasks", []), ensure_ascii=False)
+    apath = archive_path(dir_)
+    if apath.exists():
+        try:
+            blob += json.dumps(load_json(apath).get("tasks", []), ensure_ascii=False)
+        except (json.JSONDecodeError, OSError):
+            pass  # unreadable archive must not block the commit hook
+    if short in blob:
+        print(f"OK: commit {short} already referenced in ledger")
+        return 0
+
+    ts = format_ts(now_ict())
+    subject = " ".join(args.subject.split())  # collapse newlines/whitespace from git output
+    tasks = data.setdefault("tasks", [])
+    tasks.insert(0, {
+        "id": AUTOLOG_PREFIX + short,
+        "state": "done",
+        "created": ts,
+        "updated": ts,
+        "agent": "autolog",
+        "ai": f"{subject} [commit {short}]",
+    })
+
+    hk = housekeep(data, dir_)
+    rc = save_ledger(data, dir_, hk)
+    if rc == 0:
+        print(f"OK: autologged commit {short}")
+    return rc
+
+
+def cmd_check(args: argparse.Namespace, dir_: Path) -> int:
+    """Audit: list recent git commits whose hash appears nowhere in ledger or archive."""
+    repo = dir_.parent
+    result = subprocess.run(
+        ["git", "log", f"-{args.n}", "--format=%h%x1f%s"],
+        cwd=str(repo), capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: git log failed in {repo}: {result.stderr.strip()}")
+        return 1
+
+    blob = json.dumps(load_json(ledger_path(dir_)).get("tasks", []), ensure_ascii=False)
+    apath = archive_path(dir_)
+    if apath.exists():
+        blob += json.dumps(load_json(apath).get("tasks", []), ensure_ascii=False)
+
+    missing: list[tuple[str, str]] = []
+    total = 0
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        total += 1
+        short, _, subject = line.partition("\x1f")
+        if short not in blob:
+            missing.append((short, subject))
+
+    if not missing:
+        print(f"OK: all {total} recent commit(s) referenced in ledger")
+        return 0
+    print(f"MISSING: {len(missing)} of {total} recent commit(s) not referenced in ledger:")
+    for short, subject in missing:
+        print(f"  - {short} {subject}")
+    return 1
 
 
 def cmd_list(args: argparse.Namespace, dir_: Path) -> int:
     """Print a compact ASCII table of tasks (state, id, updated), optionally filtered by state."""
-    path = ledger_path(dir_)
-    data = load_json(path)
+    data = load_json(ledger_path(dir_))
     tasks = data.get("tasks", [])
     if args.state:
         tasks = [t for t in tasks if t.get("state") == args.state]
@@ -466,8 +621,7 @@ def cmd_list(args: argparse.Namespace, dir_: Path) -> int:
 
 def cmd_validate(args: argparse.Namespace, dir_: Path) -> int:
     """Full schema check of the ledger; exit 0 if valid, 1 otherwise."""
-    path = ledger_path(dir_)
-    data = load_json(path)
+    data = load_json(ledger_path(dir_))
     errors = validate_ledger(data)
     if errors:
         print(f"INVALID: {len(errors)} error(s):")
@@ -482,22 +636,18 @@ def cmd_validate(args: argparse.Namespace, dir_: Path) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the add/update/done/archive/list/validate argparse CLI."""
+    """Build the add/update/done/archive/autolog/check/compact/list/validate argparse CLI."""
     dir_only = argparse.ArgumentParser(add_help=False)
     dir_only.add_argument("--dir", default=None, help="override tracker directory (for tests)")
 
-    common = argparse.ArgumentParser(add_help=False, parents=[dir_only])
-    common.add_argument("--no-render", action="store_true", help="skip auto-render after mutation")
-
     parser = argparse.ArgumentParser(
         prog="task.py",
-        description="CLI for the project task ledger (tracker/pending.json).",
+        description="CLI for the project task ledger (tracker/pending.json) — AI-only, no human view.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_add = sub.add_parser("add", parents=[common], help="add a new task at the top of the ledger")
+    p_add = sub.add_parser("add", parents=[dir_only], help="add a new task at the top of the ledger")
     p_add.add_argument("--id", required=True)
-    p_add.add_argument("--human", required=True, help='text, or "@path" to read from a UTF-8 file')
     p_add.add_argument("--ai", required=True, help='text, or "@path" to read from a UTF-8 file')
     p_add.add_argument("--state", default="doing", choices=STATES)
     p_add.add_argument("--agent", default="")
@@ -505,10 +655,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--file", action="append", default=None, help='repeatable "path::label" (label optional)')
     p_add.set_defaults(func=cmd_add)
 
-    p_update = sub.add_parser("update", parents=[common], help="partially update an existing task")
+    p_update = sub.add_parser("update", parents=[dir_only], help="partially update an existing task")
     p_update.add_argument("--id", required=True)
     p_update.add_argument("--state", default=None, choices=STATES)
-    p_update.add_argument("--human", default=None, help='text, or "@path" to read from a UTF-8 file')
     p_update.add_argument("--ai", default=None, help='text, or "@path" to read from a UTF-8 file')
     p_update.add_argument("--agent", default=None)
     p_update.add_argument("--skills", default=None, help="comma-separated list, replaces skills")
@@ -518,16 +667,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_update.set_defaults(func=cmd_update)
 
-    p_done = sub.add_parser("done", parents=[common], help='shortcut for "update --state done"')
+    p_done = sub.add_parser("done", parents=[dir_only], help='shortcut for "update --state done"')
     p_done.add_argument("--id", required=True)
-    p_done.add_argument("--human", default=None, help='text, or "@path" to read from a UTF-8 file')
     p_done.add_argument("--ai", default=None, help='text, or "@path" to read from a UTF-8 file')
     p_done.set_defaults(func=cmd_done)
 
-    p_archive = sub.add_parser("archive", parents=[common], help="move stale done tasks to pending_archive.json")
-    p_archive.add_argument("--days", type=int, default=14)
+    p_archive = sub.add_parser("archive", parents=[dir_only], help="move stale done tasks to pending_archive.json")
+    p_archive.add_argument("--days", type=int, default=ARCHIVE_DAYS)
     p_archive.add_argument("--dry-run", action="store_true")
     p_archive.set_defaults(func=cmd_archive)
+
+    p_compact = sub.add_parser("compact", parents=[dir_only], help="strip retired fields, dedup autolog, archive stale done")
+    p_compact.set_defaults(func=cmd_compact)
+
+    p_autolog = sub.add_parser("autolog", parents=[dir_only], help="record a commit (called by .git/hooks/post-commit)")
+    p_autolog.add_argument("hash")
+    p_autolog.add_argument("subject")
+    p_autolog.set_defaults(func=cmd_autolog)
+
+    p_check = sub.add_parser("check", parents=[dir_only], help="list recent commits missing from the ledger")
+    p_check.add_argument("-n", type=int, default=30, help="how many recent commits to inspect (default 30)")
+    p_check.set_defaults(func=cmd_check)
 
     p_list = sub.add_parser("list", parents=[dir_only], help="show a compact table of tasks")
     p_list.add_argument("--state", default=None, choices=STATES)
@@ -560,13 +720,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     dir_ = Path(args.dir).resolve() if args.dir else HERE
-
-    # render_pending.py hardcodes its own paths and always renders the LIVE
-    # ledger next to this script -- rendering while operating on a different
-    # --dir would silently render the wrong file. Force-skip and say so.
-    if hasattr(args, "no_render") and dir_ != HERE and not args.no_render:
-        print("NOTE: render skipped (--dir override always targets the live ledger's render script)")
-        args.no_render = True
 
     try:
         return args.func(args, dir_)

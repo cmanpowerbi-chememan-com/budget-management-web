@@ -1,0 +1,150 @@
+{
+  "project": "04.budget_management_web",
+  "title": "Budget management web",
+  "updated": "2026-07-18T23:10:17+0700",
+  "tasks": [
+    {
+      "id": "lease-rental-subform-snapshot",
+      "state": "done",
+      "created": "2026-06-29T11:30:00+0700",
+      "updated": "2026-06-29T11:30:00+0700",
+      "agent": "main",
+      "skills": [
+        "35-webapp-testing"
+      ],
+      "files": [
+        {
+          "label": "★lease_rental_subform.png",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/★lease_rental_subform.png"
+        },
+        {
+          "label": "0002.1budget-export.html",
+          "path": "design/mockups/0002claude design/0002.1budget-export.html"
+        }
+      ],
+      "ai": "Generated a PNG snapshot of the Lease & Rental detail subform (GL ...060 vehicle) from the wired mockup 0002.1budget-export.html. Playwright file:// render; bypassed openDetailModal by bare-name assigning the global lexical bindings (transactions.push + currentEditingTxnId=999 + detailReadonly=false — window.* does NOT reach the `let` bindings), injected a pending Lease&Rental txn (CC 10AC020000, GL 6211200060) with 3 filled detail rows: Car/6ขผ-3918/BK/รับ-ส่งผู้บริหาร, Van/1นจ-3508/RY/ขนส่งวัตถุดิบโรงงาน, Trucks/6ขจ-3513/KK/ขนส่งสินค้าสำเร็จรูป — each with 12 monthly numbers. Called renderDetailTable() + added .open class. Then overlaid 5 gold circled-number markers ①②③④⑤ (.legend-marker divs, abs-positioned from live getBoundingClientRect of row-1 cells) matching the legend: ①ประเภทรถ ②ทะเบียนรถ ③สถานที่ใช้งาน ④กิจกรรม ⑤ยอดรายเดือน. Screenshotted #detailModal .modal at device_scale_factor=2 (viewport 1820w, 158 KB). Headless asserts PASS: 3 data + 1 total row, markers=5, Year total ฿632,000 (300k+242k+90k), subtitle 10AC020000·6211200060·ค่าเช่า-ยานพาหนะ, 0 console errors. Filename ★-prefixed to sort to top; MOVED into signoff_spec/assets/. NOT yet wired into build_special_gl_subform_spec.py / Spec B docx. Not opened by Claude — awaiting user visual confirm."
+    },
+    {
+      "id": "pubrel-subform-filled-asset",
+      "state": "done",
+      "created": "2026-06-29T10:20:00+0700",
+      "updated": "2026-06-29T12:05:00+0700",
+      "agent": "main",
+      "skills": [
+        "35-webapp-testing"
+      ],
+      "files": [
+        {
+          "label": "★sub_pubrel_filled.png",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/★sub_pubrel_filled.png"
+        },
+        {
+          "label": "0002.1budget-export.html",
+          "path": "design/mockups/0002claude design/0002.1budget-export.html"
+        }
+      ],
+      "ai": "Public Relation & Donation special-GL subform example snapshot from mockup 0002.1budget-export.html. v2 (user follow-up 'ใส่ annotation 1 2 3 4'): regenerated as the LOCKED read-only + FILLED state to match the pasted legend (① 🔒, ② disabled, ③ ปิด, ④ monthly amounts→auto-sum) — the earlier unlocked-filled version contradicted that legend. Headless: switchUser('suchanya') + DEPT_STATUS['Solution Delivery']='PENDING_APPROVER1' (ADR-0013 lock), repointed txn #5 glCode→6211700030, seeded 2 pendingDetails rows (รายละเอียด + scattered 12-month numbers, every month populated), openDetailModal(5). Then baked 4 gold markers (①②③④) via the same Pillow _circle/_leader/annotate pipeline as build_special_gl_subform_spec.py, coords from live getBoundingClientRect of #detailModalTitle / first รายละเอียด .detail-input / #detailCloseBtn / first month-cell input. Asserts PASS: title has 🔒 + 'Public Relation & Donation', close btn='ปิด', first input disabled=true, Year total ฿249,000, 0 missing marker rects. Cropped #detailModal .modal @ device_scale_factor=2 (118 KB). OVERWRITES sub_pubrel_filled.png (now locked+annotated, not the prior unlocked one). Distinct from existing sub_pubrel.png. NOT yet wired into Spec B docx. Awaiting user visual confirm (image not opened by Claude)."
+    },
+    {
+      "id": "glgroup-merged-rows-asset",
+      "state": "done",
+      "created": "2026-06-29T10:00:00+0700",
+      "updated": "2026-06-29T12:05:00+0700",
+      "agent": "main",
+      "skills": [
+        "35-webapp-testing"
+      ],
+      "files": [
+        {
+          "label": "07_merged.png",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/07_merged.png"
+        },
+        {
+          "label": "gl-group.html",
+          "path": "03-edit-master-table/master-tables/01frontend/gl-group.html"
+        }
+      ],
+      "ai": "Generated the missing screenshot asset for the 'Merged rows (rowspan)' section of Spec 03 (Edit GL Group). Rendered gl-group.html via file:// (auto demo seed), then overrode the top-level lexical bindings sapGlCodes/glGroupDims/masterData (bare-name assignment — window.* does NOT reach the `let` binding renderTable reads) to inject a 3-run + 2-run + single so a '3× MERGED' rowspan cell appears, matching the spec's example. Headless asserts PASS: rowspans ['3','2'], count_tags ['3× MERGED','2× MERGED'], 6 data rows (display-only merge, each GL code still 1 <tr>). Cropped to section.panel:has(.data-table) at device_scale_factor=2 (151 KB). NOT yet wired into build_edit_gl_group_spec.py / docx. Awaiting user visual confirm (per CLAUDE.md, image not opened by Claude)."
+    },
+    {
+      "id": "repo-cleanup",
+      "state": "done",
+      "created": "2026-06-28T22:09:52+0700",
+      "updated": "2026-06-28T22:09:52+0700",
+      "agent": "cursor (CC→Cursor handoff)",
+      "skills": [
+        "36-cc-cursor-handoff"
+      ],
+      "files": [
+        {
+          "label": "plan.md",
+          "path": ".claude/plan.md"
+        }
+      ],
+      "ai": "Repo cleanup shipped via CC→Cursor handoff (TASK-001). Tidied repo layout; recorded as commit 1a2d3fc in plan.md (handoff/plan record commits 276b2fb, 46d9992). Reconstructed from git history — best-effort."
+    },
+    {
+      "id": "specB-clarity-polish",
+      "state": "done",
+      "created": "2026-06-28T22:09:52+0700",
+      "updated": "2026-06-28T22:09:52+0700",
+      "agent": "cursor (CC→Cursor handoff)",
+      "skills": [
+        "36-cc-cursor-handoff"
+      ],
+      "files": [
+        {
+          "label": "build_special_gl_subform_spec.py",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/_build/build_special_gl_subform_spec.py"
+        }
+      ],
+      "ai": "Clarity polish of Special GL Group Subform sign-off spec (Spec B / Module 02) via CC→Cursor handoff (commits f96962f, 8a693e8; underlying 758d320). Readability + wording tightening. Reconstructed from git history — best-effort."
+    },
+    {
+      "id": "specC-mastertables-polish",
+      "state": "done",
+      "created": "2026-06-28T22:09:51+0700",
+      "updated": "2026-06-28T22:09:51+0700",
+      "agent": "cursor (CC→Cursor handoff)",
+      "skills": [
+        "36-cc-cursor-handoff"
+      ],
+      "files": [
+        {
+          "label": "signoff_spec",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/"
+        }
+      ],
+      "ai": "Readability/concision polish of Master-Tables sign-off spec (Spec C) — mechanical (TASK-001) + judgment (TASK-002) fixes, signoff-spec-v2 (commits 781460a, 2d0de47). Reconstructed from git history — best-effort."
+    },
+    {
+      "id": "specA-master-fx-screenshots",
+      "state": "done",
+      "created": "2026-06-28T22:28:40+0700",
+      "updated": "2026-06-28T22:28:40+0700",
+      "agent": "main",
+      "skills": [
+        "35-webapp-testing"
+      ],
+      "files": [
+        {
+          "label": "build_main_web_app_spec.py",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/_build/build_main_web_app_spec.py"
+        },
+        {
+          "label": "01_main_web_app_spec.docx",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/01_main_web_app_spec.docx"
+        },
+        {
+          "label": "main_fx_only.png",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/main_fx_only.png"
+        },
+        {
+          "label": "main_master_currency_page.png",
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/main_master_currency_page.png"
+        }
+      ],
+      "ai": "Added two figures under §15 (Master FX read-only) of Spec A main web app sign-off spec. (1) Tight Playwright crop of the read-only Master FX chip — anchored via #fxDisplay.closest('.admin-zone-note') because #fxDisplay is only the number and there are two .admin-zone-note spans. (2) Full screenshot of the Master Currency edit page (Module 09, main.wrap of 03-edit-master-table/.../master-currency.html, self-contained demo data FY2025=35.00). Wired both into build_main_web_app_spec.py: new fx_only + mc_page captures, MC_PAGE constant, order list entries, image_para calls under item 15; rebuilt docx (2.97 MB). Uncommitted. Times exact (this session)."
+    }
+  ]
+}

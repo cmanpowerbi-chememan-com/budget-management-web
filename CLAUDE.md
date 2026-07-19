@@ -3,6 +3,14 @@
 Auto-read at the start of every conversation in this folder. This is a lean operating
 manual — it POINTS to the detailed docs, it does not duplicate them. Do NOT delete this file.
 
+> **MANDATORY before ANY work (every session, every AI tool — Claude Code included):**
+> 1. `python tracker/task.py list` — see what is doing/done. Do this FIRST, before anything else.
+> 2. Log what you are ABOUT to do: `python tracker/task.py add --id <id> --state doing --ai "..." --agent <tool>`.
+> 3. When finished: `python tracker/task.py done --id <id> --ai "<what changed, commit hashes, leftovers>"`.
+>
+> `tracker/pending.json` is the ONLY hand-over channel between tools — if it is not in the
+> ledger, the next session will not know it happened. Full protocol → § Tracker Workflow.
+
 ---
 
 ## Where things live (read these, don't restate them)
@@ -104,7 +112,7 @@ Current real layout:
   03sql/ · 05deploy/ · tests/          ← schema · deploy config · pytest
 design/mockups/0002claude design/
   0002.3budget-export.html             ← DEFAULT main-app mockup (gridgeist redesign — de-slopped, grid-forward; submit/approve) — canonical source for sign-off specs since 2026-07-13; light+dark PNGs alongside
-  0002.2budget-export.html             ← prior version (pre-gridgeist, decorative); superseded by 0002.3
+  (0002.2budget-export.html → archived to bin/old-mockups/ on 2026-07-13; pre-gridgeist, decorative — superseded by 0002.3)
 requirement_spec/1_software_dev/1.1_frontend/signoff_spec/
   *.docx + _build/build_*.py + assets/ ← user sign-off specs (8 modules) + generators + screenshots
 docs/adr/                              ← 17 ADRs (architecture decisions)
@@ -166,6 +174,29 @@ Env-var names + the Fabric SQL DB / Lakehouse endpoint split → `.claude/projec
   - **Logic/calc changes:** run Playwright headless, assert computed values via `page.evaluate()`, print only a compact PASS/FAIL. No screenshot.
   - **Visual/layout changes:** verify logic headless as above, then save a screenshot to disk (`page.screenshot(path=...)`) **without Reading it**, tell the user the path, and **STOP — wait for the user to open it and confirm before proceeding.** The user is the visual reviewer; never load the image.
   - Delete temp verify scripts/images after (keep only if the user wants them).
+
+---
+
+## Tracker Workflow (cross-tool task ledger, AI-only)
+
+`tracker/pending.json` is the shared task ledger — source of truth for what was done and what
+is pending. Session history is NOT shared between Claude Code and Kimi Code; this file is the
+hand-over channel both tools read and write. AI-only: no `human` field, no PENDING.html
+(both retired 2026-07-18; `task.py` strips them on every write).
+
+- **Auto (no manual prompting needed):** `.git/hooks/post-commit` logs every commit as
+  `log-<hash>`; every CLI write auto-archives done tasks >30d to `pending_archive.json`,
+  strips empty fields, and dedups autolog entries once a real entry quotes the hash.
+- **Session start / resume (MANDATORY, do this FIRST):** run `python tracker/task.py list`
+  (compact table) — do NOT Read the whole JSON. Resume points live in each task's `ai` field.
+  Then `.claude/plan.md`.
+- **Starting any task (MANDATORY):** log it BEFORE writing code —
+  `python tracker/task.py add --id <id> --state doing --ai "<what you are about to do>" --agent <kimi|claude>`
+- **On finishing work (MANDATORY):** flip it to done with the outcome —
+  `python tracker/task.py done --id <id> --ai "<what changed, commit hashes, leftovers>"`.
+  Quote commit hashes in `--ai` so hook-created `log-<hash>` entries get deduped.
+  Log EVERY finished piece of work, small ops changes included. Never hand-edit the JSON.
+- **Audit:** `python tracker/task.py check` lists recent commits missing from the ledger.
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
