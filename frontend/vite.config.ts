@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // routers are mounted directly as /health /me /scope /budget /approval/*),
 // so the proxy forwards each known route namespace as-is rather than
 // rewriting an /api/* prefix that doesn't exist server-side.
-const BACKEND_DEV_SERVER = 'http://localhost:8000'
+const BACKEND_DEV_SERVER = 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],
