@@ -117,11 +117,15 @@ describe('BudgetGrid', () => {
       pending: { ...makeRow('x', 'y').pending, m01: 777, total_year: 777, updated_at: '2026-03-03T00:00:00Z' },
     })
     vi.mocked(budgetApi.fetchBudgetGrid)
+      // 1st call: initial mount — gated on ฝ่าย resolution (deptResolved),
+      // so this is the ONLY mount-time fetch even though DEPARTMENTS has
+      // exactly 1 ฝ่าย (see the mount-fetch-count tests below).
       .mockResolvedValueOnce([
         makeRow('CC1', '5211800030', {
           pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
         }),
       ])
+      // 2nd call: the conflict-triggered refetch after the rejected save.
       .mockResolvedValueOnce([freshRow])
     vi.mocked(budgetApi.saveRow).mockRejectedValue(
       new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'changed by someone else'),
@@ -138,6 +142,48 @@ describe('BudgetGrid', () => {
     await waitFor(() =>
       expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('777'),
     )
+  })
+
+  describe('mount-time grid fetch (gated on ฝ่าย resolution — single fetch, no flicker)', () => {
+    it('fetches the grid exactly once on mount for a single-ฝ่าย caller, already resolved to that ฝ่าย (no department=null flash)', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS) // 1 ฝ่าย: 'Solution Delivery'
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: 'Solution Delivery' }))
+    })
+
+    it('fetches the grid exactly once on mount for a >1-ฝ่าย caller, with no ฝ่าย auto-selected', async () => {
+      const MULTI_DEPARTMENTS = [
+        { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
+        { cost_center: 'CC3', department: 'Budgeting and Management Accounting', division: 'Budgeting and Cost Accounting Division', c_level: 'CFO' },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(MULTI_DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeInTheDocument())
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: undefined }))
+    })
+
+    it('still loads the grid (department=null) when fetchDepartments fails — never stuck in loading forever', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockRejectedValue(new Error('network down'))
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: undefined }))
+      await waitFor(() => expect(screen.queryByText('กำลังโหลดข้อมูลงบประมาณ…')).not.toBeInTheDocument())
+    })
   })
 
   it('applies the deep-link department/year as the initial filter', async () => {

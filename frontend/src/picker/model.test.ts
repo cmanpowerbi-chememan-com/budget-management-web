@@ -65,18 +65,32 @@ describe('matchesQuery', () => {
   })
 })
 
-describe('resolveInitialDept — ADR-0016 deep-link is convenience-only', () => {
-  const tree = buildDeptHierarchy(ROWS)
+describe('resolveInitialDept — ADR-0016 deep-link + single-ฝ่าย auto-select', () => {
+  const multiDeptTree = buildDeptHierarchy(ROWS) // 2 ฝ่าย across 2 สายงาน
+  const singleDeptTree = buildDeptHierarchy(ROWS.filter((r) => r.department === 'Solution Delivery')) // 1 ฝ่าย
 
-  it('returns the deep-link department when it exists in scope', () => {
-    expect(resolveInitialDept(tree, 'Solution Delivery')).toBe('Solution Delivery')
+  it('returns the deep-link department when it exists in scope, even with >1 ฝ่าย present', () => {
+    expect(resolveInitialDept(multiDeptTree, 'Solution Delivery')).toBe('Solution Delivery')
   })
 
-  it('returns null for a department outside the caller\'s scope (never grants access)', () => {
-    expect(resolveInitialDept(tree, 'Some Other Department')).toBeNull()
+  it('returns null for a department outside the caller\'s scope when >1 ฝ่าย remain (never grants access, never guesses)', () => {
+    expect(resolveInitialDept(multiDeptTree, 'Some Other Department')).toBeNull()
   })
 
-  it('returns null when there is no deep-link filter at all', () => {
-    expect(resolveInitialDept(tree, null)).toBeNull()
+  it('returns null when there is no deep-link and >1 ฝ่าย in scope — user must consciously choose', () => {
+    expect(resolveInitialDept(multiDeptTree, null)).toBeNull()
+  })
+
+  it('auto-selects the single ฝ่าย when there is no deep-link and exactly 1 ฝ่าย in scope', () => {
+    expect(resolveInitialDept(singleDeptTree, null)).toBe('Solution Delivery')
+  })
+
+  it('auto-selects the single ฝ่าย even when the deep-link is invalid/out-of-scope', () => {
+    expect(resolveInitialDept(singleDeptTree, 'Some Other Department')).toBe('Solution Delivery')
+  })
+
+  it('returns null for an empty scope (0 ฝ่าย), regardless of deep-link', () => {
+    expect(resolveInitialDept([], null)).toBeNull()
+    expect(resolveInitialDept([], 'Solution Delivery')).toBeNull()
   })
 })

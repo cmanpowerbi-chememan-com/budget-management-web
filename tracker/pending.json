@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T19:56:37+0700",
+  "updated": "2026-07-19T20:42:19+0700",
   "tasks": [
+    {
+      "id": "faip-mount-double-fetch",
+      "state": "done",
+      "created": "2026-07-19T20:29:32+0700",
+      "updated": "2026-07-19T20:42:19+0700",
+      "ai": "DONE + GATE APPROVE. BudgetGrid.tsx: loadGrid effect gated on deptResolved (dep added) -> single mount fetch (was 2: null then resolved dept, ~55% single-dept fillers). .catch also setDeptResolved(true) so failed dept fetch never hangs grid loading. 3 new mount-fetch guard tests; 409-conflict test reverted 3->2 mocks (still asserts 777+Thai err). Race-free (React18 batch). Suite 432/432, tsc -b clean. Combined 06+07+08 gate APPROVE, security N/A. NOT committed yet - about to commit+push all React changes together.",
+      "agent": "claude"
+    },
+    {
+      "id": "faip-react-single-dept-default",
+      "state": "done",
+      "created": "2026-07-19T20:01:39+0700",
+      "updated": "2026-07-19T20:23:55+0700",
+      "ai": "DONE + GATE APPROVE-w-suggestions. resolveInitialDept (frontend/src/picker/model.ts) now: valid deep-link wins; else exactly-1 ฝ่าย auto-selects; else null. TDD 6 cases model.test.ts. 2 collateral tests fixed as maintenance (App.test.tsx getAllByText==2; BudgetGrid.test.tsx 3rd fetchBudgetGrid mock, 409 refetch still asserts 777+Thai err). Combined 06+07+08 gate: 429/429 vitest live, tsc -b clean, security N/A (RLS server-side). NOT committed - lives in working tree, Vite HMR shows on localhost:5173. Follow-ups (non-block): (1) double-fetch on mount for single-dept users ~55% fillers - extra grid load+flicker, optimize BudgetGrid mount seq if wanted; (2) add test dup-dept-name-across-division; (3) add test 1-dept+valid-deeplink. Mockup equiv already shipped 9b7899c.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-8abffa6",
+      "state": "done",
+      "created": "2026-07-19T19:57:08+0700",
+      "updated": "2026-07-19T19:57:08+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log faip dept-picker single-dept default (9b7899c) [commit 8abffa6]"
+    },
     {
       "id": "faipicker-filler-default",
       "state": "done",

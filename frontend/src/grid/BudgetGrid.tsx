@@ -101,7 +101,14 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           setDeptResolved(true)
         }
       })
-      .catch(() => setDepartments([]))
+      .catch(() => {
+        setDepartments([])
+        // Even on failure, unblock the grid-load gate below — a broken
+        // department list must never leave the grid stuck in "loading"
+        // forever (it just loads with department=null, same as a >1-ฝ่าย
+        // caller with no auto-select).
+        setDeptResolved(true)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminViewEnabled, hasNoScope])
 
@@ -139,9 +146,19 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   }
 
   useEffect(() => {
+    // Gated on deptResolved so mount fetches the grid exactly ONCE, with
+    // the ฝ่าย already decided (auto-selected single ฝ่าย, or null for
+    // >1 — resolveInitialDept in the reference-data effect above) —
+    // instead of an initial department=null fetch immediately followed by
+    // a second fetch once resolution runs a moment later (every single-ฝ่าย
+    // filler, ~55% of them, used to eat that redundant fetch + a loading
+    // flicker on every mount). `deptResolved` still flips true even when
+    // the department fetch itself fails, so this gate can never hang the
+    // grid in "loading" forever.
+    if (!deptResolved) return
     loadGrid()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, department, adminViewEnabled])
+  }, [year, department, adminViewEnabled, deptResolved])
 
   const fillCostCenters = useMemo(
     () => (isPureAdmin ? [...new Set(departments.map((d) => d.cost_center))] : scope.fillCostCenters),

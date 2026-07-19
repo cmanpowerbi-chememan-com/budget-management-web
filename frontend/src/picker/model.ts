@@ -63,12 +63,18 @@ export function matchesQuery(node: DepartmentNode, query: string): boolean {
   return node.department.toLowerCase().includes(q) || node.division.toLowerCase().includes(q)
 }
 
-/** Validates a deep-link-provided department name against the built
- * hierarchy — returns it unchanged if real, `null` if it doesn't exist in
- * the caller's scope (ADR-0016: the deep-link is convenience-only, never
- * a bearer of access; an invalid/out-of-scope name is just ignored). */
+/** Picks the ฝ่าย (department) the picker should start on.
+ *
+ * 1. A deep-link-provided department wins if it exists in the caller's
+ *    scope (ADR-0016: the deep-link is convenience-only, never a bearer
+ *    of access — validated against the built hierarchy, not taken on
+ *    faith).
+ * 2. Otherwise, with no (valid) deep-link: auto-select only when the
+ *    caller has EXACTLY ONE ฝ่าย in scope — there is nothing to choose
+ *    between. With 0 or >1 ฝ่าย, return `null` ("— เลือกฝ่าย —") so the
+ *    user consciously picks rather than landing on an arbitrary default. */
 export function resolveInitialDept(divisions: DivisionNode[], deepLinkDept: string | null): string | null {
-  if (!deepLinkDept) return null
-  const exists = flattenDepartments(divisions).some((d) => d.department === deepLinkDept)
-  return exists ? deepLinkDept : null
+  const all = flattenDepartments(divisions)
+  if (deepLinkDept && all.some((d) => d.department === deepLinkDept)) return deepLinkDept
+  return all.length === 1 ? all[0].department : null
 }

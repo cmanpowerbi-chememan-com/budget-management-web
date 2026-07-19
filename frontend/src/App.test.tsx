@@ -79,7 +79,11 @@ describe('App shell + budget grid (A7/A8)', () => {
     await waitFor(() => expect(screen.getByText('user@chememan.com')).toBeInTheDocument())
     expect(screen.getByText('user')).toBeInTheDocument() // name = email local-part
     await waitFor(() => expect(screen.getByText('Div A')).toBeInTheDocument()) // สายงาน from /scope/departments
-    expect(screen.getByText('ฝ่ายบัญชี')).toBeInTheDocument()
+    // Renders twice: the header's ฝ่าย chip, plus the ฝ่าย-picker's trigger
+    // label — the caller has exactly 1 ฝ่าย in scope, so the picker
+    // auto-selects it (model.ts resolveInitialDept) instead of showing
+    // "— เลือกฝ่าย —".
+    await waitFor(() => expect(screen.getAllByText('ฝ่ายบัญชี').length).toBe(2))
     expect(screen.getByText('Cost Centers')).toBeInTheDocument()
     // Fill CC pill = 1 (fill_cost_centers), never a See count anywhere in the header.
     expect(screen.getByTestId('v3-cc-count')).toHaveTextContent('1')
