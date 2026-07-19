@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T19:47:58+0700",
+  "updated": "2026-07-19T19:56:37+0700",
   "tasks": [
     {
       "id": "faipicker-filler-default",
@@ -15,8 +15,8 @@
       "id": "faip-dept-default-single",
       "state": "done",
       "created": "2026-07-19T19:40:12+0700",
-      "updated": "2026-07-19T19:47:57+0700",
-      "ai": "DONE buildFaiPicker filler default split by isApprover (0002.3budget-export.html ~L2007-2016). Filler: selectedDept = _faiData.length===1 ? _faiData[0].dept : null. Approver firstWait->_faiData[0]->null UNCHANGED. Headless Playwright 4/4 PASS, 0 console err. Pre-edit: 1-dept already auto-selected (screenshot was stale); real fix = >1-dept no longer arbitrary-locks first alpha. NOT committed. Dup id faipicker-filler-default added by subagent = same work.",
+      "updated": "2026-07-19T19:56:37+0700",
+      "ai": "DONE + PUSHED 9b7899c to origin/main. buildFaiPicker filler default split by isApprover (0002.3budget-export.html L2007-2016): filler selectedDept=_faiData.length===1?_faiData[0].dept:null; approver firstWait->_faiData[0]->null UNCHANGED. Headless Playwright 4/4 PASS, 0 console err. Real fix = >1-dept no longer arbitrary-locks first-alpha; 1-dept already auto-selected pre-edit (screenshot was stale). No deploy triggered (mockup path).",
       "agent": "claude"
     },
     {
