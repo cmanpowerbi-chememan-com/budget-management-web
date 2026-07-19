@@ -77,11 +77,11 @@ section numbers (1.1, 2.4a…), emails, `฿ THB USD %`, arrows `→ ▲ ▼`, q
 - `v0.4.1` present (version bump + changelog).
 
 ### Acceptance:
-- [ ] check_paras = PASS; result opens + XML well-formed.
-- [ ] No fact/number/identifier/marker/ADR dropped (deterministic check + spot-check).
-- [ ] skip:true paragraphs (images/links/bold) untouched; `เพิ่ม Transaction` untouched.
-- [ ] version → v0.4.1, changelog has the new v0.4.1 line + old v0.4 line intact.
-- [ ] readability improved (colon-chains → bullets, prose tightened) without changing meaning.
+- [x] check_paras = PASS; result opens + XML well-formed.
+- [x] No fact/number/identifier/marker/ADR dropped (deterministic check + spot-check).
+- [x] skip:true paragraphs (images/links/bold) untouched; `เพิ่ม Transaction` untouched.
+- [x] version → v0.4.1, changelog has the new v0.4.1 line + old v0.4 line intact.
+- [x] readability improved (colon-chains → bullets, prose tightened) without changing meaning.
 
 ---
 

@@ -36,6 +36,10 @@ ASSETS_DIR = os.path.join(SIGNOFF_DIR, "assets")
 BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
 DOCX_PATH = os.path.join(SIGNOFF_DIR, "01_main_web_app_spec.docx")
 MOCKUP = pathlib.Path(PROJECT_ROOT, "design", "mockups", "0002claude design", "0002.1budget-export.html")
+# Master Currency edit page (Module 09) — separate master-tables HTML, self-contained demo
+# data (FY2025 = 35.00, matches the OPEX read-only FX chip). Captured for §15 as the place
+# where Master FX is actually edited.
+MC_PAGE = pathlib.Path(PROJECT_ROOT, "03-edit-master-table", "master-tables", "01frontend", "master-currency.html")
 os.makedirs(ASSETS_DIR, exist_ok=True)
 os.makedirs(BIN_DIR, exist_ok=True)
 
@@ -195,6 +199,24 @@ def capture():
         az_path = os.path.join(BIN_DIR, "main_admin_zone.png")
         az.screenshot(path=az_path)
         out["admin_zone"] = (az_path, _markers_from_rects(az_points, az_rects, azbox))
+
+        # ── 2b-2) MASTER FX (read-only) — TIGHT crop for §15 ──
+        #     The whole FX chip "💱 Master FX (USD→THB · FY2025): 35.00 (read-only)" — i.e. the
+        #     .admin-zone-note span that WRAPS #fxDisplay (USD→THB read-only, owned by Module 09,
+        #     recompute-on-read · ADR-0015). #fxDisplay alone is only the bold number, and there
+        #     are TWO .admin-zone-note spans (warning + FX) so we anchor via closest() on the
+        #     unique #fxDisplay. Admin-only — jakkaritw (pure admin) is still active from 2b. No
+        #     markers: §15 uses bullet points, not a numbered table (matches login-bar captures).
+        fx_rect = pg.evaluate(
+            "()=>{const e=document.getElementById('fxDisplay').closest('.admin-zone-note');"
+            "const r=e.getBoundingClientRect();return {x:r.left,y:r.top,w:r.width,h:r.height};}")
+        fxpad = 16
+        fx_box = {"x": fx_rect["x"] - fxpad, "y": fx_rect["y"] - fxpad,
+                  "w": fx_rect["w"] + fxpad * 2, "h": fx_rect["h"] + fxpad * 2}
+        fx_path = os.path.join(BIN_DIR, "main_fx_only.png")
+        pg.screenshot(path=fx_path, clip={"x": fx_box["x"], "y": fx_box["y"],
+                                          "width": fx_box["w"], "height": fx_box["h"]})
+        out["fx_only"] = (fx_path, [])
 
         # ── 2c) ฝ่าย-PICKER (open) — approver view with รออนุมัติ / อนุมัติแล้ว badges (NEW) ──
         #     The ฝ่าย-picker replaces the division filter (ADR-0008). For approvers each ฝ่าย
@@ -358,6 +380,18 @@ def capture():
         panel.screenshot(path=det_path)
         out["detail"] = (det_path, _markers_from_rects(
             det_points, det_rects, pbox, colors=[(RED, RED_DARK), (GREEN, GREEN_DARK)]))
+
+        # ── 15-ref) MASTER CURRENCY PAGE (Module 09) — where Master FX is actually edited ──
+        #     Companion to the read-only FX crop (§15). Separate self-contained HTML (master-
+        #     tables module) — seed FY2025 = 35.00 matches the OPEX chip. Screenshot the
+        #     <main class="wrap"> content (header + edit form + records table), no nav chrome,
+        #     no markers. Last capture: it navigates AWAY from the OPEX mockup, so keep it here.
+        pg.goto(MC_PAGE.as_uri()); pg.wait_for_selector(".data-table tbody tr")
+        pg.wait_for_timeout(300)
+        mc_main = pg.locator("main.wrap").first
+        mc_path = os.path.join(BIN_DIR, "main_master_currency_page.png")
+        mc_main.screenshot(path=mc_path)
+        out["mc_page"] = (mc_path, [])
 
         b.close()
     return out
@@ -970,6 +1004,12 @@ def build_body(meta, rids):
     P.append(bullet("ค่า FX ผูกตามปีงบประมาณ (เช่น FY2025 = 35.00) — ตัวกรองปีเปลี่ยน → FX ที่แสดงเปลี่ยนตาม", sz=20))
     P.append(bullet("แบบเดโม่ sync ค่าระหว่างหน้าผ่าน localStorage (cm.masterFX) — แก้ที่ Module 09 แล้วหน้านี้คิด per-diem ใหม่อัตโนมัติ", sz=20))
     P.append(bullet("เฉพาะ Admin เห็นแถบนี้ (รวม Master FX) — ผู้ใช้ทั่วไปไม่เห็น", sz=20))
+    P.append(para(run("ภาพประกอบ: แถบ Master FX (USD→THB · อ่านอย่างเดียว) ในแถบ Admin", sz=22, bold=True, color="1E3A24"),
+                  space_before=80, space_after=40))
+    P.append(image_para(rids["fx_only"], *meta["fx_only"][1], 113, "main_fx_only", width_in=3.4))
+    P.append(para(run("ภาพประกอบ: หน้า Master Currency (Module 09) — ที่แก้ไขอัตรา FX จริง (ฟอร์มแก้ปี/อัตรา + ตารางรายปี · FY2025 = 35.00)",
+                      sz=22, bold=True, color="1E3A24"), space_before=80, space_after=40))
+    P.append(image_para(rids["mc_page"], *meta["mc_page"][1], 114, "main_master_currency_page", width_in=6.3))
 
     # ── 16. Edit-lock by status × role ──
     P.append(heading("16) การล็อกการแก้ไข ตามสถานะ × บทบาท (edit-lock · ADR-0013)"))
@@ -1049,7 +1089,7 @@ def main():
     # main-page flow (ฝ่าย-picker, action bar, admin-mode toggle, edit-lock by status×role).
     order = ["login_admin", "login_user", "overview", "sap", "approved", "pending",
              "toolbar", "admin_zone", "fai_picker", "action_approver", "admin_mode",
-             "edit_lock", "detail"]
+             "edit_lock", "detail", "fx_only", "mc_page"]
     for k in order:
         src, markers = shots[k]
         meta[k] = annotate(src, os.path.basename(src), markers)
