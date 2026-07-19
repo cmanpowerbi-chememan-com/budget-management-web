@@ -1,18 +1,165 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-17T11:09:49+0700",
+  "updated": "2026-07-19T17:53:34+0700",
   "tasks": [
+    {
+      "id": "tripmanager-delete-409-guard",
+      "state": "done",
+      "created": "2026-07-19T17:05:23+0700",
+      "updated": "2026-07-19T17:05:32+0700",
+      "ai": "Fixed frontend/src/subform/TripManager.tsx deleteTripCard 409 catch: now checks otherCardsHaveUnsavedEdits (dirty or manualDirty on any card != deleted localId) before auto-load(); when true, reuses existing conflictMessage banner + reload button, flags deleted card status=error (never wiped); when false, keeps original auto-load (nothing to lose). 2 new/updated tests in TripManager.test.tsx, 123/123 subform + 425/425 full frontend suite green, tsc -b clean, npm run build clean. frontend/src/grid/** untouched. Not committed (per instructions).",
+      "agent": "claude"
+    },
+    {
+      "id": "grid-remark-identity-col",
+      "state": "done",
+      "created": "2026-07-19T16:02:48+0700",
+      "updated": "2026-07-19T16:29:27+0700",
+      "ai": "Remark is now the 4th frozen identity column (same part as CC/GL/GL Group): model.ts ColumnWidths.remark + DEFAULT 170 + freezeOffsets frz4 + loadStored per-key fallback (pre-Remark localStorage entries safe) + selectMeasureCandidates.remark (skip null, capped longest). GridTable.tsx: measurer renders remark candidates with real .remark-text font; colgroup 4th col width from shared state; header th frz frz-4 with col-resize-remark handle; body td frz frz-4 (dropped rowspan/shared approach — sticky+rowspan is what the colSpan-merged cells avoid); rows 2/3 merged colSpan 4; group-head frozen band colSpan 4; --frz4 inline var. global.css: .frz-4, frozen-edge shadow moved frz-3->frz-4, z-index chain 19/18/17 for frz-1/2/3 (glGroup handle needed a bump now that its right neighbor is frozen Remark), removed fixed .remark-col rule + .remark-cell vertical-align. Tests: freezeOffsets/loadStored/selectMeasureCandidates model tests + GridTable remark frz-4/drag test + handle counts 4 cols + --frz4 assertion; vitest 133 grid tests pass, tsc + oxlint clean. Playwright live verify PASS: remark cell x unchanged when scrolled fully right (frozen), fit-to-content width 155px on colgroup col, drag +80px resized 155->235px. Leftover: screenshot frontend/test-results/remark-col-verify.png (scrolled-right state) awaiting user visual confirm; NOT committed",
+      "agent": "kimi"
+    },
+    {
+      "id": "trip-save-consolidation",
+      "state": "done",
+      "created": "2026-07-19T15:26:29+0700",
+      "updated": "2026-07-19T17:53:34+0700",
+      "ai": "COMMITTED 2b6b345 feat(subform): consolidate saves into one บันทึก & ลงบัญชี. save-all+delete-409-guard+race-hardening(cardsRef). skeptic refuted=FALSE, gate APPROVE, 124/124, tsc/build clean. Also committed this session: grid remark col 972a831, signoff PDF rebuild 0b77eb7, monthly 4182f39, tracker-v2 52ee502, vite-dev 0afa7a4. UNCOMMITTED/held per user: global.css+plan.md (shared), mockup 0002.3+master-tables(doing), vite.review.config.ts(temp spoof, author marked not-for-commit).",
+      "agent": "claude"
+    },
+    {
+      "id": "grid-remark-column",
+      "state": "done",
+      "created": "2026-07-19T15:00:02+0700",
+      "updated": "2026-07-19T15:28:53+0700",
+      "ai": "Added Remark column to main budget grid per mockup 0002.3budget-export.html (lines 1163-1166 header/filter, 2246-2249 rowspan-3 editable cell). model.ts: ColumnFilters.remark + filterRows match on pending.remark. GridTable.tsx: remark <th> with col-filter between GL Group and Status, colgroup col.remark-col (fixed 170px, not resizable), RemarkCell component (rowSpan=3 shared cell, draft+blur-commit like MonthCell, read-only text for see-only/special-GL rows since backend rejects /budget/rows for special GLs), colSpans 16->17 and subtotal 4->5. BudgetGrid.tsx: extracted shared persistRow() from handleCommitMonth (behavior unchanged), added handleCommitRemark (empty->null). global.css: .remark-col/.remark-cell/.remark-text/.remark-input. Tests: model.test.ts remark filter cases, GridTable.test.tsx 6 remark-column tests; vitest 414 pass, tsc clean, oxlint clean, Playwright mock verify PASS. Leftover: screenshot frontend/test-results/remark-col-verify.png awaiting user visual confirm; NOT committed",
+      "agent": "kimi"
+    },
+    {
+      "id": "trip-subform-mockup-parity",
+      "state": "done",
+      "created": "2026-07-19T14:49:51+0700",
+      "updated": "2026-07-19T17:53:34+0700",
+      "ai": "DONE + COMMITTED. Restyle TripManager to mockup (A/B/C legend, section A/B, uppercase labels, Per Diem read-only table row, GL-code col, ยอดรวม/ทริป col, รายละเอียด placeholder). TSX committed in 2b6b345 (folded with save-all). global.css (subform CSS) left UNCOMMITTED — shared w/ grid session per jakkaritw. gate APPROVE, financial never-cut held.",
+      "agent": "claude"
+    },
+    {
+      "id": "gl-visibility-rules",
+      "state": "doing",
+      "created": "2026-07-19T00:24:05+0700",
+      "updated": "2026-07-19T00:24:05+0700",
+      "ai": "GL visibility rules DONE. Rule2 edit_by: GL_EDIT_BY_ENABLED=true in backend/.env (dev-only gitignored) -> non-admin sees 134 (12 admin GL stripped); PRD needs deployed config+jakkaritw. Rule1 master-membership committed 8dc59c3, gate 06/07/08 PASS. DELIBERATELY hides 5120500010(~46M FY2025/134CC)+6410200250(~7.2M)=53M FY2025 informed signed-off (memory project_gl_master_visibility_hide). CAVEAT flag ON exposes 65 pre-existing test_write_model.py fails (tests read .env not mock flag).",
+      "agent": "claude"
+    },
+    {
+      "id": "gl-master-visibility-rule",
+      "state": "done",
+      "created": "2026-07-19T00:03:26+0700",
+      "updated": "2026-07-19T00:04:18+0700",
+      "ai": "Backend+frontend implemented, tests green (24 new backend, 401/401 frontend), live-verified via Playwright: grid 11->9 rows, 0 outliers vs 134-row master, 0 reference-hint elements. plan.md updated. NOT committed (per instructions) -- awaiting user commit approval.",
+      "agent": "claude"
+    },
+    {
+      "id": "tracker-archive-30d",
+      "state": "done",
+      "created": "2026-07-18T23:17:59+0700",
+      "updated": "2026-07-18T23:18:30+0700",
+      "ai": "DONE: ARCHIVE_DAYS 14->30 in tracker/task.py; project + global CLAUDE.md updated to >30d. All 7 previously-archived tasks (2026-06-28/29) still older than 30d cutoff - nothing restored. archive --dry-run confirms no pending migrations. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "tracker-mandatory-start-rule",
+      "state": "done",
+      "created": "2026-07-18T23:15:14+0700",
+      "updated": "2026-07-18T23:16:38+0700",
+      "ai": "DONE: MANDATORY banner added at top of project CLAUDE.md (3-step: list -> add doing -> done); tracker section bullets rewritten as mandatory read-first + log-before-start + done-with-hashes; global ~/.claude/CLAUDE.md rules strengthened same way. Claude Code reads both files automatically every session. .claude/project-context.md has no tracker rules - no sync needed. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "tracker-v2-autolog",
+      "state": "done",
+      "created": "2026-07-18T23:13:17+0700",
+      "updated": "2026-07-18T23:13:17+0700",
+      "ai": "Tracker v2: task.py rewritten - human field + PENDING.html/render_pending.py RETIRED (deleted), empty agent/skills/files omitted on write, auto-archive done>14d on every write, autolog+dedup (log-<hash> entries removed once real entry quotes hash), new compact + check commands. .git/hooks/post-commit installed (autolog every commit, never blocks). CLAUDE.md project+global tracker sections updated to v2. Also logged retroactively: ui-parity thru pt11 (9e76132..23a6b02), monthly-report-2026-07, signoff-spec-pdf-rebuild. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "signoff-spec-pdf-rebuild",
+      "state": "doing",
+      "created": "2026-07-18T23:11:32+0700",
+      "updated": "2026-07-18T23:11:32+0700",
+      "ai": "Signoff specs rebuilt docx->PDF V2.0, ALL UNCOMMITTED in working tree: 7 old docx deleted (01/03/06/07/08/09/10 + laddawan Spec A/C docx), V2.0 PDFs added under laddawan/, new assets (speca2_*, sub_*, main_* pngs), build_main_web_app_spec.py + build_special_gl_subform_spec.py modified, jakkaritw/ dir new, Spec B docx modified. Found in tracker audit 2026-07-18 - owner session unknown; verify + commit before marking done.",
+      "agent": "kimi"
+    },
+    {
+      "id": "monthly-report-2026-07",
+      "state": "done",
+      "created": "2026-07-18T23:11:31+0700",
+      "updated": "2026-07-18T23:11:31+0700",
+      "ai": "Monthly report 2026-07 generated: monthly_update/monthly_report_2026-07.html+.png + data_architecture.html/.png. Files UNTRACKED in git (never committed) as of tracker audit 2026-07-18. No ledger entry existed - logged retroactively; producing session unknown.",
+      "agent": "kimi"
+    },
+    {
+      "id": "dev-login-suchanya",
+      "state": "done",
+      "created": "2026-07-18T21:25:54+0700",
+      "updated": "2026-07-18T21:27:37+0700",
+      "agent": "kimi",
+      "ai": "DONE+VERIFIED live: /me -> suchanyay@chememan.com, /health 200 on 127.0.0.1:8000. backend/.env change is uncommitted (dev-only, same as arthids before it). Note for ui-parity session: backend now impersonates suchanyay — re-set DEV_AUTH_EMAIL if arthids needed again; backend owned by kimi bg task bash-lru0opw2 (PID 17468)."
+    },
+    {
+      "id": "gl-editby-approval-separation",
+      "state": "done",
+      "created": "2026-07-17T17:32:17+0700",
+      "updated": "2026-07-17T22:53:55+0700",
+      "ai": "BUILT+COMMITTED 9e57b77 (05 agent a8d3265, gate APPROVE agent a14ae00). Lane 2.2 = admin กรอก=อนุมัติเลย. Removed buggy AdminGlInNormalSubmitError guard (would stamp whole dept APPROVED bypassing approver); submit_department routes any is_filler to normal chain; admin-GL rows never enter approval_status (approved-on-save convention, audited _user/_updated_at, no schema change); auto_submit last-editor excludes admin-GL (flag-gated); ADR-0024 written (narrows 0011, disambiguates 0012 template vs edit_by). ALSO fixed: read_model.py (core read-strip) was MISSED from commit 5119e19 - now committed in 9e57b77. Suite 621 pass/19 pre-existing flake. Flag OFF. plan.md NOT committed (shared w/ concurrent ui-parity session, content synced in-tree). NOT pushed, NOT deployed, flag NOT flipped - await jakkaritw."
+    },
+    {
+      "id": "gl-editby-dwsync",
+      "state": "done",
+      "created": "2026-07-17T15:47:48+0700",
+      "updated": "2026-07-17T16:11:54+0700",
+      "agent": "04-data-engineer",
+      "ai": "DEPLOYED+VERIFIED live cman-dw-ws (jakkaritw approved 'Deploy เลย'). 3 mutations done: (1) ALTER dbo.gl_group ADD edit_by NVARCHAR(10) NULL; (2) pushed budget_masters_lib via REST updateDefinition, live==intended byte-identical, still 1 cell; (3) ran NB_budget_masters_sync only_spec=Budget_Masters_gl_group headless (job 13167c07 Completed 1.5min). VERIFY: 146 rows, edit_by 0 NULL, admin=13/user=133, 4 new 5xxx codes=admin, 5 dup codes->1 row admin (admin-wins), 0 dup gl_codes. App unaffected (SELECT explicit cols). Follow-ups (non-blocking): source dup-fix by owner; budget_app_tables.sql DW-repo DDL +edit_by. Next: app track (05 flag-gated code)."
+    },
+    {
+      "id": "ui-parity-mockup-0002-3",
+      "state": "doing",
+      "created": "2026-07-17T14:50:50+0700",
+      "updated": "2026-07-18T23:29:08+0700",
+      "files": [
+        {
+          "path": "frontend/src/grid/GridTable.tsx",
+          "label": "point1 scroll/sticky/freeze JSX"
+        },
+        {
+          "path": "frontend/src/styles/global.css",
+          "label": "point1 scroll/sticky/freeze CSS"
+        }
+      ],
+      "ai": "DONE all 11 points + polish, git reconciled clean @842efef, 401/401 green. Commits: pts1-11(b90e5b3..23a6b02) + year-picker(bd508c5) + column-polish status-white+fit-content(3199714) + colgroup test-fix(9750710) + GL Code name-fit 269px(842efef). Concurrent editor collision resolved (user paused other session). PENDING VISUAL: GL Code fit viewable now (suchanyay); point-11 admin-zone needs DEV_AUTH_EMAIL=jakkaritw(admin) to see. LEFTOVER: 5 stashes not dropped (stash@{0} superseded glName, stash@{1} has unapplied scrollbar-gutter 2-table-align improvement); vite.config localhost->127.0.0.1 + backend/.env DEV_AUTH_EMAIL uncommitted dev-only."
+    },
+    {
+      "id": "ui-polish-mockup-parity",
+      "state": "doing",
+      "created": "2026-07-17T14:44:00+0700",
+      "updated": "2026-07-17T14:44:00+0700",
+      "ai": "UI polish vs mockup 0002.3, section by section, live review at 127.0.0.1:5180 (vite.review.config.ts temp, staging backend + spoof anurakb). Iteration 1 HEADER: V3 user-bar (avatar+division+dept chips+Fill CC pill+GL pill) DONE, visual PASS by jakkaritw, commit 0dc24ec, vitest 344. Trade-off logged: GL pill = +1 heavy GET /budget per load (sap.py RLS-pushdown = durable fix, B6 follow-up). NOT pushed, NOT deployed - gate 06+07+08 once at end of UI batch before staging redeploy. Next section: awaiting jakkaritw pick."
+    },
+    {
+      "id": "gl-editby-column",
+      "state": "done",
+      "created": "2026-07-17T14:29:59+0700",
+      "updated": "2026-07-17T17:26:11+0700",
+      "agent": "05-software-developer",
+      "ai": "App code COMMITTED 5119e19 (11 files, edit_by only; chip files of ui-parity-mockup-0002-3 excluded). Feature complete flag-OFF: DW sync deployed+live (gl-editby-dwsync done) + app server-side-strip/403-guards/submit-guard, gate APPROVE-WITH-SUGGESTIONS. NOT pushed, NOT deployed to Container Apps, flag NOT flipped (all await jakkaritw). PRE-FLAG-ON items: (1) decide submit-guard widening to non-admin filler submitting dept w/ admin-GL rows (workflow-only, no leak); (2) budget_app_tables.sql DW-repo DDL +edit_by; (3) source Excel dup-fix by owner; (4) add characterization test after (1)."
+    },
     {
       "id": "special-group-completeness",
       "state": "doing",
       "created": "2026-07-17T00:03:25+0700",
-      "updated": "2026-07-17T11:09:49+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "Both agents DONE on merged tree: backend 595 pass (+32), frontend 319 pass (+28). Contract deltas cross-checked (fixture parity, project in trip responses, traveler view shared with validate). Combined gate agent dispatched. CRITICAL ordering: migrate_budget_trip_project.py must run BEFORE next backend deploy (fetch_trips selects project unconditionally). Next: gate verdict -> selective commit (feature files only, tree has unrelated churn) -> migrations -> staging rebuild+deploy -> verify.",
-      "human": "-"
+      "updated": "2026-07-17T13:19:13+0700",
+      "ai": "ADDITIONAL STAGING TESTS 2026-07-17 (jakkaritw requested A1/A2/A4/B5/B6 + B7): B7 GL-master EXACT match(no fix). A1 past-deadline lock PASS(FY2032, grid+subform locked, read open, neg-control 2031, cleaned). A2 real-browser SPA smoke PASS(6/6, 0 console err, real API 613 travelers/15 countries, Trip subform new fields render). A4 auto-jobs PASS logic(auto_submit+escalate dry->exec->idempotent FY2033 cleaned) BUT GitHub Actions runner cant reach Fabric DB -> cron automation at go-live UNVERIFIED (open, likely secrets/msal not true IP block). B6 perf PASS filler(grid 0.9s median) findings: sap.py scans whole company every request(RLS not pushed into DW read-through), admin-wide UNTESTED(no admin cred), cold-start est 3-9s. B5 real-email BLOCKED by classifier -> needs jakkaritw explicit OK. plan.md has all entries, uncommitted(test-only). Screenshots in %TEMP% for review."
     },
     {
       "id": "ent-prd-mockup-sample-data",
@@ -20,21 +167,14 @@
       "created": "2026-07-16T17:30:28+0700",
       "updated": "2026-07-16T18:50:57+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -> each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet 'GL Acct & Group  ' cell E34 + 13Template Special/Public Relation & Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -> switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review.",
-      "human": "-"
+      "ai": "0002.3 mockup Ent+PRD sample data DONE-pending-visual-review: glCodes +5211900030(Ent ext COST) +6211700010 +6211700020 -> each group now has all 3 master sub-cats; existing empty txn 8 filled (details 25-26); new txns 18-22 (Ent EXT+INT on 10IT012000, PRD x3 on 10AC020000), details 27-36, counters 23/37. 6211700010 uses CORRECT spelling per jakkaritw ruling (master typo ใข้ at demo_data/04gl...xlsx sheet 'GL Acct & Group  ' cell E34 + 13Template Special/Public Relation & Donation.xlsx sheet GL cell E4 - user fixes at source). Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 0 correctness defects, 07 PASS (no injection introduced), 08 PASS (gate re-ran ~40 assertions independently incl codepoint key compare + render + orphan-select check). Accepted LOW: 5211900030 has no sample txn (consistent w/ Lease precedent; no production 5xxx cost center exists in demo data). NEW pre-existing bug found (NOT introduced, reproduces on committed Lease txn 14): selectGLCode only clears pendingDetails when already empty -> switching a txn to a different-column GL strands wrong-side values. NOT committed - awaiting visual review."
     },
     {
       "id": "gl-not-in-master-readonly",
       "state": "done",
       "created": "2026-07-16T16:52:22+0700",
       "updated": "2026-07-16T23:41:04+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged.",
-      "human": "-"
+      "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged."
     },
     {
       "id": "lease-rental-mockup-dropdown",
@@ -42,10 +182,7 @@
       "created": "2026-07-16T16:37:49+0700",
       "updated": "2026-07-16T17:05:14+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "0002.3 mockup Lease&Rental DONE: 7 GL codes (010/020/030/040/050/060/999) exact-match Excel GL sheet incl 030 comma rename; new detailColumns kind select-or-text for ทะเบียนรถ on …060 (tri-state ''=— เลือก — / known plate / ไม่ระบุ+off-list=free-text), handler updateDetailSelectOrText; sample txns 14-17 + details 20-24, counters 18/25. Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 07 PASS, 08 PASS (89 assertions re-run independently), 1 MEDIUM (blank row displayed ไม่ระบุ) + 1 LOW fixed. Visual approved by jakkaritw 2026-07-16. NOT-FIXED pre-existing: specialGLGroups dead data (Training&Seminar cols mismatch detailColumns) - React-port trap, separate task.",
-      "human": "-"
+      "ai": "0002.3 mockup Lease&Rental DONE: 7 GL codes (010/020/030/040/050/060/999) exact-match Excel GL sheet incl 030 comma rename; new detailColumns kind select-or-text for ทะเบียนรถ on …060 (tri-state ''=— เลือก — / known plate / ไม่ระบุ+off-list=free-text), handler updateDetailSelectOrText; sample txns 14-17 + details 20-24, counters 18/25. Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 07 PASS, 08 PASS (89 assertions re-run independently), 1 MEDIUM (blank row displayed ไม่ระบุ) + 1 LOW fixed. Visual approved by jakkaritw 2026-07-16. NOT-FIXED pre-existing: specialGLGroups dead data (Training&Seminar cols mismatch detailColumns) - React-port trap, separate task."
     },
     {
       "id": "trip-side-derivation",
@@ -53,32 +190,21 @@
       "created": "2026-07-16T16:27:36+0700",
       "updated": "2026-07-16T16:52:21+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "DONE+GATED APPROVE-W-SUGG. Dept-grain side derivation: deriveTravelSideHistory (sap/board only, pending excluded), single-side lock non-admin, both->larger-total(tie SGA), no-history must-pick, admin always enabled. 287/287 vitest, build clean. Gate suggestions non-blocking backlog: align lock to adminViewEnabled or doc it; add mismatch-side+tie tests; backend side-enforce=post-golive (client lock acceptable: EasyAuth+own-dept+approver-visible+admin-fixable).",
-      "human": "-"
+      "ai": "DONE+GATED APPROVE-W-SUGG. Dept-grain side derivation: deriveTravelSideHistory (sap/board only, pending excluded), single-side lock non-admin, both->larger-total(tie SGA), no-history must-pick, admin always enabled. 287/287 vitest, build clean. Gate suggestions non-blocking backlog: align lock to adminViewEnabled or doc it; add mismatch-side+tie tests; backend side-enforce=post-golive (client lock acceptable: EasyAuth+own-dept+approver-visible+admin-fixable)."
     },
     {
       "id": "design-concurrency",
       "state": "done",
       "created": "2026-07-16T15:58:36+0700",
       "updated": "2026-07-16T15:58:36+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DECIDED (jakkaritw 2026-07-16): grid concurrency = row-grain OPTIMISTIC-LOCK (keep current). No code change - code already matches ADR-0003 (decided 2026-06-07, supersedes last-write-wins). ADR correct. Only stale artifact was MEMORY.md index one-liner ('last-write-wins no-lock') -> fixed. F5-B 'divergence' was a false flag from that stale index line, not a real code/ADR mismatch. Optimistic-lock protects the 73%-of-CCs multi-filler case from silent lost-update; frontend auto-reloads on 409.",
-      "human": "-"
+      "ai": "DECIDED (jakkaritw 2026-07-16): grid concurrency = row-grain OPTIMISTIC-LOCK (keep current). No code change - code already matches ADR-0003 (decided 2026-06-07, supersedes last-write-wins). ADR correct. Only stale artifact was MEMORY.md index one-liner ('last-write-wins no-lock') -> fixed. F5-B 'divergence' was a false flag from that stale index line, not a real code/ADR mismatch. Optimistic-lock protects the 73%-of-CCs multi-filler case from silent lost-update; frontend auto-reloads on 409."
     },
     {
       "id": "trip-idempotency",
       "state": "doing",
       "created": "2026-07-16T13:54:51+0700",
       "updated": "2026-07-16T13:54:51+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "jakkaritw chose option 1 (frontend guard + idempotency token, backend dedup). Design approved. Implementing (05, fable): backend client_token NVARCHAR(64) NULL on budget.budget_trip + UNIQUE filtered index (WHERE client_token IS NOT NULL); POST /budget/trip create-path dedups on (client_token,_user) returns existing trip, PUT ignores; TripInput.client_token optional. Frontend: crypto.randomUUID per add-trip intent, disable Save until response. Migration script setup/migrate_budget_trip_client_token.py authored but NOT run - live ALTER on budget_trip (empty, low-risk) GATED on jakkaritw explicit go. Sequencing: batch1 (Thai label+resolve_scope+headers, no schema) redeploy first; trip-idempotency=batch2 (has DDL).",
-      "human": "-"
+      "ai": "jakkaritw chose option 1 (frontend guard + idempotency token, backend dedup). Design approved. Implementing (05, fable): backend client_token NVARCHAR(64) NULL on budget.budget_trip + UNIQUE filtered index (WHERE client_token IS NOT NULL); POST /budget/trip create-path dedups on (client_token,_user) returns existing trip, PUT ignores; TripInput.client_token optional. Frontend: crypto.randomUUID per add-trip intent, disable Save until response. Migration script setup/migrate_budget_trip_client_token.py authored but NOT run - live ALTER on budget_trip (empty, low-risk) GATED on jakkaritw explicit go. Sequencing: batch1 (Thai label+resolve_scope+headers, no schema) redeploy first; trip-idempotency=batch2 (has DDL)."
     },
     {
       "id": "backend-502-secheaders",
@@ -86,43 +212,28 @@
       "created": "2026-07-16T13:54:48+0700",
       "updated": "2026-07-16T13:59:23+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "DONE: FIX1 resolve_scope inside try->502 in routers/budget.py+scope.py+subform.py(x2)+reference.py(departments); FIX2 add_security_headers middleware main.py (4 headers, CSP deferred). TDD RED->GREEN, 9 new tests, suite 513->522 pass/44 deselected. Residual: conn-OPEN failure still 500 (out of scope). Not deployed/committed.",
-      "human": "แก้ read API ให้ตอบ 502 เมื่อ DB ล่มระหว่างเช็คสิทธิ์ + เพิ่ม security headers"
+      "ai": "DONE: FIX1 resolve_scope inside try->502 in routers/budget.py+scope.py+subform.py(x2)+reference.py(departments); FIX2 add_security_headers middleware main.py (4 headers, CSP deferred). TDD RED->GREEN, 9 new tests, suite 513->522 pass/44 deselected. Residual: conn-OPEN failure still 500 (out of scope). Not deployed/committed."
     },
     {
       "id": "stg-test-suite3",
       "state": "done",
       "created": "2026-07-16T13:16:36+0700",
       "updated": "2026-07-16T14:35:16+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "ALL 5 suites done. F5-A backend 60/60, F5-B database 39/40 (Thai-label bug), F5-C data 6/6 (91858 cells 0 mismatch), F5-D frontend 16/16 (0 console err, fy2020 clean), F5-E other 45/45. Bugs FOUND+FIXED (staged, gated APPROVE, NOT deployed per jakkaritw hold): (1) Thai per-diem label ??? -> parameterized; (2) resolve_scope-500 -> 502 across 4 read routers; (3) security headers added. Feature built (gated APPROVE, migration ready NOT applied): trip-idempotency client_token. Design calls PENDING jakkaritw: grid concurrency optimistic-lock vs last-write-wins; trip default side SGA vs COST-first dropdown; editable-but-unsaveable rows (SAP GL not in 142 master shows editable->400 on save; verify Y-1 SAP GLs subset master pre-golive); trip idempotency approach approved=option1. Follow-ups: get_fabric_conn connection-OPEN still 500 not 502 (db.py); modal-load click race; 422 generic msg. Nothing deployed; staging still on subform-fix image.",
-      "human": "-"
+      "ai": "ALL 5 suites done. F5-A backend 60/60, F5-B database 39/40 (Thai-label bug), F5-C data 6/6 (91858 cells 0 mismatch), F5-D frontend 16/16 (0 console err, fy2020 clean), F5-E other 45/45. Bugs FOUND+FIXED (staged, gated APPROVE, NOT deployed per jakkaritw hold): (1) Thai per-diem label ??? -> parameterized; (2) resolve_scope-500 -> 502 across 4 read routers; (3) security headers added. Feature built (gated APPROVE, migration ready NOT applied): trip-idempotency client_token. Design calls PENDING jakkaritw: grid concurrency optimistic-lock vs last-write-wins; trip default side SGA vs COST-first dropdown; editable-but-unsaveable rows (SAP GL not in 142 master shows editable->400 on save; verify Y-1 SAP GLs subset master pre-golive); trip idempotency approach approved=option1. Follow-ups: get_fabric_conn connection-OPEN still 500 not 502 (db.py); modal-load click race; 422 generic msg. Nothing deployed; staging still on subform-fix image."
     },
     {
       "id": "fix-subform-500",
       "state": "done",
       "created": "2026-07-16T03:17:44+0700",
       "updated": "2026-07-16T03:30:17+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "FIXED+VERIFIED. subform.py DetailLineRow/TripRow updated_at str->datetime (matches TripState/DetailLineState/PendingLayer). Gate 06+08 APPROVE-W-SUGG; Decimal->float verified safe (no 2nd latent 500). 512 unit pass (+4). Deployed to staging image subform-fix; mut_suite W6 now GREEN (/budget/detail returns 2 per-diem lines sum 1000). Committed 356570e. Note: staging now on subform-fix but git tip 356570e differs from that image build source only by the commit itself (working-tree identical); rebuild from 356570e before prod. Non-blocking suggestion: pin Decimal month in a router test.",
-      "human": "-"
+      "ai": "FIXED+VERIFIED. subform.py DetailLineRow/TripRow updated_at str->datetime (matches TripState/DetailLineState/PendingLayer). Gate 06+08 APPROVE-W-SUGG; Decimal->float verified safe (no 2nd latent 500). 512 unit pass (+4). Deployed to staging image subform-fix; mut_suite W6 now GREEN (/budget/detail returns 2 per-diem lines sum 1000). Committed 356570e. Note: staging now on subform-fix but git tip 356570e differs from that image build source only by the commit itself (working-tree identical); rebuild from 356570e before prod. Non-blocking suggestion: pin Decimal month in a router test."
     },
     {
       "id": "stg-test-sweep",
       "state": "done",
       "created": "2026-07-16T02:00:16+0700",
       "updated": "2026-07-16T06:22:03+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "COMPLETE. 3 suites all app-correct: read-only 35/35 + mutation 28/28 + suite2 19/19-effective. Suite2 added: security/IDOR (approval-status view authz 403 no-leak, non-admin admin_view_enabled no-widen, header case-insensitive, IDOR trip-delete-by-other 403, IDOR detail owner-mismatch 409), financial edge (negative month 400, overflow 422, FX-with-rate asian fy2026 2*70*35.5=4970, cent-boundary total==sum, manual travel-line rollup+delete-recompute, side-mismatch 400), RLS depth (see_only manager read-yes/write-no/fill-empty, see-widening bunpotk fill0->see120, sibling-CC lock), approval edge (approve-unsubmitted 404, approve-approved 409, self-skip Nipaporn pos2). 3 suite2 fails ALL test-harness not app bugs: S4 httpx blocks whitespace header; R2 fixture scope-overlap (widening proven by R1); F5 cross-check polluted by S6 leftover line (clean repro confirms rollup=500 correct). Final reconcile budget.* ALL-ZERO. Untestable-naturally: past_deadline (deadlines all future), null-manager fallback (no such filler exists).",
-      "human": "-"
+      "ai": "COMPLETE. 3 suites all app-correct: read-only 35/35 + mutation 28/28 + suite2 19/19-effective. Suite2 added: security/IDOR (approval-status view authz 403 no-leak, non-admin admin_view_enabled no-widen, header case-insensitive, IDOR trip-delete-by-other 403, IDOR detail owner-mismatch 409), financial edge (negative month 400, overflow 422, FX-with-rate asian fy2026 2*70*35.5=4970, cent-boundary total==sum, manual travel-line rollup+delete-recompute, side-mismatch 400), RLS depth (see_only manager read-yes/write-no/fill-empty, see-widening bunpotk fill0->see120, sibling-CC lock), approval edge (approve-unsubmitted 404, approve-approved 409, self-skip Nipaporn pos2). 3 suite2 fails ALL test-harness not app bugs: S4 httpx blocks whitespace header; R2 fixture scope-overlap (widening proven by R1); F5 cross-check polluted by S6 leftover line (clean repro confirms rollup=500 correct). Final reconcile budget.* ALL-ZERO. Untestable-naturally: past_deadline (deadlines all future), null-manager fallback (no such filler exists)."
     },
     {
       "id": "stg-db-connectivity",
@@ -133,9 +244,7 @@
       "skills": [
         "40-diagnose"
       ],
-      "files": [],
-      "ai": "DONE+VERIFIED: staging /health?deep=1 -> db:ok on image dbfix-b037a5e (rev 0000003, jakkaritw approved stg update). Root cause: msodbcsql internal SP token fetch ~20.3s on Linux > 15s login timeout (NOT ip block). Fix: db.py msal token + attrs_before 1256, health.py RuntimeError degrade, msal==1.36.0. Gate APPROVE-W-SUGG (07 all-pass), 508/508 unit. Probe jobs deleted. Pending: Easy Auth still OFF on stg (runbook s7 unmet); prod deploy awaits runbook run; stg image lacks 2 hardening follow-ups (in git, next build).",
-      "human": "-"
+      "ai": "DONE+VERIFIED: staging /health?deep=1 -> db:ok on image dbfix-b037a5e (rev 0000003, jakkaritw approved stg update). Root cause: msodbcsql internal SP token fetch ~20.3s on Linux > 15s login timeout (NOT ip block). Fix: db.py msal token + attrs_before 1256, health.py RuntimeError degrade, msal==1.36.0. Gate APPROVE-W-SUGG (07 all-pass), 508/508 unit. Probe jobs deleted. Pending: Easy Auth still OFF on stg (runbook s7 unmet); prod deploy awaits runbook run; stg image lacks 2 hardening follow-ups (in git, next build)."
     },
     {
       "id": "a14-deploy",
@@ -143,21 +252,14 @@
       "created": "2026-07-15T23:13:09+0700",
       "updated": "2026-07-16T01:03:25+0700",
       "agent": "10-devops",
-      "skills": [],
-      "files": [],
-      "ai": "STAGING COMPREHENSIVE TEST DONE — app layer CLEAN, single infra blocker. PASS: /health 200, / SPA 200 no-cache, /me 401, SPA deep-link hard-reload serves index, asset immutable-cache split correct, CWE-22 traversal 3/3 safe IN DEPLOYED IMAGE, revision Healthy, all env vars wired, DEV_AUTH_EMAIL+NOTIFICATIONS_DRY_RUN NOT set, clean 500s no stack leak. BLOCKER (infra not code): DB egress HYT00 network-drop (deterministic 15s) — root cause NARROWED: Fabric tenant ConfigureWorkspaceLevelIPFirewallRules=enabled, env egress IP 40.119.206.243 not on workspace budget_management_web allow-list (AllowAccessOverPrivateLinks=false so not PrivateLink). FIX #1 (recommended): Fabric/DATA workspace admin allow-lists 40.119.206.243 (+gold ws if same) — staging+prod share env=same IP so one entry unblocks both. Easy Auth still OFF (/docs public, header-trusted) — mandatory before prod + security pass + jakkaritw approval. Committing 3 build fixes + runbook truths.",
-      "human": "(retired field — see ai)"
+      "ai": "STAGING COMPREHENSIVE TEST DONE — app layer CLEAN, single infra blocker. PASS: /health 200, / SPA 200 no-cache, /me 401, SPA deep-link hard-reload serves index, asset immutable-cache split correct, CWE-22 traversal 3/3 safe IN DEPLOYED IMAGE, revision Healthy, all env vars wired, DEV_AUTH_EMAIL+NOTIFICATIONS_DRY_RUN NOT set, clean 500s no stack leak. BLOCKER (infra not code): DB egress HYT00 network-drop (deterministic 15s) — root cause NARROWED: Fabric tenant ConfigureWorkspaceLevelIPFirewallRules=enabled, env egress IP 40.119.206.243 not on workspace budget_management_web allow-list (AllowAccessOverPrivateLinks=false so not PrivateLink). FIX #1 (recommended): Fabric/DATA workspace admin allow-lists 40.119.206.243 (+gold ws if same) — staging+prod share env=same IP so one entry unblocks both. Easy Auth still OFF (/docs public, header-trusted) — mandatory before prod + security pass + jakkaritw approval. Committing 3 build fixes + runbook truths."
     },
     {
       "id": "pc-health-check",
       "state": "done",
       "created": "2026-07-15T22:46:53+0700",
       "updated": "2026-07-15T23:05:12+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DONE. User confirmed uvicorn 8001/8002 still in use for testing - kept alive. Cleanup executed: Temp>7d 12.9GB (40561 files), pip 1.7GB, npm ~2GB, Edge 465MB, VSCode CachedData 238MB. Disk 219 to 248GB free. uv cache clean deferred (lock held by live sessions). Root cause of lag = RAM 90% from 5 concurrent CC sessions; advice: keep <=3 sessions. Memory saved: reference_machine_multi_session_ram.md",
-      "human": "ตรวจเครื่องช้า: RAM เต็ม 90% จาก Claude Code 5 session; รอเลือกวิธีเคลียร์"
+      "ai": "DONE. User confirmed uvicorn 8001/8002 still in use for testing - kept alive. Cleanup executed: Temp>7d 12.9GB (40561 files), pip 1.7GB, npm ~2GB, Edge 465MB, VSCode CachedData 238MB. Disk 219 to 248GB free. uv cache clean deferred (lock held by live sessions). Root cause of lag = RAM 90% from 5 concurrent CC sessions; advice: keep <=3 sessions. Memory saved: reference_machine_multi_session_ram.md"
     },
     {
       "id": "sign-laddawan-specs",
@@ -165,10 +267,7 @@
       "created": "2026-07-15T22:18:08+0700",
       "updated": "2026-07-15T22:33:39+0700",
       "agent": "main",
-      "skills": [],
-      "files": [],
-      "ai": "Stamped cursive 'Jakkarit W' signature into 3 signoff docx (Spec A/B/C V2.0, laddawan) - verify PASS x3, committed 2ba6c5a. Then exported all 3 to PDF via Word COM (ExportAsFixedFormat) for review email to Nipaporn+Waraporn, cut-off 20 Jul 2026. PDFs not committed (derived, regenerable via scratchpad convert_pdf.ps1).",
-      "human": "เซ็นชื่อ Jakkarit W (ตัวเขียน) ลงช่อง Signature ของเอกสาร signoff 3 ฉบับ (Spec A/B/C V2.0) โฟลเดอร์ laddawan"
+      "ai": "Stamped cursive 'Jakkarit W' signature into 3 signoff docx (Spec A/B/C V2.0, laddawan) - verify PASS x3, committed 2ba6c5a. Then exported all 3 to PDF via Word COM (ExportAsFixedFormat) for review email to Nipaporn+Waraporn, cut-off 20 Jul 2026. PDFs not committed (derived, regenerable via scratchpad convert_pdf.ps1)."
     },
     {
       "id": "a13-6-e2e-journey",
@@ -176,10 +275,7 @@
       "created": "2026-07-15T22:03:07+0700",
       "updated": "2026-07-15T23:11:41+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE: APPROVE. Depth audit: 23/23 classified DEEP (payload field-level asserts incl _updated_at echo, 409 reverts to REFETCHED value, dropdown-vs-fixture parity, per-diem == server number, negative cases, sessionStorage persistence, multipart field parsing, /budget never-called proof for no-scope); 0 shallow. Bug fix verified vs backend source (PastDeadlineError text match, disjoint from department_locked marker). Mock shapes == real Pydantic models (3 sampled). Gate re-ran: e2e 23/23 zero flakes 1.7m, vitest 255, build green, workflows untouched, artifacts gitignored. Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE: APPROVE. Depth audit: 23/23 classified DEEP (payload field-level asserts incl _updated_at echo, 409 reverts to REFETCHED value, dropdown-vs-fixture parity, per-diem == server number, negative cases, sessionStorage persistence, multipart field parsing, /budget never-called proof for no-scope); 0 shallow. Bug fix verified vs backend source (PastDeadlineError text match, disjoint from department_locked marker). Mock shapes == real Pydantic models (3 sampled). Gate re-ran: e2e 23/23 zero flakes 1.7m, vitest 255, build green, workflows untouched, artifacts gitignored. Committed."
     },
     {
       "id": "a13-5-tool-sweep",
@@ -187,10 +283,7 @@
       "created": "2026-07-15T21:38:52+0700",
       "updated": "2026-07-15T22:00:30+0700",
       "agent": "08-tester",
-      "skills": [],
-      "files": [],
-      "ai": "A13.5 SWEEP COMPLETE — overall PASS, nothing blocks A14. (1) pip-audit/Bandit: Bandit 18 hits all false-positive (documented closed-enum pattern); requirements.txt fresh-resolve clean; stale shared venv has 3 real backend-relevant CVEs (starlette via fastapi, python-multipart = attachment surface, idna) — fresh install at deploy pulls clean; recommend pinning requirements.txt. (2) Schemathesis: 274 calls / 22 endpoints / 0x 5xx; injection/XSS/IDOR/RLS/error-leak all clean; row-count invariant proven 0 writes; minor note: no-scope GET /budget still runs the full SAP fetch before filtering -> slow/timeout, could short-circuit role=none (non-blocking). (3) Locust 30 users x 3min: /me p95 36ms, /scope p95 660ms, /budget p95 2.6-3.5s (SAP cross-store read-through — dominant cost), 0 failures on core endpoints; 47 'failures' = test-harness 422s (missing query params), not system errors. Playwright journey ran shallower than briefed (page-load smoke x3 personas, 0 console errors) — acceptable because A8/A9/A10 per-feature Playwright runs (13+2+6 scenarios) already covered the flows individually; noted honestly. Deferred items logged: dep pin, no-scope short-circuit, locust harness params.",
-      "human": "(retired field — see ai)"
+      "ai": "A13.5 SWEEP COMPLETE — overall PASS, nothing blocks A14. (1) pip-audit/Bandit: Bandit 18 hits all false-positive (documented closed-enum pattern); requirements.txt fresh-resolve clean; stale shared venv has 3 real backend-relevant CVEs (starlette via fastapi, python-multipart = attachment surface, idna) — fresh install at deploy pulls clean; recommend pinning requirements.txt. (2) Schemathesis: 274 calls / 22 endpoints / 0x 5xx; injection/XSS/IDOR/RLS/error-leak all clean; row-count invariant proven 0 writes; minor note: no-scope GET /budget still runs the full SAP fetch before filtering -> slow/timeout, could short-circuit role=none (non-blocking). (3) Locust 30 users x 3min: /me p95 36ms, /scope p95 660ms, /budget p95 2.6-3.5s (SAP cross-store read-through — dominant cost), 0 failures on core endpoints; 47 'failures' = test-harness 422s (missing query params), not system errors. Playwright journey ran shallower than briefed (page-load smoke x3 personas, 0 console errors) — acceptable because A8/A9/A10 per-feature Playwright runs (13+2+6 scenarios) already covered the flows individually; noted honestly. Deferred items logged: dep pin, no-scope short-circuit, locust harness params."
     },
     {
       "id": "a13-final-verify",
@@ -198,10 +291,7 @@
       "created": "2026-07-15T20:40:48+0700",
       "updated": "2026-07-15T21:25:29+0700",
       "agent": "08-tester",
-      "skills": [],
-      "files": [],
-      "ai": "FINAL GATE: READY (after 1 mechanical fix). Whole-system verdict: 0 ungated endpoints; never-cut->test mapping complete (control-number reconcile = manual A14 gate by design); secrets/PDPA/injection/XSS clean; fail-safe defaults verified. Blocker fixed: ci-tests.yml verify step false-failed every run (collect-only prints IDs not decorators) — removed, exclusion = pytest.ini addopts + explicit -m; lifecycle test renamed (was overclaiming — real chain proven by A6/A10 tests, gate verified each green). Counts: 486 mocked + 42 live + 2 jobs, FE 254 + build, audit 0, sentinels 0 @2092-2099. Gate transparency: its own 120s timeout once killed a live run mid-txn leaving 1 dirty row @2099 — self-healed on rerun, sweep confirms clean. A13 COMPLETE. A14 = deploy checklist for jakkaritw (8 items in commit msg). Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "FINAL GATE: READY (after 1 mechanical fix). Whole-system verdict: 0 ungated endpoints; never-cut->test mapping complete (control-number reconcile = manual A14 gate by design); secrets/PDPA/injection/XSS clean; fail-safe defaults verified. Blocker fixed: ci-tests.yml verify step false-failed every run (collect-only prints IDs not decorators) — removed, exclusion = pytest.ini addopts + explicit -m; lifecycle test renamed (was overclaiming — real chain proven by A6/A10 tests, gate verified each green). Counts: 486 mocked + 42 live + 2 jobs, FE 254 + build, audit 0, sentinels 0 @2092-2099. Gate transparency: its own 120s timeout once killed a live run mid-txn leaving 1 dirty row @2099 — self-healed on rerun, sweep confirms clean. A13 COMPLETE. A14 = deploy checklist for jakkaritw (8 items in commit msg). Committed."
     },
     {
       "id": "a10-approval-ui",
@@ -209,10 +299,7 @@
       "created": "2026-07-15T18:40:36+0700",
       "updated": "2026-07-15T20:23:47+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE FINAL: APPROVE. FIX1 verified: single entry validate_upload -> sanitized name, quote(safe='') = no raw colon possible (test-locked), reserved names case-insensitive, 404 unknown dept incl admin, 413 pre-read. FIX2 verified: all 5 write/delete entry points gated before deadline check, admin zero-extra-queries (assert_not_called), 4 extended mocks sampled = not weakened, live 2093 value-unchanged proof. Gate re-ran: 483 mocked + 39 + 2 live, sentinels 0 @2093-2099, FE 254 + build, audit 0. Notes: FE lock-message matches error substring (brittle-but-acceptable, no error-code convention exists); unknown-CC fail-open judged unreachable by non-admin. A10 COMPLETE. Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE FINAL: APPROVE. FIX1 verified: single entry validate_upload -> sanitized name, quote(safe='') = no raw colon possible (test-locked), reserved names case-insensitive, 404 unknown dept incl admin, 413 pre-read. FIX2 verified: all 5 write/delete entry points gated before deadline check, admin zero-extra-queries (assert_not_called), 4 extended mocks sampled = not weakened, live 2093 value-unchanged proof. Gate re-ran: 483 mocked + 39 + 2 live, sentinels 0 @2093-2099, FE 254 + build, audit 0. Notes: FE lock-message matches error substring (brittle-but-acceptable, no error-code convention exists); unknown-CC fail-open judged unreachable by non-admin. A10 COMPLETE. Committed."
     },
     {
       "id": "a9-subforms-trip",
@@ -220,10 +307,7 @@
       "created": "2026-07-15T16:45:08+0700",
       "updated": "2026-07-15T18:40:03+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE: APPROVE, zero findings. See-scope read judged correct (matches GET /budget); DELETE IDOR-proof confirmed (id+token only, owner from DB); commit-order asserted via mock_calls index; fixture parity = real shared file both sides (git check-ignore clean); no client per-diem math (grep-verified); notify_approved correct branch gating. Gate re-ran: 402 mocked + 34 live + 2 jobs live, sentinels 0 @2095-2099, FE 184 + build, audit 0. Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE: APPROVE, zero findings. See-scope read judged correct (matches GET /budget); DELETE IDOR-proof confirmed (id+token only, owner from DB); commit-order asserted via mock_calls index; fixture parity = real shared file both sides (git check-ignore clean); no client per-diem math (grep-verified); notify_approved correct branch gating. Gate re-ran: 402 mocked + 34 live + 2 jobs live, sentinels 0 @2095-2099, FE 184 + build, audit 0. Committed."
     },
     {
       "id": "a11-a12-automations",
@@ -231,10 +315,7 @@
       "created": "2026-07-15T16:18:38+0700",
       "updated": "2026-07-15T17:54:44+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE: APPROVE WITH SUGGESTIONS. Triple dry-run gate verified independently (job --execute + DRY_RUN env + notifications_dry_run); workflow dispatch-only; recipients correct (no name-guessing, frozen submitter_email); refactor byte-identical + A6 live 31/31 regression clean; REJECTED-exclusion judged CORRECT per ADR-0012 (not a policy Q). Tests: 136/136 scope, 2/2 live jobs, sentinels clean. Both suggestions applied (in-function deadline guard + prod placeholder warning, 89/89). POLICY ANSWERS (jakkaritw 2026-07-16): final-APPROVED email = BUILD (dispatching); admin stuck-view = Phase 2; negative months = NO (positive only). Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE: APPROVE WITH SUGGESTIONS. Triple dry-run gate verified independently (job --execute + DRY_RUN env + notifications_dry_run); workflow dispatch-only; recipients correct (no name-guessing, frozen submitter_email); refactor byte-identical + A6 live 31/31 regression clean; REJECTED-exclusion judged CORRECT per ADR-0012 (not a policy Q). Tests: 136/136 scope, 2/2 live jobs, sentinels clean. Both suggestions applied (in-function deadline guard + prod placeholder warning, 89/89). POLICY ANSWERS (jakkaritw 2026-07-16): final-APPROVED email = BUILD (dispatching); admin stuck-view = Phase 2; negative months = NO (positive only). Committed."
     },
     {
       "id": "a8-main-grid",
@@ -242,10 +323,7 @@
       "created": "2026-07-15T15:12:06+0700",
       "updated": "2026-07-15T16:44:45+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Security clear: /scope/departments scoped server-side (unit+live attack tests), no filler-email leak, updated_at = timestamp only; COST/SGA lock structurally tested; year semantics correct; 409 revert covered; is_special single-source (classify_special_gl both sides); admin auto-see-all = correct ADR-0014 reading (pure admin, backend re-checks). Gate re-ran: FE 109 + build, BE 293 mocked + 31 live, sentinels clean. Suggestions: scope-error banner (APPLIED — 110/110), commit-hygiene note (2 A8 live tests rode in 9bdbc16), test_notifications collect error = A11/12 in-flight, negative-months = open policy Q for jakkaritw. Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Security clear: /scope/departments scoped server-side (unit+live attack tests), no filler-email leak, updated_at = timestamp only; COST/SGA lock structurally tested; year semantics correct; 409 revert covered; is_special single-source (classify_special_gl both sides); admin auto-see-all = correct ADR-0014 reading (pure admin, backend re-checks). Gate re-ran: FE 109 + build, BE 293 mocked + 31 live, sentinels clean. Suggestions: scope-error banner (APPLIED — 110/110), commit-hygiene note (2 A8 live tests rode in 9bdbc16), test_notifications collect error = A11/12 in-flight, negative-months = open policy Q for jakkaritw. Committed."
     },
     {
       "id": "a5-deadline-lock",
@@ -253,10 +331,7 @@
       "created": "2026-07-15T15:12:06+0700",
       "updated": "2026-07-15T15:57:01+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Extraction verified behavior-preserving; all 3 write entry points gated before first write; admin exemption server-side; batch per-item independence tested; fail-loud on lookup error; monkeypatch target fix verified correct (module-namespace lookup). Gate re-ran: isolated 124, full mocked 291, live 31, sentinels 0 @2097+2099. Suggestions: docstring (applied via cavecrew), pre-existing fetchone side_effect extras (logged, not new). Committed.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Extraction verified behavior-preserving; all 3 write entry points gated before first write; admin exemption server-side; batch per-item independence tested; fail-loud on lookup error; monkeypatch target fix verified correct (module-namespace lookup). Gate re-ran: isolated 124, full mocked 291, live 31, sentinels 0 @2097+2099. Suggestions: docstring (applied via cavecrew), pre-existing fetchone side_effect extras (logged, not new). Committed."
     },
     {
       "id": "a7-frontend-scaffold",
@@ -264,10 +339,7 @@
       "created": "2026-07-15T14:30:19+0700",
       "updated": "2026-07-15T15:07:14+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE FINAL: APPROVE. strict:true both tsconfigs verified (build still 0 type errors); 4 boundary tests + dynamic-year test verified; gate re-ran npm test 28/28 + build green itself; git tracking clean (no node_modules/dist, nothing outside frontend/+plan.md). A7 COMPLETE: React+Vite+TS scaffold, Easy Auth /me+/scope hooks, deep-link ?dept&year parser (server-side authz unchanged), mockup-0002.3 design tokens, shell. Committing.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE FINAL: APPROVE. strict:true both tsconfigs verified (build still 0 type errors); 4 boundary tests + dynamic-year test verified; gate re-ran npm test 28/28 + build green itself; git tracking clean (no node_modules/dist, nothing outside frontend/+plan.md). A7 COMPLETE: React+Vite+TS scaffold, Easy Auth /me+/scope hooks, deep-link ?dept&year parser (server-side authz unchanged), mockup-0002.3 design tokens, shell. Committing."
     },
     {
       "id": "a6-approval-engine",
@@ -275,87 +347,56 @@
       "created": "2026-07-15T13:40:11+0700",
       "updated": "2026-07-15T14:20:08+0700",
       "agent": "05-software-developer",
-      "skills": [],
-      "files": [],
-      "ai": "GATE FINAL: APPROVE (combined 06+07+08, re-verified for real). B1 RLS fix confirmed live (real out-of-scope 403, no dept enumeration); B2 fail-closed guard confirmed, post-deadline override preserved, policy confirmed by jakkaritw + ADR-0012 amended; S1-S4 verified at exact lines. Gate re-ran suites itself: 265 mocked + 27 live pass, sentinels clean. A6 approval engine COMPLETE. Committing now.",
-      "human": "(retired field — see ai)"
+      "ai": "GATE FINAL: APPROVE (combined 06+07+08, re-verified for real). B1 RLS fix confirmed live (real out-of-scope 403, no dept enumeration); B2 fail-closed guard confirmed, post-deadline override preserved, policy confirmed by jakkaritw + ADR-0012 amended; S1-S4 verified at exact lines. Gate re-ran suites itself: 265 mocked + 27 live pass, sentinels clean. A6 approval engine COMPLETE. Committing now."
     },
     {
       "id": "a4-a5-exhaustive-verify",
       "state": "done",
       "created": "2026-07-15T10:55:29+0700",
       "updated": "2026-07-15T12:06:44+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "A4+A5 exhaustive live verify DONE + all 11 defects FIXED (194 mocked + 15 live green). D1 per_diem col position->job_level (SHOWSTOPPER, trip feature was 100% dead live). D2 SAP assignment NULL-safe (policy jakkaritw: keep NULL, cut only TFRS16) - ADR-0020 + DATA_PIPELINE#7 corrected; the old live parity check passed only because it compared the query to an identical hand-query dropping NULLs the same way (self-consistency != correctness). D3/D4 IDOR+parent desync -> resolve detail row's ACTUAL cc. D5 parent recompute now atomic single-statement SUM (was losing money 5/5 live races under RCSI). D6 quantize months at boundary -> total_year==SUM(months). D7 travel_months 1..12 + dedupe. D8 side-flip handles ALL trip lines. D9 max_length/range + per-item rollback. D10 fetch_cc_dims for SAP-led rows. D11 ORDER BY filler_email. D13 no table-name leak. D12 policy: rate 0.00 = VALID (fail only when job_level has no row). LOGIC AUDIT (jakkaritw asked 'make sense?'): cost_center NOT IN is NULL-unsafe TOO but its NULLs MUST stay dropped - FY2025 2249381 rows/-1138962985.31 THB have no cc and cannot appear in a cc-keyed grid; making it NULL-safe would pull ~1.1 BILLION THB in and corrupt every cell. doc_type<>CO NULL-unsafe but 0 NULL rows live. Both recorded in ADR-0020. REMAINING: add explicit 'AND cost_center IS NOT NULL' (behavior-identical, prevents a future catastrophic fix) - needs dev agent, session limit resets 15:50.",
-      "human": "ตรวจ A4+A5 ทุกมุมกับ DB จริง (6 lens) เจอ defect จริง ~13 ตัว รวม showstopper + NEVER-CUT financial ที่ mock+gate 6 รอบมองไม่เห็น; ยังไม่ผ่าน ต้องแก้ก่อนไป A6"
+      "ai": "A4+A5 exhaustive live verify DONE + all 11 defects FIXED (194 mocked + 15 live green). D1 per_diem col position->job_level (SHOWSTOPPER, trip feature was 100% dead live). D2 SAP assignment NULL-safe (policy jakkaritw: keep NULL, cut only TFRS16) - ADR-0020 + DATA_PIPELINE#7 corrected; the old live parity check passed only because it compared the query to an identical hand-query dropping NULLs the same way (self-consistency != correctness). D3/D4 IDOR+parent desync -> resolve detail row's ACTUAL cc. D5 parent recompute now atomic single-statement SUM (was losing money 5/5 live races under RCSI). D6 quantize months at boundary -> total_year==SUM(months). D7 travel_months 1..12 + dedupe. D8 side-flip handles ALL trip lines. D9 max_length/range + per-item rollback. D10 fetch_cc_dims for SAP-led rows. D11 ORDER BY filler_email. D13 no table-name leak. D12 policy: rate 0.00 = VALID (fail only when job_level has no row). LOGIC AUDIT (jakkaritw asked 'make sense?'): cost_center NOT IN is NULL-unsafe TOO but its NULLs MUST stay dropped - FY2025 2249381 rows/-1138962985.31 THB have no cc and cannot appear in a cc-keyed grid; making it NULL-safe would pull ~1.1 BILLION THB in and corrupt every cell. doc_type<>CO NULL-unsafe but 0 NULL rows live. Both recorded in ADR-0020. REMAINING: add explicit 'AND cost_center IS NOT NULL' (behavior-identical, prevents a future catastrophic fix) - needs dev agent, session limit resets 15:50."
     },
     {
       "id": "live-db-verification",
       "state": "done",
       "created": "2026-07-15T10:12:25+0700",
       "updated": "2026-07-15T10:12:25+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "FIRST LIVE-DB verification (env re-point DONE via backend/.env, gitignored). CONNECTION SOLVED: SERVER=<cluster>-<base32le(workspace GUID)>.database.fabric.microsoft.com ; DATABASE=<displayName>-<full item GUID> (GUID suffix REQUIRED; bare name -> error 40532). cluster v5o4qez3u4cupase7cogkwvyke shared across cman-dw workspaces. PROVEN ON REAL DB: Entertainment 1000 -> API 1000 -> fresh-connection re-read pending_budget.m01=1000 total_year=1000; 2nd line 500 -> 1500. Real data cc=10AC010000 filler=salineep@chememan.com GL=5211900030. 2 SHOWSTOPPERS mocks hid: (1) dbo.gl_group real col = gl_group NOT group_name; (2) budget.pending_budget has NO status column (correct per DDL/ADR-0013, status lives on approval_status) but A4 read + A5 write both referenced it -> every first save would fail 'Invalid column name status'. Both fixed+verified live. GL-NAME GAP RESOLVED: dbo.gl_group carries gl_code->gl_name (cols: gl_code, gl_group, gl_name) - no gl_account_ref seed, no extra SharePoint file; DATA_PIPELINE_PLAN item4 closed. 3 integration tests (sentinel fy=2099, cleanup 0 rows verified) + 165 mocked green. FOLLOW-UP: A4 read path still has NO live test (SapLayer lacks gl_name/gl_group; structural). NOT deployed.",
-      "human": "ต่อ DB จริงสำเร็จ + พิสูจน์ Entertainment 1,000 -> ยอดรวม 1,000 จริง; เจอบั๊ก showstopper อีก 2 ตัวที่ mock ซ่อนไว้ แก้แล้ว; gl_name GAP ปิด"
+      "ai": "FIRST LIVE-DB verification (env re-point DONE via backend/.env, gitignored). CONNECTION SOLVED: SERVER=<cluster>-<base32le(workspace GUID)>.database.fabric.microsoft.com ; DATABASE=<displayName>-<full item GUID> (GUID suffix REQUIRED; bare name -> error 40532). cluster v5o4qez3u4cupase7cogkwvyke shared across cman-dw workspaces. PROVEN ON REAL DB: Entertainment 1000 -> API 1000 -> fresh-connection re-read pending_budget.m01=1000 total_year=1000; 2nd line 500 -> 1500. Real data cc=10AC010000 filler=salineep@chememan.com GL=5211900030. 2 SHOWSTOPPERS mocks hid: (1) dbo.gl_group real col = gl_group NOT group_name; (2) budget.pending_budget has NO status column (correct per DDL/ADR-0013, status lives on approval_status) but A4 read + A5 write both referenced it -> every first save would fail 'Invalid column name status'. Both fixed+verified live. GL-NAME GAP RESOLVED: dbo.gl_group carries gl_code->gl_name (cols: gl_code, gl_group, gl_name) - no gl_account_ref seed, no extra SharePoint file; DATA_PIPELINE_PLAN item4 closed. 3 integration tests (sentinel fy=2099, cleanup 0 rows verified) + 165 mocked green. FOLLOW-UP: A4 read path still has NO live test (SapLayer lacks gl_name/gl_group; structural). NOT deployed."
     },
     {
       "id": "a5-write-path",
       "state": "done",
       "created": "2026-07-15T08:46:37+0700",
       "updated": "2026-07-15T08:46:37+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "A5 budget write (05-dev, TDD): per_diem.py derive_per_diem days*rate(job_level_name_en,country_group)*FX, Decimal, LAST month absorbs remainder (sum==exact total; mockup round-every-month=BUG), missing FX/rate/'N/A' -> raise never 35.00 fallback. write_model.py save_pending_rows/save_detail_lines/save_trip: row-grain optimistic lock (atomic UPDATE WHERE _updated_at + rowcount -> 409 no clobber no TOCTOU), total_year in sync, parent==SUM(detail), dim re-derive, Pending BLANK, approval_status untouched (ADR-0013), ONE side/trip + side-flip cleans old-GL line + recomputes old parent, excluded-CC + fill-scope + CC-existence on ALL write paths (admin bypasses fill-scope only ADR-0012). special_gl.py GL-conditional meta (Entertainment, Lease&Rental; other 3 free-form per spec 4a). routers/budget_write.py PUT /budget/rows /budget/detail, POST|PUT /budget/trip. 165/165. GATE 3 ROUNDS: R1 REQUEST-CHANGES 4 MUST-FIX (parent-cell recompute NEVER committed->silent data loss 5 special-GL groups w/ 200 OK; PK-collision race 502 not 409; travel line w/o trip_id bypassed side-check; trip side-flip ghost amount). R2 verified + found 5th (detail path missing excluded-CC check -> would break SAP control-number reconcile). R3 delta APPROVE no regression. LESSON: mock-only unit tests missed the commit-ordering bug; ordering asserted via conn.mock_calls now. PENDING: env re-point->fabric_sql_database for live integration test. A6 approval next.",
-      "human": "A5 write path (pending+detail+trip+per-diem) เสร็จ; gate 3 รอบ เจอบั๊กจริง 5 ตัว แก้ครบ; 165 tests ผ่าน; รอ env re-point เพื่อ live verify"
+      "ai": "A5 budget write (05-dev, TDD): per_diem.py derive_per_diem days*rate(job_level_name_en,country_group)*FX, Decimal, LAST month absorbs remainder (sum==exact total; mockup round-every-month=BUG), missing FX/rate/'N/A' -> raise never 35.00 fallback. write_model.py save_pending_rows/save_detail_lines/save_trip: row-grain optimistic lock (atomic UPDATE WHERE _updated_at + rowcount -> 409 no clobber no TOCTOU), total_year in sync, parent==SUM(detail), dim re-derive, Pending BLANK, approval_status untouched (ADR-0013), ONE side/trip + side-flip cleans old-GL line + recomputes old parent, excluded-CC + fill-scope + CC-existence on ALL write paths (admin bypasses fill-scope only ADR-0012). special_gl.py GL-conditional meta (Entertainment, Lease&Rental; other 3 free-form per spec 4a). routers/budget_write.py PUT /budget/rows /budget/detail, POST|PUT /budget/trip. 165/165. GATE 3 ROUNDS: R1 REQUEST-CHANGES 4 MUST-FIX (parent-cell recompute NEVER committed->silent data loss 5 special-GL groups w/ 200 OK; PK-collision race 502 not 409; travel line w/o trip_id bypassed side-check; trip side-flip ghost amount). R2 verified + found 5th (detail path missing excluded-CC check -> would break SAP control-number reconcile). R3 delta APPROVE no regression. LESSON: mock-only unit tests missed the commit-ordering bug; ordering asserted via conn.mock_calls now. PENDING: env re-point->fabric_sql_database for live integration test. A6 approval next."
     },
     {
       "id": "a4-read-path",
       "state": "done",
       "created": "2026-07-15T07:28:50+0700",
       "updated": "2026-07-15T07:28:50+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "A4 main-table read path (05-dev, TDD): app/sap.py fetch_sap_actuals VERBATIM ADR-0020 query on gold.fact_gl_trans (company_code=1000, doc_type<>CO, excl CCs w/o 10SC012000, assignment<>TFRS16, NO sign flip, NO doc_status) + fail-loud SapActualsFetchError->502 never silent-empty. app/read_model.py dbo.board_budget FULL OUTER JOIN budget.pending_budget (local cross-schema ADR-0023) key (cc,gl); FULL OUTER not LEFT per ADR-0010 (board-only + manual pending-only rows must persist) - gate RULED CORRECT. SAP merged in FastAPI, period_month->m01..m12 pivot. Years spec 1c: SAP=Y, Approved=Y, Pending=Y+1; router year=planning, board_year=year-1. RLS: SQL-side parameterized cost_center IN (See scope) + Python backstop; empty See->0 rows; admin-wide only if is_admin AND admin_view_enabled. GET /budget. 502 detail generic (raw logged server-side). 85/85 tests. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (SAP char-by-char verified, fail-loud, RLS/admin verified). PENDING: env re-point->fabric_sql_database for live integration test. A5 write next.",
-      "human": "A4 read path (SAP+Approved+Pending 3 ชั้น) เสร็จ; gate APPROVE; 85 tests ผ่าน; รอ env re-point เพื่อ live verify"
+      "ai": "A4 main-table read path (05-dev, TDD): app/sap.py fetch_sap_actuals VERBATIM ADR-0020 query on gold.fact_gl_trans (company_code=1000, doc_type<>CO, excl CCs w/o 10SC012000, assignment<>TFRS16, NO sign flip, NO doc_status) + fail-loud SapActualsFetchError->502 never silent-empty. app/read_model.py dbo.board_budget FULL OUTER JOIN budget.pending_budget (local cross-schema ADR-0023) key (cc,gl); FULL OUTER not LEFT per ADR-0010 (board-only + manual pending-only rows must persist) - gate RULED CORRECT. SAP merged in FastAPI, period_month->m01..m12 pivot. Years spec 1c: SAP=Y, Approved=Y, Pending=Y+1; router year=planning, board_year=year-1. RLS: SQL-side parameterized cost_center IN (See scope) + Python backstop; empty See->0 rows; admin-wide only if is_admin AND admin_view_enabled. GET /budget. 502 detail generic (raw logged server-side). 85/85 tests. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (SAP char-by-char verified, fail-loud, RLS/admin verified). PENDING: env re-point->fabric_sql_database for live integration test. A5 write next."
     },
     {
       "id": "a3-rls-scope-resolution",
       "state": "done",
       "created": "2026-07-15T01:38:22+0700",
       "updated": "2026-07-15T01:38:22+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "A3 RLS scope resolution (05-dev, TDD) on A2: app/rls.py resolve_scope(email,conn)->Scope{is_admin,role,fill_cost_centers,see_cost_centers}. Fill=dbo.cc_filler_map WHERE filler_email=@me (case-insens); See=Fill UNION CCs of Fillers whose Primary manager_email=@me (JOIN cc_filler_map x dbo.v_employee_budget_01, param SQL). role=admin/filler/see_only/none. GET /scope. ADMIN_EMAILS exact-match set. Edge: Filler-not-in-view still Fills no-crash. admin_view_enabled=A4 no-op hook (regression test: cannot self-elevate non-admin). Hardening: blank-email guard, cursor.close finally. 43/43 tests (mocked DB). Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (parameterized, no scope leak, no self-elevate). PENDING: env re-point->fabric_sql_database for live integration test. A4 read path next.",
-      "human": "A3 RLS scope (Fill/See+role) เสร็จ; gate APPROVE; 43 tests ผ่าน; รอ env re-point เพื่อ live verify"
+      "ai": "A3 RLS scope resolution (05-dev, TDD) on A2: app/rls.py resolve_scope(email,conn)->Scope{is_admin,role,fill_cost_centers,see_cost_centers}. Fill=dbo.cc_filler_map WHERE filler_email=@me (case-insens); See=Fill UNION CCs of Fillers whose Primary manager_email=@me (JOIN cc_filler_map x dbo.v_employee_budget_01, param SQL). role=admin/filler/see_only/none. GET /scope. ADMIN_EMAILS exact-match set. Edge: Filler-not-in-view still Fills no-crash. admin_view_enabled=A4 no-op hook (regression test: cannot self-elevate non-admin). Hardening: blank-email guard, cursor.close finally. 43/43 tests (mocked DB). Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (parameterized, no scope leak, no self-elevate). PENDING: env re-point->fabric_sql_database for live integration test. A4 read path next."
     },
     {
       "id": "a2-backend-foundation",
       "state": "done",
       "created": "2026-07-15T01:04:50+0700",
       "updated": "2026-07-15T01:04:50+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "A2 increment-1 backend foundation (05-dev, TDD): FastAPI backend/ — config(fail-closed APP_ENV=production, env_file anchored abs), Easy Auth email extraction (x-ms-client-principal-name + DEV override local-only), 2 conn factories (fabric_sql_database + gold warehouse; SP cman-fabric-write; ODBC17; lazy/context-managed), GET /health(+deep) /me, 25 pyodbc-mocked unit tests PASS. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS, no blockers. REQUIRED before deploy: Container Apps Easy Auth=require-auth (header spoof guard). Non-block suggestions: conn pool(A4/A5), GOLD_SQL_* doc-sync, structured logging. NO RLS/read/write yet (A3+). env re-point still pending. NOT committed->now committing. NOT deployed.",
-      "human": "A2 backend scaffold+auth เสร็จ; gate 06+07+08 APPROVE; 25 tests ผ่าน; ยังไม่ deploy"
+      "ai": "A2 increment-1 backend foundation (05-dev, TDD): FastAPI backend/ — config(fail-closed APP_ENV=production, env_file anchored abs), Easy Auth email extraction (x-ms-client-principal-name + DEV override local-only), 2 conn factories (fabric_sql_database + gold warehouse; SP cman-fabric-write; ODBC17; lazy/context-managed), GET /health(+deep) /me, 25 pyodbc-mocked unit tests PASS. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS, no blockers. REQUIRED before deploy: Container Apps Easy Auth=require-auth (header spoof guard). Non-block suggestions: conn pool(A4/A5), GOLD_SQL_* doc-sync, structured logging. NO RLS/read/write yet (A3+). env re-point still pending. NOT committed->now committing. NOT deployed."
     },
     {
       "id": "db-consolidation-single-fabric-sql",
       "state": "done",
       "created": "2026-07-14T23:44:43+0700",
       "updated": "2026-07-15T00:36:51+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DDL EXECUTED 2026-07-15 on fabric_sql_database (Fabric SQL editor, clean run no-error) — 5 budget.* tables LIVE: pending_budget, pending_budget_detail, budget_trip, approval_status, approval_log + 9 indexes. dbo holds synced masters. Employee source=dbo.v_employee_budget_01 (verified A=0,C=0). NEXT: env re-point (at A2) + A2 backend scaffold.",
-      "human": "รวมเหลือ DB เดียว fabric_sql_database: budget schema=5 ตาราง transactional, dbo=masters; DB1 เลิกใช้; รอ jakkaritw รัน DDL"
+      "ai": "DDL EXECUTED 2026-07-15 on fabric_sql_database (Fabric SQL editor, clean run no-error) — 5 budget.* tables LIVE: pending_budget, pending_budget_detail, budget_trip, approval_status, approval_log + 9 indexes. dbo holds synced masters. Employee source=dbo.v_employee_budget_01 (verified A=0,C=0). NEXT: env re-point (at A2) + A2 backend scaffold."
     },
     {
       "id": "gridgeist-0002-3",
@@ -371,8 +412,7 @@
           "path": "design/mockups/0002claude design/0002.3budget-export.html"
         }
       ],
-      "ai": "DONE + COMMITTED 0e562c3 (main). Gridgeist redesign 0002.2->0002.3budget-export.html, CSS-only restyle, behavior preserved. Removed AI-slop (glassSweep/twinkle/rainbow/addGlow=0), unified button set (rust=Submit/Save only), --r:6px token, grid-forward ledger table (hairline rules/mono tabular-nums/status swatch), Newsreader headers, prefers-reduced-motion. Light+dark themes kept; light approved by jakkaritw. SET AS PROJECT DEFAULT main-app mockup (CLAUDE.md pointer 0002.2->0002.3; 0002.2 retained as prior). Ref PNGs 0002_3_light/dark.png committed in design/mockups/.",
-      "human": "Gridgeist redesign of the budget mockup - new 0002.3 variant, de-slopped, awaiting your visual review"
+      "ai": "DONE + COMMITTED 0e562c3 (main). Gridgeist redesign 0002.2->0002.3budget-export.html, CSS-only restyle, behavior preserved. Removed AI-slop (glassSweep/twinkle/rainbow/addGlow=0), unified button set (rust=Submit/Save only), --r:6px token, grid-forward ledger table (hairline rules/mono tabular-nums/status swatch), Newsreader headers, prefers-reduced-motion. Light+dark themes kept; light approved by jakkaritw. SET AS PROJECT DEFAULT main-app mockup (CLAUDE.md pointer 0002.2->0002.3; 0002.2 retained as prior). Ref PNGs 0002_3_light/dark.png committed in design/mockups/."
     },
     {
       "id": "perdiem-master-inspect",
@@ -388,8 +428,7 @@
           "path": "design/mockups/0002claude design/0002.2budget-export.html"
         }
       ],
-      "ai": "Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don't assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates.",
-      "human": "Per-diem rate master inspected; rates match mockup, but country-group mapping missing from source (mockup-only)."
+      "ai": "Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don't assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates."
     },
     {
       "id": "spec-a-v2",
@@ -397,43 +436,28 @@
       "created": "2026-07-13T15:15:12+0700",
       "updated": "2026-07-13T16:32:01+0700",
       "agent": "01-sa-doc-writer",
-      "skills": [],
-      "files": [],
-      "ai": "Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K'laddawan pending user approval.",
-      "human": "แก้เอกสาร Spec A เป็น V2.0 โฟกัส 3 ส่วนหลักของหน้าจอ"
+      "ai": "Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K'laddawan pending user approval."
     },
     {
       "id": "mockup-0002.2-admin-reconcile",
       "state": "done",
       "created": "2026-07-13T14:00:12+0700",
       "updated": "2026-07-13T14:23:35+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DONE + user-confirmed screenshot 2026-07-12. 05-software-developer applied 3 edits to 0002.2: (1) restored admin-mode toggle in page-head (ADR-0014 regression fix; toggle shows for dual-role admins only, jakkaritw pure-admin always-on by design), (2) removed Import Approved button+importCSV()+file input, added read-only SharePoint note, (3) deleted Export Approved button+exportApprovedCSV() 21-col. Bonus: 'CSV'->'Excel' wording fix. Verify headless Playwright 5/5 PASS (toggle wired+flips adminMode+overlay CC count increases; import/export gone; 0 console errors). Diff +5/-69, mockup only. ADR-0021 updated (export=deleted, library 'Budgeting and Management' confirmed). Follow-up open: regenerate signoff doc 01 (still shows old buttons); doc-sweep gold_sap_gl_trans in project-context/data-platform-map/data-sources.",
-      "human": "-"
+      "ai": "DONE + user-confirmed screenshot 2026-07-12. 05-software-developer applied 3 edits to 0002.2: (1) restored admin-mode toggle in page-head (ADR-0014 regression fix; toggle shows for dual-role admins only, jakkaritw pure-admin always-on by design), (2) removed Import Approved button+importCSV()+file input, added read-only SharePoint note, (3) deleted Export Approved button+exportApprovedCSV() 21-col. Bonus: 'CSV'->'Excel' wording fix. Verify headless Playwright 5/5 PASS (toggle wired+flips adminMode+overlay CC count increases; import/export gone; 0 console errors). Diff +5/-69, mockup only. ADR-0021 updated (export=deleted, library 'Budgeting and Management' confirmed). Follow-up open: regenerate signoff doc 01 (still shows old buttons); doc-sweep gold_sap_gl_trans in project-context/data-platform-map/data-sources."
     },
     {
       "id": "approver-primary-manager-rule",
       "state": "done",
       "created": "2026-07-12T01:38:48+0700",
       "updated": "2026-07-12T01:38:48+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "RESOLVED ADR-0019 open item via real-data grilling: See-manager + approver1 = managerempcode from Filler's PRIMARY row only (Acting ignored). Tested+rejected 2 alt rules: org_code equality (90.4% zero-match, structural parent-child), CC-orgcode tie-break via cc orgcode.xlsx (many-to-many, 47% unresolved, redundant where it works). Key insight: 3/4 'multi-manager' Fillers had self-manager Acting rows; real case taweesaks -> Bunpot (user confirmed). Fallbacks: warapornkh not in master -> ADR-0006 Nipaporn fallback + sync WARN; lookup source must be unfiltered (thanakorny only in stg 649 not mas 344). ADR-0019 + spec updated. NOT committed yet.",
-      "human": "-"
+      "ai": "RESOLVED ADR-0019 open item via real-data grilling: See-manager + approver1 = managerempcode from Filler's PRIMARY row only (Acting ignored). Tested+rejected 2 alt rules: org_code equality (90.4% zero-match, structural parent-child), CC-orgcode tie-break via cc orgcode.xlsx (many-to-many, 47% unresolved, redundant where it works). Key insight: 3/4 'multi-manager' Fillers had self-manager Acting rows; real case taweesaks -> Bunpot (user confirmed). Fallbacks: warapornkh not in master -> ADR-0006 Nipaporn fallback + sync WARN; lookup source must be unfiltered (thanakorny only in stg 649 not mas 344). ADR-0019 + spec updated. NOT committed yet."
     },
     {
       "id": "reconcile-budget-schema-spec",
       "state": "done",
       "created": "2026-07-12T00:07:59+0700",
       "updated": "2026-07-12T00:20:50+0700",
-      "agent": "",
-      "skills": [],
-      "files": [],
-      "ai": "DONE: spec docs/specs/budget-transactional-data-model.md reconciled to ADR-0008 (approval unit dept,year), ADR-0019 (CC-Filler RLS), new ADR-0020 (SAP read-through fact_gl_trans DW ws 302668d3), new ADR-0021 (board_budget yearly Excel drop, 14-col A-N, year-from-filename strict). CONTEXT.md 4 spots fixed. ADR-0003/0010 got amended-by backlinks. GATE (06 combined, docs-only): initial REQUEST CHANGES — 1 blocker (spec line ~291 stale 'Lakehouse gold_sap_gl_trans' in section-3 intro) + 3 suggestions (1a lifecycle wording, remark DBML comment, ADR backlinks); ALL 4 fixed same session -> effectively APPROVE. Follow-up candidates (out of scope, not done): .claude/project-context.md, docs/reference/data-platform-map.md + data-sources.md still say gold_sap_gl_trans; mockup 0002.2 + signoff doc 01 still show import/export buttons; fact_gl_trans exact col names verify-at-build; sync trigger (Sync-now btn vs daily poll) open.",
-      "human": "-"
+      "ai": "DONE: spec docs/specs/budget-transactional-data-model.md reconciled to ADR-0008 (approval unit dept,year), ADR-0019 (CC-Filler RLS), new ADR-0020 (SAP read-through fact_gl_trans DW ws 302668d3), new ADR-0021 (board_budget yearly Excel drop, 14-col A-N, year-from-filename strict). CONTEXT.md 4 spots fixed. ADR-0003/0010 got amended-by backlinks. GATE (06 combined, docs-only): initial REQUEST CHANGES — 1 blocker (spec line ~291 stale 'Lakehouse gold_sap_gl_trans' in section-3 intro) + 3 suggestions (1a lifecycle wording, remark DBML comment, ADR backlinks); ALL 4 fixed same session -> effectively APPROVE. Follow-up candidates (out of scope, not done): .claude/project-context.md, docs/reference/data-platform-map.md + data-sources.md still say gold_sap_gl_trans; mockup 0002.2 + signoff doc 01 still show import/export buttons; fact_gl_trans exact col names verify-at-build; sync trigger (Sync-now btn vs daily poll) open."
     },
     {
       "id": "specC-signoff-v2-excel",
@@ -449,21 +473,17 @@
           "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/laddawan/Spec C การจัดการตารางข้อมูลหลัก_V2.0.docx"
         }
       ],
-      "ai": "Rewrote laddawan Spec C sign-off docx to Excel-on-SharePoint reality (V2.0). New generator _build/build_spec_c_master_tables.py builds fresh no-install OOXML docx; dropped all 31 screenshots + UI-walkthrough/cfg_master/Entra/DEMO content; 6 sections (C-1..C-6) each = Context+admins(SharePoint perms)+Excel file(link+column table)+rules+Data sync(cman-dw-ws/modern_lh_cman_dw). C-3 reframed to org-reference only (RLS moved to C-6 per ADR-0019). C-6 new Filler map. Preserved ADR-0012 lock, ADR-0015 FX impact table, C-4 downstream filters. Signature block preserved, prep date 11/07/2026, reviewer/approver blank. Verified: XML well-formed, python-docx opens (135 paras/8 tables), 50 required tokens present, 0 forbidden. V1.0 untouched. Not committed.",
-      "human": "เขียน Spec C sign-off ใหม่ให้เป็นแบบแก้ผ่าน Excel บน SharePoint (V2.0)"
+      "ai": "Rewrote laddawan Spec C sign-off docx to Excel-on-SharePoint reality (V2.0). New generator _build/build_spec_c_master_tables.py builds fresh no-install OOXML docx; dropped all 31 screenshots + UI-walkthrough/cfg_master/Entra/DEMO content; 6 sections (C-1..C-6) each = Context+admins(SharePoint perms)+Excel file(link+column table)+rules+Data sync(cman-dw-ws/modern_lh_cman_dw). C-3 reframed to org-reference only (RLS moved to C-6 per ADR-0019). C-6 new Filler map. Preserved ADR-0012 lock, ADR-0015 FX impact table, C-4 downstream filters. Signature block preserved, prep date 11/07/2026, reviewer/approver blank. Verified: XML well-formed, python-docx opens (135 paras/8 tables), 50 required tokens present, 0 forbidden. V1.0 untouched. Not committed."
     },
     {
       "id": "mastertables-excel-migration",
       "state": "done",
       "created": "2026-07-11T18:37:25+0700",
       "updated": "2026-07-11T18:44:30+0700",
-      "agent": "",
       "skills": [
         "20-grill-with-docs"
       ],
-      "files": [],
-      "ai": "Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center<->Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item).",
-      "human": "see ai field"
+      "ai": "Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center<->Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item)."
     },
     {
       "id": "employee-budget-view",
@@ -480,8 +500,7 @@
           "label": "filter logic source"
         }
       ],
-      "ai": "FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data's compact names (empcode/orgcode/joblevelnameen). Applied the project's 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status='Active', employee_code NOT LIKE '4%' (Gritsman), org_code NOT LIKE '117%' (Vietnam/Office of Affiliate), job_level_name_en NOT IN ('Operator 1','Operator 2','Operator 3','Driver','Maid') (L5). Added record_status='active' as forward-proofing (user probe: only value present is 'active', 649 rows; Fabric Warehouse collation is case-sensitive so 'active' lower vs 'Active' upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW.",
-      "human": "เสร็จแล้ว — สร้าง view กรองรายชื่อพนักงานสำหรับระบบ budget จากตาราง employee_master (ตัว mirror warehouse ตัวเดียวตามที่พี่ระบุ)\n\nview ชื่อ: dbo.vw_employee_budget (CREATE OR ALTER — รันซ้ำได้ไม่ error)\n\nตรรกะการกรอง (เหมือนกฎเดิมที่สคริปต์ sync_employees.py ใช้กรอง mas_employee_data เป๊ะ):\n- เอาเฉพาะพนักงาน Active (hr_status = 'Active')\n- ตัด Gritsman (employee_code ไม่ขึ้นต้น 4)\n- ตัด Vietnam / Office of Affiliate (org_code ไม่ขึ้นต้น 117)\n- ตัดระดับ L5 Operator/Driver/Maid (ไม่ได้ใช้ระบบ)\n- เพิ่ม record_status = 'active' กันเหนียว (เผื่อ mirror flag แถวที่ถูกลบต้นทางในอนาคต)\n\nผลตรวจ (รันจริง 1 รอบ): จาก 649 คน active เหลือ 344 คนหลังกรอง — จำนวนสมเหตุสมผล ตรงตรรกะเดียวกับ sync เดิม\n\nทำเป็นเวอร์ชัน slim = เลือกเฉพาะคอลัมน์ที่ budget ใช้ ตัด PII (id_card, religion_name, personal_email, ที่อยู่) และตัดคอลัมน์ metadata ของ pipeline (_load_dt, _load_dttm, record_status) แต่ยังเก็บ manager_employee_code ไว้ให้ approval chain ใช้ต่อ\n\nหมายเหตุ: view สร้างจาก mode fast (ผมส่ง SQL ให้พี่รันเอง ตรวจผลรอบเดียว) เป็น DDL อย่างเดียว — ตัว view นี้ยังไม่ได้เก็บเข้าไฟล์ .sql ใน repo ถ้าอยากให้ commit เก็บไว้เป็นหลักฐาน บอกได้ ผมเซฟให้"
+      "ai": "FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data's compact names (empcode/orgcode/joblevelnameen). Applied the project's 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status='Active', employee_code NOT LIKE '4%' (Gritsman), org_code NOT LIKE '117%' (Vietnam/Office of Affiliate), job_level_name_en NOT IN ('Operator 1','Operator 2','Operator 3','Driver','Maid') (L5). Added record_status='active' as forward-proofing (user probe: only value present is 'active', 649 rows; Fabric Warehouse collation is case-sensitive so 'active' lower vs 'Active' upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW."
     },
     {
       "id": "emp-ingest-to-dw-prompt",
@@ -489,15 +508,13 @@
       "created": "2026-07-09T15:27:31+0700",
       "updated": "2026-07-09T15:27:31+0700",
       "agent": "main",
-      "skills": [],
       "files": [
         {
           "path": "tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md",
           "label": "Cross-project prompt"
         }
       ],
-      "ai": "Generated a self-contained cross-project handoff prompt to migrate mas_employee_data ingestion (C-POP HR REST API) from the external Python sync (sync_employees.py DELETE+INSERT into budget_management_web Fabric SQL DB, GitHub Action 06:00 BKK) INTO the cman-dw-ws (adeb7108) medallion master lane. Recon via Fabric MCP: cman-dw-ws is a mature registry-driven medallion DW with an existing master lane (pl_daily_master -> pl_copy_landing_master + pl_batch_ingest_master/NB_batch_orchestrator 'loop over source specs' -> 02_NB_land_to_bronze_master_{sap,non_sap} -> 03_NB_bronze_to_silver_master_{sap,non_sap} -> gold via 04_NB_vendor/NB_gold_asset_costcenter), Lakehouse modern_lh_cman_dw (bronze_src/silver_master/gold_master schemas) + in-ws fabric_sql_database, varlib_env VariableLibrary, env_spark Environment. Employee = new source KIND rest_api (existing kinds: gateway-copy SAP master, SharePoint xlsx MNL_M_ non-SAP). Prompt file tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md embeds: API contract (POST keyDate/empCode, Authorization header, employeeList, 'hr status' key w/ space, empty->NULL, date fields), 4 filters applied at SILVER (Active, drop empcode 4*, drop orgcode 117*, drop L5 Operator/Driver/Maid), full ~80-col gold contract == current mas_employee_data, build steps (register source -> land JSON -> bronze -> silver+filter+dedup -> gold_master.employee -> optional fabric_sql_database mirror -> ride pl_daily_master, retire GitHub Action), secrets in varlib_env/KeyVault not GitHub, SP cman-fabric-write needs Contributor on cman-dw-ws + Spark egress, fabric-deploy-gotchas + TDD. User answered Q1=generate a copy-paste prompt for the other project, Q2=app reads from the new ws. Actual Fabric build happens in the DW project (not this repo).",
-      "human": "สร้าง prompt สำหรับก๊อปไปวางที่โปรเจกต์ DW (คนที่ดูแล workspace cman-dw-ws) เพื่อย้ายการนำเข้าข้อมูลพนักงาน (mas_employee_data) จาก C-POP HR API เข้าไปทำใน Fabric ที่ workspace ใหม่แทนสคริปต์ Python เดิม\n\nทำอะไรไปแล้ว:\n- สำรวจของจริง: cman-dw-ws (id adeb7108) เป็น data warehouse ทรง medallion ที่มี \"master lane\" อัตโนมัติอยู่แล้ว (pipeline pl_daily_master → land → bronze → silver → gold) และมีทั้ง Lakehouse (modern_lh_cman_dw) กับ Fabric SQL DB ในตัว\n- เขียนไฟล์ prompt แบบพกครบในตัว: tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md — ข้างในมี API contract (วิธีเรียก, header, body), ตัวกรอง 4 ข้อ (Active/ตัด Gritsman/ตัด Vietnam/ตัด L5), รายชื่อคอลัมน์ครบ ~80 ช่อง, ชื่อ notebook/pipeline เดิมที่ให้ต่อยอด, ที่เก็บ secret, สิทธิ์ที่ต้องให้ Service Principal\n\nวิธีที่ prompt สั่งให้ทำ (สรุป): ลงทะเบียน C-POP HR API เป็น master source ตัวใหม่ในสาย master ที่มีอยู่ → ดึง API เขียน JSON ลง landing → ไหลผ่าน bronze → silver (ใส่ตัวกรองตรงนี้) → gold_master.employee (คอลัมน์เท่ากับ mas_employee_data เดิมเป๊ะ) → ให้แอปอ่านจากที่ใหม่ → เกาะ schedule รายวันเดิม แล้วเลิกใช้ GitHub Action ตัวเก่า\n\nยังไม่ได้ทำ (ต้องทำที่โปรเจกต์ DW ปลายทาง):\n- ตัวงานจริงใน \tFabric ยังไม่ถูกสร้าง — งานนี้ผมส่งแค่ prompt ให้พี่เอาไปวางที่โปรเจกต์นั้น\n- ยังไม่ได้เลิก/ลบ GitHub Action + สคริปต์ Python เดิม (ทำหลัง lane ใหม่รันเขียวสัก 2-3 วัน)\n\nพี่ต้องทำต่อ: เปิดไฟล์ CROSS_PROJECT_PROMPT.md ก๊อปบล็อก prompt ไปวางที่ session ของโปรเจกต์ DW; และช่วยยืนยันว่าจะให้แอปอ่าน employee จาก gold ของ Lakehouse (อ่านอย่างเดียว) หรือให้ pipeline คัดลอกเข้า Fabric SQL DB ในworkspace ใหม่ด้วย (prompt รองรับทั้งสองแบบ)"
+      "ai": "Generated a self-contained cross-project handoff prompt to migrate mas_employee_data ingestion (C-POP HR REST API) from the external Python sync (sync_employees.py DELETE+INSERT into budget_management_web Fabric SQL DB, GitHub Action 06:00 BKK) INTO the cman-dw-ws (adeb7108) medallion master lane. Recon via Fabric MCP: cman-dw-ws is a mature registry-driven medallion DW with an existing master lane (pl_daily_master -> pl_copy_landing_master + pl_batch_ingest_master/NB_batch_orchestrator 'loop over source specs' -> 02_NB_land_to_bronze_master_{sap,non_sap} -> 03_NB_bronze_to_silver_master_{sap,non_sap} -> gold via 04_NB_vendor/NB_gold_asset_costcenter), Lakehouse modern_lh_cman_dw (bronze_src/silver_master/gold_master schemas) + in-ws fabric_sql_database, varlib_env VariableLibrary, env_spark Environment. Employee = new source KIND rest_api (existing kinds: gateway-copy SAP master, SharePoint xlsx MNL_M_ non-SAP). Prompt file tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md embeds: API contract (POST keyDate/empCode, Authorization header, employeeList, 'hr status' key w/ space, empty->NULL, date fields), 4 filters applied at SILVER (Active, drop empcode 4*, drop orgcode 117*, drop L5 Operator/Driver/Maid), full ~80-col gold contract == current mas_employee_data, build steps (register source -> land JSON -> bronze -> silver+filter+dedup -> gold_master.employee -> optional fabric_sql_database mirror -> ride pl_daily_master, retire GitHub Action), secrets in varlib_env/KeyVault not GitHub, SP cman-fabric-write needs Contributor on cman-dw-ws + Spark egress, fabric-deploy-gotchas + TDD. User answered Q1=generate a copy-paste prompt for the other project, Q2=app reads from the new ws. Actual Fabric build happens in the DW project (not this repo)."
     },
     {
       "id": "sap-actuals-view",
@@ -505,160 +522,7 @@
       "created": "2026-07-09T13:03:03+0700",
       "updated": "2026-07-09T13:24:12+0700",
       "agent": "04-data-engineer",
-      "skills": [],
-      "files": [],
-      "ai": "BLOCKED on permissions: SP cman-fabric-write (de4b353f, same SP in budget+DW .env) has no grant on workspace 302668d3 (cman_dw_wh_gold). REST 403, OneLake 403, SQL 18456; sanity connect to cman-dw-ws OK so recipe correct. Endpoint host derived offline (base32 trick, saved to memory). Probe script ready in scratchpad (probe_fact_gl_trans.py, 16 probes). Next: user grants Viewer/ReadData in portal -> rerun probe -> resume workflow wf_4a5c10c5-155 (author+verify phases).",
-      "human": "งานสร้าง view ติดเรื่องสิทธิ์เข้าถึงข้อมูลชั่วคราว — ตัว service principal (บัญชีโปรแกรมชื่อ cman-fabric-write ที่ระบบใช้ต่อฐานข้อมูล) ยังไม่มีสิทธิ์เข้า workspace ที่เก็บตาราง fact_gl_trans จึงยัง probe ข้อมูลจริงไม่ได้ สิ่งที่ต้องทำ: เข้า Fabric portal แล้วให้สิทธิ์ Viewer กับ cman-fabric-write บน workspace นั้น (สิทธิ์นี้ backend ของแอปงบประมาณต้องใช้อยู่แล้วตอนดึงยอดใช้จริงขึ้นเว็บ ไม่ใช่สิทธิ์เกินจำเป็น) พอให้สิทธิ์แล้วบอก ผมจะ probe ต่อและส่ง SQL สร้าง view ที่ตรวจแล้วให้รัน"
-    },
-    {
-      "id": "lease-rental-subform-snapshot",
-      "state": "done",
-      "created": "2026-06-29T11:30:00+0700",
-      "updated": "2026-06-29T11:30:00+0700",
-      "agent": "main",
-      "skills": [
-        "35-webapp-testing"
-      ],
-      "files": [
-        {
-          "label": "★lease_rental_subform.png",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/★lease_rental_subform.png"
-        },
-        {
-          "label": "0002.1budget-export.html",
-          "path": "design/mockups/0002claude design/0002.1budget-export.html"
-        }
-      ],
-      "ai": "Generated a PNG snapshot of the Lease & Rental detail subform (GL ...060 vehicle) from the wired mockup 0002.1budget-export.html. Playwright file:// render; bypassed openDetailModal by bare-name assigning the global lexical bindings (transactions.push + currentEditingTxnId=999 + detailReadonly=false — window.* does NOT reach the `let` bindings), injected a pending Lease&Rental txn (CC 10AC020000, GL 6211200060) with 3 filled detail rows: Car/6ขผ-3918/BK/รับ-ส่งผู้บริหาร, Van/1นจ-3508/RY/ขนส่งวัตถุดิบโรงงาน, Trucks/6ขจ-3513/KK/ขนส่งสินค้าสำเร็จรูป — each with 12 monthly numbers. Called renderDetailTable() + added .open class. Then overlaid 5 gold circled-number markers ①②③④⑤ (.legend-marker divs, abs-positioned from live getBoundingClientRect of row-1 cells) matching the legend: ①ประเภทรถ ②ทะเบียนรถ ③สถานที่ใช้งาน ④กิจกรรม ⑤ยอดรายเดือน. Screenshotted #detailModal .modal at device_scale_factor=2 (viewport 1820w, 158 KB). Headless asserts PASS: 3 data + 1 total row, markers=5, Year total ฿632,000 (300k+242k+90k), subtitle 10AC020000·6211200060·ค่าเช่า-ยานพาหนะ, 0 console errors. Filename ★-prefixed to sort to top; MOVED into signoff_spec/assets/. NOT yet wired into build_special_gl_subform_spec.py / Spec B docx. Not opened by Claude — awaiting user visual confirm.",
-      "human": "สร้างภาพ PNG ฟอร์มย่อย Lease & Rental (GL ...060 รถ) จาก mockup 0002.1 — 3 แถว (Car/Van/Trucks) + ตัวเลข 12 เดือน รวม ฿632,000 + marker ทอง ①②③④⑤ ตรง legend; ตั้งชื่อขึ้นต้น ★ ให้ลอยขึ้นบนสุด ย้ายเข้า signoff_spec/assets แล้ว; ยังไม่ wire เข้า build/docx; รอผู้ใช้เปิดดูยืนยัน"
-    },
-    {
-      "id": "pubrel-subform-filled-asset",
-      "state": "done",
-      "created": "2026-06-29T10:20:00+0700",
-      "updated": "2026-06-29T12:05:00+0700",
-      "agent": "main",
-      "skills": [
-        "35-webapp-testing"
-      ],
-      "files": [
-        {
-          "label": "★sub_pubrel_filled.png",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/★sub_pubrel_filled.png"
-        },
-        {
-          "label": "0002.1budget-export.html",
-          "path": "design/mockups/0002claude design/0002.1budget-export.html"
-        }
-      ],
-      "ai": "Public Relation & Donation special-GL subform example snapshot from mockup 0002.1budget-export.html. v2 (user follow-up 'ใส่ annotation 1 2 3 4'): regenerated as the LOCKED read-only + FILLED state to match the pasted legend (① 🔒, ② disabled, ③ ปิด, ④ monthly amounts→auto-sum) — the earlier unlocked-filled version contradicted that legend. Headless: switchUser('suchanya') + DEPT_STATUS['Solution Delivery']='PENDING_APPROVER1' (ADR-0013 lock), repointed txn #5 glCode→6211700030, seeded 2 pendingDetails rows (รายละเอียด + scattered 12-month numbers, every month populated), openDetailModal(5). Then baked 4 gold markers (①②③④) via the same Pillow _circle/_leader/annotate pipeline as build_special_gl_subform_spec.py, coords from live getBoundingClientRect of #detailModalTitle / first รายละเอียด .detail-input / #detailCloseBtn / first month-cell input. Asserts PASS: title has 🔒 + 'Public Relation & Donation', close btn='ปิด', first input disabled=true, Year total ฿249,000, 0 missing marker rects. Cropped #detailModal .modal @ device_scale_factor=2 (118 KB). OVERWRITES sub_pubrel_filled.png (now locked+annotated, not the prior unlocked one). Distinct from existing sub_pubrel.png. NOT yet wired into Spec B docx. Awaiting user visual confirm (image not opened by Claude).",
-      "human": "ภาพฟอร์มย่อย Public Relation & Donation — v2: ทำใหม่เป็นสถานะ 'ล็อก/อ่านอย่างเดียว + กรอกแล้ว' ให้ตรงกับตาราง legend (① 🔒, ② disabled, ③ ปิด, ④ ยอดรายเดือน→รวมอัตโนมัติ ฿249,000) แล้ววาง marker ทอง ①②③④ ตามตำแหน่งจริงด้วย Pillow (วิธีเดียวกับ build Spec B); ทับไฟล์ sub_pubrel_filled.png เดิม; ยังไม่ wire เข้า docx; รอผู้ใช้เปิดดูยืนยัน"
-    },
-    {
-      "id": "glgroup-merged-rows-asset",
-      "state": "done",
-      "created": "2026-06-29T10:00:00+0700",
-      "updated": "2026-06-29T12:05:00+0700",
-      "agent": "main",
-      "skills": [
-        "35-webapp-testing"
-      ],
-      "files": [
-        {
-          "label": "07_merged.png",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/07_merged.png"
-        },
-        {
-          "label": "gl-group.html",
-          "path": "03-edit-master-table/master-tables/01frontend/gl-group.html"
-        }
-      ],
-      "ai": "Generated the missing screenshot asset for the 'Merged rows (rowspan)' section of Spec 03 (Edit GL Group). Rendered gl-group.html via file:// (auto demo seed), then overrode the top-level lexical bindings sapGlCodes/glGroupDims/masterData (bare-name assignment — window.* does NOT reach the `let` binding renderTable reads) to inject a 3-run + 2-run + single so a '3× MERGED' rowspan cell appears, matching the spec's example. Headless asserts PASS: rowspans ['3','2'], count_tags ['3× MERGED','2× MERGED'], 6 data rows (display-only merge, each GL code still 1 <tr>). Cropped to section.panel:has(.data-table) at device_scale_factor=2 (151 KB). NOT yet wired into build_edit_gl_group_spec.py / docx. Awaiting user visual confirm (per CLAUDE.md, image not opened by Claude).",
-      "human": "สร้างภาพ '07_merged.png' ประกอบหัวข้อ 'รวมแถว (Merged rows)' ของ Spec 03 (Edit GL Group) — แสดงช่อง 3× MERGED (rowspan) จาก gl-group.html, ครอปเฉพาะตาราง; ยังไม่ได้ wire เข้า build script/docx; รอผู้ใช้เปิดดูยืนยัน"
-    },
-    {
-      "id": "repo-cleanup",
-      "state": "done",
-      "created": "2026-06-28T22:09:52+0700",
-      "updated": "2026-06-28T22:09:52+0700",
-      "agent": "cursor (CC→Cursor handoff)",
-      "skills": [
-        "36-cc-cursor-handoff"
-      ],
-      "files": [
-        {
-          "label": "plan.md",
-          "path": ".claude/plan.md"
-        }
-      ],
-      "ai": "Repo cleanup shipped via CC→Cursor handoff (TASK-001). Tidied repo layout; recorded as commit 1a2d3fc in plan.md (handoff/plan record commits 276b2fb, 46d9992). Reconstructed from git history — best-effort.",
-      "human": "ทำความสะอาดโครงสร้าง repo (handoff ให้ Cursor ทำ, CC วางแผน+ตรวจ)"
-    },
-    {
-      "id": "specB-clarity-polish",
-      "state": "done",
-      "created": "2026-06-28T22:09:52+0700",
-      "updated": "2026-06-28T22:09:52+0700",
-      "agent": "cursor (CC→Cursor handoff)",
-      "skills": [
-        "36-cc-cursor-handoff"
-      ],
-      "files": [
-        {
-          "label": "build_special_gl_subform_spec.py",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/_build/build_special_gl_subform_spec.py"
-        }
-      ],
-      "ai": "Clarity polish of Special GL Group Subform sign-off spec (Spec B / Module 02) via CC→Cursor handoff (commits f96962f, 8a693e8; underlying 758d320). Readability + wording tightening. Reconstructed from git history — best-effort.",
-      "human": "ปรับ Spec B (ฟอร์มย่อย Special GL) ให้อ่านง่าย/ชัดขึ้น (handoff Cursor)"
-    },
-    {
-      "id": "specC-mastertables-polish",
-      "state": "done",
-      "created": "2026-06-28T22:09:51+0700",
-      "updated": "2026-06-28T22:09:51+0700",
-      "agent": "cursor (CC→Cursor handoff)",
-      "skills": [
-        "36-cc-cursor-handoff"
-      ],
-      "files": [
-        {
-          "label": "signoff_spec",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/"
-        }
-      ],
-      "ai": "Readability/concision polish of Master-Tables sign-off spec (Spec C) — mechanical (TASK-001) + judgment (TASK-002) fixes, signoff-spec-v2 (commits 781460a, 2d0de47). Reconstructed from git history — best-effort.",
-      "human": "ปรับ Spec C (Master Tables) ให้กระชับ อ่านง่าย (handoff Cursor)"
-    },
-    {
-      "id": "specA-master-fx-screenshots",
-      "state": "done",
-      "created": "2026-06-28T22:28:40+0700",
-      "updated": "2026-06-28T22:28:40+0700",
-      "agent": "main",
-      "skills": [
-        "35-webapp-testing"
-      ],
-      "files": [
-        {
-          "label": "build_main_web_app_spec.py",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/_build/build_main_web_app_spec.py"
-        },
-        {
-          "label": "01_main_web_app_spec.docx",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/01_main_web_app_spec.docx"
-        },
-        {
-          "label": "main_fx_only.png",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/main_fx_only.png"
-        },
-        {
-          "label": "main_master_currency_page.png",
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/assets/main_master_currency_page.png"
-        }
-      ],
-      "ai": "Added two figures under §15 (Master FX read-only) of Spec A main web app sign-off spec. (1) Tight Playwright crop of the read-only Master FX chip — anchored via #fxDisplay.closest('.admin-zone-note') because #fxDisplay is only the number and there are two .admin-zone-note spans. (2) Full screenshot of the Master Currency edit page (Module 09, main.wrap of 03-edit-master-table/.../master-currency.html, self-contained demo data FY2025=35.00). Wired both into build_main_web_app_spec.py: new fx_only + mc_page captures, MC_PAGE constant, order list entries, image_para calls under item 15; rebuilt docx (2.97 MB). Uncommitted. Times exact (this session).",
-      "human": "เพิ่มภาพ 2 รูปใต้ข้อ 15 (Master FX) เอกสาร Spec A — crop แถบ FX read-only + ภาพหน้า Master Currency (Module 09) ที่แก้อัตราจริง; wire เข้า build script แล้ว rebuild docx (ยังไม่ commit)"
+      "ai": "BLOCKED on permissions: SP cman-fabric-write (de4b353f, same SP in budget+DW .env) has no grant on workspace 302668d3 (cman_dw_wh_gold). REST 403, OneLake 403, SQL 18456; sanity connect to cman-dw-ws OK so recipe correct. Endpoint host derived offline (base32 trick, saved to memory). Probe script ready in scratchpad (probe_fact_gl_trans.py, 16 probes). Next: user grants Viewer/ReadData in portal -> rerun probe -> resume workflow wf_4a5c10c5-155 (author+verify phases)."
     }
   ]
 }
