@@ -1,8 +1,40 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T19:14:25+0700",
+  "updated": "2026-07-19T19:47:58+0700",
   "tasks": [
+    {
+      "id": "faipicker-filler-default",
+      "state": "done",
+      "created": "2026-07-19T19:47:05+0700",
+      "updated": "2026-07-19T19:47:58+0700",
+      "ai": "DUP of faip-dept-default-single (subagent auto-added). Same work. See that entry.",
+      "agent": "claude"
+    },
+    {
+      "id": "faip-dept-default-single",
+      "state": "done",
+      "created": "2026-07-19T19:40:12+0700",
+      "updated": "2026-07-19T19:47:57+0700",
+      "ai": "DONE buildFaiPicker filler default split by isApprover (0002.3budget-export.html ~L2007-2016). Filler: selectedDept = _faiData.length===1 ? _faiData[0].dept : null. Approver firstWait->_faiData[0]->null UNCHANGED. Headless Playwright 4/4 PASS, 0 console err. Pre-edit: 1-dept already auto-selected (screenshot was stale); real fix = >1-dept no longer arbitrary-locks first alpha. NOT committed. Dup id faipicker-filler-default added by subagent = same work.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-8d45fb1",
+      "state": "done",
+      "created": "2026-07-19T19:35:34+0700",
+      "updated": "2026-07-19T19:35:34+0700",
+      "agent": "autolog",
+      "ai": "Merge branch 'main' of https://github.com/cmanpowerbi-chememan-com/budget-management-web [commit 8d45fb1]"
+    },
+    {
+      "id": "log-86617e9",
+      "state": "done",
+      "created": "2026-07-19T19:30:10+0700",
+      "updated": "2026-07-19T19:30:10+0700",
+      "agent": "autolog",
+      "ai": "chore: commit in-progress session work (user-requested bulk commit) [commit 86617e9]"
+    },
     {
       "id": "log-47d00ab",
       "state": "done",

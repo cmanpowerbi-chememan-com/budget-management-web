@@ -2007,8 +2007,14 @@
     // default / re-validate the locked ฝ่าย against the current scope
     const valid = _faiData.some(d => d.dept === selectedDept);
     if (!valid){
-      const firstWait = _faiData.find(d => d.status === 'wait');
-      selectedDept = (isApprover && firstWait) ? firstWait.dept : (_faiData[0] ? _faiData[0].dept : null);
+      if (isApprover){
+        const firstWait = _faiData.find(d => d.status === 'wait');
+        selectedDept = firstWait ? firstWait.dept : (_faiData[0] ? _faiData[0].dept : null);
+      } else {
+        // filler: auto-lock only when there is exactly ONE ฝ่าย in scope; with >1,
+        // leave unpicked ("— เลือกฝ่าย —") so the user consciously chooses which to view.
+        selectedDept = _faiData.length === 1 ? _faiData[0].dept : null;
+      }
     }
     updateFaiTrigger();
     renderFaiList();
