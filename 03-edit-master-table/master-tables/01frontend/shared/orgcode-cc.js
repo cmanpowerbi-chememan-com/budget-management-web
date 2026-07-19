@@ -34,28 +34,69 @@ let newRowKey     = null;  // "cost_center::orgcode" for highlight
 let viewMode      = 'cc';  // 'cc' | 'org'
 
 /* ═══════════════════════════════════════════════════════════
+   DEMO DATA — only used when opened as a local file (file://).
+   Deployed app always pulls real data from the backend.
+   ═══════════════════════════════════════════════════════════ */
+function seedDemoData() {
+  sapOrgcodes = [
+    { code: '1010', name: 'สำนักกรรมการผู้จัดการ' },
+    { code: '1020', name: 'ฝ่ายบัญชีและการเงิน' },
+    { code: '1030', name: 'ฝ่ายขายและการตลาด' },
+    { code: '2010', name: 'ฝ่ายผลิต — สระบุรี' },
+    { code: '2020', name: 'ฝ่ายซ่อมบำรุง' },
+    { code: '3010', name: 'ฝ่ายโลจิสติกส์' },
+  ];
+  sapCostCenters = [
+    { code: 'CC1010', name: 'MD Office' },
+    { code: 'CC1021', name: 'Accounting' },
+    { code: 'CC1022', name: 'Finance' },
+    { code: 'CC1031', name: 'Sales — Domestic' },
+    { code: 'CC1032', name: 'Sales — Export' },
+    { code: 'CC2011', name: 'Kiln Line 1' },
+    { code: 'CC2012', name: 'Kiln Line 2' },
+    { code: 'CC2021', name: 'Mechanical' },
+    { code: 'CC3011', name: 'Warehouse' },
+  ];
+  masterData = [
+    { id: 1, cost_center: 'CC1010', orgcode: '1010', orgcode_name: 'สำนักกรรมการผู้จัดการ' },
+    { id: 2, cost_center: 'CC1021', orgcode: '1020', orgcode_name: 'ฝ่ายบัญชีและการเงิน' },
+    { id: 3, cost_center: 'CC1022', orgcode: '1020', orgcode_name: 'ฝ่ายบัญชีและการเงิน' },
+    { id: 4, cost_center: 'CC1031', orgcode: '1030', orgcode_name: 'ฝ่ายขายและการตลาด' },
+    { id: 5, cost_center: 'CC1032', orgcode: '1030', orgcode_name: 'ฝ่ายขายและการตลาด' },
+    { id: 6, cost_center: 'CC2011', orgcode: '2010', orgcode_name: 'ฝ่ายผลิต — สระบุรี' },
+    { id: 7, cost_center: 'CC2012', orgcode: '2010', orgcode_name: 'ฝ่ายผลิต — สระบุรี' },
+    { id: 8, cost_center: 'CC2021', orgcode: '2020', orgcode_name: 'ฝ่ายซ่อมบำรุง' },
+    { id: 9, cost_center: 'CC3011', orgcode: '3010', orgcode_name: 'ฝ่ายโลจิสติกส์' },
+  ];
+}
+
+/* ═══════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   applyThemeFromStorage();
 
-  const ok = await checkAdminAccess();
-  if (!ok) return;
+  if (location.protocol === 'file:') {
+    seedDemoData();               // local preview — no backend
+  } else {
+    const ok = await checkAdminAccess();
+    if (!ok) return;
 
-  showLoading(true);
-  try {
-    const [orgcodes, costCenters, mappings] = await Promise.all([
-      occApiClient.refOrgcodes(),
-      occApiClient.refCostCenters(),
-      occApiClient.list(),
-    ]);
-    sapOrgcodes    = orgcodes;
-    sapCostCenters = costCenters;
-    masterData     = mappings;
-  } catch (err) {
-    showError(err);
-  } finally {
-    showLoading(false);
+    showLoading(true);
+    try {
+      const [orgcodes, costCenters, mappings] = await Promise.all([
+        occApiClient.refOrgcodes(),
+        occApiClient.refCostCenters(),
+        occApiClient.list(),
+      ]);
+      sapOrgcodes    = orgcodes;
+      sapCostCenters = costCenters;
+      masterData     = mappings;
+    } catch (err) {
+      showError(err);
+    } finally {
+      showLoading(false);
+    }
   }
 
   initCostCenterDropdown();

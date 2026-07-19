@@ -900,12 +900,12 @@ input:focus-visible {
   top: 22px;
 }
 /* Per-column filter inputs (UI-parity point 8b, mockup 0002.3budget-export.html
-   lines 411-420) — ported verbatim. `.col-filter` sits under the 3 filterable
-   identity columns (Cost Center / GL Code / GL Group); `.col-filter-spacer`
-   keeps Status + every month `<th>` the same height as the filterable ones
-   so the header row doesn't ragged-edge. Both live inside `.col-row th`, so
-   they inherit that row's sticky `top: 22px` (scroll-freeze together with
-   the frozen columns). */
+   lines 411-420) — ported verbatim. `.col-filter` sits under the 4 filterable
+   identity columns (Cost Center / GL Code / GL Group / Remark);
+   `.col-filter-spacer` keeps Status + every month `<th>` the same height as
+   the filterable ones so the header row doesn't ragged-edge. Both live inside
+   `.col-row th`, so they inherit that row's sticky `top: 22px` (scroll-freeze
+   together with the frozen columns). */
 .col-filter {
   display: block;
   width: 100%;
@@ -944,8 +944,8 @@ input:focus-visible {
   color: var(--ink-3);
   font-size: 12.5px;
 }
-/* Freeze the 3 identity columns (Cost Center / GL Code / GL Group) to the
-   left; Status + the 12 month columns scroll underneath. */
+/* Freeze the 4 identity columns (Cost Center / GL Code / GL Group / Remark)
+   to the left; Status + the 12 month columns scroll underneath. */
 .data-table th.frz,
 .data-table td.frz {
   position: sticky;
@@ -967,11 +967,14 @@ input:focus-visible {
 .data-table .frz-3 {
   left: var(--frz3);
 }
+.data-table .frz-4 {
+  left: var(--frz4);
+}
 /* Edge shadow = scroll cue at the right boundary of the frozen region.
-   .frz-edge is a separate class (not folded into .frz-3) because the 3
+   .frz-edge is a separate class (not folded into .frz-4) because the 3
    stacked rows/subtotal per transaction use a single spanned cell (left:0,
-   width = all 3 identity columns) rather than the 3 individual columns. */
-.data-table .frz-3,
+   width = all 4 identity columns) rather than the 4 individual columns. */
+.data-table .frz-4,
 .data-table .frz-edge {
   box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.28);
 }
@@ -990,24 +993,28 @@ input:focus-visible {
    half of every handle is unclickable: a real mousedown/Playwright
    `elementFromPoint` there resolves to the NEXT column's `<th>`, and the
    drag never starts (confirmed live, same bug exists in the mockup HTML —
-   not introduced by this port). Fix: the left-hand identity column must
-   outrank its immediate right neighbor. GL Group (`.frz-3`) needs no bump —
-   its right neighbor is the plain Status `<th>` (z-index 10), already below
-   the shared `th.frz` z-index (16). Must come AFTER the shared `th.frz`
-   z-index rule above (same specificity, 0,2,2 vs 0,2,2) to win by source
-   order; the more specific `tr.group-head-row th.frz` rule (0,3,3) is
-   unaffected either way. */
+   not introduced by this port). Fix: each frozen identity column must
+   outrank its immediate right neighbor, hence the strictly descending
+   chain below. Remark (`.frz-4`) needs no bump — its right neighbor is the
+   plain Status `<th>` (z-index 10), already below the shared `th.frz`
+   z-index (16). Must come AFTER the shared `th.frz` z-index rule above
+   (same specificity, 0,2,2 vs 0,2,2) to win by source order; the more
+   specific `tr.group-head-row th.frz` rule (0,3,3) is unaffected either
+   way. */
 .data-table thead tr.col-row th.frz-1 {
-  z-index: 18;
+  z-index: 19;
 }
 .data-table thead tr.col-row th.frz-2 {
+  z-index: 18;
+}
+.data-table thead tr.col-row th.frz-3 {
   z-index: 17;
 }
 
 /* Column resize handle (UI-parity point 8c, mockup 0002.3budget-export.html
    lines 422-435, ported verbatim) — one per identity `<th>` (Cost Center /
-   GL Code / GL Group), positioned at the column's right edge. The parent
-   `th.frz` is already `position: sticky` (below), which establishes a
+   GL Code / GL Group / Remark), positioned at the column's right edge. The
+   parent `th.frz` is already `position: sticky` (below), which establishes a
    containing block for this `position: absolute` handle same as `relative`
    would. z-index 20 keeps it above the 8b `.col-filter` input sharing the
    same `<th>` so a drag never focuses/blocks the filter. */
@@ -1321,6 +1328,30 @@ body.col-dragging * {
   border-color: var(--accent);
   background: var(--surface);
 }
+/* Remark = the 4th frozen identity column (`.remark-cell frz frz-4` on the
+   td — no rule needed beyond the shared frz machinery). Read-only text and
+   the editable input share one font size so the fit-to-content measurement
+   (`.remark-text` in the hidden measurer) approximates both. */
+.remark-text {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.remark-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+.remark-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
 .subtotal-row td {
   background: var(--paper-2);
   font-weight: 700;
@@ -1523,7 +1554,66 @@ body.col-dragging * {
   opacity: 0.6;
 }
 
+/* ─── Trip Manager — intro legend banner (rendered ONCE per modal, above
+   all trip cards — "1 ทริป = กรอกครั้งเดียว") ─── */
+.trip-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--special-edge);
+  border-radius: var(--r);
+  background: color-mix(in oklab, var(--special-bg) 55%, var(--surface));
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+.trip-legend-head {
+  font-weight: 600;
+  color: var(--ink);
+}
+.trip-legend-steps {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.trip-legend-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  max-width: 320px;
+}
+.trip-legend-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
 /* ─── Trip Manager (TripManager) ─── */
+/* Wraps every trip card during a save-all batch — resets the browser's
+   default fieldset chrome (border/padding/min-width) and reproduces
+   .modal-body's own vertical rhythm so disabling it (native <fieldset>
+   semantics — every descendant input/select/button at once) causes no
+   visual shift. */
+.trip-cards-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
 .trip-card {
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -1549,10 +1639,32 @@ body.col-dragging * {
   flex-direction: column;
   gap: 12px;
 }
+/* Section A / B divider label (mirrors mockup .trip-section-label) — makes
+   the input-once (A) vs auto-computed-expense (B) structure visible. */
+.trip-section-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
 .trip-field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+@media (max-width: 720px) {
+  .trip-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .trip-field-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .trip-field-grid label {
   display: flex;
@@ -1626,8 +1738,14 @@ body.col-dragging * {
   align-items: center;
   gap: 10px;
 }
+/* The 12-month ledger is wide — scrolls inside its own container so it
+   never forces the modal itself to widen/break on smaller screens. */
+.trip-exp-scroll {
+  overflow-x: auto;
+}
 .trip-exp-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12px;
@@ -1654,6 +1772,58 @@ body.col-dragging * {
   background: var(--paper);
   font-family: var(--mono);
   text-align: right;
+}
+/* GL-code column (mirrors mockup .exp-gl-chip / .travel-glcode). */
+.exp-gl-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: var(--r);
+  background: var(--paper-2);
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+/* ยอดรวม/ทริป column — the one warm-accent money figure in the table. */
+.exp-row-total {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+/* Per-diem row — visually distinct (quiet tint) + its cells are always
+   read-only spans, never inputs (financial never-cut: only the server's own
+   number is ever shown). */
+.exp-per-diem-row td {
+  background: color-mix(in oklab, var(--special-bg) 22%, var(--surface));
+}
+.exp-perdiem-sub {
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.exp-perdiem-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+/* รายละเอียด placeholder row beneath the expense table — disabled: no
+   backing field exists in the trip data model yet (see TripManager.tsx). */
+.trip-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+.trip-detail-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 .trip-empty {
   padding: 40px;

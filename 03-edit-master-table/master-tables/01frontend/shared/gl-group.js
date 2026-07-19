@@ -71,28 +71,72 @@ function escapeHtml(s) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   DEMO DATA — only used when opened as a local file (file://).
+   Deployed app always pulls real data from the backend.
+   ═══════════════════════════════════════════════════════════ */
+function seedDemoData() {
+  glGroupDims = [
+    { group_id: 1, group_name: 'รายได้จากการขาย' },
+    { group_id: 2, group_name: 'ต้นทุนขาย' },
+    { group_id: 3, group_name: 'เงินเดือนและค่าแรง' },
+    { group_id: 4, group_name: 'ค่าสาธารณูปโภค' },
+    { group_id: 5, group_name: 'ค่าซ่อมบำรุง' },
+    { group_id: 6, group_name: 'ค่าขนส่ง' },
+    { group_id: 7, group_name: 'ค่าเสื่อมราคา' },
+  ];
+  sapGlCodes = [
+    { code: '40010001', name: 'Sales — Quicklime' },
+    { code: '40010002', name: 'Sales — Hydrated Lime' },
+    { code: '50010001', name: 'Raw Material — Limestone' },
+    { code: '50010002', name: 'Fuel — Coal' },
+    { code: '60010001', name: 'Salary — Production' },
+    { code: '60010002', name: 'Wages — Daily' },
+    { code: '61020001', name: 'Electricity' },
+    { code: '61020002', name: 'Water Supply' },
+    { code: '62030001', name: 'Machine Maintenance' },
+    { code: '63040001', name: 'Freight — Outbound' },
+    { code: '64050001', name: 'Depreciation — Kiln' },
+  ];
+  masterData = [
+    { gl_code: '40010001', group_id: 1, group_name: 'รายได้จากการขาย' },
+    { gl_code: '40010002', group_id: 1, group_name: 'รายได้จากการขาย' },
+    { gl_code: '50010001', group_id: 2, group_name: 'ต้นทุนขาย' },
+    { gl_code: '50010002', group_id: 2, group_name: 'ต้นทุนขาย' },
+    { gl_code: '60010001', group_id: 3, group_name: 'เงินเดือนและค่าแรง' },
+    { gl_code: '60010002', group_id: 3, group_name: 'เงินเดือนและค่าแรง' },
+    { gl_code: '61020001', group_id: 4, group_name: 'ค่าสาธารณูปโภค' },
+    { gl_code: '62030001', group_id: 5, group_name: 'ค่าซ่อมบำรุง' },
+    { gl_code: '63040001', group_id: 6, group_name: 'ค่าขนส่ง' },
+  ];
+}
+
+/* ═══════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   applyThemeFromStorage();
 
-  const ok = await checkAdminAccess();
-  if (!ok) return;
+  if (location.protocol === 'file:') {
+    seedDemoData();               // local preview — no backend
+  } else {
+    const ok = await checkAdminAccess();
+    if (!ok) return;
 
-  showTableLoading(true);
-  try {
-    const [glCodes, glGroups, mappings] = await Promise.all([
-      glApiClient.refGlCodes(),
-      glApiClient.refGlGroups(),
-      glApiClient.list(),
-    ]);
-    sapGlCodes  = glCodes;
-    glGroupDims = glGroups;
-    masterData  = mappings;
-  } catch (err) {
-    showError(err);
-  } finally {
-    showTableLoading(false);
+    showTableLoading(true);
+    try {
+      const [glCodes, glGroups, mappings] = await Promise.all([
+        glApiClient.refGlCodes(),
+        glApiClient.refGlGroups(),
+        glApiClient.list(),
+      ]);
+      sapGlCodes  = glCodes;
+      glGroupDims = glGroups;
+      masterData  = mappings;
+    } catch (err) {
+      showError(err);
+    } finally {
+      showTableLoading(false);
+    }
   }
 
   initGlCodeDropdown();

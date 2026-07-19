@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T18:24:12+0700",
+  "updated": "2026-07-19T19:14:25+0700",
   "tasks": [
+    {
+      "id": "log-47d00ab",
+      "state": "done",
+      "created": "2026-07-19T19:14:25+0700",
+      "updated": "2026-07-19T19:14:25+0700",
+      "agent": "autolog",
+      "ai": "feat(subform): dept-scoped trip traveler picker (v_employee_orgmap + v_traveler_picker) [commit 47d00ab]"
+    },
     {
       "id": "traveler-picker-dept-views",
       "state": "done",

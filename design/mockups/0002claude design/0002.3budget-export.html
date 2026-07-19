@@ -1571,6 +1571,8 @@
     { code:'6210600020', group:'Communication Expense',                 name:'ค่าเช่า/บริการ วงจรสื่อสาร' },
     // ─── Special GL groups — รหัสจริงจาก sheet GL ของไฟล์ docs/13Template Special ───
     // Entertainment — dropdown ประเภทการรับรอง ขึ้นกับ GL: …900030 ภายนอก · …900031 ภายใน
+    // 5211900030 = ฝั่งผลิต/ต้นทุน (5xxx) · 6211900030 = ฝั่ง SG&A บริหาร-ขาย (6xxx) — คนละฝั่งบัญชี ใช้ dropdown ภายนอกเหมือนกัน
+    { code:'5211900030', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายนอก' },
     { code:'6211900030', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายนอก' },
     { code:'6211900031', group:'Entertainment',              name:'ค่าเลี้ยงรับรองภายใน' },
     // Lease & Rental — dropdown/พื้นที่เทา ขึ้นกับ sub-category (suffix): 060 รถ (ทะเบียนรถ = select-or-text) · 030 เครื่องจักร · อื่น เทา
@@ -1584,6 +1586,9 @@
     // Professional & Legal Fee — text ล้วน (ไม่มี dropdown)
     { code:'6210700030', group:'Professional & Legal Fee',   name:'ค่าที่ปรึกษา - ทางกฎหมาย' },
     // Public Relation & Donation — text ล้วน (รายละเอียด คอลัมเดียว)
+    // 6211700010: มาสเตอร์/template ต้นทางสะกด "ค่าใข้จ่าย" (พิมพ์ผิด) — ในนี้ใช้สะกดที่ถูกต้อง "ค่าใช้จ่าย"; jakkaritw แก้ที่มาสเตอร์ต้นทางแยกต่างหาก
+    { code:'6211700010', group:'Public Relation & Donation', name:'ค่าใช้จ่ายในการผลิตสื่อประชาสัมพันธ์' },
+    { code:'6211700020', group:'Public Relation & Donation', name:'ค่าใช้จ่ายงานมวลชนสัมพันธ์' },
     { code:'6211700030', group:'Public Relation & Donation', name:'เงินบริจาคสาธารณกุศล' },
     // Training & Seminar — dropdown Method (Inhouse/Public)
     { code:'6210100150', group:'Training & Seminar',         name:'ค่าอบรมและสัมมนา - ค่าธรรมเนียม' },
@@ -1649,7 +1654,12 @@
       sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
       approved:[0,0,0,0,0,0,0,0,0,0,0,0],
       pending: [0,0,0,0,0,0,0,0,0,0,0,0],
-      pendingDetails:[] },
+      pendingDetails:[
+        { id:25, 'ประเภทการรับรอง':'Business partner', 'รายละเอียด':'เลี้ยงรับรองผู้สอบบัญชี ปิดงบประจำปี',
+          months:[0,0,20000,0,0,0,0,0,0,0,15000,0] },
+        { id:26, 'ประเภทการรับรอง':'หน่วยงานราชการ', 'รายละเอียด':'ต้อนรับเจ้าหน้าที่สรรพากรเข้าตรวจ',
+          months:[0,0,0,0,0,8000,0,0,0,0,0,0] }
+      ] },
     // ── General (orphan 10GE000000) — admin fills + submits → APPROVED directly ──
     { id:9, costCenter:'10GE000000', glCode:'6211800030', remark:'งบกลาง (orphan — admin fills)', year:2026,
       sap:     [8000,8000,0,0,0,0,0,0,0,0,0,0],
@@ -1691,10 +1701,62 @@
       pendingDetails:[
         { id:24, 'ประเภทรถ':'', 'ทะเบียนรถ':'', 'สถานที่ใช้งาน':'BK', 'กิจกรรม':'เช่าพื้นที่ชั้น 5',
           months:[55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000,55000] }
+      ] },
+    // ── Entertainment ตัวอย่างเพิ่มเติม (10IT012000) — สาธิต DD_ENT_EXT + DD_ENT_INT (ครบ 4/2 ตัวเลือก รวมกับ txn 8) ──
+    { id:18, costCenter:'10IT012000', glCode:'6211900030', remark:'เลี้ยงรับรองคู่ค้า IT', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:27, 'ประเภทการรับรอง':'Customer', 'รายละเอียด':'เลี้ยงรับรองลูกค้าโครงการ ERP',
+          months:[0,12000,0,0,0,0,0,12000,0,0,0,0] },
+        { id:28, 'ประเภทการรับรอง':'Business partner', 'รายละเอียด':'เลี้ยงรับรอง vendor ระบบ Cloud',
+          months:[0,0,0,0,9000,0,0,0,0,0,0,0] },
+        { id:29, 'ประเภทการรับรอง':'อื่นๆ', 'รายละเอียด':'เลี้ยงรับรองที่ปรึกษาภายนอก',
+          months:[0,0,0,0,0,0,0,0,5000,0,0,0] }
+      ] },
+    { id:19, costCenter:'10IT012000', glCode:'6211900031', remark:'เลี้ยงรับรองภายใน', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:30, 'ประเภทการรับรอง':'พนักงานบริษัท', 'รายละเอียด':'เลี้ยงทีมปิดโครงการ',
+          months:[0,0,0,0,0,0,0,0,0,0,0,20000] },
+        { id:31, 'ประเภทการรับรอง':'กรรมการบริษัท', 'รายละเอียด':'ประชุมคณะกรรมการชุด IT',
+          months:[0,0,15000,0,0,0,0,0,15000,0,0,0] }
+      ] },
+    // ── Public Relation & Donation ตัวอย่าง (10AC020000) — 1 txn/sub-category, นิภาพร (admin) เห็นทุกตัวอย่างในมุมมองเดียว ──
+    { id:20, costCenter:'10AC020000', glCode:'6211700010', remark:'ผลิตสื่อประชาสัมพันธ์', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:32, 'รายละเอียด':'ผลิตวีดิทัศน์แนะนำบริษัท',
+          months:[0,0,0,150000,0,0,0,0,0,0,0,0] },
+        { id:33, 'รายละเอียด':'จัดทำรายงานประจำปี',
+          months:[0,80000,0,0,0,0,0,0,0,0,0,0] }
+      ] },
+    { id:21, costCenter:'10AC020000', glCode:'6211700020', remark:'งานมวลชนสัมพันธ์', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:34, 'รายละเอียด':'กิจกรรมชุมชนรอบโรงงาน ระยอง',
+          months:[0,0,0,0,0,60000,0,0,0,60000,0,0] }
+      ] },
+    { id:22, costCenter:'10AC020000', glCode:'6211700030', remark:'เงินบริจาค', year:2026,
+      sap:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      approved:[0,0,0,0,0,0,0,0,0,0,0,0],
+      pending: [0,0,0,0,0,0,0,0,0,0,0,0],
+      pendingDetails:[
+        { id:35, 'รายละเอียด':'บริจาคทุนการศึกษาโรงเรียนในพื้นที่',
+          months:[0,0,0,0,0,0,100000,0,0,0,0,0] },
+        { id:36, 'รายละเอียด':'บริจาคช่วยเหลือผู้ประสบภัย',
+          months:[0,0,0,0,0,0,0,0,0,0,50000,0] }
       ] }
   ];
-  let transactionIdCounter = 18;   // raised above every hardcoded sample id (max used = 17)
-  let detailIdCounter = 25;        // raised above every hardcoded sample detail id (max used = 24)
+  let transactionIdCounter = 23;   // raised above every hardcoded sample id (max used = 22)
+  let detailIdCounter = 37;        // raised above every hardcoded sample detail id (max used = 36)
   let currentEditingTxnId = null;
   let detailReadonly = false;   // subform locked (view-only) when the ฝ่าย is not editable (ADR-0013)
 

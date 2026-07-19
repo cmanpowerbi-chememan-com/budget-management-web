@@ -1831,13 +1831,27 @@
     }
     window.validateCostCenter = validateCostCenter;
 
-    renderTable(); // empty paint
-    // Pull real data from backend
-    loadList().catch(err => {
-      showNotice('โหลด list ไม่สำเร็จ',
-        `ไม่สามารถดึงข้อมูลจาก backend ได้: ${err.message}. กรุณา refresh หน้าหรือ login ใหม่`,
-        null);
-    });
+    if (location.protocol === 'file:') {
+      // local preview — no backend: seed demo data
+      masterData = [
+        { glCode: '5400005042', glGroup: '2026-01' },
+        { glCode: '5400005043', glGroup: '2026-01' },
+        { glCode: '5400006120', glGroup: '2026-02' },
+        { glCode: '5400006121', glGroup: '2026-02' },
+        { glCode: '5400007890', glGroup: '2026-03' },
+        { glCode: '5100002201', glGroup: '2025-12' },
+        { glCode: '5100002202', glGroup: '2025-12' },
+      ];
+      renderTable();
+    } else {
+      renderTable(); // empty paint
+      // Pull real data from backend
+      loadList().catch(err => {
+        showNotice('โหลด list ไม่สำเร็จ',
+          `ไม่สามารถดึงข้อมูลจาก backend ได้: ${err.message}. กรุณา refresh หน้าหรือ login ใหม่`,
+          null);
+      });
+    }
   })();
 </script>
 </body>
