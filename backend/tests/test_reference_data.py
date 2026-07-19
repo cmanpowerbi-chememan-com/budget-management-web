@@ -208,31 +208,48 @@ def test_fetch_countries_closes_cursor():
 
 
 # ---------------------------------------------------------------------------
-# fetch_travelers — Trip Manager traveler picker (full roster fallback)
+# fetch_travelers — Trip Manager traveler picker (dept-scoped via
+# dbo.v_traveler_picker; full-roster fallback for non-employee logins)
 # ---------------------------------------------------------------------------
 
-def test_fetch_travelers_maps_full_roster_from_v_employee_primary():
-    """Full roster from dbo.v_employee_primary — the SAME view
-    write_model._lookup_traveler validates against, so every pickable
-    traveler is guaranteed save-able. (dept→employee filtering proven
-    unreliable live 2026-07-17: cc_filler_map.department matches
-    employee org_name_en for only 35/114 ฝ่าย.)"""
+def test_fetch_travelers_maps_dept_scoped_roster_from_picker_view():
+    """Dept-scoped roster from dbo.v_traveler_picker keyed by the login
+    email (same dept + manager chain + direct reports — see
+    db/ddl/traveler_picker_views.sql). The view's base is
+    dbo.v_employee_primary, the SAME roster write_model._lookup_traveler
+    validates against, so every pickable traveler is save-able."""
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = [
         ("100001", "สมชาย ใจดี", "Manager"),
         ("100002", "สมหญิง สายลม", "Officer"),
     ]
-    rows = fetch_travelers(conn)
+    rows = fetch_travelers(conn, "SuchanyaY@chememan.com")
     assert rows == [
         {"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"},
         {"empcode": "100002", "name": "สมหญิง สายลม", "position": "Officer"},
     ]
-    sql_text = conn.cursor.return_value.execute.call_args.args[0]
-    assert "dbo.v_employee_primary" in sql_text
-    assert "employee_code" in sql_text
-    assert "full_name_th" in sql_text
-    assert "job_level_name_en" in sql_text
-    assert "ORDER BY full_name_th" in sql_text
+    call = conn.cursor.return_value.execute.call_args
+    assert "dbo.v_traveler_picker" in call.args[0]
+    assert "WHERE filler_email = ?" in call.args[0]
+    assert "ORDER BY traveler_name" in call.args[0]
+    assert call.args[1] == "suchanyay@chememan.com"  # parameterized, lower-cased
+
+
+def test_fetch_travelers_unknown_login_falls_back_to_full_roster(caplog):
+    """A login email absent from the picker view (admin/test account) gets
+    the FULL roster from dbo.v_employee_primary + a warning — non-employee
+    sessions keep working exactly as before the dept-scoping."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [],                                            # picker view: no rows
+        [("100001", "สมชาย ใจดี", "Manager")],          # fallback roster
+    ]
+    with caplog.at_level(logging.WARNING):
+        rows = fetch_travelers(conn, "admin@example.com")
+    assert rows == [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"}]
+    assert "full-roster fallback" in caplog.text
+    fallback_sql = conn.cursor.return_value.execute.call_args.args[0]
+    assert "dbo.v_employee_primary" in fallback_sql
 
 
 def test_fetch_travelers_coerces_null_name_or_position_to_empty_string():
@@ -240,12 +257,12 @@ def test_fetch_travelers_coerces_null_name_or_position_to_empty_string():
     picker, never null/None."""
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = [("100003", None, None)]
-    rows = fetch_travelers(conn)
+    rows = fetch_travelers(conn, "a@b.com")
     assert rows == [{"empcode": "100003", "name": "", "position": ""}]
 
 
 def test_fetch_travelers_closes_cursor():
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = []
-    fetch_travelers(conn)
+    fetch_travelers(conn, "a@b.com")
     conn.cursor.return_value.close.assert_called_once()

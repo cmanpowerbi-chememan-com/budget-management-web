@@ -6,8 +6,9 @@
   division, c_level) rows, scoped like `GET /budget` (See-scope, or
   admin-wide when `admin_view_enabled=True` AND the caller is admin) — feeds
   the ฝ่าย picker's สายงาน›ฝ่าย›CC hierarchy (ADR-0019).
-- `GET /reference/travelers` — Trip Manager's traveler picker (full roster;
-  See-scope gated on the requested cost_center, admin bypass).
+- `GET /reference/travelers` — Trip Manager's traveler picker (the caller's
+  department-scoped roster via `dbo.v_traveler_picker`; See-scope gated on
+  the requested cost_center, admin bypass).
 - `GET /reference/countries` — Trip Manager's destination-country picker
   (identity-only auth, like /budget/gl-accounts).
 
@@ -128,7 +129,7 @@ def travelers(
         with get_fabric_conn() as conn:
             scope = resolve_scope(email, conn)
             _ensure_see_scope(cost_center, scope)
-            rows = fetch_travelers(conn)
+            rows = fetch_travelers(conn, email)
     except pyodbc.Error as exc:
         logger.exception("fetch_travelers failed for %s", email)
         raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc

@@ -11,9 +11,13 @@ master read:
   c_level) rows from `dbo.cc_filler_map`, scoped exactly like `GET /budget`
   (See-scope list, or `None` for the admin-wide bypass). Feeds the ฝ่าย
   picker's สายงาน›ฝ่าย›CC hierarchy (ADR-0019).
-- `fetch_travelers` — Trip Manager's traveler picker: the full roster from
-  `dbo.v_employee_primary` (the SAME view `write_model._lookup_traveler`
-  validates against, so every pickable traveler is save-able).
+- `fetch_travelers` — Trip Manager's traveler picker: the caller's
+  department-scoped roster from `dbo.v_traveler_picker` (same department +
+  direct manager + manager's manager + direct reports — see
+  db/ddl/traveler_picker_views.sql), a SUBSET of `dbo.v_employee_primary`
+  which `write_model._lookup_traveler` validates against, so every pickable
+  traveler stays save-able. Falls back to the full roster when the login
+  email is not in the employee roster at all (admin/test accounts).
 - `fetch_countries` — Trip Manager's destination-country picker from
   `dbo.country_group` (group NAME → per-diem group int).
 
@@ -120,23 +124,40 @@ def fetch_departments(conn: pyodbc.Connection, cost_centers: list[str] | None) -
     ]
 
 
-def fetch_travelers(conn: pyodbc.Connection) -> list[dict]:
-    """Full roster traveler list, sorted by Thai name.
+def fetch_travelers(conn: pyodbc.Connection, filler_email: str) -> list[dict]:
+    """Department-scoped traveler list for the login, sorted by Thai name.
 
-    FULL ROSTER, not dept-filtered: cc_filler_map.department matches the HR
-    org names (`org_name_en`) for only 35/114 ฝ่าย (0/114 on Thai names —
-    live-verified 2026-07-17), so filtering the picker by the CC's
-    department would return an EMPTY list for ~70% of departments. The
-    task-approved fallback is the full active roster; the caller's
-    See-scope on the cost_center is still enforced at the router. NULL HR
-    fields coerce to '' (API contract is plain strings)."""
+    Scoped via `dbo.v_traveler_picker` (build + live validation:
+    db/ddl/traveler_picker_views.sql): same-department colleagues (dept_key =
+    org_code prefix + suffix-stripped org name, derived from ONE source so it
+    always resolves — the old cc_filler_map.department name match failed for
+    ~70% of ฝ่าย), UNION direct manager + manager's manager + direct
+    reports. Every row also exists in `dbo.v_employee_primary` (the picker
+    view's base), which `write_model._lookup_traveler` validates against —
+    every pickable traveler is save-able.
+
+    Fallback: a login email absent from the employee roster (admin/test
+    account) gets the FULL roster from `dbo.v_employee_primary` + a warning,
+    so non-employee sessions keep working exactly as before. NULL HR fields
+    coerce to '' (API contract is plain strings)."""
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT employee_code, full_name_th, job_level_name_en "
-            "FROM dbo.v_employee_primary ORDER BY full_name_th"
+            "SELECT traveler_empcode, traveler_name, traveler_position "
+            "FROM dbo.v_traveler_picker WHERE filler_email = ? ORDER BY traveler_name",
+            filler_email.lower(),
         )
         rows = cursor.fetchall()
+        if not rows:
+            logger.warning(
+                "fetch_travelers: %r not in dbo.v_traveler_picker — full-roster fallback",
+                filler_email,
+            )
+            cursor.execute(
+                "SELECT employee_code, full_name_th, job_level_name_en "
+                "FROM dbo.v_employee_primary ORDER BY full_name_th"
+            )
+            rows = cursor.fetchall()
     finally:
         cursor.close()
     return [{"empcode": r[0], "name": r[1] or "", "position": r[2] or ""} for r in rows]

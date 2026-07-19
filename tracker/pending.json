@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T17:53:34+0700",
+  "updated": "2026-07-19T18:24:12+0700",
   "tasks": [
+    {
+      "id": "traveler-picker-dept-views",
+      "state": "done",
+      "created": "2026-07-19T18:09:26+0700",
+      "updated": "2026-07-19T18:24:12+0700",
+      "ai": "DONE: dbo.v_employee_orgmap + dbo.v_traveler_picker created LIVE in fabric_sql_database (SP had DDL rights; dedupe fix: ROW_NUMBER one-row-per-traveler, priority manager>skip>report>dept — caught by suchanya 13-row/8-person dupe). Verified live: orgmap 611 rows; suchanya picker 8 rows correct; 99/99 fillers min=3/median=7/max=46. DDL persisted db/ddl/traveler_picker_views.sql (run-order + verify notes). Backend: fetch_travelers(conn, filler_email) queries v_traveler_picker WHERE filler_email=? (lower-cased, parameterized); full-roster fallback + WARN for logins absent from roster (admin/test). Router passes email. Tests: 4 traveler unit tests rewritten (scoped-map/fallback/null-coerce/close) all pass; router tests untouched-green. Live smoke: suchanya mixed-case → 8 rows; unknown email → 611-roster fallback. Spec budget-transactional-data-model.md updated (view row + 1b note). NOT committed (repo has other sessions' uncommitted work; 65 pre-existing suite failures in write_model dept-lock + 401-vs-403 from other in-flight features, unrelated). plan.md sync left to that session.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-30fc5ac",
+      "state": "done",
+      "created": "2026-07-19T17:53:37+0700",
+      "updated": "2026-07-19T17:53:37+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log session work (subform save-all, grid, signoff, housekeeping) [commit 30fc5ac]"
+    },
     {
       "id": "tripmanager-delete-409-guard",
       "state": "done",
