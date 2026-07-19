@@ -270,7 +270,7 @@ test.describe('filler journey', () => {
 
     await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
     const card = page.getByTestId('trip-card-new-0')
-    await expect(card).toContainText('เบี้ยเลี้ยง: ระบบจะคำนวณให้หลังกดบันทึก')
+    await expect(card).toContainText('ระบบจะคำนวณให้หลังกดบันทึก')
 
     // traveler = dropdown from /reference/travelers (value=empcode); position
     // auto-displays read-only; destination dropdown AUTO-SETS country_group
@@ -280,10 +280,12 @@ test.describe('filler journey', () => {
     expect(await card.getByLabel('country_group new-0').count()).toBe(0)
     await card.getByLabel('destination new-0').selectOption('ญี่ปุ่น')
     await card.getByLabel('days new-0').fill('5')
-    await card.getByRole('button', { name: 'm03', exact: true }).click()
-    await card.getByRole('button', { name: 'm04', exact: true }).click()
+    await card.getByRole('button', { name: 'Mar', exact: true }).click()
+    await card.getByRole('button', { name: 'Apr', exact: true }).click()
     await card.getByLabel('side new-0').selectOption('COST')
-    await page.getByTestId('save-trip-new-0').click()
+    // Consolidated save-all (2026-07-19) — one bottom-bar button saves every
+    // card/line in the modal; the per-card "บันทึกทริป" button was removed.
+    await page.getByTestId('save-all').click()
 
     await expect.poll(() => world.captured.tripBodies.length).toBeGreaterThan(0)
     expect(world.captured.tripBodies.at(-1)).toMatchObject({
@@ -299,7 +301,9 @@ test.describe('filler journey', () => {
       expected_updated_at: null,
     })
 
-    await expect(page.getByTestId('trip-card-existing-501')).toContainText('เบี้ยเลี้ยง (จากเซิร์ฟเวอร์): 6,000')
+    const savedCard = page.getByTestId('trip-card-existing-501')
+    await expect(savedCard).toContainText('เฉลี่ยจากเซิร์ฟเวอร์')
+    await expect(savedCard).toContainText('6,000')
   })
 
   test('1.9 Submit confirms with a summary, posts the payload, and the status chip flips to รออนุมัติ ขั้น 1', async ({ page }) => {

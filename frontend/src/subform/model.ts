@@ -452,3 +452,17 @@ export function buildManualLinePayload(
 export function manualLineTotal(draft: ManualLineDraft): number {
   return MONTH_KEYS.reduce((sum, m) => sum + (draft.months[m] || 0), 0)
 }
+
+/** Decides whether `saveAll` writes ONE manual line, given its `dirty` flag
+ * (`TripCardState.manualDirty[type]`, set by `setManualMonth`):
+ * - NEW line (`detail_id === null`): write only when dirty AND non-zero —
+ *   a never-persisted, all-zero line (blank, or typed then cleared back to
+ *   0) is skipped, so no spurious zero row is ever created.
+ * - EXISTING line (`detail_id` set): write whenever dirty, INCLUDING an
+ *   edit down to all-zero — the persisted row must be zeroed server-side
+ *   (never-cut: skipping it would leave a stale nonzero amount behind).
+ * An untouched existing line (`dirty` false) is skipped — no needless PUT. */
+export function shouldWriteManualLine(draft: ManualLineDraft, dirty: boolean): boolean {
+  if (draft.detail_id === null) return dirty && manualLineTotal(draft) > 0
+  return dirty
+}
