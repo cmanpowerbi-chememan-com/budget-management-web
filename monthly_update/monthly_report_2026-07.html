@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Budget Management Web — Monthly Status 2026-07</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI", Arial, sans-serif; background:#e9eaec; padding:24px; }
+
+  .slide {
+    width:1350px; height:934px; background:#fff; position:relative;
+    border:1px solid #ccc; margin:0 auto; overflow:hidden;
+  }
+
+  /* ---------- Header ---------- */
+  .header { display:flex; align-items:center; padding:14px 20px 10px; }
+  .accent { width:14px; height:46px; background:#0f4d2e; margin-right:14px; }
+  .title { font-size:34px; font-weight:800; color:#1a1a1a; letter-spacing:-.5px; }
+  .logo { margin-left:auto; text-align:right; line-height:1; }
+  .logo .green { color:#0f7a3d; font-size:11px; font-weight:700; }
+  .logo .big { color:#0f7a3d; font-size:22px; font-weight:800; letter-spacing:1px; }
+  .logo .sub { color:#444; font-size:9px; }
+
+  /* ---------- Layout ---------- */
+  .body { display:flex; padding:0 18px; gap:14px; }
+  .left { width:920px; }
+  .right { width:380px; }
+
+  .tab {
+    display:inline-block; background:#1f3864; color:#fff; font-weight:700;
+    font-size:16px; padding:6px 18px; border-radius:3px 3px 0 0;
+  }
+
+  /* Description box */
+  .desc-box {
+    background:#dbe5f1; border:1px solid #c3d2e8; padding:12px 16px;
+    position:relative; min-height:128px; border-radius:0 4px 4px 4px;
+  }
+  .desc-box p { font-size:15px; color:#1a1a1a; line-height:1.45; padding-right:150px; }
+  .desc-box .feat { margin-top:10px; font-size:14px; padding-right:150px; }
+  .desc-box .feat u { font-weight:700; }
+  .desc-img {
+    position:absolute; top:10px; right:12px; width:120px; height:96px;
+    background:#0f7a3d; border-radius:4px; color:#fff; font-size:11px;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:6px;
+  }
+
+  /* Highlights box */
+  .hi-box {
+    background:#fff; border:1px solid #c3d2e8; padding:12px 16px 14px;
+    min-height:138px; border-radius:0 4px 4px 4px;
+  }
+  .hi-box ul { list-style:none; }
+  .hi-box li { font-size:14.5px; color:#1a1a1a; line-height:1.55; padding-left:16px; position:relative; }
+  .hi-box li::before { content:"•"; position:absolute; left:2px; color:#1f3864; font-weight:800; }
+  .hi-box li b { color:#0f7a3d; }
+
+  /* ---------- Right column ---------- */
+  .stat-table { border-collapse:collapse; width:100%; }
+  .stat-table tr { height:38px; }
+  .stat-table .k {
+    background:#1f3864; color:#fff; font-weight:700; font-size:15px;
+    width:96px; padding:0 10px; border:2px solid #fff;
+  }
+  .stat-table .v {
+    background:#fff; border:1px solid #bcbcbc; font-size:15px; font-weight:700;
+    padding:0 10px; color:#1a1a1a;
+  }
+  .chip { display:inline-block; width:54px; height:22px; border-radius:2px; vertical-align:middle; float:right; }
+  .chip.green { background:#37a24a; }
+  .pct-cell { width:66px; background:#d9d9d9; text-align:center; font-weight:700; border:1px solid #bcbcbc; }
+
+  .depend-row td { font-size:13px; }
+  .dep-boxes { display:flex; align-items:center; gap:6px; }
+  .dep-boxes .b { flex:1; border:1px solid #bcbcbc; text-align:center; padding:4px 0; color:#555; }
+  .dep-boxes .arrow { color:#2e6bbf; font-size:14px; }
+  .prereq { text-align:center; font-size:11px; color:#666; margin-top:2px; }
+
+  .chal-tab {
+    display:inline-block; background:#d9d9d9; color:#1a1a1a; font-weight:800;
+    font-size:17px; padding:8px 16px; margin-top:14px; width:100%; border-radius:3px;
+  }
+  .chal-box { padding:12px 4px 0; }
+  .chal-box li { font-size:13.5px; color:#222; line-height:1.5; margin-bottom:9px; padding-left:14px; position:relative; list-style:none; }
+  .chal-box li::before { content:"•"; position:absolute; left:0; color:#c00; font-weight:800; }
+
+  /* ---------- Timeline ---------- */
+  .timeline { margin:14px 18px 0; position:relative; }
+  .yr-row { display:flex; align-items:center; font-weight:800; font-size:13px; color:#444; margin-bottom:4px; }
+  .yr-2026 { flex:1; text-align:center; border-bottom:none; }
+
+  .month-grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); border:1px solid #1f3864; }
+  .month-grid .mh {
+    background:#1f3864; color:#fff; font-weight:700; font-size:13px; text-align:center;
+    padding:6px 0; border-right:1px solid #38507f;
+  }
+  .month-grid .mh:last-child { border-right:none; }
+
+  .gantt { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); position:relative; row-gap:5px; padding:8px 0 6px; }
+  .bar {
+    grid-row:auto; background:#1f3864; color:#fff; font-size:11.5px; font-weight:600;
+    height:20px; line-height:20px; padding:0 8px; border-radius:2px; white-space:nowrap;
+    overflow:visible; position:relative;
+  }
+  .bar.go { background:#2e6bbf; }
+  .bar.done { background:#37a24a; }
+  .bar.future { background:#fff; color:#888; border:1px dashed #999; font-weight:600; }
+
+  /* "We're here" marker at 1 Jul => 6/12 = 50% of width */
+  .here-line {
+    position:absolute; top:-2px; bottom:0; left:50%; width:3px; background:#e00; z-index:5;
+  }
+  .here-pin {
+    position:absolute; top:-30px; left:50%; transform:translateX(-50%);
+    color:#e00; font-weight:800; font-size:13px; white-space:nowrap;
+  }
+  .here-pin .dot { display:block; width:14px; height:14px; background:#e00; border-radius:50%; margin:2px auto 0; }
+
+  .footer { position:absolute; bottom:8px; width:100%; text-align:center; font-size:11px; color:#666; }
+  .copyr { position:absolute; bottom:8px; right:18px; font-size:9px; color:#999; }
+</style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="accent"></div>
+    <div class="title">02 Budget Management Web</div>
+    <div class="logo">
+      <div class="green">Human Chemical</div>
+      <div class="big">CHEMEMAN</div>
+      <div class="sub">COPYRIGHT © 2026</div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <!-- LEFT -->
+    <div class="left">
+      <div class="tab">Description</div>
+      <div class="desc-box">
+        <div class="desc-img">Web Budget Form · Approval · Dashboard</div>
+        <p>Internal OPEX budget system replacing manual SAP exports and Excel
+        consolidation. Users fill the yearly budget by cost center / GL account, route it
+        through a multi-level approval workflow, then view a dashboard comparing budget
+        vs SAP actuals — across 38 divisions and ~275 users.</p>
+        <div class="feat"><u>Key Features</u>: Budget Input Form / Approval Workflow / SAP Actuals Integration / Dashboard / RLS by Division</div>
+      </div>
+
+      <div style="margin-top:14px;"></div>
+      <div class="tab">Key Highlights — June (last 30 days)</div>
+      <div class="hi-box">
+        <ul>
+          <li><b>Master Tables module shipped to production</b> (SWA + FastAPI/Functions backend) — all 5 editors live &amp; code-reviewed: GL Group, Currency, Org↔Cost Center, Budget Closing Date, Hide Document</li>
+          <li>Codebase restructured to <b>modules/{name}/</b> layout + unified tests/ + consolidated SQL — clean foundation for the main app build</li>
+          <li><b>Fabric SQL migration complete</b> (ADR-0017) — Azure SQL retired; employee master auto-syncs daily on Service Principal (343 active), GitHub Action green</li>
+          <li>User sign-off spec docs (8 modules, Spec A/B/C) polished for readability via CC→Cursor handoff workflow</li>
+          <li>Docs consolidated (CLAUDE.md/README slimmed) + nightly knowledge-graph (graphify) on GitHub Actions</li>
+          <li><b>SAP Actuals source confirmed</b> — full T_GL_TRANS extract (89 cols incl. Entry Date + Order); ready for the production data pipeline</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+      <table class="stat-table">
+        <tr><td class="k">PM</td><td class="v">Jakkaritw</td></tr>
+        <tr><td class="k">Status</td><td class="v">On plan <span class="chip green"></span></td></tr>
+        <tr>
+          <td class="k">Progress</td>
+          <td class="v">35%</td>
+        </tr>
+        <tr>
+          <td class="k">Budget</td>
+          <td class="v" style="padding:0;">
+            <table style="width:100%;border-collapse:collapse;"><tr>
+              <td style="padding:0 10px;font-weight:700;">0 / 0</td>
+              <td class="pct-cell">—</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr class="depend-row">
+          <td class="k">Depend..</td>
+          <td class="v" style="padding:4px 8px;">
+            <div class="dep-boxes">
+              <div class="b">none</div><span class="arrow">▸</span>
+              <div class="b">–</div><span class="arrow">▸</span>
+              <div class="b">–</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <div class="prereq">Prerequisite</div>
+
+      <div class="chal-tab">Key Challenges</div>
+      <div class="chal-box">
+        <ul>
+          <li>Main app (React frontend + FastAPI backend) build not yet started — ~2 months to end-Aug go-live; the biggest effort is still ahead</li>
+          <li>Data gaps: unmapped cost centers + orgcodes → handled incrementally — admin adds missing mappings later via the live Org↔Cost Center master editor (not a blocker)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline">
+    <div class="yr-row"><div class="yr-2026">Y2026</div></div>
+    <div class="month-grid">
+      <div class="mh">Jan</div><div class="mh">Feb</div><div class="mh">Mar</div>
+      <div class="mh">Apr</div><div class="mh">May</div><div class="mh">Jun</div>
+      <div class="mh">Jul</div><div class="mh">Aug</div><div class="mh">Sep</div>
+      <div class="mh">Oct</div><div class="mh">Nov</div><div class="mh">Dec</div>
+    </div>
+
+    <div class="gantt">
+      <!-- we're here marker: 1 Jul = 50% of 12 cols -->
+      <div class="here-line"><div class="here-pin">We're here<span class="dot"></span></div></div>
+
+      <div class="bar done" style="grid-row:1;grid-column:4/6;margin-left:33.3%;">1. Requirements &amp; Architecture</div>
+      <div class="bar" style="grid-row:2;grid-column:4/8;margin-left:22.2%;">2. Data Platform pipeline + Ref tables (50%)</div>
+      <div class="bar done" style="grid-row:3;grid-column:5/7;">3. Sign-off specs</div>
+      <div class="bar done" style="grid-row:4;grid-column:5/7;">4. Master Tables module — built + deployed</div>
+      <div class="bar" style="grid-row:5;grid-column:7/9;">5. Backend (FastAPI) + Frontend (React) build</div>
+      <div class="bar" style="grid-row:6;grid-column:7/9;">6. Approval workflow + Email notify</div>
+      <div class="bar" style="grid-row:7;grid-column:8/9;font-size:10.5px;text-align:center;">7. UAT + Deploy</div>
+      <div class="bar go" style="grid-row:8;grid-column:8/9;font-size:10.5px;text-align:center;">8. Go-live</div>
+      <div class="bar future" style="grid-row:9;grid-column:9/11;">9. Dashboard &mdash; Phase 2 (future)</div>
+    </div>
+  </div>
+
+  <div class="footer">- 2 -</div>
+  <div class="copyr">COPYRIGHT © 2026 CHEMEMAN PLC ALL RIGHTS RESERVED</div>
+</div>
+</body>
+</html>
