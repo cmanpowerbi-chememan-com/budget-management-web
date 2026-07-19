@@ -94,19 +94,21 @@ export interface ColumnFilters {
   cc: string
   gl: string
   glGroup: string
+  remark: string
 }
 
-export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '' }
+export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '', remark: '' }
 
 /** Identity-column widths (UI-parity point 8c) — replaces point 1's STATIC
  * freeze offsets (fixed `--frz1/2/3` px in CSS) with state-derived offsets,
- * so a column resize keeps the frozen band's left position correct. Only
- * the 3 identity columns are resizable — Status and the 12 month columns
- * are out of this feature's scope. */
+ * so a column resize keeps the frozen band's left position correct. The 4
+ * identity columns (Cost Center / GL Code / GL Group / Remark) are resizable
+ * — Status and the 12 month columns are out of this feature's scope. */
 export interface ColumnWidths {
   cc: number
   gl: number
   glGroup: number
+  remark: number
 }
 
 export type ColumnWidthKey = keyof ColumnWidths
@@ -114,10 +116,12 @@ export type ColumnWidthKey = keyof ColumnWidths
 /** Pre-measurement placeholder only (point-1's original static offsets:
  * frz2=130, frz3=130+150=280) — used for the very first paint before the
  * fit-to-content measurement effect runs, and as `loadStoredColumnWidths`'s
- * per-key fallback when a stored value is missing/corrupted. The REAL
- * default width is fit-to-content (GridTable.tsx's measurement effect,
- * point 8d) — this constant is not "the" default column width anymore. */
-export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = { cc: 130, gl: 150, glGroup: 150 }
+ * per-key fallback when a stored value is missing/corrupted (e.g. an old
+ * entry from before Remark joined the identity columns, which has no
+ * `remark` key). The REAL default width is fit-to-content (GridTable.tsx's
+ * measurement effect, point 8d) — this constant is not "the" default column
+ * width anymore. */
+export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = { cc: 130, gl: 150, glGroup: 150, remark: 170 }
 
 export const COLUMN_WIDTH_MIN = 60
 export const COLUMN_WIDTH_MAX = 800
@@ -153,6 +157,7 @@ export function loadStoredColumnWidths(): ColumnWidths {
       cc: clampColumnWidth(isFiniteNumber(parsed.cc) ? parsed.cc : DEFAULT_COLUMN_WIDTHS.cc),
       gl: clampColumnWidth(isFiniteNumber(parsed.gl) ? parsed.gl : DEFAULT_COLUMN_WIDTHS.gl),
       glGroup: clampColumnWidth(isFiniteNumber(parsed.glGroup) ? parsed.glGroup : DEFAULT_COLUMN_WIDTHS.glGroup),
+      remark: clampColumnWidth(isFiniteNumber(parsed.remark) ? parsed.remark : DEFAULT_COLUMN_WIDTHS.remark),
     }
   } catch {
     return DEFAULT_COLUMN_WIDTHS
@@ -194,14 +199,14 @@ export function clearStoredColumnWidths(): void {
   }
 }
 
-/** Derives the 3 frozen-column left offsets from the CURRENT widths — no
+/** Derives the 4 frozen-column left offsets from the CURRENT widths — no
  * DOM measurement (unlike the mockup's `applyFreeze()`, which reads real
  * header `getBoundingClientRect()`s). Both side-tables (COST/SGA) read the
  * SAME `colWidths` state and call this same pure function, so they stay
  * pixel-aligned by construction rather than by re-measuring two separate
  * DOM trees. */
-export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number } {
-  return { frz1: 0, frz2: widths.cc, frz3: widths.cc + widths.gl }
+export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number; frz4: number } {
+  return { frz1: 0, frz2: widths.cc, frz3: widths.cc + widths.gl, frz4: widths.cc + widths.gl + widths.glGroup }
 }
 
 /** Horizontal padding allowance added to a raw measured TEXT width to
@@ -240,6 +245,10 @@ export interface ColumnMeasureCandidates {
    * width must be max(widest code, widest name) or the name overflows. */
   glName: string[]
   glGroup: string[]
+  /** Remark texts (pending layer) — Remarks can run long, so the same
+   * longest-N cap applies as cc/gl; the 800px clamp in `fitColumnWidth`
+   * bounds the final width regardless. */
+  remark: string[]
 }
 
 export const COLUMN_MEASURE_CANDIDATE_CAP = 30
@@ -253,6 +262,7 @@ export function selectMeasureCandidates(
   const glSet = new Set<string>()
   const glNameSet = new Set<string>()
   const glGroupSet = new Set<string>()
+  const remarkSet = new Set<string>()
   rows.forEach((r) => {
     const meta = glMetaFor(r.gl_account, glRef)
     ccSet.add(r.cost_center)
@@ -261,6 +271,9 @@ export function selectMeasureCandidates(
     // wider. Skip null names so the measurer never sizes to the literal "null".
     if (meta.gl_name) glNameSet.add(meta.gl_name)
     glGroupSet.add(meta.gl_group)
+    // Same skip-null reasoning as gl_name — a remark-less row contributes
+    // nothing to the Remark column's fit width.
+    if (r.pending.remark) remarkSet.add(r.pending.remark)
   })
   const topLongest = (values: Set<string>) => [...values].sort((a, b) => b.length - a.length).slice(0, cap)
   return {
@@ -268,6 +281,7 @@ export function selectMeasureCandidates(
     gl: topLongest(glSet),
     glName: topLongest(glNameSet),
     glGroup: [...glGroupSet],
+    remark: topLongest(remarkSet),
   }
 }
 
@@ -283,13 +297,14 @@ function matchesFilter(value: string, filter: string): boolean {
  * resolved via `glMetaFor` (never `row.gl_group`, which doesn't exist on
  * `BudgetRow` — group membership always comes from the GL master). */
 export function filterRows(rows: BudgetRow[], glRef: GlAccount[], filters: ColumnFilters): BudgetRow[] {
-  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim()) return rows
+  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim() && !filters.remark.trim()) return rows
   return rows.filter((r) => {
     const meta = glMetaFor(r.gl_account, glRef)
     return (
       matchesFilter(r.cost_center, filters.cc) &&
       matchesFilter(r.gl_account, filters.gl) &&
-      matchesFilter(meta.gl_group, filters.glGroup)
+      matchesFilter(meta.gl_group, filters.glGroup) &&
+      matchesFilter(r.pending.remark ?? '', filters.remark)
     )
   })
 }

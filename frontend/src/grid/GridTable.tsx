@@ -49,6 +49,11 @@ export interface GridTableProps {
   rows: BudgetRow[]
   glRef: GlAccount[]
   onCommitMonth: (row: BudgetRow, month: MonthKey, value: number) => void
+  /** Commits a Remark edit (same `PUT /budget/rows` write path as a month
+   * commit — the backend already round-trips `pending.remark`). Optional so
+   * presentational test renders can omit it; an absent handler renders the
+   * remark read-only. */
+  onCommitRemark?: (row: BudgetRow, remark: string) => void
   /** Keyed by `${cost_center}|${gl_account}` — per-row save status (never a
    * single global banner, since the write endpoint is one row per call and
    * one row's failure must never block another, mirroring the backend's
@@ -95,11 +100,12 @@ function measureColumnWidths(container: HTMLElement | null): ColumnWidths {
     cc: fitColumnWidth(maxWidth('cc')),
     gl: fitColumnWidth(maxWidth('gl')),
     glGroup: fitColumnWidth(maxWidth('glGroup')),
+    remark: fitColumnWidth(maxWidth('remark')),
   }
 }
 
 /** Hidden (visually, not `display:none` — that would report 0 widths in a
- * real browser too) DOM measurement pass for the 3 identity columns
+ * real browser too) DOM measurement pass for the 4 identity columns
  * (UI-parity point 8d — fit-to-content default). Renders each header label +
  * bounded candidate list with the SAME classNames as the real cells
  * (`idx-cell` / `gl-code-text` / the GL-group chip) so font/weight match;
@@ -159,6 +165,14 @@ function ColumnWidthMeasurer({
           </span>
         )
       })}
+      <span data-measure-col="remark" style={headerLabelStyle}>Remark</span>
+      {/* Remarks are measured with the real .remark-text font — both the
+          read-only text and the editable input share that font size. */}
+      {candidates.remark.map((v) => (
+        <span key={`remark-${v}`} className="remark-text" data-measure-col="remark" style={{ display: 'inline-block' }}>
+          {v}
+        </span>
+      ))}
     </div>
   )
 }
@@ -236,10 +250,63 @@ function PendingCells({
   )
 }
 
+/** The Remark cell (mockup 0002.3budget-export.html lines 2246-2249) — one
+ * shared cell per txn block (rowSpan=3 on the SAP row, exactly like the
+ * mockup's `<td rowspan="3" class="shared">`; safe here because the remark
+ * column is NOT sticky/frozen, unlike the 3 identity columns which use the
+ * colSpan-merged-cell trick instead). Editable for the same rows whose
+ * month cells are editable: the backend's `/budget/rows` rejects special
+ * GLs outright (`SpecialGlDirectEditError`), so a remark input there would
+ * be a write-trap. Local draft + blur-commit mirrors `MonthCell`. */
+function RemarkCell({
+  row,
+  editable,
+  onCommitRemark,
+}: {
+  row: BudgetRow
+  editable: boolean
+  onCommitRemark?: GridTableProps['onCommitRemark']
+}) {
+  const { cost_center: cc, gl_account: gl } = row
+  const remark = row.pending.remark ?? ''
+  const [draft, setDraft] = useState(remark)
+
+  // Re-sync from the SERVER-derived remark (post-save merge / 409 refetch),
+  // same reasoning as MonthCell's draft sync.
+  useEffect(() => {
+    setDraft(remark)
+  }, [remark])
+
+  if (!editable || !onCommitRemark) {
+    return (
+      <span className="remark-text" data-testid={`remark-text-${cc}-${gl}`}>
+        {remark || '—'}
+      </span>
+    )
+  }
+
+  return (
+    <input
+      type="text"
+      className="remark-input"
+      maxLength={500}
+      aria-label={`Remark ${cc} ${gl}`}
+      data-testid={`remark-input-${cc}-${gl}`}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const next = draft.trim()
+        if (next !== remark) onCommitRemark(row, next)
+      }}
+    />
+  )
+}
+
 function TxnBlock({
   row,
   glRef,
   onCommitMonth,
+  onCommitRemark,
   message,
   onOpenSpecial,
   nowMonth,
@@ -247,6 +314,7 @@ function TxnBlock({
   row: BudgetRow
   glRef: GlAccount[]
   onCommitMonth: GridTableProps['onCommitMonth']
+  onCommitRemark?: GridTableProps['onCommitRemark']
   message?: RowMessage
   onOpenSpecial?: GridTableProps['onOpenSpecial']
   /** Current-month key (UI-parity point 8a). */
@@ -273,16 +341,23 @@ function TxnBlock({
         <td className="gl-group-cell frz frz-3">
           {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{meta.gl_group}</span> : meta.gl_group}
         </td>
+        {/* Remark = the 4th frozen identity column (same part as CC/GL/GL
+           Group): a plain per-row frz cell, NOT a rowSpan like the mockup —
+           sticky + rowSpan is the combination the colSpan-merged cells below
+           exist to avoid. */}
+        <td className="remark-cell frz frz-4">
+          <RemarkCell row={row} editable={editable} onCommitRemark={onCommitRemark} />
+        </td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
         <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
       </tr>
       <tr className="txn-row" data-status="approved">
-        <td colSpan={3} className="frz frz-1 frz-edge" />
+        <td colSpan={4} className="frz frz-1 frz-edge" />
         <td className="status-cell approved">Approved · งบ</td>
         <MonthCells values={row.board} layerTestId="board-value" variant="approved-ro" cc={cc} gl={gl} nowMonth={nowMonth} />
       </tr>
       <tr className="txn-row last" data-status="pending">
-        <td colSpan={3} className="frz frz-1 frz-edge" />
+        <td colSpan={4} className="frz frz-1 frz-edge" />
         <td className="status-cell pending">
           Pending · รออนุมัติ
           {meta.is_special && row.editable && onOpenSpecial && (
@@ -310,7 +385,7 @@ function TxnBlock({
       </tr>
       {message && (
         <tr className="txn-row-message">
-          <td colSpan={16} className={`row-message row-message-${message.kind}`}>
+          <td colSpan={17} className={`row-message row-message-${message.kind}`}>
             {message.text}
           </td>
         </tr>
@@ -323,10 +398,11 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
   return (
     <tbody>
       <tr className="subtotal-row">
-        {/* colSpan=4 covers the 3 frozen identity cols + Status — frozen at
-           left:0 (not left-unfrozen) so the label never scrolls out of view
-           under the horizontally-scrolled month columns (verified point 1). */}
-        <td colSpan={4} className="frz frz-1 frz-edge">
+        {/* colSpan=5 covers the 4 frozen identity cols (incl. Remark) +
+           Status — frozen at left:0 (not left-unfrozen) so the label never
+           scrolls out of view under the horizontally-scrolled month columns
+           (verified point 1). */}
+        <td colSpan={5} className="frz frz-1 frz-edge">
           {label}
         </td>
         {MONTH_KEYS.map((m) => (
@@ -343,7 +419,7 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
  * 5xxx / SG&A 6xxx — NEVER-CUT, their totals never combine), each grouped
  * by gl_group with a subtotal row, 3 layers per transaction. Pure
  * presentational component — all state/API calls live in `BudgetGrid`. */
-export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpenSpecial }: GridTableProps) {
+export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessages = {}, onOpenSpecial }: GridTableProps) {
   // Shared per-column filter state (UI-parity point 8b) — held LOCALLY here
   // (not lifted to BudgetGrid) since both side-tables live inside this one
   // component; one filter string per column applies to both tables at once,
@@ -503,10 +579,15 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
   // Frozen-column left offsets derived from the CURRENT widths (UI-parity
   // point 8c) — no DOM measurement, both side-tables read this SAME object
   // so they stay pixel-aligned by construction. Applied as inline CSS custom
-  // properties; the existing `.frz-1/2/3 { left: var(--frzN) }` rules in
+  // properties; the existing `.frz-1/2/3/4 { left: var(--frzN) }` rules in
   // global.css then just work, same as the old static values did.
-  const { frz1, frz2, frz3 } = freezeOffsets(colWidths)
-  const freezeStyle = { '--frz1': `${frz1}px`, '--frz2': `${frz2}px`, '--frz3': `${frz3}px` } as CSSProperties
+  const { frz1, frz2, frz3, frz4 } = freezeOffsets(colWidths)
+  const freezeStyle = {
+    '--frz1': `${frz1}px`,
+    '--frz2': `${frz2}px`,
+    '--frz3': `${frz3}px`,
+    '--frz4': `${frz4}px`,
+  } as CSSProperties
 
   const updateFilter =
     (key: keyof ColumnFilters) =>
@@ -549,19 +630,20 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
               <div className="table-wrap">
                 <table className="data-table" style={freezeStyle}>
                   {/* Column widths live on the <colgroup> (fixed layout) —
-                     the 3 identity cols come from the SAME shared `colWidths`
-                     state, Status + the 12 month cols from fixed CSS classes
-                     (.status-col/.m-col in global.css), so BOTH side-tables
-                     render an identical colgroup and every column stays
-                     pixel-aligned across COST/SGA. Auto table-layout could
-                     never promise that: its widths are content-driven, so a
-                     long reference-hint in one table widened its Status
-                     column and shifted all its month columns vs the other
-                     table (measured: Jan off by ~147px). */}
+                     the 4 identity cols (incl. Remark) come from the SAME
+                     shared `colWidths` state, Status + the 12 month cols from
+                     fixed CSS classes (.status-col/.m-col in global.css), so
+                     BOTH side-tables render an identical colgroup and every
+                     column stays pixel-aligned across COST/SGA. Auto
+                     table-layout could never promise that: its widths are
+                     content-driven, so a long reference-hint in one table
+                     widened its Status column and shifted all its month
+                     columns vs the other table (measured: Jan off by ~147px). */}
                   <colgroup>
                     <col style={{ width: colWidths.cc }} />
                     <col style={{ width: colWidths.gl }} />
                     <col style={{ width: colWidths.glGroup }} />
+                    <col style={{ width: colWidths.remark }} />
                     <col className="status-col" />
                     {MONTH_KEYS.map((m) => (
                       <col key={m} className="m-col" />
@@ -576,7 +658,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                        reintroduce that exact year confusion (see the
                        legend, point 6, for the per-layer years). */}
                     <tr className="group-head-row">
-                      <th colSpan={3} className="frz frz-1 frz-edge" />
+                      <th colSpan={4} className="frz frz-1 frz-edge" />
                       <th />
                       <th colSpan={12} className="month-group-label">
                         <span className="th-label">งบประมาณรายเดือน (บาท)</span>
@@ -659,6 +741,27 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                           onTouchStart={startColumnResize('glGroup')}
                         />
                       </th>
+                      <th className="frz frz-4">
+                        <span className="th-label">Remark</span>
+                        <input
+                          type="text"
+                          className="col-filter"
+                          placeholder="กรอง…"
+                          data-testid="filter-remark"
+                          value={colFilters.remark}
+                          onChange={updateFilter('remark')}
+                        />
+                        <div
+                          className={`col-resize${draggingKey === 'remark' ? ' is-dragging' : ''}`}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="ปรับความกว้างคอลัมน์ Remark"
+                          title="ลากเพื่อปรับความกว้าง"
+                          data-testid="col-resize-remark"
+                          onMouseDown={startColumnResize('remark')}
+                          onTouchStart={startColumnResize('remark')}
+                        />
+                      </th>
                       <th>
                         <span className="th-label">Status</span>
                         <div className="col-filter-spacer" />
@@ -674,7 +777,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                   {groups.length === 0 ? (
                     <tbody>
                       <tr>
-                        <td colSpan={16} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
+                        <td colSpan={17} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
                           ไม่มีรายการที่ตรงกับตัวกรอง
                         </td>
                       </tr>
@@ -689,6 +792,7 @@ export function GridTable({ rows, glRef, onCommitMonth, rowMessages = {}, onOpen
                               row={row}
                               glRef={glRef}
                               onCommitMonth={onCommitMonth}
+                              onCommitRemark={onCommitRemark}
                               message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
                               onOpenSpecial={onOpenSpecial}
                               nowMonth={nowMonth}

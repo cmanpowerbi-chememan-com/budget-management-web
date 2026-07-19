@@ -165,12 +165,11 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const selectedDeptCostCenterCount = department !== null ? costCentersOfDepartment(departments, department).length : 0
   const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
 
-  async function handleCommitMonth(row: BudgetRow, month: MonthKey, value: number) {
-    const key = rowKey(row.cost_center, row.gl_account)
-    const optimistic = { ...row, pending: { ...row.pending, [month]: value } }
-    optimistic.pending.total_year = Object.keys(optimistic.pending)
-      .filter((k) => /^m\d\d$/.test(k))
-      .reduce((sum, k) => sum + (optimistic.pending as unknown as Record<string, number>)[k], 0)
+  /** Shared save path for any Pending-layer edit (month cell or remark) —
+   * optimistic local replace, `PUT /budget/rows`, then the server-
+   * authoritative merge. Per-row status lives in `rowMessages` so one row's
+   * failure never blocks another. */
+  async function persistRow(key: string, optimistic: BudgetRow) {
     setRows((prev) => prev.map((r) => (rowKey(r.cost_center, r.gl_account) === key ? optimistic : r)))
     setRowMessages((prev) => ({ ...prev, [key]: { kind: 'saving', text: 'กำลังบันทึก…' } }))
 
@@ -195,6 +194,22 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'บันทึกไม่สำเร็จ'
       setRowMessages((prev) => ({ ...prev, [key]: { kind: 'error', text: message } }))
     }
+  }
+
+  async function handleCommitMonth(row: BudgetRow, month: MonthKey, value: number) {
+    const optimistic = { ...row, pending: { ...row.pending, [month]: value } }
+    optimistic.pending.total_year = Object.keys(optimistic.pending)
+      .filter((k) => /^m\d\d$/.test(k))
+      .reduce((sum, k) => sum + (optimistic.pending as unknown as Record<string, number>)[k], 0)
+    await persistRow(rowKey(row.cost_center, row.gl_account), optimistic)
+  }
+
+  /** Remark commit — same whole-row replace contract as a month commit
+   * (`buildSavePayload` already carries `pending.remark`); an emptied input
+   * normalizes to null. */
+  async function handleCommitRemark(row: BudgetRow, remark: string) {
+    const optimistic = { ...row, pending: { ...row.pending, remark: remark === '' ? null : remark } }
+    await persistRow(rowKey(row.cost_center, row.gl_account), optimistic)
   }
 
   /** Special-GL cells never edit inline (A8) — clicking "เปิดฟอร์มย่อย"
@@ -363,6 +378,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           rows={rows}
           glRef={glRef}
           onCommitMonth={handleCommitMonth}
+          onCommitRemark={handleCommitRemark}
           rowMessages={rowMessages}
           onOpenSpecial={handleOpenSpecial}
         />

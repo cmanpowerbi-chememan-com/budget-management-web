@@ -293,12 +293,29 @@ describe('filterRows', () => {
   it('combines multiple column filters with AND', () => {
     // Both rows[0] and rows[2] are CC1-North + "Office expenses" — only the
     // gl_account filter narrows it down to the single COST-side row.
-    const result = filterRows(rows, GL_REF, { cc: 'CC1', gl: '5211', glGroup: 'office' })
+    const result = filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, cc: 'CC1', gl: '5211', glGroup: 'office' })
     expect(result).toEqual([rows[0]])
   })
 
   it('returns an empty array when nothing matches', () => {
     expect(filterRows(rows, GL_REF, { ...BLANK_COLUMN_FILTERS, cc: 'no-such-cc' })).toEqual([])
+  })
+
+  it('matches the pending-layer remark case-insensitively by substring; a null remark never matches a non-blank filter', () => {
+    const remarked = [
+      row({
+        cost_center: 'CC1', gl_account: '5211800030',
+        pending: { ...row({ cost_center: 'x', gl_account: 'x' }).pending, remark: 'อุปกรณ์สำนักงาน IT' },
+      }),
+      row({
+        cost_center: 'CC2', gl_account: '6211800030',
+        pending: { ...row({ cost_center: 'x', gl_account: 'x' }).pending, remark: 'Notebook lease' },
+      }),
+      row({ cost_center: 'CC3', gl_account: '6211900030' }), // remark: null
+    ]
+    expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'notebook' })).toEqual([remarked[1]])
+    expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'สำนักงาน' })).toEqual([remarked[0]])
+    expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'x' })).toEqual([])
   })
 })
 
@@ -325,11 +342,11 @@ describe('clampColumnWidth (UI-parity point 8c)', () => {
 })
 
 describe('freezeOffsets (UI-parity point 8c)', () => {
-  it('derives frz1/frz2/frz3 from the current widths with no DOM measurement', () => {
-    expect(freezeOffsets({ cc: 130, gl: 150, glGroup: 150 })).toEqual({ frz1: 0, frz2: 130, frz3: 280 })
+  it('derives frz1/frz2/frz3/frz4 from the current widths with no DOM measurement', () => {
+    expect(freezeOffsets({ cc: 130, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 130, frz3: 280, frz4: 430 })
   })
-  it('reflects a resized cc column in frz2 and frz3', () => {
-    expect(freezeOffsets({ cc: 200, gl: 150, glGroup: 150 })).toEqual({ frz1: 0, frz2: 200, frz3: 350 })
+  it('reflects a resized cc column in frz2, frz3 and frz4', () => {
+    expect(freezeOffsets({ cc: 200, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 200, frz3: 350, frz4: 500 })
   })
 })
 
@@ -343,8 +360,8 @@ describe('loadStoredColumnWidths / persistColumnWidths (UI-parity point 8c)', ()
   })
 
   it('round-trips a persisted value', () => {
-    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160 })
-    expect(loadStoredColumnWidths()).toEqual({ cc: 200, gl: 175, glGroup: 160 })
+    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160, remark: 210 })
+    expect(loadStoredColumnWidths()).toEqual({ cc: 200, gl: 175, glGroup: 160, remark: 210 })
   })
 
   it('falls back to defaults for a corrupted stored value (never crashes)', () => {
@@ -353,13 +370,18 @@ describe('loadStoredColumnWidths / persistColumnWidths (UI-parity point 8c)', ()
   })
 
   it('clamps a stored value that is out of range', () => {
-    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 5000, gl: 10, glGroup: 150 }))
-    expect(loadStoredColumnWidths()).toEqual({ cc: 800, gl: 60, glGroup: 150 })
+    window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 5000, gl: 10, glGroup: 150, remark: 9999 }))
+    expect(loadStoredColumnWidths()).toEqual({ cc: 800, gl: 60, glGroup: 150, remark: 800 })
   })
 
-  it('ignores a missing/non-numeric field and falls back to its default', () => {
+  it('ignores a missing/non-numeric field and falls back to its default (incl. pre-Remark stored entries)', () => {
     window.localStorage.setItem(COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ cc: 200 }))
-    expect(loadStoredColumnWidths()).toEqual({ cc: 200, gl: DEFAULT_COLUMN_WIDTHS.gl, glGroup: DEFAULT_COLUMN_WIDTHS.glGroup })
+    expect(loadStoredColumnWidths()).toEqual({
+      cc: 200,
+      gl: DEFAULT_COLUMN_WIDTHS.gl,
+      glGroup: DEFAULT_COLUMN_WIDTHS.glGroup,
+      remark: DEFAULT_COLUMN_WIDTHS.remark,
+    })
   })
 
   it('does not throw when localStorage.setItem fails (guarded)', () => {
@@ -386,7 +408,7 @@ describe('hasStoredColumnWidthsOverride / clearStoredColumnWidths (UI-parity poi
   })
 
   it('becomes false again after clearStoredColumnWidths removes the entry', () => {
-    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160 })
+    persistColumnWidths({ cc: 200, gl: 175, glGroup: 160, remark: 210 })
     expect(hasStoredColumnWidthsOverride()).toBe(true)
     clearStoredColumnWidths()
     expect(hasStoredColumnWidthsOverride()).toBe(false)
@@ -461,7 +483,22 @@ describe('selectMeasureCandidates (UI-parity point 8d)', () => {
   })
 
   it('returns empty candidate lists for an empty row set', () => {
-    expect(selectMeasureCandidates([], glRef)).toEqual({ cc: [], gl: [], glName: [], glGroup: [] })
+    expect(selectMeasureCandidates([], glRef)).toEqual({ cc: [], gl: [], glName: [], glGroup: [], remark: [] })
+  })
+
+  it('collects pending remarks (skipping null) so the Remark column fits its longest text', () => {
+    const rows = [
+      row({
+        cost_center: 'CC1', gl_account: '5211800030',
+        pending: { ...row({ cost_center: 'x', gl_account: 'x' }).pending, remark: 'อุปกรณ์สำนักงาน IT' },
+      }),
+      row({
+        cost_center: 'CC2', gl_account: '5211800030',
+        pending: { ...row({ cost_center: 'x', gl_account: 'x' }).pending, remark: 'อุปกรณ์สำนักงาน IT' }, // dup — deduped
+      }),
+      row({ cost_center: 'CC3', gl_account: '5211900030' }), // remark: null — skipped
+    ]
+    expect(selectMeasureCandidates(rows, glRef).remark).toEqual(['อุปกรณ์สำนักงาน IT'])
   })
 
   it('collects GL names (the second line of the cell) so the column fits the wider of code or name', () => {

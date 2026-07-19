@@ -15,11 +15,11 @@ function getTable(testId: string): HTMLTableElement {
   return screen.getByTestId(testId).querySelector('table.data-table') as HTMLTableElement
 }
 
-/** The identity-column widths live on the <colgroup>'s first 3 <col>
+/** The identity-column widths live on the <colgroup>'s first 4 <col>
  * elements (fixed table layout — a width on the col-row <th> is ignored),
  * so that's where width assertions must read. */
 function getIdentityCols(table: HTMLTableElement): HTMLTableColElement[] {
-  return ([...table.querySelectorAll('colgroup col')] as HTMLTableColElement[]).slice(0, 3)
+  return ([...table.querySelectorAll('colgroup col')] as HTMLTableColElement[]).slice(0, 4)
 }
 
 describe('GridTable', () => {
@@ -297,6 +297,12 @@ describe('GridTable', () => {
       expect(costTable.style.getPropertyValue('--frz3')).toBe(
         `${parseInt(costCc.style.width, 10) + parseInt(costGl.style.width, 10)}px`,
       )
+      // Remark joined the frozen identity columns — frz4 sits at its left
+      // edge (cc + gl + glGroup).
+      const costGlGroup = getIdentityCols(costTable)[2]
+      expect(costTable.style.getPropertyValue('--frz4')).toBe(
+        `${parseInt(costCc.style.width, 10) + parseInt(costGl.style.width, 10) + parseInt(costGlGroup.style.width, 10)}px`,
+      )
     })
 
     it('a saved localStorage width WINS over the fit-to-content default on mount (does not get auto-overwritten)', () => {
@@ -333,11 +339,12 @@ describe('GridTable', () => {
       makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
     ]
 
-    it('renders a drag handle on each of the 3 identity columns, in both side-tables', () => {
+    it('renders a drag handle on each of the 4 identity columns, in both side-tables', () => {
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       expect(screen.getAllByTestId('col-resize-cc')).toHaveLength(2) // COST + SGA tables
       expect(screen.getAllByTestId('col-resize-gl')).toHaveLength(2)
       expect(screen.getAllByTestId('col-resize-glgroup')).toHaveLength(2)
+      expect(screen.getAllByTestId('col-resize-remark')).toHaveLength(2)
     })
 
     it('dragging the Cost Center handle widens the column, updates --frz2/--frz3, and keeps both tables aligned', () => {
@@ -434,6 +441,100 @@ describe('GridTable', () => {
       expect(removedTypes).toEqual(expect.arrayContaining(['mousemove', 'mouseup']))
       expect(document.body.classList.contains('col-dragging')).toBe(false)
       removeSpy.mockRestore()
+    })
+  })
+
+  describe('remark column (mockup 0002.3 lines 1163-1166 / 2246-2249)', () => {
+    afterEach(() => {
+      window.localStorage.clear()
+    })
+
+    const pendingWithRemark = (remark: string | null) =>
+      ({
+        ...blankLayer(),
+        template: null, remark, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null,
+      }) as BudgetRow['pending']
+
+    it('renders a Remark header with a col-filter input between GL Group and Status', () => {
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
+      const labels = [...table.querySelectorAll('thead tr.col-row th .th-label')].map((el) => el.textContent)
+      expect(labels.slice(0, 5)).toEqual(['Cost Center', 'GL Code', 'GL Group', 'Remark', 'Status'])
+      expect(screen.getByTestId('filter-remark')).toBeInTheDocument()
+    })
+
+    it('is the 4th FROZEN identity column: frz-4 header + body cell, drag-resize widens the colgroup col', () => {
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
+
+      const remarkTh = [...table.querySelectorAll('thead tr.col-row th')].find(
+        (th) => th.querySelector('.th-label')?.textContent === 'Remark',
+      ) as HTMLTableCellElement
+      expect(remarkTh).toHaveClass('frz', 'frz-4')
+      const remarkBodyCell = table.querySelector('td.remark-cell') as HTMLTableCellElement
+      expect(remarkBodyCell).toHaveClass('frz', 'frz-4')
+
+      const remarkCol = getIdentityCols(table)[3]
+      const startWidth = parseInt(remarkCol.style.width, 10)
+      const handle = screen.getByTestId('col-resize-remark')
+      fireEvent.mouseDown(handle, { clientX: 100 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 180, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 180, bubbles: true }))
+      expect(getIdentityCols(table)[3].style.width).toBe(`${startWidth + 80}px`)
+    })
+
+    it('shows an editable input for an editable row and commits the trimmed text on blur', () => {
+      const onCommitRemark = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onCommitRemark={onCommitRemark} />)
+      const input = screen.getByTestId('remark-input-CC1-5211800030')
+      fireEvent.change(input, { target: { value: '  อุปกรณ์สำนักงาน IT  ' } })
+      fireEvent.blur(input)
+      expect(onCommitRemark).toHaveBeenCalledWith(rows[0], 'อุปกรณ์สำนักงาน IT')
+    })
+
+    it('does not commit when the remark is unchanged on blur', () => {
+      const onCommitRemark = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true, pending: pendingWithRemark('เดิม') })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onCommitRemark={onCommitRemark} />)
+      const input = screen.getByTestId('remark-input-CC1-5211800030')
+      expect((input as HTMLInputElement).value).toBe('เดิม')
+      fireEvent.blur(input)
+      expect(onCommitRemark).not.toHaveBeenCalled()
+    })
+
+    it('renders read-only remark text for a See-only row (no input)', () => {
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: false, pending: pendingWithRemark('งบกลาง') })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onCommitRemark={vi.fn()} />)
+      expect(screen.queryByTestId('remark-input-CC1-5211800030')).not.toBeInTheDocument()
+      expect(screen.getByTestId('remark-text-CC1-5211800030')).toHaveTextContent('งบกลาง')
+    })
+
+    it('renders read-only remark for a special-GL row even when editable (backend rejects /budget/rows for special GLs)', () => {
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: true, pending: pendingWithRemark('เลี้ยงรับรอง') })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onCommitRemark={vi.fn()} />)
+      expect(screen.queryByTestId('remark-input-CC1-5211900030')).not.toBeInTheDocument()
+      expect(screen.getByTestId('remark-text-CC1-5211900030')).toHaveTextContent('เลี้ยงรับรอง')
+    })
+
+    it('filters rows by remark text across both side-tables', () => {
+      const rows = [
+        makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true, pending: pendingWithRemark('Notebook lease') }),
+        makeRow({ cost_center: 'CC2', gl_account: '6211800030', editable: true, pending: pendingWithRemark('ที่ปรึกษาระบบ') }),
+      ]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      // One filter-remark input per side-table, both bound to the same
+      // shared colFilters state — typing in the first filters both tables.
+      fireEvent.change(screen.getAllByTestId('filter-remark')[0], { target: { value: 'note' } })
+      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.queryByTestId('txn-CC2-6211800030')).not.toBeInTheDocument()
+
+      fireEvent.change(screen.getAllByTestId('filter-remark')[0], { target: { value: '' } })
+      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-6211800030')).toBeInTheDocument()
     })
   })
 })
