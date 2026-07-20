@@ -1668,3 +1668,98 @@ def delete_trip(
     return _run_per_item(
         conn, [trip_id], lambda t: _delete_one_trip(conn, t, expected_updated_at, user_email, scope), _fail,
     )[0]
+
+
+# ---------------------------------------------------------------------------
+# 5. Delete — pending row (grid trailing "ลบ" column). Deletes one
+# manually-added Pending row by its NATURAL KEY (cost_center, gl_account,
+# fiscal_year) — unlike delete_detail_line/delete_trip above, there is no id
+# to resolve an owner from first; this mirrors save_pending_rows' own
+# calling convention instead.
+#
+# Frontend eligibility gate (jakkaritw-approved, 2 policy decisions) only
+# offers this button for a row with no SAP and no Approved value in ANY
+# month (a truly web-added row — deleting it makes the whole txn-block
+# vanish from every layer) and never for Travelling Expense (trip-driven,
+# shared across 8 GLs — delete stays owned by Trip Manager). This endpoint
+# itself does NOT re-check either condition: it is a generic
+# (cost_center, gl_account, fiscal_year) delete with the SAME authorization
+# shape as every other write in this module (Fill-scope-or-admin,
+# department-lock, deadline-lock) — the SAP/Approved/GL-group eligibility is
+# a UX/business decision enforced client-side, not a server-side invariant.
+# ---------------------------------------------------------------------------
+
+class RowDeleteResult(BaseModel):
+    cost_center: str
+    gl_account: str
+    fiscal_year: int
+    ok: bool
+    error: str | None = None
+    detail: str | None = None
+
+
+def _delete_one_pending_row(
+    conn: pyodbc.Connection, cost_center: str, gl_account: str, fiscal_year: int,
+    expected_updated_at: datetime, user_email: str, scope: Scope,
+) -> RowDeleteResult:
+    """Delete one `pending_budget` row, cascading any special-GL detail
+    lines it owns first (`pending_budget_detail` is keyed by the SAME
+    (cost_center, gl_account, fiscal_year) as its parent row for the 5
+    non-Travelling special groups — a plain GL simply has none to delete).
+    Same guard chain as `_delete_one_detail_line`/`_delete_one_trip`, same
+    commit-order rule (both DELETEs happen BEFORE `conn.commit()` — db.py has
+    no implicit commit, so committing earlier would silently discard them
+    on connection close)."""
+    _ensure_not_excluded(cost_center)
+    _ensure_write_scope(cost_center, scope, conn)
+    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
+    _ensure_not_post_deadline(conn, fiscal_year, scope)
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.pending_budget_detail WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
+            cost_center, gl_account, fiscal_year,
+        )
+    finally:
+        cursor.close()
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM budget.pending_budget WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ? AND _updated_at = ?",
+            cost_center, gl_account, fiscal_year, expected_updated_at,
+        )
+        if cursor.rowcount == 0:
+            raise RowConflictError(
+                f"{cost_center}/{gl_account}/{fiscal_year} was changed by someone else — reload and retry"
+            )
+    finally:
+        cursor.close()
+
+    conn.commit()
+
+    return RowDeleteResult(cost_center=cost_center, gl_account=gl_account, fiscal_year=fiscal_year, ok=True)
+
+
+def delete_pending_row(
+    conn: pyodbc.Connection, cost_center: str, gl_account: str, fiscal_year: int,
+    expected_updated_at: datetime, user_email: str, scope: Scope,
+) -> RowDeleteResult:
+    """Delete one manually-added Pending row by its natural key (see
+    `_delete_one_pending_row`). Single-item like `delete_detail_line`/
+    `delete_trip` above (reuses `_run_per_item` for the same
+    rollback-on-failure/error-code-mapping behavior)."""
+    def _fail(_key: tuple[str, str, int], exc: Exception) -> RowDeleteResult:
+        return RowDeleteResult(
+            cost_center=cost_center, gl_account=gl_account, fiscal_year=fiscal_year,
+            ok=False, error=_ERROR_CODE_BY_EXCEPTION[type(exc)], detail=str(exc),
+        )
+
+    return _run_per_item(
+        conn, [(cost_center, gl_account, fiscal_year)],
+        lambda _key: _delete_one_pending_row(
+            conn, cost_center, gl_account, fiscal_year, expected_updated_at, user_email, scope
+        ),
+        _fail,
+    )[0]

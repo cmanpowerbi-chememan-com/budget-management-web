@@ -716,6 +716,56 @@ input:focus-visible {
   font-size: 13px;
   min-width: 220px;
 }
+/* Searchable GL combobox (the GL master has 130+ rows — a plain <select>
+   forced scrolling through all of them). Input matches .add-txn-form select;
+   the filtered list floats below it. */
+.add-txn-form .gl-combo {
+  position: relative;
+}
+.add-txn-form .gl-combo-input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  min-width: 280px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.gl-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow: auto;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 8px 20px rgba(30, 25, 20, 0.12);
+}
+.gl-combo-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  background: none;
+  border: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gl-combo-option:hover {
+  background: var(--paper-2);
+}
+.gl-combo-empty {
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
 .add-txn-error {
   color: var(--accent);
   font-size: 12.5px;
@@ -822,6 +872,12 @@ input:focus-visible {
 }
 .data-table col.m-col {
   width: 98px;
+}
+/* Trailing "ลบ" (delete) column (grid-level row delete) — a single icon
+   button, so a narrow fixed width is enough; kept visually recessive
+   (quiet border, no fill until hover) so it never competes with the data. */
+.data-table col.action-col {
+  width: 52px;
 }
 .data-table thead th {
   position: sticky;
@@ -943,6 +999,39 @@ input:focus-visible {
   padding: 24px 10px;
   color: var(--ink-3);
   font-size: 12.5px;
+}
+/* Trailing "ลบ" (delete) column — mockup 0002.3budget-export.html lines
+   579-587, one icon button per manually-added row. Deliberately quiet: a
+   1px border, no fill, muted icon color — only the hover state (a single
+   destructive accent) draws attention, so the column stays visually
+   recessive and never competes with the data next to it. */
+.action-col-head {
+  text-align: center;
+}
+.action-cell {
+  text-align: center;
+  padding: 0 8px;
+  background: var(--surface);
+}
+.action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  color: var(--ink-3);
+  transition: all 160ms;
+}
+.action-btn:hover {
+  color: #c25a3f;
+  border-color: #c25a3f;
+}
+.action-btn svg {
+  width: 12px;
+  height: 12px;
 }
 /* Freeze the 4 identity columns (Cost Center / GL Code / GL Group / Remark)
    to the left; Status + the 12 month columns scroll underneath. */
@@ -1076,14 +1165,17 @@ body.col-dragging * {
    color wash only starts at the month columns (user preference, deviates
    from the mockup which tints the frozen columns too). Status keeps its
    own colored TEXT + swatch (`.status-cell.sap/.approved/.pending`,
-   point 7) — only the CELL BACKGROUND is excluded here. */
-.data-table tr[data-status='sap'] td:not(.shared):not(.frz):not(.status-cell) {
+   point 7) — only the CELL BACKGROUND is excluded here. The trailing "ลบ"
+   action cell is excluded too (`rowSpan=3`, one shared control per txn
+   block — same reasoning the mockup encodes via its own `class="shared
+   action-cell"`, matching Remark's `.frz` exemption from this same wash). */
+.data-table tr[data-status='sap'] td:not(.shared):not(.frz):not(.status-cell):not(.action-cell) {
   background: color-mix(in oklab, var(--status-sap) 9%, var(--surface));
 }
-.data-table tr[data-status='approved'] td:not(.shared):not(.frz):not(.status-cell) {
+.data-table tr[data-status='approved'] td:not(.shared):not(.frz):not(.status-cell):not(.action-cell) {
   background: color-mix(in oklab, var(--status-approved) 9%, var(--surface));
 }
-.data-table tr[data-status='pending'] td:not(.shared):not(.frz):not(.status-cell) {
+.data-table tr[data-status='pending'] td:not(.shared):not(.frz):not(.status-cell):not(.action-cell) {
   background: color-mix(in oklab, var(--ink) 9%, var(--surface));
 }
 .data-table th.month-col {
@@ -1541,6 +1633,46 @@ body.col-dragging * {
   align-items: center;
   gap: 10px;
 }
+/* Monthly-total row at the foot of the special-GL subform table (mockup
+   0002.3budget-export.html .detail-table tr.total-row). */
+.detail-table tr.total-row td {
+  background: var(--paper-2);
+  font-weight: 700;
+  color: var(--ink);
+  border-top: 2px solid var(--ink);
+  font-size: 12.5px;
+}
+.detail-table tr.total-row td.label {
+  font-family: var(--sans);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.detail-table tr.total-row td.grand {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+/* Icon-only delete in the detail table (mockup #detailModal .action-btn —
+   26×26 trash). Scoped under .detail-table so TripManager's text "ลบ" button
+   keeps the base .action-btn style. */
+.detail-table .action-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 160ms;
+}
+.detail-table .action-btn:hover:not(:disabled) {
+  color: #c25a3f;
+  border-color: #c25a3f;
+}
+.detail-table .action-btn svg {
+  width: 12px;
+  height: 12px;
+}
 .action-btn {
   padding: 4px 10px;
   border-radius: var(--r);
@@ -1834,18 +1966,25 @@ body.col-dragging * {
 }
 
 /* ─── A10 approval action bar (inline Submit/Approve/Reject, ADR-0016) ─── */
+/* Right-aligned action row BELOW the grid (mockup 0002.3 .submit-row at the
+   end of <main>) — status chip + hints first, action buttons hugging the
+   right edge; no card chrome. */
 .approval-bar {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding: 0 4px;
 }
-.approval-bar-row {
+/* Status chip + hints on their own line ABOVE the action buttons — full-width
+   flex item so the buttons wrap to the next line; both lines hug the right. */
+.approval-bar-status {
+  flex-basis: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
   flex-wrap: wrap;
 }
@@ -1912,10 +2051,20 @@ body.col-dragging * {
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* Submit is "the one accent moment" (mockup 0002.3) — bigger and wider than
+   Approve/Reject: 13px 26px padding, 14px text, paper-plane icon. */
 .btn-submit {
+  gap: 10px;
+  padding: 13px 26px;
+  font-size: 14px;
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
+}
+.btn-submit svg {
+  width: 15px;
+  height: 15px;
+  color: #fff;
 }
 .btn-submit:hover {
   background: #8f3216;
@@ -1941,6 +2090,8 @@ body.col-dragging * {
   border-color: #a8443a;
 }
 .reject-panel {
+  /* Full-width line under the right-aligned .approval-bar flex row */
+  flex-basis: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -192,7 +192,7 @@ test.describe('filler journey', () => {
 
     await dropdown.selectOption('Customer')
     await page.getByLabel('m01 new-0').fill('5000')
-    await page.getByTestId('save-row-new-0').click()
+    await page.getByTestId('save-all').click()
 
     await expect.poll(() => world.captured.detailBodies.length).toBeGreaterThan(0)
     expect(world.captured.detailBodies.at(-1)).toMatchObject({

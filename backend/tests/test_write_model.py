@@ -46,6 +46,7 @@ from app.write_model import (
     TripSideMismatchError,
     UnknownGlAccountError,
     delete_detail_line,
+    delete_pending_row,
     delete_trip,
     save_detail_lines,
     save_pending_rows,
@@ -2173,3 +2174,124 @@ def test_trip_create_replay_returns_stored_project():
     results = save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
     assert results[0].ok is True
     assert results[0].trip.project == "ERP rollout"
+
+
+# ---------------------------------------------------------------------------
+# Grid trailing "ลบ" column — delete_pending_row: a generic delete of one
+# manually-added Pending row by its natural key (cost_center, gl_account,
+# fiscal_year), cascading any special-GL detail lines it owns. Same guard
+# chain/shape as delete_detail_line/delete_trip above, but — unlike those —
+# resolves NOTHING from an id first: cost_center/gl_account/fiscal_year come
+# straight from the caller, exactly like save_pending_rows already does.
+# ---------------------------------------------------------------------------
+
+def test_delete_pending_row_forbidden_when_outside_fill_scope_no_db_call():
+    conn = MagicMock()
+    scope = _scope(fill_cost_centers=[], see_cost_centers=["CC1"])  # See-only, not Fill
+    result = delete_pending_row(conn, "CC1", "GL1", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "forbidden"
+    conn.cursor.assert_not_called()
+
+
+def test_delete_pending_row_success_cascades_detail_lines_and_commits_once():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("deptA", "divA", "clA"),  # cc_dims lookup for department-lock check
+        None,                       # department-lock check -> no approval_status row, not locked
+        None,                       # deadline check -> no row, open
+    ]
+    cursor.rowcount = 1
+    scope = _scope()
+    result = delete_pending_row(conn, "CC1", "5211900030", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+    assert result.cost_center == "CC1"
+    assert result.gl_account == "5211900030"
+    assert result.fiscal_year == 2027
+    assert conn.commit.call_count == 1
+
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert any(s.strip().startswith("DELETE FROM budget.pending_budget_detail") for s in executed_sql)
+    assert any(s.strip().startswith("DELETE FROM budget.pending_budget ") for s in executed_sql)
+
+    # commit-order rule: both DELETEs happen before commit (db.py has no
+    # implicit commit — a commit placed earlier would silently discard them).
+    delete_idx = parent_idx = commit_idx = None
+    for i, call in enumerate(conn.mock_calls):
+        name, args = call[0], call[1]
+        if name == "commit":
+            commit_idx = i
+        elif name.endswith("execute") and args:
+            if args[0].strip().startswith("DELETE FROM budget.pending_budget_detail"):
+                delete_idx = i
+            elif args[0].strip().startswith("DELETE FROM budget.pending_budget "):
+                parent_idx = i
+    assert delete_idx is not None, "detail-line cascade DELETE not found"
+    assert parent_idx is not None, "parent-row DELETE not found"
+    assert commit_idx is not None
+    assert delete_idx < commit_idx
+    assert parent_idx < commit_idx
+
+
+def test_delete_pending_row_stale_token_is_conflict_no_commit():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("deptA", "divA", "clA"),
+        None,
+        None,
+    ]
+    cursor.rowcount = 0  # parent DELETE matches nothing -> stale token
+    scope = _scope()
+    result = delete_pending_row(conn, "CC1", "GL1", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "conflict"
+    conn.commit.assert_not_called()
+
+
+def test_delete_pending_row_rejected_when_deadline_has_passed_no_db_write():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("deptA", "divA", "clA"),
+        None,
+        (date(2020, 1, 1),),  # dbo.submission_deadline -> already passed
+    ]
+    scope = _scope()
+    result = delete_pending_row(conn, "CC1", "GL1", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "past_deadline"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget" in s for s in executed_sql)
+
+
+@pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
+def test_delete_pending_row_rejected_when_department_is_locked(locked_status):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("deptA", "divA", "clA"),
+        (locked_status,),  # approval_status row -> locked
+    ]
+    scope = _scope()
+    result = delete_pending_row(conn, "CC1", "GL1", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "department_locked"
+    conn.commit.assert_not_called()
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("DELETE FROM budget.pending_budget" in s for s in executed_sql)
+
+
+def test_delete_pending_row_admin_bypasses_deadline_and_department_lock():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [(1,)]  # admin CC-existence check only (_ensure_write_scope)
+    cursor.rowcount = 1
+    scope = _admin_scope()
+    result = delete_pending_row(conn, "ANY-CC", "GL1", 2027, STALE, "admin@chememan.com", scope)
+    assert result.ok is True
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("approval_status" in s for s in executed_sql)
+    assert not any("submission_deadline" in s for s in executed_sql)

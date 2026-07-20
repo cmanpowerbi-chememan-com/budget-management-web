@@ -18,6 +18,7 @@ import {
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
+  isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
   mergeSavedRow,
@@ -122,6 +123,38 @@ describe('isEditableCell', () => {
   })
   it('is NOT editable when the GL is not in the GL master (add-later policy), even when row.editable is true', () => {
     expect(isEditableCell(true, false, false)).toBe(false)
+  })
+})
+
+describe('isDeletableRow — grid trailing "ลบ" column eligibility (jakkaritw-approved, 2 policy decisions)', () => {
+  const officeMeta = glMetaFor('5211800030', GL_REF) // Office expenses — non-special, non-travel
+  const travelMeta = glMetaFor('5210400010', GL_REF) // Travelling Expense
+
+  it('is deletable when editable, no SAP value in any month, no Approved value in any month, and not Travelling Expense', () => {
+    const r = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+    expect(isDeletableRow(r, officeMeta)).toBe(true)
+  })
+
+  it('is NOT deletable when row.editable is false (See-only / out-of-scope)', () => {
+    const r = row({ cost_center: 'CC1', gl_account: '5211800030', editable: false })
+    expect(isDeletableRow(r, officeMeta)).toBe(false)
+  })
+
+  it('is NOT deletable when ANY month has a SAP value (not a web-added row)', () => {
+    const base = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+    const r = { ...base, sap: { ...base.sap, m03: 100 } }
+    expect(isDeletableRow(r, officeMeta)).toBe(false)
+  })
+
+  it('is NOT deletable when ANY month has an Approved (board) value', () => {
+    const base = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+    const r = { ...base, board: { ...base.board, m07: 50 } }
+    expect(isDeletableRow(r, officeMeta)).toBe(false)
+  })
+
+  it('is NOT deletable for Travelling Expense, even when editable with no SAP/Approved (Trip Manager owns delete there)', () => {
+    const r = row({ cost_center: 'CC1', gl_account: '5210400010', editable: true })
+    expect(isDeletableRow(r, travelMeta)).toBe(false)
   })
 })
 

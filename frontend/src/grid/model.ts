@@ -392,6 +392,28 @@ export function isEditableCell(rowEditable: boolean, isSpecialGl: boolean, glInM
   return rowEditable && !isSpecialGl && glInMaster
 }
 
+/** Grid trailing "ลบ" (delete) column eligibility (jakkaritw-approved, 2
+ * policy decisions). A row is deletable iff ALL of:
+ *  1. `row.editable` — the caller's Fill scope (NOT `isEditableCell`: delete
+ *     is a row-level operation, allowed even for special GLs, unlike cell
+ *     editing which always routes special GLs through their subform).
+ *  2. no SAP value in ANY month — a row with SAP history was not "added on
+ *     the web".
+ *  3. no Approved (board) value in ANY month — deleting the pending row
+ *     must make the whole txn-block vanish, since nothing would remain in
+ *     the SAP/board layers.
+ *  4. GL group is not 'Travelling Expense' — trip-driven and shared across
+ *     8 GLs, so a per-row grid delete is incoherent; that group stays
+ *     deletable only via the existing Trip Manager. The other 5 special
+ *     groups ARE deletable here (the backend cascades their detail lines). */
+export function isDeletableRow(row: BudgetRow, meta: GlMeta): boolean {
+  if (!row.editable) return false
+  if (MONTH_KEYS.some((m) => row.sap[m])) return false
+  if (MONTH_KEYS.some((m) => row.board[m])) return false
+  if (meta.gl_group === 'Travelling Expense') return false
+  return true
+}
+
 /** Pure: returns a NEW row with one Pending month cell updated and
  * `total_year` recomputed client-side for immediate display. The server
  * remains the authority — `mergeSavedRow` overwrites this with the real

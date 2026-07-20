@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError } from '../api/client'
 import { deleteDetailLine, fetchDetailLines, saveDetailLine } from '../api/subform'
 import type { DetailLineState } from '../api/types'
-import { formatThb, MONTH_KEYS } from '../grid/model'
+import { formatThb, MONTH_KEYS, MONTH_LABELS } from '../grid/model'
 import {
   blankDetailDraft,
   buildDetailLinePayload,
@@ -22,13 +22,13 @@ export interface DetailSubformProps {
   glName: string | null
   fiscalYear: number
   onClose: () => void
-  /** Called after EVERY successful line save — the parent grid refetches so
-   * the aggregate Pending cell (server-recomputed SUM of detail) stays in
-   * sync while this modal is still open. */
+  /** Called after a successful save batch (at least one line written) — the
+   * parent grid refetches so the aggregate Pending cell (server-recomputed
+   * SUM of detail) stays in sync. */
   onSaved: () => void
 }
 
-type RowStatus = 'idle' | 'saving' | 'deleting' | 'error'
+type RowStatus = 'idle' | 'deleting' | 'error'
 
 interface RowState {
   localId: string
@@ -47,12 +47,16 @@ function rowsFromServer(lines: DetailLineState[]): RowState[] {
 /** Special-GL detail-line subform for the 5 non-travel groups (Entertainment,
  * Lease & Rental, Professional & Legal Fee, Public Relation & Donation,
  * Training & Seminar) — Travelling Expense uses `TripManager` instead
- * (ADR-0005: trip-centric, structurally different). Each line saves
- * independently (`PUT /budget/detail` is one line per call) so one line's
- * error never blocks another (mirrors the backend's per-item contract). */
+ * (ADR-0005: trip-centric, structurally different). Layout follows mockup
+ * 0002.3budget-export.html `#detailModal`: JAN..DEC month columns, a Monthly
+ * total row, and ONE footer บันทึก button (`saveAll`) that writes every line
+ * (`PUT /budget/detail` is still one line per call) so one line's error never
+ * blocks another — on full success the modal closes, on any failure it stays
+ * open with the failed rows marked. */
 export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYear, onClose, onSaved }: DetailSubformProps) {
   const [rows, setRows] = useState<RowState[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [newRowCounter, setNewRowCounter] = useState(0)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
@@ -95,37 +99,58 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
     updateDraft(localId, (d) => ({ ...d, months: { ...d.months, [month]: value } }))
   }
 
-  async function saveRow(localId: string) {
-    const row = rows.find((r) => r.localId === localId)
-    if (!row) return
-    // A free-text trigger option ('อื่นๆ') with nothing typed must never be
-    // sent — the API expects the actual plate, not the trigger literal.
-    const blankFreeText = firstBlankFreeTextField(fields, row.draft.meta)
-    if (blankFreeText) {
-      setRows((prev) =>
-        prev.map((r) => (r.localId === localId ? { ...r, status: 'error', errorText: `กรุณาพิมพ์${blankFreeText}` } : r)),
-      )
-      return
-    }
-    setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'saving', errorText: undefined } : r)))
+  /** Consolidated บันทึก — the ONE save path for the whole modal (mockup
+   * `#detailModal` foot: ยกเลิก / + เพิ่มรายการ / บันทึก). Iterates one
+   * snapshot of `rows` taken at click time; every line is attempted, one
+   * line's failure never blocks the rest of the batch (partial-failure
+   * policy, same as TripManager's saveAll). Full success closes the modal
+   * (mock saveDetailData); any failure keeps it open with the failed rows
+   * marked so the user can fix and re-click. */
+  async function saveAll() {
+    if (saving || loading) return
+    setSaving(true)
+    setConflictMessage(null)
+    const snapshot = rows
+    // Seeded with every row up front and replaced BY INDEX (never pushed) —
+    // an unexpected throw mid-loop still leaves every earlier row's result
+    // intact instead of silently dropping the tail of the batch.
+    const nextRows: RowState[] = snapshot.slice()
+    let anySaved = false
+    let anyError = false
     try {
-      const saved = await saveDetailLine(buildDetailLinePayload(row.draft))
-      setRows((prev) =>
-        prev.map((r) =>
-          r.localId === localId
-            ? { localId: `existing-${saved.detail_id}`, draft: draftFromServerLine(saved), status: 'idle' }
-            : r,
-        ),
-      )
-      onSaved()
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        const lines = await fetchDetailLines(costCenter, glAccount, fiscalYear)
-        setRows(rowsFromServer(lines))
-        return
+      for (let i = 0; i < snapshot.length; i++) {
+        const row = snapshot[i]
+        // A free-text trigger option ('อื่นๆ') with nothing typed must never
+        // be sent — the API expects the actual plate, not the trigger literal.
+        const blankFreeText = firstBlankFreeTextField(fields, row.draft.meta)
+        if (blankFreeText) {
+          anyError = true
+          nextRows[i] = { ...row, status: 'error', errorText: `กรุณาพิมพ์${blankFreeText}` }
+          continue
+        }
+        try {
+          const saved = await saveDetailLine(buildDetailLinePayload(row.draft))
+          anySaved = true
+          nextRows[i] = { localId: `existing-${saved.detail_id}`, draft: draftFromServerLine(saved), status: 'idle' }
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            // Someone else changed these lines — replace with the server's
+            // latest and abort the rest of the batch (the snapshot is stale).
+            const lines = await fetchDetailLines(costCenter, glAccount, fiscalYear)
+            setRows(rowsFromServer(lines))
+            if (anySaved) onSaved()
+            return
+          }
+          anyError = true
+          const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'บันทึกไม่สำเร็จ'
+          nextRows[i] = { ...row, status: 'error', errorText: message }
+        }
       }
-      const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'บันทึกไม่สำเร็จ'
-      setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'error', errorText: message } : r)))
+      setRows(nextRows)
+      if (anySaved) onSaved()
+      if (!anyError) onClose()
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -159,6 +184,11 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
       setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'error', errorText: message } : r)))
     }
   }
+
+  /** Client-side Monthly total row (mockup `#detailModal` renderDetailTable)
+   * — display only; the authoritative sums are server-recomputed on save. */
+  const monthlyTotals = MONTH_KEYS.map((m) => rows.reduce((sum, r) => sum + (r.draft.months[m] || 0), 0))
+  const grandTotal = monthlyTotals.reduce((a, b) => a + b, 0)
 
   return (
     <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -203,7 +233,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
             <table className="detail-table">
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th className="num-col">#</th>
                   {fields.map((f) => (
                     <th key={f.key} className="special-col">
                       {f.key}
@@ -211,17 +241,25 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                   ))}
                   {MONTH_KEYS.map((m) => (
                     <th key={m} className="month-col">
-                      {m}
+                      {MONTH_LABELS[m]}
                     </th>
                   ))}
-                  <th className="month-col">รวม</th>
+                  {/* Accent-tinted รวม header, per mockup #detailModal */}
+                  <th
+                    className="month-col"
+                    style={{ background: 'color-mix(in oklab, var(--accent) 10%, var(--paper-2))', color: 'var(--accent)' }}
+                  >
+                    รวม
+                  </th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={row.localId} data-testid={`detail-row-${row.localId}`}>
-                    <td>{idx + 1}</td>
+                    <td className="num-col">
+                      <div className="idx-cell">{idx + 1}</div>
+                    </td>
                     {fields.map((f) => {
                       if (f.kind === 'locked') {
                         return (
@@ -288,53 +326,81 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                       </td>
                     ))}
                     <td className="month-cell">
-                      <span className="month-value">{formatThb(detailLineTotal(row.draft))}</span>
+                      <span className="month-value pending-readonly">{formatThb(detailLineTotal(row.draft))}</span>
                     </td>
                     <td>
+                      {/* Icon-only trash, mockup #detailModal .action-btn (26×26) */}
                       <button
                         type="button"
                         className="action-btn"
                         aria-label="ลบรายการ"
-                        disabled={row.status === 'deleting' || row.status === 'saving'}
+                        title="ลบรายการ"
+                        disabled={row.status === 'deleting' || saving}
                         onClick={() => deleteRow(row.localId)}
                       >
-                        {row.status === 'deleting' ? 'กำลังลบ…' : 'ลบ'}
+                        {row.status === 'deleting' ? (
+                          '…'
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          </svg>
+                        )}
                       </button>
                     </td>
                   </tr>
                 ))}
+                {/* Monthly total row — mockup #detailModal renderDetailTable */}
+                <tr className="total-row">
+                  <td className="label" colSpan={1 + fields.length}>
+                    Monthly total
+                  </td>
+                  {MONTH_KEYS.map((m, i) => (
+                    <td key={m} className="month-cell">
+                      <span className="month-value pending-readonly">{formatThb(monthlyTotals[i])}</span>
+                    </td>
+                  ))}
+                  <td className="month-cell grand">{grandTotal.toLocaleString('en-US')}</td>
+                  <td />
+                </tr>
               </tbody>
             </table>
           )}
 
-          {rows.map((row) => (
-            <div key={`actions-${row.localId}`} className="detail-row-actions">
-              <button
-                type="button"
-                className="btn btn-export"
-                disabled={row.status === 'saving' || row.status === 'deleting'}
-                onClick={() => saveRow(row.localId)}
-                data-testid={`save-row-${row.localId}`}
-              >
-                {row.status === 'saving' ? 'กำลังบันทึก…' : 'บันทึกรายการนี้'}
-              </button>
-              {row.status === 'error' && (
+          {/* Per-row save errors — no per-row save button; the ONE บันทึก
+           * lives in the footer (mockup #detailModal). Each error is labeled
+           * with its 1-based row number so the user can find the failed row. */}
+          {rows.map((row, idx) =>
+            row.status === 'error' && row.errorText ? (
+              <div key={`error-${row.localId}`} className="detail-row-actions" data-testid={`detail-row-error-${row.localId}`}>
+                <span>รายการที่ {idx + 1}:</span>
                 <span className="row-message row-message-error">{row.errorText}</span>
-              )}
-            </div>
-          ))}
+              </div>
+            ) : null,
+          )}
         </div>
 
         <div className="modal-foot">
-          <div className="modal-foot-info">รายการ: {rows.length}</div>
+          <div className="modal-foot-info">
+            Rows: <b>{rows.length}</b> · Year total: <b>฿{grandTotal.toLocaleString('en-US')}</b>
+          </div>
           <div className="modal-actions">
+            <button type="button" className="btn" disabled={loading || saving} onClick={onClose}>
+              ยกเลิก
+            </button>
             {/* Disabled while load() is in-flight — its setRows(...) REPLACES the
              * array, so a row added before the data lands would be silently lost. */}
-            <button type="button" className="btn" disabled={loading} onClick={addRow}>
+            <button type="button" className="btn btn-add" disabled={loading || saving} onClick={addRow}>
               + เพิ่มรายการ
             </button>
-            <button type="button" className="btn" onClick={onClose}>
-              ปิด
+            <button
+              type="button"
+              className="btn btn-export"
+              disabled={loading || saving || rows.length === 0}
+              onClick={saveAll}
+              data-testid="save-all"
+            >
+              {saving ? 'กำลังบันทึก…' : 'บันทึก'}
             </button>
           </div>
         </div>

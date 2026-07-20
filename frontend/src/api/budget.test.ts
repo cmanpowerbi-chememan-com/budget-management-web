@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from './budget'
+import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from './budget'
 import { ApiError } from './client'
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -135,6 +135,40 @@ describe('saveRow', () => {
         remark: null,
         expected_updated_at: '2026-01-01T00:00:00Z',
       }),
+    ).rejects.toBeInstanceOf(ApiError)
+  })
+})
+
+describe('deleteRow', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('DELETEs /budget/rows with cost_center/gl_account/fiscal_year/expected_updated_at as query params', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await deleteRow({
+      costCenter: 'CC1', glAccount: 'GL1', fiscalYear: 2027, expectedUpdatedAt: '2026-01-01T00:00:00Z',
+    })
+
+    const [url, init] = fetchSpy.mock.calls[0]
+    const calledUrl = String(url)
+    expect(calledUrl).toContain('/budget/rows?')
+    expect(calledUrl).toContain('cost_center=CC1')
+    expect(calledUrl).toContain('gl_account=GL1')
+    expect(calledUrl).toContain('fiscal_year=2027')
+    expect(calledUrl).toContain(encodeURIComponent('2026-01-01T00:00:00Z'))
+    expect((init as RequestInit).method).toBe('DELETE')
+    expect(result.ok).toBe(true)
+  })
+
+  it('propagates a 409 ApiError on lock conflict', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'changed by someone else' })),
+    )
+
+    await expect(
+      deleteRow({ costCenter: 'CC1', glAccount: 'GL1', fiscalYear: 2027, expectedUpdatedAt: '2026-01-01T00:00:00Z' }),
     ).rejects.toBeInstanceOf(ApiError)
   })
 })

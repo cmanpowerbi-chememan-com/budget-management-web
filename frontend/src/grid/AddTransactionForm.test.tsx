@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { AddTransactionForm } from './AddTransactionForm'
@@ -11,6 +11,18 @@ const GL_REF: GlAccount[] = [
 
 function makeExistingRow(cc: string, gl: string): BudgetRow {
   return makeRow({ cost_center: cc, gl_account: gl, editable: true })
+}
+
+/** The GL picker is a searchable combobox — focusing the input opens the
+ * option list; clicking an option is what selects the GL (free text alone
+ * never counts as a selection). */
+function openGlList() {
+  fireEvent.focus(screen.getByLabelText('GL Code'))
+}
+
+function pickGlOption(name: string | RegExp) {
+  openGlList()
+  fireEvent.click(screen.getByRole('option', { name }))
 }
 
 describe('AddTransactionForm', () => {
@@ -32,9 +44,9 @@ describe('AddTransactionForm', () => {
   it('excludes special-GL accounts from the GL picker options', () => {
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    const glSelect = screen.getByLabelText('GL Code')
-    expect(glSelect).toHaveTextContent('5211800030')
-    expect(glSelect).not.toHaveTextContent('5211900030')
+    openGlList()
+    expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /5211900030/ })).not.toBeInTheDocument()
   })
 
   it('marks an admin-only GL with a badge in the picker label (GL edit_by lock, design v2)', () => {
@@ -44,10 +56,38 @@ describe('AddTransactionForm', () => {
     ]
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={glRefWithAdminGl} existingRows={[]} onAdd={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    const glSelect = screen.getByLabelText('GL Code')
-    expect(glSelect).toHaveTextContent('5210100010 — Ins Premium (เฉพาะแอดมิน)')
+    openGlList()
+    expect(screen.getByRole('option', { name: '5210100010 — Ins Premium (เฉพาะแอดมิน)' })).toBeInTheDocument()
     // a normal GL (edit_by absent, or 'user') never gets the badge
-    expect(glSelect).not.toHaveTextContent('5211800030 — Office COST (เฉพาะแอดมิน)')
+    expect(screen.queryByRole('option', { name: /5211800030 — Office COST \(เฉพาะแอดมิน\)/ })).not.toBeInTheDocument()
+  })
+
+  it('typing filters the options by code or name; no match shows an empty hint', () => {
+    render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    const glInput = screen.getByLabelText('GL Code')
+
+    openGlList()
+    fireEvent.change(glInput, { target: { value: 'office' } })
+    expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
+
+    fireEvent.change(glInput, { target: { value: 'zzz' } })
+    // CC <select> also has native "option" roles — scope to the GL listbox.
+    expect(within(screen.getByRole('listbox')).queryByRole('option')).not.toBeInTheDocument()
+    expect(screen.getByText('ไม่พบ GL Code ที่ค้นหา')).toBeInTheDocument()
+  })
+
+  it('Enter picks the first filtered match; free text alone never selects a GL', () => {
+    render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    const glInput = screen.getByLabelText('GL Code') as HTMLInputElement
+
+    openGlList()
+    fireEvent.change(glInput, { target: { value: 'office' } })
+    fireEvent.keyDown(glInput, { key: 'Enter' })
+
+    expect(glInput.value).toBe('5211800030 — Office COST')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument() // list closed after pick
   })
 
   it('shows a validation error and does not call onAdd for a duplicate (CC, GL) row', () => {
@@ -62,7 +102,7 @@ describe('AddTransactionForm', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
     fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
-    fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: '5211800030' } })
+    pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
     expect(screen.getByText('รายการนี้มีอยู่ในตารางแล้ว')).toBeInTheDocument()
     expect(onAdd).not.toHaveBeenCalled()
@@ -73,7 +113,7 @@ describe('AddTransactionForm', () => {
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
     fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
-    fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: '5211800030' } })
+    pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC1', '5211800030'))
@@ -85,7 +125,7 @@ describe('AddTransactionForm', () => {
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
     fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
-    fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: '5211800030' } })
+    pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
     await waitFor(() => expect(screen.getByText('สร้างรายการไม่สำเร็จ')).toBeInTheDocument())

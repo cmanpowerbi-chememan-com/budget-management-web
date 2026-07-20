@@ -8,7 +8,7 @@ import react from '@vitejs/plugin-react'
 
 const STAGING =
   'https://cman-budget-web-stg.kindstone-f34836dd.southeastasia.azurecontainerapps.io'
-const SPOOF_USER = 'anurakb@chememan.com'
+const SPOOF_USER = 'passakornh@chememan.com'
 
 // Every proxied API call gets the spoof identity header injected so the
 // browser (which cannot set it) is seen by staging as this filler.

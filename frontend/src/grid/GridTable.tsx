@@ -26,6 +26,7 @@ import {
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
+  isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
   MONTH_KEYS,
@@ -65,6 +66,11 @@ export interface GridTableProps {
    * row just shows the static tooltip (viewing the detail breakdown for
    * read-only users is out of this task's scope, flagged as a fast-follow). */
   onOpenSpecial?: (row: BudgetRow, glGroup: string) => void
+  /** Trailing "ลบ" column — deletes one manually-added Pending row (see
+   * `isDeletableRow` for the eligibility gate). Optional so presentational
+   * test renders can omit it; the delete button only renders when both this
+   * handler is provided AND the row passes `isDeletableRow`. */
+  onDeleteRow?: (row: BudgetRow) => void
 }
 
 const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
@@ -309,6 +315,7 @@ function TxnBlock({
   onCommitRemark,
   message,
   onOpenSpecial,
+  onDeleteRow,
   nowMonth,
 }: {
   row: BudgetRow
@@ -317,11 +324,13 @@ function TxnBlock({
   onCommitRemark?: GridTableProps['onCommitRemark']
   message?: RowMessage
   onOpenSpecial?: GridTableProps['onOpenSpecial']
+  onDeleteRow?: GridTableProps['onDeleteRow']
   /** Current-month key (UI-parity point 8a). */
   nowMonth: MonthKey
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
+  const deletable = isDeletableRow(row, meta)
   // Chip is gated on the GROUP NAME (one of the 6 special-GL groups), never
   // on meta.is_special — a fixture/live GL can be is_special:false while
   // still belonging to a chipped group, which would leave some rows in the
@@ -350,6 +359,27 @@ function TxnBlock({
         </td>
         <td className="status-cell sap">SAP · ใช้จริง</td>
         <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
+        {/* Trailing "ลบ" column — one shared cell per txn block (rowSpan=3,
+           same pattern as the mockup's rowspan=3 action-cell) since the
+           delete op targets the whole row, not one layer. Rendered ONLY on
+           this first (SAP) <tr> — rows 2/3 add no <td> here, the rowSpan
+           already covers them. */}
+        <td rowSpan={3} className="action-cell">
+          {deletable && onDeleteRow && (
+            <button
+              type="button"
+              className="action-btn"
+              title="ลบรายการนี้"
+              data-testid={`delete-row-${cc}-${gl}`}
+              onClick={() => onDeleteRow(row)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          )}
+        </td>
       </tr>
       <tr className="txn-row" data-status="approved">
         <td colSpan={4} className="frz frz-1 frz-edge" />
@@ -385,7 +415,7 @@ function TxnBlock({
       </tr>
       {message && (
         <tr className="txn-row-message">
-          <td colSpan={17} className={`row-message row-message-${message.kind}`}>
+          <td colSpan={18} className={`row-message row-message-${message.kind}`}>
             {message.text}
           </td>
         </tr>
@@ -410,6 +440,7 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
             {formatThb(totals.pending[m])}
           </td>
         ))}
+        <td className="action-cell" />
       </tr>
     </tbody>
   )
@@ -419,7 +450,15 @@ function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<type
  * 5xxx / SG&A 6xxx — NEVER-CUT, their totals never combine), each grouped
  * by gl_group with a subtotal row, 3 layers per transaction. Pure
  * presentational component — all state/API calls live in `BudgetGrid`. */
-export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessages = {}, onOpenSpecial }: GridTableProps) {
+export function GridTable({
+  rows,
+  glRef,
+  onCommitMonth,
+  onCommitRemark,
+  rowMessages = {},
+  onOpenSpecial,
+  onDeleteRow,
+}: GridTableProps) {
   // Shared per-column filter state (UI-parity point 8b) — held LOCALLY here
   // (not lifted to BudgetGrid) since both side-tables live inside this one
   // component; one filter string per column applies to both tables at once,
@@ -648,6 +687,7 @@ export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessa
                     {MONTH_KEYS.map((m) => (
                       <col key={m} className="m-col" />
                     ))}
+                    <col className="action-col" />
                   </colgroup>
                   <thead>
                     {/* Group-head row (UI-parity point 8a): identity+Status
@@ -663,6 +703,7 @@ export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessa
                       <th colSpan={12} className="month-group-label">
                         <span className="th-label">งบประมาณรายเดือน (บาท)</span>
                       </th>
+                      <th className="action-col-head" aria-hidden="true" />
                     </tr>
                     {/* Column-filter row (UI-parity point 8b, mockup
                        col-filter-row): every `.th-label` keeps its spot, a
@@ -772,12 +813,15 @@ export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessa
                           <div className="col-filter-spacer" />
                         </th>
                       ))}
+                      <th className="action-col-head">
+                        <div className="col-filter-spacer" />
+                      </th>
                     </tr>
                   </thead>
                   {groups.length === 0 ? (
                     <tbody>
                       <tr>
-                        <td colSpan={17} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
+                        <td colSpan={18} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
                           ไม่มีรายการที่ตรงกับตัวกรอง
                         </td>
                       </tr>
@@ -795,6 +839,7 @@ export function GridTable({ rows, glRef, onCommitMonth, onCommitRemark, rowMessa
                               onCommitRemark={onCommitRemark}
                               message={rowMessages[rowKey(row.cost_center, row.gl_account)]}
                               onOpenSpecial={onOpenSpecial}
+                              onDeleteRow={onDeleteRow}
                               nowMonth={nowMonth}
                             />
                           ))}

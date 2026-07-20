@@ -1,8 +1,40 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-19T20:43:43+0700",
+  "updated": "2026-07-20T21:07:29+0700",
   "tasks": [
+    {
+      "id": "grid-delete-web-txn",
+      "state": "done",
+      "created": "2026-07-20T20:11:48+0700",
+      "updated": "2026-07-20T21:07:29+0700",
+      "ai": "IMPLEMENTED (uncommitted): trailing action/ลบ column after Dec + DELETE /budget/rows. Eligibility=editable & no-SAP-any-month & no-Approved-any-month & gl_group!=Travelling Expense. Backend delete_pending_row cascades pending_budget_detail then parent w/ optimistic-lock, guard chain==delete_trip. gate:APPROVE-WITH-SUGGESTIONS (06+07+08 combined). 401 Q RESOLVED=env-flake (DEV_AUTH_EMAIL local; clean-env all 4 401 pass; delete_row auth identical to siblings). Clean-env tests: backend 199 in-scope pass, frontend 453/453. 3 LOW follow-ups (test hermeticity, updatedAt??'' edge, dup .action-btn css visual). NOT committed/deployed. Screenshot delete_column_verify.png awaits jakkaritw visual. Travelling Expense grid-delete INTENTIONALLY out of scope (trip-shared -> Trip Manager).",
+      "agent": "claude"
+    },
+    {
+      "id": "truncate-budget-txn-tables",
+      "state": "done",
+      "created": "2026-07-20T16:53:24+0700",
+      "updated": "2026-07-20T16:53:24+0700",
+      "ai": "TRUNCATE budget.pending_budget_detail(8->0)+pending_budget(6->0)+budget_trip(1->0) on fabric_sql_database-a42ef9f3 (consolidated DB, staging/SIT shared); no FK/no status col so no approved loss; SP cman-fabric-write had TRUNCATE perm; jakkaritw confirmed; clean slate for SIT",
+      "agent": "claude"
+    },
+    {
+      "id": "review-spoof-passakornh",
+      "state": "done",
+      "created": "2026-07-20T16:18:42+0700",
+      "updated": "2026-07-20T16:18:42+0700",
+      "ai": "vite.review.config.ts SPOOF_USER anurakb->passakornh@chememan.com for local staging review; dev-only uncommitted config, needs dev-server restart to apply",
+      "agent": "claude"
+    },
+    {
+      "id": "log-eca3d47",
+      "state": "done",
+      "created": "2026-07-19T20:43:47+0700",
+      "updated": "2026-07-19T20:43:47+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log dept-picker react feature push (1987dcb) [commit eca3d47]"
+    },
     {
       "id": "faip-mount-double-fetch",
       "state": "done",

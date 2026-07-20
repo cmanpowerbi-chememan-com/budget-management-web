@@ -137,7 +137,9 @@ export function ApprovalActionBar({
 
   return (
     <div className="approval-bar" data-testid="approval-bar">
-      <div className="approval-bar-row">
+      {/* Status line sits ABOVE the action buttons (both right-aligned) —
+       * chip + hints first, then Reject / Approve / Submit below. */}
+      <div className="approval-bar-status">
         <span className={`status-chip status-chip-${statusToneClass(status.status)}`} data-testid="approval-status-chip">
           {statusChipLabel(status)}
         </span>
@@ -154,41 +156,44 @@ export function ApprovalActionBar({
         )}
       </div>
 
-      <div className="approval-bar-row">
-        {showApproveReject && !rejecting && (
-          <button
-            type="button"
-            className="btn-reject"
-            data-testid="approval-reject-btn"
-            disabled={actionBusy}
-            onClick={() => setRejecting(true)}
-          >
-            ตีกลับทั้งฝ่าย
-          </button>
-        )}
-        {showApproveReject && (
-          <button
-            type="button"
-            className="btn-approve"
-            data-testid="approval-approve-btn"
-            disabled={actionBusy}
-            onClick={handleApprove}
-          >
-            อนุมัติทั้งฝ่าย
-          </button>
-        )}
-        {showSubmit && (
-          <button
-            type="button"
-            className="btn-submit"
-            data-testid="approval-submit-btn"
-            disabled={actionBusy}
-            onClick={handleSubmit}
-          >
-            ส่งอนุมัติ
-          </button>
-        )}
-      </div>
+      {showApproveReject && !rejecting && (
+        <button
+          type="button"
+          className="btn-reject"
+          data-testid="approval-reject-btn"
+          disabled={actionBusy}
+          onClick={() => setRejecting(true)}
+        >
+          ตีกลับทั้งฝ่าย
+        </button>
+      )}
+      {showApproveReject && (
+        <button
+          type="button"
+          className="btn-approve"
+          data-testid="approval-approve-btn"
+          disabled={actionBusy}
+          onClick={handleApprove}
+        >
+          อนุมัติทั้งฝ่าย
+        </button>
+      )}
+      {showSubmit && (
+        <button
+          type="button"
+          className="btn-submit"
+          data-testid="approval-submit-btn"
+          disabled={actionBusy}
+          onClick={handleSubmit}
+        >
+          {/* Paper-plane, mockup #submitBtn */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 2L11 13" />
+            <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+          </svg>
+          <span>ส่งอนุมัติ</span>
+        </button>
+      )}
 
       {rejecting && (
         <div className="reject-panel" data-testid="approval-reject-panel">

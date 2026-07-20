@@ -9,6 +9,7 @@ const GL_REF: GlAccount[] = [
   { gl_code: '5211800030', gl_group: 'Office expenses', gl_name: 'Office COST', is_special: false },
   { gl_code: '6211800030', gl_group: 'Office expenses', gl_name: 'Office SGA', is_special: false },
   { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+  { gl_code: '5210400010', gl_group: 'Travelling Expense', gl_name: 'Per diem', is_special: false },
 ]
 
 function getTable(testId: string): HTMLTableElement {
@@ -95,6 +96,53 @@ describe('GridTable', () => {
     render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
     expect(screen.queryByTestId('open-subform-CC1-5211900030')).not.toBeInTheDocument()
     expect(screen.getByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).toBeInTheDocument()
+  })
+
+  describe('trailing "ลบ" (delete) column', () => {
+    it('shows the delete button for a deletable row (editable, no SAP/Approved, non-Travelling) and calls onDeleteRow with the row', () => {
+      const onDeleteRow = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
+      const deleteBtn = screen.getByTestId('delete-row-CC1-5211800030')
+      fireEvent.click(deleteBtn)
+      expect(onDeleteRow).toHaveBeenCalledWith(rows[0])
+    })
+
+    it('does not show the delete button when onDeleteRow is not provided', () => {
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.queryByTestId('delete-row-CC1-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('does not show the delete button for a non-editable (See-only) row', () => {
+      const onDeleteRow = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: false })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
+      expect(screen.queryByTestId('delete-row-CC1-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('does not show the delete button when the row has a SAP value in any month', () => {
+      const onDeleteRow = vi.fn()
+      const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+      const rows = [{ ...base, sap: { ...base.sap, m01: 100 } }]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
+      expect(screen.queryByTestId('delete-row-CC1-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('does not show the delete button when the row has an Approved (board) value in any month', () => {
+      const onDeleteRow = vi.fn()
+      const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+      const rows = [{ ...base, board: { ...base.board, m01: 100 } }]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
+      expect(screen.queryByTestId('delete-row-CC1-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('does not show the delete button for a Travelling Expense row, even when editable with no SAP/Approved', () => {
+      const onDeleteRow = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5210400010', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
+      expect(screen.queryByTestId('delete-row-CC1-5210400010')).not.toBeInTheDocument()
+    })
   })
 
   it('renders a not-in-master GL row as READ-ONLY, with no reference marker (server now hides such rows entirely — 2026-07-18 GL-visibility rule)', () => {

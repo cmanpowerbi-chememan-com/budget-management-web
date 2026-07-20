@@ -31,6 +31,7 @@ from app.write_model import (
     PendingRowInput,
     TripInput,
     delete_detail_line,
+    delete_pending_row,
     delete_trip,
     save_detail_lines,
     save_pending_rows,
@@ -109,6 +110,31 @@ def update_trip(body: TripInput, email: str = Depends(get_current_user_email)):
     if body.trip_id is None:
         raise HTTPException(status_code=422, detail="trip_id is required to update an existing trip")
     return _save_one_trip(body, email)
+
+
+@router.delete("/rows")
+def delete_row(
+    cost_center: str = Query(...),
+    gl_account: str = Query(...),
+    fiscal_year: int = Query(...),
+    expected_updated_at: datetime = Query(...),
+    email: str = Depends(get_current_user_email),
+):
+    """Grid trailing "ลบ" column: delete one manually-added Pending row (and
+    cascade any special-GL detail lines it owns). Frontend only offers this
+    button for a row with no SAP/Approved value in any month and never for
+    Travelling Expense — this endpoint itself is generic and does not
+    re-check either condition."""
+    try:
+        # Same connection-open/resolve_scope contract as put_row above.
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            result = delete_pending_row(conn, cost_center, gl_account, fiscal_year, expected_updated_at, email, scope)
+    except pyodbc.Error as exc:
+        logger.exception("delete_pending_row failed for %s/%s", cost_center, gl_account)
+        raise HTTPException(status_code=502, detail=_DB_UNAVAILABLE_DETAIL) from exc
+    _raise_for_result(result)
+    return {"ok": True, "cost_center": cost_center, "gl_account": gl_account, "fiscal_year": fiscal_year}
 
 
 @router.delete("/detail")

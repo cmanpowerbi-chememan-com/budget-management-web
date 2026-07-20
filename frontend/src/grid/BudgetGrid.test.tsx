@@ -144,6 +144,85 @@ describe('BudgetGrid', () => {
     )
   })
 
+  describe('grid trailing "ลบ" column — deleting a manually-added row', () => {
+    beforeEach(() => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('confirms in Thai, calls deleteRow with the row lock token, and removes the row from the grid', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+      vi.mocked(budgetApi.deleteRow).mockResolvedValue({ ok: true })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const deleteBtn = await screen.findByTestId('delete-row-CC1-5211800030')
+      fireEvent.click(deleteBtn)
+
+      expect(window.confirm).toHaveBeenCalled()
+      await waitFor(() =>
+        expect(budgetApi.deleteRow).toHaveBeenCalledWith({
+          costCenter: 'CC1', glAccount: '5211800030', fiscalYear: 2027, expectedUpdatedAt: '2026-01-01T00:00:00Z',
+        }),
+      )
+      await waitFor(() => expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument())
+    })
+
+    it('does nothing when the user cancels the confirm dialog (no API call, row stays)', async () => {
+      vi.mocked(window.confirm).mockReturnValue(false)
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const deleteBtn = await screen.findByTestId('delete-row-CC1-5211800030')
+      fireEvent.click(deleteBtn)
+
+      expect(budgetApi.deleteRow).not.toHaveBeenCalled()
+      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+    })
+
+    it('on a 409 conflict, refetches the grid instead of silently removing the row', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid)
+        .mockResolvedValueOnce([
+          makeRow('CC1', '5211800030', {
+            pending: { ...makeRow('x', 'y').pending, updated_at: '2026-01-01T00:00:00Z' },
+          }),
+        ])
+        .mockResolvedValueOnce([
+          makeRow('CC1', '5211800030', {
+            pending: { ...makeRow('x', 'y').pending, m01: 500, total_year: 500, updated_at: '2026-02-02T00:00:00Z' },
+          }),
+        ])
+      vi.mocked(budgetApi.deleteRow).mockRejectedValue(
+        new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น', 'changed by someone else'),
+      )
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const deleteBtn = await screen.findByTestId('delete-row-CC1-5211800030')
+      fireEvent.click(deleteBtn)
+
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument())
+    })
+  })
+
   describe('mount-time grid fetch (gated on ฝ่าย resolution — single fetch, no flicker)', () => {
     it('fetches the grid exactly once on mount for a single-ฝ่าย caller, already resolved to that ฝ่าย (no department=null flash)', async () => {
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
@@ -223,7 +302,9 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
     fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
-    fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: '5211800030' } })
+    // GL picker is a searchable combobox — focus opens the list, click picks.
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
     await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toBeInTheDocument())

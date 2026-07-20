@@ -3,7 +3,7 @@ import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
 import { fetchPendingForMe } from '../api/approval'
 import { ApiError } from '../api/client'
-import { fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
+import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
 import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
 import { ApprovalActionBar } from '../approval/ApprovalActionBar'
@@ -277,6 +277,30 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  /** Grid trailing "ลบ" column — deletes a manually-added Pending row
+   * (`isDeletableRow`'s eligibility already gated whether the button was
+   * even rendered). Thai confirm before an irreversible delete; a 409
+   * refetches the grid (the row was changed/removed elsewhere) instead of
+   * assuming this client's view is still correct. */
+  async function handleDeleteRow(row: BudgetRow) {
+    if (!window.confirm(`ลบรายการนี้? (${row.cost_center} · ${row.gl_account})\nลบแล้วเรียกคืนไม่ได้`)) return
+    const key = rowKey(row.cost_center, row.gl_account)
+    try {
+      await deleteRow({
+        costCenter: row.cost_center, glAccount: row.gl_account, fiscalYear: year,
+        expectedUpdatedAt: row.pending.updated_at ?? '',
+      })
+      setRows((prev) => prev.filter((r) => rowKey(r.cost_center, r.gl_account) !== key))
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        await loadGrid()
+        return
+      }
+      const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'ลบไม่สำเร็จ'
+      setRowMessages((prev) => ({ ...prev, [key]: { kind: 'error', text: message } }))
+    }
+  }
+
   if (hasNoScope) {
     return (
       <div className="budget-grid">
@@ -367,18 +391,6 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         </div>
       )}
 
-      {department && (
-        <ApprovalActionBar
-          department={department}
-          fiscalYear={year}
-          isFillerOfDept={isFillerOfSelectedDept}
-          adminViewEnabled={adminViewEnabled}
-          rowCount={rows.length}
-          costCenterCount={selectedDeptCostCenterCount}
-          onChanged={loadPendingApprovals}
-        />
-      )}
-
       {error && (
         <div className="grid-error" role="alert">
           <span>{error}</span>
@@ -398,6 +410,21 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           onCommitRemark={handleCommitRemark}
           rowMessages={rowMessages}
           onOpenSpecial={handleOpenSpecial}
+          onDeleteRow={handleDeleteRow}
+        />
+      )}
+
+      {/* Below the grid, right-aligned — mockup 0002.3 .submit-row sits at
+       * the END of <main>, under the table. */}
+      {department && (
+        <ApprovalActionBar
+          department={department}
+          fiscalYear={year}
+          isFillerOfDept={isFillerOfSelectedDept}
+          adminViewEnabled={adminViewEnabled}
+          rowCount={rows.length}
+          costCenterCount={selectedDeptCostCenterCount}
+          onChanged={loadPendingApprovals}
         />
       )}
 

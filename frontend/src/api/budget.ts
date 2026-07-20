@@ -55,3 +55,22 @@ export function saveRow(payload: PendingRowInput): Promise<PendingRowState> {
     body: JSON.stringify(payload),
   })
 }
+
+/** `DELETE /budget/rows` — grid trailing "ลบ" column: remove one
+ * manually-added Pending row (the server cascades any special-GL detail
+ * lines it owns). Throws `ApiError` on 400/403/409/5xx — a stale
+ * `expectedUpdatedAt` throws 409 and deletes nothing. */
+export function deleteRow(params: {
+  costCenter: string
+  glAccount: string
+  fiscalYear: number
+  expectedUpdatedAt: string
+}): Promise<{ ok: true }> {
+  const query = buildQuery({
+    cost_center: params.costCenter,
+    gl_account: params.glAccount,
+    fiscal_year: params.fiscalYear,
+    expected_updated_at: params.expectedUpdatedAt,
+  })
+  return apiFetch<{ ok: true }>(`/budget/rows${query}`, { method: 'DELETE' })
+}

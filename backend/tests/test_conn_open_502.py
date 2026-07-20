@@ -56,6 +56,10 @@ _ENDPOINTS = [
     pytest.param("PUT", "/budget/detail", _DETAIL_BODY, "app.routers.budget_write", id="PUT /budget/detail"),
     pytest.param("POST", "/budget/trip", _TRIP_BODY, "app.routers.budget_write", id="POST /budget/trip"),
     pytest.param(
+        "DELETE", "/budget/rows?cost_center=X&gl_account=Y&fiscal_year=2026&expected_updated_at=2026-01-01T00:00:00Z",
+        None, "app.routers.budget_write", id="DELETE /budget/rows",
+    ),
+    pytest.param(
         "DELETE", "/budget/detail?detail_id=5&expected_updated_at=2026-01-01T00:00:00Z",
         None, "app.routers.budget_write", id="DELETE /budget/detail",
     ),

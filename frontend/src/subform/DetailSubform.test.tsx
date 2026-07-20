@@ -171,7 +171,7 @@ describe('DetailSubform', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มรายการ/ }))
     fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
-    fireEvent.click(screen.getByTestId('save-row-new-0'))
+    fireEvent.click(screen.getByTestId('save-all'))
 
     await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
     const payload = vi.mocked(subformApi.saveDetailLine).mock.calls[0][0]
@@ -198,9 +198,75 @@ describe('DetailSubform', () => {
       />,
     )
     await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
-    fireEvent.click(screen.getByTestId('save-row-existing-1'))
+    fireEvent.click(screen.getByTestId('save-all'))
 
     await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
+  })
+
+  describe('save-all footer button (mockup #detailModal — one บันทึก per modal)', () => {
+    function renderTwoRows(onClose = vi.fn(), onSaved = vi.fn()) {
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={onSaved}
+        />,
+      )
+      return { onClose, onSaved }
+    }
+
+    it('one click saves EVERY row, then closes the modal on full success', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine({ detail_id: 1 }), blankLine({ detail_id: 2 })])
+      vi.mocked(subformApi.saveDetailLine)
+        .mockResolvedValueOnce(blankLine({ detail_id: 1 }))
+        .mockResolvedValueOnce(blankLine({ detail_id: 2 }))
+      const onClose = vi.fn()
+      const onSaved = vi.fn()
+      renderTwoRows(onClose, onSaved)
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-2')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalledTimes(2))
+      expect(onSaved).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(onClose).toHaveBeenCalled())
+    })
+
+    it('a failed row never blocks the rest — modal stays open with that row marked', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine({ detail_id: 1 }), blankLine({ detail_id: 2 })])
+      vi.mocked(subformApi.saveDetailLine)
+        .mockRejectedValueOnce(new ApiError(500, 'เซิร์ฟเวอร์ขัดข้อง'))
+        .mockResolvedValueOnce(blankLine({ detail_id: 2 }))
+      const onClose = vi.fn()
+      const onSaved = vi.fn()
+      renderTwoRows(onClose, onSaved)
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-2')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(screen.getByTestId('detail-row-error-existing-1')).toBeInTheDocument())
+      expect(screen.getByText('เซิร์ฟเวอร์ขัดข้อง')).toBeInTheDocument()
+      expect(onSaved).toHaveBeenCalledTimes(1) // row 2 still saved
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('renders JAN-labelled month columns, a Monthly total row, and Rows/Year-total footer', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine({ m01: 5000, m02: 250, total_year: 5250 })])
+      renderTwoRows()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      expect(screen.getByText('Jan')).toBeInTheDocument()
+      expect(screen.getByText('Dec')).toBeInTheDocument()
+      expect(screen.getByText('Monthly total')).toBeInTheDocument()
+      expect(screen.getByText('5,000')).toBeInTheDocument() // m01 column total
+      expect(screen.getByText('฿5,250')).toBeInTheDocument() // footer year total
+      expect(screen.getByText(/Rows:/)).toBeInTheDocument()
+    })
   })
 
   describe('Lease & Rental vehicle plate — อื่นๆ reveals a required free-text plate (2026-07-17)', () => {
@@ -233,7 +299,7 @@ describe('DetailSubform', () => {
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
       expect(screen.queryByPlaceholderText('พิมพ์ทะเบียนรถ')).not.toBeInTheDocument()
 
-      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+      fireEvent.click(screen.getByTestId('save-all'))
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
       expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ทะเบียนรถ).toBe('6ขผ-3918')
     })
@@ -246,7 +312,7 @@ describe('DetailSubform', () => {
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
       expect(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ')).toBeInTheDocument()
 
-      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+      fireEvent.click(screen.getByTestId('save-all'))
       await waitFor(() => expect(screen.getByText('กรุณาพิมพ์ทะเบียนรถ')).toBeInTheDocument())
       expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
     })
@@ -259,7 +325,7 @@ describe('DetailSubform', () => {
 
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
       fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'กข-1234' } })
-      fireEvent.click(screen.getByTestId('save-row-existing-1'))
+      fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
       expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ทะเบียนรถ).toBe('กข-1234')
@@ -380,7 +446,7 @@ describe('DetailSubform', () => {
     })
   })
 
-  it('calls onClose when the close button is clicked', async () => {
+  it('calls onClose when the ยกเลิก button is clicked', async () => {
     vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
     const onClose = vi.fn()
     render(
@@ -395,7 +461,7 @@ describe('DetailSubform', () => {
       />,
     )
     await waitFor(() => expect(screen.getByText(/ยังไม่มีรายการ/)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
     expect(onClose).toHaveBeenCalled()
   })
 })
