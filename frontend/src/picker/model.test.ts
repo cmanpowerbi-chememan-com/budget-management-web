@@ -65,7 +65,7 @@ describe('matchesQuery', () => {
   })
 })
 
-describe('resolveInitialDept — ADR-0016 deep-link + single-ฝ่าย auto-select', () => {
+describe('resolveInitialDept — ADR-0016 deep-link + forced default ฝ่าย (2026-07-21)', () => {
   const multiDeptTree = buildDeptHierarchy(ROWS) // 2 ฝ่าย across 2 สายงาน
   const singleDeptTree = buildDeptHierarchy(ROWS.filter((r) => r.department === 'Solution Delivery')) // 1 ฝ่าย
 
@@ -73,12 +73,12 @@ describe('resolveInitialDept — ADR-0016 deep-link + single-ฝ่าย auto-s
     expect(resolveInitialDept(multiDeptTree, 'Solution Delivery')).toBe('Solution Delivery')
   })
 
-  it('returns null for a department outside the caller\'s scope when >1 ฝ่าย remain (never grants access, never guesses)', () => {
-    expect(resolveInitialDept(multiDeptTree, 'Some Other Department')).toBeNull()
+  it('an out-of-scope deep-link falls back to the FIRST ฝ่าย in scope (alphabetical), never grants access', () => {
+    expect(resolveInitialDept(multiDeptTree, 'Some Other Department')).toBe('Budgeting and Management Accounting')
   })
 
-  it('returns null when there is no deep-link and >1 ฝ่าย in scope — user must consciously choose', () => {
-    expect(resolveInitialDept(multiDeptTree, null)).toBeNull()
+  it('with no deep-link and >1 ฝ่าย in scope, defaults to the FIRST ฝ่าย — the page never lands unselected', () => {
+    expect(resolveInitialDept(multiDeptTree, null)).toBe('Budgeting and Management Accounting')
   })
 
   it('auto-selects the single ฝ่าย when there is no deep-link and exactly 1 ฝ่าย in scope', () => {

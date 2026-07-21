@@ -17,13 +17,20 @@ export interface DeptPickerProps {
  * (ADR-0008/0019). Mirrors the mockup's `.faip` component: a trigger
  * button opens a searchable panel grouped by division, each department row
  * showing its CC count; a department the caller must approve right now
- * gets a "รออนุมัติ" pill (A10). */
+ * gets a "รออนุมัติ" pill (A10). Search keyboard: when the query narrows
+ * the list to exactly ONE department, Enter selects it (row highlighted as
+ * the default); Escape closes the panel. */
 export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartments }: DeptPickerProps) {
   const pending = pendingApprovalDepartments ?? new Set<string>()
   const selectedIsPending = selected !== null && pending.has(selected)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const divisions = useMemo(() => buildDeptHierarchy(rows), [rows])
+  const visibleDepts = useMemo(
+    () => divisions.flatMap((d) => d.departments).filter((d) => matchesQuery(d, query)),
+    [divisions, query],
+  )
+  const singleMatch = visibleDepts.length === 1 ? visibleDepts[0].department : null
 
   function pick(department: string) {
     onSelect(department)
@@ -53,6 +60,10 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
             placeholder="ค้นหาฝ่าย…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && singleMatch) pick(singleMatch)
+              if (e.key === 'Escape') setOpen(false)
+            }}
             autoFocus
           />
           <div className="dept-picker-list">
@@ -69,7 +80,7 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
                     <button
                       type="button"
                       key={dept.department}
-                      className={`dept-picker-row${dept.department === selected ? ' selected' : ''}`}
+                      className={`dept-picker-row${dept.department === selected ? ' selected' : ''}${dept.department === singleMatch ? ' default' : ''}`}
                       onClick={() => pick(dept.department)}
                     >
                       <span className="dept-picker-name">{dept.department}</span>

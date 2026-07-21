@@ -69,12 +69,13 @@ export function matchesQuery(node: DepartmentNode, query: string): boolean {
  *    scope (ADR-0016: the deep-link is convenience-only, never a bearer
  *    of access — validated against the built hierarchy, not taken on
  *    faith).
- * 2. Otherwise, with no (valid) deep-link: auto-select only when the
- *    caller has EXACTLY ONE ฝ่าย in scope — there is nothing to choose
- *    between. With 0 or >1 ฝ่าย, return `null` ("— เลือกฝ่าย —") so the
- *    user consciously picks rather than landing on an arbitrary default. */
+ * 2. Otherwise the page must NEVER land unselected (2026-07-21 jakkaritw
+ *    — supersedes the earlier ">1 ฝ่าย → null, user consciously picks"
+ *    rule): default to the FIRST ฝ่าย in scope (alphabetical hierarchy
+ *    order); the user can switch any time via the picker. `null` only when
+ *    the scope is empty (0 ฝ่าย). */
 export function resolveInitialDept(divisions: DivisionNode[], deepLinkDept: string | null): string | null {
   const all = flattenDepartments(divisions)
   if (deepLinkDept && all.some((d) => d.department === deepLinkDept)) return deepLinkDept
-  return all.length === 1 ? all[0].department : null
+  return all.length > 0 ? all[0].department : null
 }

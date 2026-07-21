@@ -43,6 +43,37 @@ describe('DeptPicker', () => {
     expect(onSelect).toHaveBeenCalledWith('Solution Delivery')
   })
 
+  it('Enter selects the department when the search narrows to exactly one match', () => {
+    const onSelect = vi.fn()
+    render(<DeptPicker rows={ROWS} selected={null} onSelect={onSelect} />)
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const search = screen.getByPlaceholderText('ค้นหาฝ่าย…')
+    fireEvent.change(search, { target: { value: 'budgeting' } })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith('Budgeting and Management Accounting')
+    // panel closed after the pick
+    expect(screen.queryByPlaceholderText('ค้นหาฝ่าย…')).not.toBeInTheDocument()
+  })
+
+  it('Enter does nothing while more than one department matches', () => {
+    const onSelect = vi.fn()
+    render(<DeptPicker rows={ROWS} selected={null} onSelect={onSelect} />)
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const search = screen.getByPlaceholderText('ค้นหาฝ่าย…')
+    fireEvent.change(search, { target: { value: 'division' } }) // matches both divisions
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('Escape closes the panel without selecting', () => {
+    const onSelect = vi.fn()
+    render(<DeptPicker rows={ROWS} selected={null} onSelect={onSelect} />)
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    fireEvent.keyDown(screen.getByPlaceholderText('ค้นหาฝ่าย…'), { key: 'Escape' })
+    expect(screen.queryByPlaceholderText('ค้นหาฝ่าย…')).not.toBeInTheDocument()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('shows an empty-scope message when there are no departments at all', () => {
     render(<DeptPicker rows={[]} selected={null} onSelect={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))

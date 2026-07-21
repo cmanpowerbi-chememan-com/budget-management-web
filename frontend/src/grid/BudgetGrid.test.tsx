@@ -236,7 +236,7 @@ describe('BudgetGrid', () => {
       expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: 'Solution Delivery' }))
     })
 
-    it('fetches the grid exactly once on mount for a >1-ฝ่าย caller, with no ฝ่าย auto-selected', async () => {
+    it('fetches the grid exactly once on mount for a >1-ฝ่าย caller, with the FIRST ฝ่าย force-selected (2026-07-21)', async () => {
       const MULTI_DEPARTMENTS = [
         { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
         { cost_center: 'CC3', department: 'Budgeting and Management Accounting', division: 'Budgeting and Cost Accounting Division', c_level: 'CFO' },
@@ -247,9 +247,11 @@ describe('BudgetGrid', () => {
 
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
 
-      await waitFor(() => expect(screen.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeInTheDocument())
+      // Divisions sort alphabetically: 'Budgeting and Cost Accounting Division'
+      // < 'Digital Technology Division' → first ฝ่าย wins as the forced default.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Budgeting and Management Accounting' })).toBeInTheDocument())
       await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1))
-      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: undefined }))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: 'Budgeting and Management Accounting' }))
     })
 
     it('still loads the grid (department=null) when fetchDepartments fails — never stuck in loading forever', async () => {
