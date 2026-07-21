@@ -1442,11 +1442,12 @@ def test_delete_detail_line_not_found_is_conflict_not_500():
     assert result.error == "conflict"
 
 
-def test_delete_detail_line_deleting_last_line_zeroes_parent_row_not_removed():
-    """Deleting the LAST remaining detail line is allowed: parent ==
-    SUM(detail) becomes 0 and the atomic recompute zeroes the EXISTING
-    pending_budget row in place (never deletes it) — same contract every
-    other detail-line write already relies on."""
+def test_delete_detail_line_deleting_last_line_removes_the_empty_parent():
+    """Deleting the LAST remaining detail line removes the now-empty parent
+    row too (2026-07-21 jakkaritw spot-test residue fix) — but ONLY via the
+    guarded DELETE: `remark IS NULL` (a user-authored grid remark keeps the
+    row), `total_year = 0`, and `NOT EXISTS` any remaining detail line for
+    the cell (other lines — e.g. another trip's — keep it)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
@@ -1456,14 +1457,23 @@ def test_delete_detail_line_deleting_last_line_zeroes_parent_row_not_removed():
         None,  # deadline check -> open
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),
     ]
-    cursor.rowcount = 1  # parent row already exists -> atomic UPDATE matches it directly, zeroing it
+    cursor.rowcount = 1  # parent row already exists -> recompute UPDATE matches it
     scope = _scope()
     result = delete_detail_line(conn, 5, STALE, "filler@chememan.com", scope)
     assert result.ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
-    # the atomic recompute always runs an UPDATE (never a DELETE) against the parent table
-    assert not any(s.strip().startswith("DELETE FROM budget.pending_budget ") for s in executed_sql)
     assert any(s.strip().startswith("UPDATE budget.pending_budget") for s in executed_sql)
+    parent_deletes = [
+        s
+        for s in executed_sql
+        if s.strip().startswith("DELETE FROM budget.pending_budget")
+        and not s.strip().startswith("DELETE FROM budget.pending_budget_detail")
+    ]
+    assert len(parent_deletes) == 1, "expected exactly one guarded parent DELETE"
+    sql = parent_deletes[0]
+    assert "remark IS NULL" in sql
+    assert "total_year = 0" in sql
+    assert "NOT EXISTS" in sql
 
 
 def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
@@ -1510,6 +1520,48 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
     cost_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
     recomputed = {gl for args in parent_writes for gl in cost_side_gls if gl in args}
     assert recomputed == cost_side_gls, f"expected all 4 COST-side parent cells recomputed, got {recomputed}"
+
+
+def test_delete_trip_removes_orphaned_parents_for_all_four_side_gls():
+    """After the trip's lines are gone, each of the 4 travel-GL parent rows
+    gets the same guarded orphan DELETE as the detail-line path (2026-07-21
+    residue fix) — a parent another trip still uses is kept by the NOT EXISTS
+    guard, not by skipping the attempt."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    one_off = iter([
+        ("CC1", "COST", 2027),      # trip lookup
+        ("deptA", "divA", "clA"),    # cc_dims lookup for department-lock check
+        None,                         # department-lock check -> not locked
+        None,                         # deadline check -> open
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+
+    executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
+    cost_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
+    parent_deletes = [
+        (sql, args)
+        for sql, args in executed
+        if sql.strip().startswith("DELETE FROM budget.pending_budget")
+        and not sql.strip().startswith("DELETE FROM budget.pending_budget_detail")
+    ]
+    deleted_gls = {gl for sql, args in parent_deletes for gl in cost_side_gls if gl in args}
+    assert deleted_gls == cost_side_gls, f"expected guarded parent DELETE for all 4 GLs, got {deleted_gls}"
+    for sql, _args in parent_deletes:
+        assert "remark IS NULL" in sql
+        assert "NOT EXISTS" in sql
 
 
 def test_delete_trip_forbidden_when_actual_cc_outside_caller_scope():

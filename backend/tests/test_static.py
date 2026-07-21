@@ -10,6 +10,7 @@ That keeps the "absent vs present" cases deterministic across environments.
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.config import Settings, get_settings
 from app.routers import approval, attachments, budget, budget_write, health, me, reference, scope, subform
 from app.static import mount_frontend
 
@@ -17,8 +18,14 @@ ALL_ROUTERS = (health, me, scope, budget, budget_write, approval, reference, sub
 
 
 def _build_test_app() -> FastAPI:
-    """Fresh FastAPI app with the same routers as app.main, unmounted."""
+    """Fresh FastAPI app with the same routers as app.main, unmounted.
+
+    Settings are pinned to `_env_file=None`: these apps must be hermetic —
+    with the documented local backend/.env (APP_ENV=local + DEV_AUTH_EMAIL)
+    the real auth dependency would return the dev email and /budget would
+    hit the LIVE DB instead of raising 401."""
     test_app = FastAPI(title="test")
+    test_app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
     for module in ALL_ROUTERS:
         test_app.include_router(module.router)
     return test_app

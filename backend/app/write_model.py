@@ -1539,23 +1539,57 @@ class TripDeleteResult(BaseModel):
     detail: str | None = None
 
 
+def _delete_parent_if_orphaned(conn: pyodbc.Connection, cost_center: str, gl_account: str, fiscal_year: int) -> bool:
+    """Remove a `pending_budget` parent row left empty after its last detail
+    line was deleted (2026-07-21 jakkaritw spot-test residue fix: deleting a
+    trip left 4 all-zero travel-GL parent rows on the grid with no UI way to
+    remove them).
+
+    Only when the row is genuinely residue — every guard lives IN THE SQL so
+    a concurrent detail insert between check and delete can never race the
+    decision:
+    - `NOT EXISTS` any remaining detail line for the cell (another trip's /
+    another line's data keeps the parent),
+    - `total_year = 0` (never delete a row that still carries an amount),
+    - `remark IS NULL` (the grid's remark editor writes to this same row —
+    user-authored content keeps it).
+
+    Runs inside the caller's transaction — a later conflict rollback undoes
+    it together with the rest of the unit of work."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            DELETE FROM budget.pending_budget
+            WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?
+              AND remark IS NULL AND total_year = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM budget.pending_budget_detail d
+                  WHERE d.cost_center = budget.pending_budget.cost_center
+                    AND d.gl_account = budget.pending_budget.gl_account
+                    AND d.fiscal_year = budget.pending_budget.fiscal_year)
+            """,
+            cost_center, gl_account, fiscal_year,
+        )
+        return cursor.rowcount > 0
+    finally:
+        cursor.close()
+
+
 def _delete_one_detail_line(
     conn: pyodbc.Connection, detail_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
 ) -> DetailLineDeleteResult:
     """Delete one special-GL detail line, then re-assert parent==SUM(detail)
     (never-cut, same as every other detail-line write).
 
-    Deleting the LAST remaining detail line for a cell is allowed by design:
-    SUM(detail) becomes 0 and `_recompute_parent_cell`'s atomic UPDATE zeroes
-    the EXISTING `pending_budget` row in place — the parent row is kept
-    (zeroed), never deleted. This matches the "parent row always reflects
-    SUM(detail)" contract every save path already relies on; deleting the
-    parent row too would be a second, unrelated behavior (removing a
-    cost_center/gl_account cell from the grid entirely) that nothing in this
-    task asked for and that would desync the grid's zero-filled-layer
-    contract (`read_model` always expects a Pending layer to exist once any
-    budget activity has happened on that cell).
-    """
+    Deleting the LAST remaining detail line for a cell is allowed: the
+    recompute zeroes the parent, then `_delete_parent_if_orphaned` removes
+    the empty parent row entirely (2026-07-21 contract change — the earlier
+    "keep the zeroed parent" behavior left undead zero rows on the grid;
+    read_model zero-fills a display-only Pending layer for cells with no
+    parent row, so removing the row loses nothing). The guarded DELETE keeps
+    a parent that still has other detail lines, a non-zero total, or a
+    user-authored remark."""
     owner = _lookup_detail_owner(conn, detail_id)
     if owner is None:
         raise RowConflictError(f"detail line {detail_id} not found — reload and retry")
@@ -1583,6 +1617,7 @@ def _delete_one_detail_line(
     now = _now()
     dims = _derive_dim_snapshot(conn, cost_center, gl_account)
     _recompute_parent_cell(conn, cost_center, gl_account, fiscal_year, dims, user_email, now)
+    _delete_parent_if_orphaned(conn, cost_center, gl_account, fiscal_year)
     conn.commit()
 
     return DetailLineDeleteResult(detail_id=detail_id, ok=True)
@@ -1618,7 +1653,11 @@ def _delete_one_trip(
     correct option: `_recompute_parent_cell` re-derives SUM(detail) fresh
     from whatever remains, so recomputing a cell this trip never touched
     costs nothing and cannot desync it (other trips' lines under the same
-    GL are untouched by this trip's DELETE and remain fully counted)."""
+    GL are untouched by this trip's DELETE and remain fully counted).
+
+    After each recompute, `_delete_parent_if_orphaned` removes a parent left
+    with no detail lines at all (2026-07-21 residue fix) — the NOT EXISTS
+    guard keeps parents still used by other trips."""
     trip = _lookup_trip(conn, trip_id)
     if trip is None:
         raise RowConflictError(f"trip {trip_id} not found — reload and retry")
@@ -1651,6 +1690,7 @@ def _delete_one_trip(
         gl_account = side_to_gl[side]
         dims = _derive_dim_snapshot(conn, cost_center, gl_account)
         _recompute_parent_cell(conn, cost_center, gl_account, fiscal_year, dims, user_email, now)
+        _delete_parent_if_orphaned(conn, cost_center, gl_account, fiscal_year)
 
     conn.commit()
 
