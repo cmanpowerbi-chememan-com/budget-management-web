@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { COLUMN_WIDTH_MIN, COLUMN_WIDTHS_STORAGE_KEY } from './model'
@@ -101,7 +101,9 @@ describe('GridTable', () => {
   describe('trailing "ลบ" (delete) column', () => {
     it('shows the delete button for a deletable row (editable, no SAP/Approved, non-Travelling) and calls onDeleteRow with the row', () => {
       const onDeleteRow = vi.fn()
-      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+      // A deletable row is a persisted pending row — updated_at must be non-null.
+      const rows = [{ ...base, pending: { ...base.pending, updated_at: '2026-01-01T00:00:00Z' } }]
       render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onDeleteRow={onDeleteRow} />)
       const deleteBtn = screen.getByTestId('delete-row-CC1-5211800030')
       fireEvent.click(deleteBtn)
@@ -269,6 +271,18 @@ describe('GridTable', () => {
       expect(costSection).toHaveTextContent('100')
     })
 
+    it('filters by the STATUS column — keeps only rows whose matched layer has a value', () => {
+      const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+      const withSap = { ...base, sap: { ...base.sap, m01: 100 } }
+      const noSap = makeRow({ cost_center: 'CC2', gl_account: '5211800030', editable: true })
+      render(<GridTable rows={[withSap, noSap]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      fireEvent.change(screen.getByTestId('filter-status'), { target: { value: 'sap' } })
+
+      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.queryByTestId('txn-CC2-5211800030')).not.toBeInTheDocument()
+    })
+
     it('shows an empty-filtered message and keeps the filter input editable when nothing matches', () => {
       render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
 
@@ -301,13 +315,14 @@ describe('GridTable', () => {
       expect(screen.queryByTestId('txn-CC2-South-5211900030')).not.toBeInTheDocument()
     })
 
-    it('renders a col-filter-spacer under the Status th and every month th', () => {
+    it('renders a col-filter input under the Status th and a col-filter-spacer under every month th', () => {
       render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
       const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
       const ths = [...colRow.querySelectorAll('th')]
       const statusTh = ths.find((th) => th.querySelector('.th-label')?.textContent === 'Status')
-      expect(statusTh?.querySelector('.col-filter-spacer')).toBeInTheDocument()
+      // Status got its own filter input (2026-07-21) — months keep spacers.
+      expect(statusTh?.querySelector('[data-testid="filter-status"]')).toBeInTheDocument()
       const monthThs = colRow.querySelectorAll('th.month-col')
       expect(monthThs).toHaveLength(12)
       monthThs.forEach((th) => expect(th.querySelector('.col-filter-spacer')).toBeInTheDocument())
@@ -583,6 +598,128 @@ describe('GridTable', () => {
       fireEvent.change(screen.getAllByTestId('filter-remark')[0], { target: { value: '' } })
       expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
       expect(screen.getByTestId('txn-CC2-6211800030')).toBeInTheDocument()
+    })
+  })
+
+  describe('compact mode ("ซ่อนคอลัมน์" toggle on the Status header — jakkaritw-approved 2026-07-21)', () => {
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }), // COST, Office expenses
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }), // SGA, Office expenses
+    ]
+
+    // Both side-tables (COST/SGA) render their own copy of the collapse/
+    // expand button (same convention as filter-cc/col-resize-cc elsewhere in
+    // this file) — clicking ANY of them flips the ONE shared columnsCollapsed
+    // state, which is exactly what proves both tables toggle together.
+    function clickFirstCollapseButton() {
+      fireEvent.click(screen.getAllByTestId('collapse-columns-btn')[0])
+    }
+    function clickFirstExpandButton() {
+      fireEvent.click(screen.getAllByTestId('expand-columns-btn')[0])
+    }
+
+    it('shows the collapse button (one per side-table) in expanded state, with GL Group/Remark/Status content visible', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getAllByTestId('collapse-columns-btn')).toHaveLength(2)
+      expect(screen.queryAllByTestId('expand-columns-btn')).toHaveLength(0)
+      expect(screen.getAllByText('Office expenses').length).toBeGreaterThan(0)
+      expect(screen.getByTestId('remark-text-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.getAllByText('SAP · ใช้จริง').length).toBeGreaterThan(0)
+    })
+
+    it('clicking collapse hides GL Group/Remark/Status but keeps CC/GL/month values, and swaps the toggle button', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      clickFirstCollapseButton()
+
+      // Scoped to the visible side-section — the hidden fit-to-content
+      // measurer (UI-parity 8d) always renders "Office expenses" as a width
+      // candidate regardless of compact mode, which is unrelated to this
+      // feature and would otherwise false-negative a document-wide query.
+      expect(within(screen.getByTestId('side-section-COST')).queryByText('Office expenses')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('remark-text-CC1-5211800030')).not.toBeInTheDocument()
+      expect(screen.queryByText('SAP · ใช้จริง')).not.toBeInTheDocument()
+      expect(screen.queryAllByTestId('collapse-columns-btn')).toHaveLength(0)
+      expect(screen.getAllByTestId('expand-columns-btn')).toHaveLength(2)
+
+      expect(screen.getByTestId('txn-CC1-5211800030')).toHaveTextContent('5211800030')
+      expect(screen.getByTestId('sap-value-CC1-5211800030-m01')).toBeInTheDocument()
+    })
+
+    it('clicking expand restores GL Group/Remark/Status', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      clickFirstCollapseButton()
+      clickFirstExpandButton()
+
+      expect(screen.getAllByTestId('collapse-columns-btn')).toHaveLength(2)
+      expect(screen.queryAllByTestId('expand-columns-btn')).toHaveLength(0)
+      expect(screen.getAllByText('Office expenses').length).toBeGreaterThan(0)
+      expect(screen.getByTestId('remark-text-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.getAllByText('SAP · ใช้จริง').length).toBeGreaterThan(0)
+    })
+
+    it('one click collapses BOTH side tables (COST and SGA)', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      clickFirstCollapseButton()
+
+      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument() // COST row
+      expect(screen.getByTestId('txn-CC1-6211800030')).toBeInTheDocument() // SGA row
+      expect(screen.queryByText('SAP · ใช้จริง')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('remark-text-CC1-6211800030')).not.toBeInTheDocument()
+    })
+
+    it('a special editable row in compact mode shows the ↗ button in the GL cell and fires onOpenSpecial', () => {
+      const onOpenSpecial = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
+      clickFirstCollapseButton()
+
+      const openBtn = screen.getByTestId('open-subform-CC1-5211900030')
+      fireEvent.click(openBtn)
+      expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
+    })
+
+    it('a non-editable (See-only) special row shows no ↗ button and no hint text in compact mode', () => {
+      const onOpenSpecial = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: false })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
+      clickFirstCollapseButton()
+
+      expect(screen.queryByTestId('open-subform-CC1-5211900030')).not.toBeInTheDocument()
+      expect(screen.queryByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).not.toBeInTheDocument()
+    })
+
+    it('Pending month inputs stay editable and commit still fires in compact mode', () => {
+      const onCommitMonth = vi.fn()
+      const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={onCommitMonth} />)
+      clickFirstCollapseButton()
+
+      const input = screen.getByTestId('pending-input-CC1-5211800030-m01')
+      fireEvent.change(input, { target: { value: '750' } })
+      fireEvent.blur(input)
+      expect(onCommitMonth).toHaveBeenCalledWith(rows[0], 'm01', 750)
+    })
+
+    it('a glGroup filter stays applied after collapsing (a filter on a now-hidden column is not cleared)', () => {
+      const rows = [
+        makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }), // Office expenses
+        makeRow({ cost_center: 'CC2', gl_account: '5211900030', editable: true }), // Entertainment
+      ]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      fireEvent.change(screen.getAllByTestId('filter-glgroup')[0], { target: { value: 'Entertainment' } })
+      expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-5211900030')).toBeInTheDocument()
+
+      clickFirstCollapseButton()
+
+      expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument()
+      expect(screen.getByTestId('txn-CC2-5211900030')).toBeInTheDocument()
+    })
+
+    it('the subtotal row still renders its label in compact mode', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      clickFirstCollapseButton()
+      expect(screen.getAllByText(/รวม/).length).toBeGreaterThan(0)
     })
   })
 })

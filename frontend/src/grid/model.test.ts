@@ -14,10 +14,12 @@ import {
   fitColumnWidth,
   formatThb,
   freezeOffsets,
+  fullRowColSpan,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
+  identityColSpan,
   isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
@@ -28,6 +30,7 @@ import {
   sectionTotals,
   selectMeasureCandidates,
   sideOfGl,
+  subtotalLabelColSpan,
   validateNewTransaction,
 } from './model'
 import { makeRow as row } from './testUtils'
@@ -131,8 +134,14 @@ describe('isDeletableRow — grid trailing "ลบ" column eligibility (jakkarit
   const travelMeta = glMetaFor('5210400010', GL_REF) // Travelling Expense
 
   it('is deletable when editable, no SAP value in any month, no Approved value in any month, and not Travelling Expense', () => {
-    const r = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+    const base = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
+    const r = { ...base, pending: { ...base.pending, updated_at: '2026-01-01T00:00:00Z' } }
     expect(isDeletableRow(r, officeMeta)).toBe(true)
+  })
+
+  it('is NOT deletable when no pending_budget row exists (updated_at null) — the click would 422 on a blank lock token', () => {
+    const r = row({ cost_center: 'CC1', gl_account: '5211800030', editable: true }) // testUtils default: pending.updated_at = null
+    expect(isDeletableRow(r, officeMeta)).toBe(false)
   })
 
   it('is NOT deletable when row.editable is false (See-only / out-of-scope)', () => {
@@ -350,6 +359,55 @@ describe('filterRows', () => {
     expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'สำนักงาน' })).toEqual([remarked[0]])
     expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'x' })).toEqual([])
   })
+
+  describe('status filter — keeps rows whose MATCHED layer has any non-zero month', () => {
+    const blank = row({ cost_center: 'x', gl_account: 'x' })
+    const sapOnly = { ...blank, cost_center: 'CC-SAP', sap: { ...blank.sap, m01: 100 } }
+    const approvedOnly = { ...blank, cost_center: 'CC-APP', board: { ...blank.board, m02: 50 } }
+    const pendingOnly = {
+      ...blank,
+      cost_center: 'CC-PEN',
+      pending: { ...blank.pending, m03: 25 },
+    }
+    const mixed = [sapOnly, approvedOnly, pendingOnly]
+
+    it('"sap" keeps only rows with an actual value in the SAP layer', () => {
+      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'sap' })).toEqual([sapOnly])
+    })
+
+    it('"งบ" matches the Approved layer label and keeps only rows with an approved value', () => {
+      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'งบ' })).toEqual([approvedOnly])
+    })
+
+    it('"pending" keeps only rows with a pending value', () => {
+      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'pending' })).toEqual([pendingOnly])
+    })
+
+    it('a query matching no layer label hides everything', () => {
+      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'zzz' })).toEqual([])
+    })
+
+    it('blank status filter is a no-op', () => {
+      expect(filterRows(mixed, GL_REF, BLANK_COLUMN_FILTERS)).toEqual(mixed)
+    })
+  })
+})
+
+describe('identityColSpan / fullRowColSpan / subtotalLabelColSpan (compact-mode "ซ่อนคอลัมน์" toggle)', () => {
+  it('identityColSpan: 4 expanded (CC/GL/GL Group/Remark), 2 collapsed (CC/GL only)', () => {
+    expect(identityColSpan(false)).toBe(4)
+    expect(identityColSpan(true)).toBe(2)
+  })
+
+  it('fullRowColSpan: 18 expanded (4 identity + status + 12 months + action), 15 collapsed (2 identity + 12 months + action)', () => {
+    expect(fullRowColSpan(false)).toBe(18)
+    expect(fullRowColSpan(true)).toBe(15)
+  })
+
+  it('subtotalLabelColSpan: identityColSpan + 1 for the Status band expanded, no +1 collapsed', () => {
+    expect(subtotalLabelColSpan(false)).toBe(5)
+    expect(subtotalLabelColSpan(true)).toBe(2)
+  })
 })
 
 describe('formatThb', () => {
@@ -375,11 +433,11 @@ describe('clampColumnWidth (UI-parity point 8c)', () => {
 })
 
 describe('freezeOffsets (UI-parity point 8c)', () => {
-  it('derives frz1/frz2/frz3/frz4 from the current widths with no DOM measurement', () => {
-    expect(freezeOffsets({ cc: 130, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 130, frz3: 280, frz4: 430 })
+  it('derives frz1..frz5 from the current widths with no DOM measurement', () => {
+    expect(freezeOffsets({ cc: 130, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 130, frz3: 280, frz4: 430, frz5: 600 })
   })
-  it('reflects a resized cc column in frz2, frz3 and frz4', () => {
-    expect(freezeOffsets({ cc: 200, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 200, frz3: 350, frz4: 500 })
+  it('reflects a resized cc column in frz2, frz3, frz4 and frz5', () => {
+    expect(freezeOffsets({ cc: 200, gl: 150, glGroup: 150, remark: 170 })).toEqual({ frz1: 0, frz2: 200, frz3: 350, frz4: 500, frz5: 670 })
   })
 })
 

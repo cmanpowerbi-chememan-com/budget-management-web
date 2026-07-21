@@ -22,10 +22,12 @@ import {
   fitColumnWidth,
   formatThb,
   freezeOffsets,
+  fullRowColSpan,
   glMetaFor,
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
+  identityColSpan,
   isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
@@ -35,6 +37,7 @@ import {
   persistColumnWidths,
   sectionTotals,
   selectMeasureCandidates,
+  subtotalLabelColSpan,
   type ColumnFilters,
   type ColumnWidthKey,
   type ColumnWidths,
@@ -79,9 +82,31 @@ const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
 }
 
 const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
+const COLLAPSE_COLUMNS_LABEL = 'ซ่อนคอลัมน์ GL Group / Remark / Status'
+const EXPAND_COLUMNS_LABEL = 'แสดงคอลัมน์ GL Group / Remark / Status'
 
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
+}
+
+/** Compact-mode toggle icons (UI-parity with the existing Reset-columns
+ * button, mockup 0002.3): quiet double-chevron, stroke-only, no fill. */
+function ChevronsLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="11 17 6 12 11 7" />
+      <polyline points="18 17 13 12 18 7" />
+    </svg>
+  )
+}
+
+function ChevronsRightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 17 11 12 6 7" />
+      <polyline points="13 17 18 12 13 7" />
+    </svg>
+  )
 }
 
 /** Reads the hidden measurement pass (see `<ColumnWidthMeasurer>` below) and
@@ -317,6 +342,7 @@ function TxnBlock({
   onOpenSpecial,
   onDeleteRow,
   nowMonth,
+  columnsCollapsed,
 }: {
   row: BudgetRow
   glRef: GlAccount[]
@@ -327,6 +353,9 @@ function TxnBlock({
   onDeleteRow?: GridTableProps['onDeleteRow']
   /** Current-month key (UI-parity point 8a). */
   nowMonth: MonthKey
+  /** Compact mode ("ซ่อนคอลัมน์" toggle) — hides GL Group/Remark/Status,
+   * leaving Cost Center + GL Code as the frozen identity band. */
+  columnsCollapsed: boolean
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
@@ -338,26 +367,48 @@ function TxnBlock({
   const chipClass = groupChipClass(meta.gl_group)
   const cc = row.cost_center
   const gl = row.gl_account
+  // Same condition the EXPANDED open-subform button already uses (in the
+  // Pending status cell) — in compact mode that cell doesn't render at all,
+  // so the button moves into the GL cell instead. Never both at once.
+  const canOpenSpecial = meta.is_special && row.editable && onOpenSpecial
 
   return (
     <tbody className="txn-block" data-testid={`txn-${cc}-${gl}`}>
       <tr className="txn-row first" data-status="sap">
         <td className="idx-cell frz frz-1">{cc}</td>
-        <td className="gl-cell frz frz-2">
+        <td className={`gl-cell frz frz-2${columnsCollapsed ? ' frz-edge' : ''}`}>
           <span className="gl-code-text">{gl}</span>
           <div className="gl-name">{meta.gl_name ?? '—'}</div>
+          {columnsCollapsed && canOpenSpecial && (
+            <button
+              type="button"
+              className="special-open-btn compact"
+              title={SPECIAL_GL_TOOLTIP}
+              aria-label={SPECIAL_GL_TOOLTIP}
+              data-testid={`open-subform-${cc}-${gl}`}
+              onClick={() => onOpenSpecial(row, meta.gl_group)}
+            >
+              ↗
+            </button>
+          )}
         </td>
-        <td className="gl-group-cell frz frz-3">
-          {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{meta.gl_group}</span> : meta.gl_group}
+        {!columnsCollapsed && (
+          <>
+            <td className="gl-group-cell frz frz-3">
+              {chipClass ? <span className={`gl-chip special-gl-group ${chipClass}`}>{meta.gl_group}</span> : meta.gl_group}
+            </td>
+            {/* Remark = the 4th frozen identity column (same part as CC/GL/GL
+               Group): a plain per-row frz cell, NOT a rowSpan like the mockup —
+               sticky + rowSpan is the combination the colSpan-merged cells below
+               exist to avoid. */}
+            <td className="remark-cell frz frz-4">
+              <RemarkCell row={row} editable={editable} onCommitRemark={onCommitRemark} />
+            </td>
+            <td className="status-cell sap frz frz-5">
+          <span className="status-cell-content">SAP · ใช้จริง</span>
         </td>
-        {/* Remark = the 4th frozen identity column (same part as CC/GL/GL
-           Group): a plain per-row frz cell, NOT a rowSpan like the mockup —
-           sticky + rowSpan is the combination the colSpan-merged cells below
-           exist to avoid. */}
-        <td className="remark-cell frz frz-4">
-          <RemarkCell row={row} editable={editable} onCommitRemark={onCommitRemark} />
-        </td>
-        <td className="status-cell sap">SAP · ใช้จริง</td>
+          </>
+        )}
         <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
         {/* Trailing "ลบ" column — one shared cell per txn block (rowSpan=3,
            same pattern as the mockup's rowspan=3 action-cell) since the
@@ -382,29 +433,35 @@ function TxnBlock({
         </td>
       </tr>
       <tr className="txn-row" data-status="approved">
-        <td colSpan={4} className="frz frz-1 frz-edge" />
-        <td className="status-cell approved">Approved · งบ</td>
+        <td colSpan={identityColSpan(columnsCollapsed)} className={`frz frz-1${columnsCollapsed ? ' frz-edge' : ''}`} />
+        {!columnsCollapsed && (
+          <td className="status-cell approved frz frz-5">
+            <span className="status-cell-content">Approved · งบ</span>
+          </td>
+        )}
         <MonthCells values={row.board} layerTestId="board-value" variant="approved-ro" cc={cc} gl={gl} nowMonth={nowMonth} />
       </tr>
       <tr className="txn-row last" data-status="pending">
-        <td colSpan={4} className="frz frz-1 frz-edge" />
-        <td className="status-cell pending">
-          Pending · รออนุมัติ
-          {meta.is_special && row.editable && onOpenSpecial && (
-            <button
-              type="button"
-              className="special-open-btn"
-              title={SPECIAL_GL_TOOLTIP}
-              data-testid={`open-subform-${cc}-${gl}`}
-              onClick={() => onOpenSpecial(row, meta.gl_group)}
-            >
-              {SPECIAL_GL_TOOLTIP} ↗
-            </button>
-          )}
-          {meta.is_special && !(row.editable && onOpenSpecial) && (
-            <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
-          )}
-        </td>
+        <td colSpan={identityColSpan(columnsCollapsed)} className={`frz frz-1${columnsCollapsed ? ' frz-edge' : ''}`} />
+        {!columnsCollapsed && (
+          <td className="status-cell pending frz frz-5">
+            Pending · รออนุมัติ
+            {canOpenSpecial && (
+              <button
+                type="button"
+                className="special-open-btn"
+                title={SPECIAL_GL_TOOLTIP}
+                data-testid={`open-subform-${cc}-${gl}`}
+                onClick={() => onOpenSpecial(row, meta.gl_group)}
+              >
+                {SPECIAL_GL_TOOLTIP} ↗
+              </button>
+            )}
+            {meta.is_special && !canOpenSpecial && (
+              <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
+            )}
+          </td>
+        )}
         <PendingCells
           row={row}
           editable={editable}
@@ -415,7 +472,7 @@ function TxnBlock({
       </tr>
       {message && (
         <tr className="txn-row-message">
-          <td colSpan={18} className={`row-message row-message-${message.kind}`}>
+          <td colSpan={fullRowColSpan(columnsCollapsed)} className={`row-message row-message-${message.kind}`}>
             {message.text}
           </td>
         </tr>
@@ -424,15 +481,23 @@ function TxnBlock({
   )
 }
 
-function SubtotalRow({ label, totals }: { label: string; totals: ReturnType<typeof sectionTotals> }) {
+function SubtotalRow({
+  label,
+  totals,
+  columnsCollapsed,
+}: {
+  label: string
+  totals: ReturnType<typeof sectionTotals>
+  columnsCollapsed: boolean
+}) {
   return (
     <tbody>
       <tr className="subtotal-row">
-        {/* colSpan=5 covers the 4 frozen identity cols (incl. Remark) +
-           Status — frozen at left:0 (not left-unfrozen) so the label never
-           scrolls out of view under the horizontally-scrolled month columns
+        {/* colSpan covers the frozen identity band (+ Status when expanded) —
+           frozen at left:0 (not left-unfrozen) so the label never scrolls
+           out of view under the horizontally-scrolled month columns
            (verified point 1). */}
-        <td colSpan={5} className="frz frz-1 frz-edge">
+        <td colSpan={subtotalLabelColSpan(columnsCollapsed)} className="frz frz-1 frz-edge">
           {label}
         </td>
         {MONTH_KEYS.map((m) => (
@@ -464,6 +529,13 @@ export function GridTable({
   // component; one filter string per column applies to both tables at once,
   // so typing in either table's input keeps them in sync by construction.
   const [colFilters, setColFilters] = useState<ColumnFilters>(BLANK_COLUMN_FILTERS)
+
+  // Compact mode ("ซ่อนคอลัมน์" toggle, jakkaritw-approved 2026-07-21) — hides
+  // GL Group/Remark/Status in BOTH side-tables at once (single shared state,
+  // same reasoning as colFilters/colWidths above). Plain useState, always
+  // expanded on load — deliberately NOT persisted (no localStorage), per the
+  // approved policy decision.
+  const [columnsCollapsed, setColumnsCollapsed] = useState(false)
 
   // Identity-column widths (UI-parity point 8c) — held LOCALLY, same
   // reasoning as colFilters: both side-tables live inside this one
@@ -618,14 +690,15 @@ export function GridTable({
   // Frozen-column left offsets derived from the CURRENT widths (UI-parity
   // point 8c) — no DOM measurement, both side-tables read this SAME object
   // so they stay pixel-aligned by construction. Applied as inline CSS custom
-  // properties; the existing `.frz-1/2/3/4 { left: var(--frzN) }` rules in
+  // properties; the existing `.frz-1/2/3/4/5 { left: var(--frzN) }` rules in
   // global.css then just work, same as the old static values did.
-  const { frz1, frz2, frz3, frz4 } = freezeOffsets(colWidths)
+  const { frz1, frz2, frz3, frz4, frz5 } = freezeOffsets(colWidths)
   const freezeStyle = {
     '--frz1': `${frz1}px`,
     '--frz2': `${frz2}px`,
     '--frz3': `${frz3}px`,
     '--frz4': `${frz4}px`,
+    '--frz5': `${frz5}px`,
   } as CSSProperties
 
   const updateFilter =
@@ -681,9 +754,16 @@ export function GridTable({
                   <colgroup>
                     <col style={{ width: colWidths.cc }} />
                     <col style={{ width: colWidths.gl }} />
-                    <col style={{ width: colWidths.glGroup }} />
-                    <col style={{ width: colWidths.remark }} />
-                    <col className="status-col" />
+                    {/* GL Group / Remark / Status columns vanish entirely in
+                       compact mode ("ซ่อนคอลัมน์" toggle) — CC + GL Code
+                       become the whole frozen identity band. */}
+                    {!columnsCollapsed && (
+                      <>
+                        <col style={{ width: colWidths.glGroup }} />
+                        <col style={{ width: colWidths.remark }} />
+                        <col className="status-col" />
+                      </>
+                    )}
                     {MONTH_KEYS.map((m) => (
                       <col key={m} className="m-col" />
                     ))}
@@ -698,8 +778,17 @@ export function GridTable({
                        reintroduce that exact year confusion (see the
                        legend, point 6, for the per-layer years). */}
                     <tr className="group-head-row">
-                      <th colSpan={4} className="frz frz-1 frz-edge" />
-                      <th />
+                      {columnsCollapsed ? (
+                        <th colSpan={2} className="frz frz-1 frz-edge" />
+                      ) : (
+                        <>
+                          <th colSpan={4} className="frz frz-1" />
+                          {/* Status is the 5th FROZEN column (frz-5) — without it,
+                           * scrolling slid Status under the Remark pane and the
+                           * colSpan=5 subtotal label covered the Jan/Feb cells. */}
+                          <th className="frz frz-5 frz-edge" />
+                        </>
+                      )}
                       <th colSpan={12} className="month-group-label">
                         <span className="th-label">งบประมาณรายเดือน (บาท)</span>
                       </th>
@@ -740,8 +829,24 @@ export function GridTable({
                           onTouchStart={startColumnResize('cc')}
                         />
                       </th>
-                      <th className="frz frz-2">
+                      <th className={`frz frz-2${columnsCollapsed ? ' frz-edge' : ''}`}>
                         <span className="th-label">GL Code</span>
+                        {/* Expand button — restores GL Group/Remark/Status.
+                           Rendered ONLY while collapsed; the mirror collapse
+                           button below lives on the Status th, which itself
+                           only exists in the expanded state. */}
+                        {columnsCollapsed && (
+                          <button
+                            type="button"
+                            className="col-toggle-btn"
+                            title={EXPAND_COLUMNS_LABEL}
+                            aria-label={EXPAND_COLUMNS_LABEL}
+                            data-testid="expand-columns-btn"
+                            onClick={() => setColumnsCollapsed(false)}
+                          >
+                            <ChevronsRightIcon />
+                          </button>
+                        )}
                         <input
                           type="text"
                           className="col-filter"
@@ -761,52 +866,74 @@ export function GridTable({
                           onTouchStart={startColumnResize('gl')}
                         />
                       </th>
-                      <th className="frz frz-3">
-                        <span className="th-label">GL Group</span>
-                        <input
-                          type="text"
-                          className="col-filter"
-                          placeholder="กรอง…"
-                          data-testid="filter-glgroup"
-                          value={colFilters.glGroup}
-                          onChange={updateFilter('glGroup')}
-                        />
-                        <div
-                          className={`col-resize${draggingKey === 'glGroup' ? ' is-dragging' : ''}`}
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label="ปรับความกว้างคอลัมน์ GL Group"
-                          title="ลากเพื่อปรับความกว้าง"
-                          data-testid="col-resize-glgroup"
-                          onMouseDown={startColumnResize('glGroup')}
-                          onTouchStart={startColumnResize('glGroup')}
-                        />
-                      </th>
-                      <th className="frz frz-4">
-                        <span className="th-label">Remark</span>
-                        <input
-                          type="text"
-                          className="col-filter"
-                          placeholder="กรอง…"
-                          data-testid="filter-remark"
-                          value={colFilters.remark}
-                          onChange={updateFilter('remark')}
-                        />
-                        <div
-                          className={`col-resize${draggingKey === 'remark' ? ' is-dragging' : ''}`}
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label="ปรับความกว้างคอลัมน์ Remark"
-                          title="ลากเพื่อปรับความกว้าง"
-                          data-testid="col-resize-remark"
-                          onMouseDown={startColumnResize('remark')}
-                          onTouchStart={startColumnResize('remark')}
-                        />
-                      </th>
-                      <th>
-                        <span className="th-label">Status</span>
-                        <div className="col-filter-spacer" />
-                      </th>
+                      {!columnsCollapsed && (
+                        <>
+                          <th className="frz frz-3">
+                            <span className="th-label">GL Group</span>
+                            <input
+                              type="text"
+                              className="col-filter"
+                              placeholder="กรอง…"
+                              data-testid="filter-glgroup"
+                              value={colFilters.glGroup}
+                              onChange={updateFilter('glGroup')}
+                            />
+                            <div
+                              className={`col-resize${draggingKey === 'glGroup' ? ' is-dragging' : ''}`}
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label="ปรับความกว้างคอลัมน์ GL Group"
+                              title="ลากเพื่อปรับความกว้าง"
+                              data-testid="col-resize-glgroup"
+                              onMouseDown={startColumnResize('glGroup')}
+                              onTouchStart={startColumnResize('glGroup')}
+                            />
+                          </th>
+                          <th className="frz frz-4">
+                            <span className="th-label">Remark</span>
+                            <input
+                              type="text"
+                              className="col-filter"
+                              placeholder="กรอง…"
+                              data-testid="filter-remark"
+                              value={colFilters.remark}
+                              onChange={updateFilter('remark')}
+                            />
+                            <div
+                              className={`col-resize${draggingKey === 'remark' ? ' is-dragging' : ''}`}
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label="ปรับความกว้างคอลัมน์ Remark"
+                              title="ลากเพื่อปรับความกว้าง"
+                              data-testid="col-resize-remark"
+                              onMouseDown={startColumnResize('remark')}
+                              onTouchStart={startColumnResize('remark')}
+                            />
+                          </th>
+                          <th className="frz frz-5">
+                            <span className="th-label">Status</span>
+                            {/* Collapse button — hides GL Group/Remark/Status. */}
+                            <button
+                              type="button"
+                              className="col-toggle-btn"
+                              title={COLLAPSE_COLUMNS_LABEL}
+                              aria-label={COLLAPSE_COLUMNS_LABEL}
+                              data-testid="collapse-columns-btn"
+                              onClick={() => setColumnsCollapsed(true)}
+                            >
+                              <ChevronsLeftIcon />
+                            </button>
+                            <input
+                              type="text"
+                              className="col-filter"
+                              placeholder="กรอง…"
+                              data-testid="filter-status"
+                              value={colFilters.status}
+                              onChange={updateFilter('status')}
+                            />
+                          </th>
+                        </>
+                      )}
                       {MONTH_KEYS.map((m) => (
                         <th key={m} className={`month-col${m === nowMonth ? ' now' : ''}`}>
                           <span className="th-label">{MONTH_LABELS[m]}</span>
@@ -821,7 +948,7 @@ export function GridTable({
                   {groups.length === 0 ? (
                     <tbody>
                       <tr>
-                        <td colSpan={18} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
+                        <td colSpan={fullRowColSpan(columnsCollapsed)} className="grid-empty-row" data-testid={`grid-empty-filtered-${side}`}>
                           ไม่มีรายการที่ตรงกับตัวกรอง
                         </td>
                       </tr>
@@ -841,14 +968,16 @@ export function GridTable({
                               onOpenSpecial={onOpenSpecial}
                               onDeleteRow={onDeleteRow}
                               nowMonth={nowMonth}
+                              columnsCollapsed={columnsCollapsed}
                             />
                           ))}
-                          <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} />
+                          <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} columnsCollapsed={columnsCollapsed} />
                         </Fragment>
                       ))}
                       <SubtotalRow
                         label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`}
                         totals={sectionTotals(groups.flatMap((g) => g.rows))}
+                        columnsCollapsed={columnsCollapsed}
                       />
                     </>
                   )}

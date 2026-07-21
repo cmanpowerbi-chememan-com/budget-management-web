@@ -672,6 +672,11 @@ input:focus-visible {
 .dept-picker-row.selected {
   background: var(--paper-2);
 }
+/* The single search match = Enter's default pick (accent edge hint). */
+.dept-picker-row.default {
+  background: var(--paper-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .dept-picker-cc-count {
   font-family: var(--mono);
   font-size: 11px;
@@ -937,7 +942,14 @@ input:focus-visible {
 }
 .data-table thead tr.group-head-row th.frz {
   text-align: left;
-  z-index: 17;
+  /* 22 (not 17): group-head row is really ~30px tall (16px serif
+     month-group-label) vs col-row's `top: 22px` sticky offset below, so the
+     two sticky rows overlap ~8px while scrolled. Must out-rank the ENTIRE
+     col-row frz z-chain (frz-1..5 = 19,18,17,16,15) or col-row th paints
+     over this row's border-bottom on frz-1..3 (bug seen 2026-07-21) — same
+     invariant the unfrozen side already has for free (group-head z11 >
+     col-row z10, so it always paints on top there). */
+  z-index: 22;
 }
 /* Neutral serif label over the 12 month columns — deliberately NOT a bare
    year: the month columns mix SAP/Approved (year-1) and Pending (year), see
@@ -991,6 +1003,46 @@ input:focus-visible {
   height: 27px;
   margin-top: 6px;
 }
+/* Compact mode ("ซ่อนคอลัมน์" toggle, jakkaritw-approved 2026-07-21) — hides
+   GL Group/Remark/Status, leaving Cost Center + GL Code as the frozen
+   identity band. The collapse button lives on the Status th, the expand
+   button on the GL Code th (only one of the two is ever rendered, per
+   GridTable.tsx) — both absolutely positioned so they never grow the
+   header's height or disturb the existing label/filter/resize-handle
+   layout already sharing that th. Quiet by design: 1px border, no fill
+   until hover, same restrained language as .action-btn/.col-resize. */
+.col-toggle-btn {
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.col-toggle-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+.col-toggle-btn svg {
+  width: 11px;
+  height: 11px;
+}
+/* Compact-mode ↗ button (special-GL subform access, moved into the GL cell
+   while Status is hidden) — same amber "special" look as .special-open-btn,
+   tightened to an icon-only pill so it fits next to the GL code/name. */
+.special-open-btn.compact {
+  display: inline-flex;
+  margin-top: 3px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
 /* Zero-match empty state (point 8b) — table keeps its header (with the
    filter inputs still editable) so the user can clear the filter without
    the whole table disappearing. */
@@ -1025,9 +1077,15 @@ input:focus-visible {
   color: var(--ink-3);
   transition: all 160ms;
 }
-.action-btn:hover {
+/* The ONE .action-btn style (mockup 0002.3 lines 581-587) — icon-only 26×26
+   trash used by the grid action column, DetailSubform and TripManager. */
+.action-btn:hover:not(:disabled) {
   color: #c25a3f;
   border-color: #c25a3f;
+}
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .action-btn svg {
   width: 12px;
@@ -1059,11 +1117,15 @@ input:focus-visible {
 .data-table .frz-4 {
   left: var(--frz4);
 }
-/* Edge shadow = scroll cue at the right boundary of the frozen region.
-   .frz-edge is a separate class (not folded into .frz-4) because the 3
-   stacked rows/subtotal per transaction use a single spanned cell (left:0,
-   width = all 4 identity columns) rather than the 4 individual columns. */
-.data-table .frz-4,
+.data-table .frz-5 {
+  left: var(--frz5);
+}
+/* Edge shadow = scroll cue at the right boundary of the frozen region —
+   STATUS (.frz-5), the 5th frozen column. .frz-edge is a separate class (not
+   folded into .frz-5) because the stacked rows/subtotal per transaction use
+   single spanned cells (left:0, width = several frozen columns) rather than
+   the individual columns. */
+.data-table .frz-5,
 .data-table .frz-edge {
   box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.28);
 }
@@ -1084,12 +1146,9 @@ input:focus-visible {
    drag never starts (confirmed live, same bug exists in the mockup HTML —
    not introduced by this port). Fix: each frozen identity column must
    outrank its immediate right neighbor, hence the strictly descending
-   chain below. Remark (`.frz-4`) needs no bump — its right neighbor is the
-   plain Status `<th>` (z-index 10), already below the shared `th.frz`
-   z-index (16). Must come AFTER the shared `th.frz` z-index rule above
-   (same specificity, 0,2,2 vs 0,2,2) to win by source order; the more
-   specific `tr.group-head-row th.frz` rule (0,3,3) is unaffected either
-   way. */
+   chain below — extended to frz-5 when Status became the 5th frozen column
+   (2026-07-21): Remark's handle now spills onto frozen Status, so Status
+   must sit ONE step below Remark. */
 .data-table thead tr.col-row th.frz-1 {
   z-index: 19;
 }
@@ -1098,6 +1157,12 @@ input:focus-visible {
 }
 .data-table thead tr.col-row th.frz-3 {
   z-index: 17;
+}
+.data-table thead tr.col-row th.frz-4 {
+  z-index: 16;
+}
+.data-table thead tr.col-row th.frz-5 {
+  z-index: 15;
 }
 
 /* Column resize handle (UI-parity point 8c, mockup 0002.3budget-export.html
@@ -1447,7 +1512,6 @@ body.col-dragging * {
 .subtotal-row td {
   background: var(--paper-2);
   font-weight: 700;
-  border-top: 2px solid var(--line);
   font-family: var(--mono);
 }
 .row-message {
@@ -1652,38 +1716,6 @@ body.col-dragging * {
   color: var(--accent);
   font-family: var(--mono);
   font-size: 14px;
-}
-/* Icon-only delete in the detail table (mockup #detailModal .action-btn —
-   26×26 trash). Scoped under .detail-table so TripManager's text "ลบ" button
-   keeps the base .action-btn style. */
-.detail-table .action-btn {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
-  cursor: pointer;
-  transition: all 160ms;
-}
-.detail-table .action-btn:hover:not(:disabled) {
-  color: #c25a3f;
-  border-color: #c25a3f;
-}
-.detail-table .action-btn svg {
-  width: 12px;
-  height: 12px;
-}
-.action-btn {
-  padding: 4px 10px;
-  border-radius: var(--r);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-3);
-  font-size: 11.5px;
-  cursor: not-allowed;
-}
-.action-btn:disabled {
-  opacity: 0.6;
 }
 
 /* ─── Trip Manager — intro legend banner (rendered ONCE per modal, above

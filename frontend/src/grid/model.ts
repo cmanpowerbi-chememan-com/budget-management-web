@@ -95,9 +95,10 @@ export interface ColumnFilters {
   gl: string
   glGroup: string
   remark: string
+  status: string
 }
 
-export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '', remark: '' }
+export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '', remark: '', status: '' }
 
 /** Identity-column widths (UI-parity point 8c) — replaces point 1's STATIC
  * freeze offsets (fixed `--frz1/2/3` px in CSS) with state-derived offsets,
@@ -199,14 +200,22 @@ export function clearStoredColumnWidths(): void {
   }
 }
 
-/** Derives the 4 frozen-column left offsets from the CURRENT widths — no
+/** Derives the 5 frozen-column left offsets from the CURRENT widths — no
  * DOM measurement (unlike the mockup's `applyFreeze()`, which reads real
  * header `getBoundingClientRect()`s). Both side-tables (COST/SGA) read the
  * SAME `colWidths` state and call this same pure function, so they stay
  * pixel-aligned by construction rather than by re-measuring two separate
- * DOM trees. */
-export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number; frz4: number } {
-  return { frz1: 0, frz2: widths.cc, frz3: widths.cc + widths.gl, frz4: widths.cc + widths.gl + widths.glGroup }
+ * DOM trees. frz5 = the STATUS column's offset (it is the 5th frozen
+ * column — without it, scrolling slid Status under the Remark pane and the
+ * colSpan=5 subtotal label covered the Jan/Feb cells, 2026-07-21 bug). */
+export function freezeOffsets(widths: ColumnWidths): { frz1: number; frz2: number; frz3: number; frz4: number; frz5: number } {
+  return {
+    frz1: 0,
+    frz2: widths.cc,
+    frz3: widths.cc + widths.gl,
+    frz4: widths.cc + widths.gl + widths.glGroup,
+    frz5: widths.cc + widths.gl + widths.glGroup + widths.remark,
+  }
 }
 
 /** Horizontal padding allowance added to a raw measured TEXT width to
@@ -296,15 +305,35 @@ function matchesFilter(value: string, filter: string): boolean {
  * substring match, empty filter = matches everything. `gl_group` is
  * resolved via `glMetaFor` (never `row.gl_group`, which doesn't exist on
  * `BudgetRow` — group membership always comes from the GL master). */
+/** STATUS-column layer labels (as rendered in the status cells). The status
+ * filter keeps a row only when the layer whose label CONTAINS the query has
+ * any non-zero month — e.g. "sap" → rows with actuals, "งบ" → rows with an
+ * approved value, "pending" → rows with a pending value. A query matching no
+ * layer label hides everything (same all-or-nothing rule as other filters). */
+const STATUS_LAYER_LABELS: { layer: 'sap' | 'board' | 'pending'; label: string }[] = [
+  { layer: 'sap', label: 'sap · ใช้จริง' },
+  { layer: 'board', label: 'approved · งบ' },
+  { layer: 'pending', label: 'pending · รออนุมัติ' },
+]
+
+function matchesStatusFilter(row: BudgetRow, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const layers = STATUS_LAYER_LABELS.filter((l) => l.label.includes(q))
+  if (layers.length === 0) return false
+  return layers.some((l) => MONTH_KEYS.some((m) => row[l.layer][m]))
+}
+
 export function filterRows(rows: BudgetRow[], glRef: GlAccount[], filters: ColumnFilters): BudgetRow[] {
-  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim() && !filters.remark.trim()) return rows
+  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim() && !filters.remark.trim() && !filters.status.trim()) return rows
   return rows.filter((r) => {
     const meta = glMetaFor(r.gl_account, glRef)
     return (
       matchesFilter(r.cost_center, filters.cc) &&
       matchesFilter(r.gl_account, filters.gl) &&
       matchesFilter(meta.gl_group, filters.glGroup) &&
-      matchesFilter(r.pending.remark ?? '', filters.remark)
+      matchesFilter(r.pending.remark ?? '', filters.remark) &&
+      matchesStatusFilter(r, filters.status)
     )
   })
 }
@@ -379,6 +408,29 @@ export function groupAndSortBySide(
   return { COST: buildSections(bySide.COST), SGA: buildSections(bySide.SGA) }
 }
 
+/** Compact mode ("ซ่อนคอลัมน์" toggle, jakkaritw-approved 2026-07-21) hides
+ * GL Group / Remark / Status, leaving Cost Center + GL Code as the frozen
+ * identity band. Returns the colSpan for that merged band — used by txn
+ * rows 2/3 (Approved/Pending) and the group-head row, which each render ONE
+ * spanned cell covering the identity columns. */
+export function identityColSpan(collapsed: boolean): number {
+  return collapsed ? 2 : 4
+}
+
+/** colSpan for a full-width row (the per-row message row + the
+ * filtered-empty row): identity band + Status (expanded only) + the 12
+ * month columns + the trailing action column. 18 expanded, 15 collapsed. */
+export function fullRowColSpan(collapsed: boolean): number {
+  return identityColSpan(collapsed) + (collapsed ? 0 : 1) + MONTH_KEYS.length + 1
+}
+
+/** colSpan for the subtotal row's label cell: the identity band, plus the
+ * Status column when expanded (Status has no subtotal of its own, so its
+ * space folds into the label). 5 expanded, 2 collapsed. */
+export function subtotalLabelColSpan(collapsed: boolean): number {
+  return identityColSpan(collapsed) + (collapsed ? 0 : 1)
+}
+
 /** A month cell is editable only when the row itself is in the caller's
  * Fill scope (`row.editable`, from A3/A4 RLS) AND the GL is not one of
  * the 6 special groups — those always route through their subform (A9),
@@ -405,12 +457,17 @@ export function isEditableCell(rowEditable: boolean, isSpecialGl: boolean, glInM
  *  4. GL group is not 'Travelling Expense' — trip-driven and shared across
  *     8 GLs, so a per-row grid delete is incoherent; that group stays
  *     deletable only via the existing Trip Manager. The other 5 special
- *     groups ARE deletable here (the backend cascades their detail lines). */
+ *     groups ARE deletable here (the backend cascades their detail lines).
+ *  5. a `pending_budget` row actually EXISTS (`pending.updated_at` non-null)
+ *     — a board-only row whose Approved months are all zero passes checks
+ *     2-3 but has nothing to delete; without this guard the click sent a
+ *     blank lock token and the API answered a raw 422. */
 export function isDeletableRow(row: BudgetRow, meta: GlMeta): boolean {
   if (!row.editable) return false
   if (MONTH_KEYS.some((m) => row.sap[m])) return false
   if (MONTH_KEYS.some((m) => row.board[m])) return false
   if (meta.gl_group === 'Travelling Expense') return false
+  if (row.pending.updated_at === null) return false
   return true
 }
 
