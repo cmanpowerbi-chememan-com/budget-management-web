@@ -10,6 +10,10 @@ const BACKEND_DEV_SERVER = 'http://127.0.0.1:8000'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Bind IPv4 explicitly. Vite's default "localhost" resolves to IPv6 ::1
+    // on this Windows machine, so http://127.0.0.1:5173 was refused even
+    // though the server was up. Binding 127.0.0.1 makes the IPv4 URL work.
+    host: '127.0.0.1',
     proxy: {
       '/health': BACKEND_DEV_SERVER,
       '/me': BACKEND_DEV_SERVER,

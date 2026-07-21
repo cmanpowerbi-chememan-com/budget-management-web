@@ -563,10 +563,18 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                     type="button"
                     className="action-btn"
                     aria-label="ลบทริป"
+                    title="ลบทริป"
                     disabled={card.status === 'deleting'}
                     onClick={() => deleteTripCard(card.localId)}
                   >
-                    {card.status === 'deleting' ? 'กำลังลบ…' : 'ลบ'}
+                    {card.status === 'deleting' ? (
+                      '…'
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 <div className="trip-card-body">
