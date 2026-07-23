@@ -4,7 +4,7 @@ Mounting the built frontend is a structural, import-time decision (Starlette
 resolves routes in registration order once, at app construction) — so these
 tests build isolated FastAPI test apps mirroring `app.main`'s router set and
 call `mount_frontend` directly with a controlled `tmp_path`, rather than
-depending on whether a real `frontend/dist` happens to exist on this machine.
+depending on whether a real `frontend/out` happens to exist on this machine.
 That keeps the "absent vs present" cases deterministic across environments.
 """
 from fastapi import FastAPI
@@ -63,6 +63,24 @@ def test_static_dir_present_serves_asset_with_long_cache(tmp_path):
 
     client = TestClient(test_app)
     resp = client.get("/assets/app-abc123.js")
+    assert resp.status_code == 200
+    assert "console.log" in resp.text
+    assert "max-age" in resp.headers.get("cache-control", "")
+
+
+def test_static_dir_present_serves_next_asset_with_long_cache(tmp_path):
+    dist = tmp_path / "dist"
+    next_static_dir = dist / "_next" / "static"
+    next_static_dir.mkdir(parents=True)
+    (dist / "index.html").write_text("<html>INDEX</html>", encoding="utf-8")
+    (next_static_dir / "app-abc123.js").write_text("console.log('hi')", encoding="utf-8")
+
+    test_app = _build_test_app()
+    mounted = mount_frontend(test_app, dist)
+    assert mounted is True
+
+    client = TestClient(test_app)
+    resp = client.get("/_next/static/app-abc123.js")
     assert resp.status_code == 200
     assert "console.log" in resp.text
     assert "max-age" in resp.headers.get("cache-control", "")

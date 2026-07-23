@@ -89,10 +89,11 @@ class Settings(BaseSettings):
     # benefits severance, Depreciation).
     gl_edit_by_enabled: bool = False
 
-    # A14 — built SPA location (`frontend/dist`), ONE Container App serves
-    # both API + frontend. In the container this will be an absolute path
-    # (e.g. /app/static); unset locally, where it falls back to the sibling
-    # `frontend/dist` so a local `uvicorn` run can preview a production build
+    # A14 — built frontend location (`frontend/out`, Next.js static export;
+    # previously `frontend/dist` under Vite). ONE Container App serves both
+    # API + frontend. In the container this will be an absolute path (e.g.
+    # /app/static); unset locally, where it falls back to the sibling
+    # `frontend/out` so a local `uvicorn` run can preview a production build
     # without any extra config. Missing dir = API-only, no error (app/static.py).
     static_dir: str | None = None
 
@@ -100,8 +101,8 @@ class Settings(BaseSettings):
     def static_dir_path(self) -> Path:
         if self.static_dir:
             return Path(self.static_dir)
-        # backend/app/config.py -> backend/ -> repo root -> frontend/dist
-        return Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+        # backend/app/config.py -> backend/ -> repo root -> frontend/out
+        return Path(__file__).resolve().parent.parent.parent / "frontend" / "out"
 
     @property
     def is_local(self) -> bool:

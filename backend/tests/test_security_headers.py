@@ -40,9 +40,9 @@ def test_security_headers_on_api_error_response(client):
 def test_security_headers_on_spa_route(tmp_path):
     """SPA fallback (index.html for a deep link) carries the headers too.
 
-    Isolated test app with a controlled tmp dist, same convention as
-    test_static.py — whether a real `frontend/dist` exists on this machine
-    must not decide the outcome.
+    Isolated test app with a controlled tmp static dir, same convention as
+    test_static.py — whether a real `frontend/out` build exists on this
+    machine must not decide the outcome.
     """
     dist = tmp_path / "dist"
     dist.mkdir()

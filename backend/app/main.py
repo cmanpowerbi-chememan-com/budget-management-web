@@ -7,7 +7,8 @@ A9 subform read-only support (`GET /budget/detail`, `GET /budget/trip`).
 A10 approval UI support (`GET /approval/pending-for-me`) + SharePoint
 attachments (`GET /attachments`, `POST /attachments/upload`,
 `GET /attachments/download-url`).
-A14 — serves the built React SPA (`frontend/dist`) from this same app; see
+A14 — serves the built frontend (`frontend/out`, Next.js static export;
+previously `frontend/dist` under Vite) from this same app; see
 `app/static.py`. Mounted LAST so no API route can ever be shadowed.
 """
 from collections.abc import Awaitable, Callable

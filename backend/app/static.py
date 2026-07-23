@@ -1,6 +1,7 @@
-"""Serve the built React SPA (`frontend/dist`) from this same FastAPI app —
-one Container App serves API + frontend, Easy Auth handles login at the
-platform layer (A14 step 1).
+"""Serve the frontend build output — `frontend/out` (Next.js export),
+previously `frontend/dist` (Vite) — from this same FastAPI app: one Container
+App serves API + frontend, Easy Auth handles login at the platform layer
+(A14 step 1).
 
 `mount_frontend` must be called AFTER every API router is included. Starlette
 resolves routes by iterating its route list in registration order and using
@@ -65,7 +66,7 @@ class _LongCacheStaticFiles(StaticFiles):
 
 
 def mount_frontend(app: FastAPI, static_dir: Path) -> bool:
-    """Mount the built SPA if `static_dir` (e.g. `frontend/dist`) exists.
+    """Mount the built SPA if `static_dir` (e.g. `frontend/out`) exists.
 
     Returns True if mounted, False if the directory (or its index.html) is
     missing — the normal local-dev case where Vite serves the frontend on
@@ -79,6 +80,11 @@ def mount_frontend(app: FastAPI, static_dir: Path) -> bool:
     assets_dir = static_dir / "assets"
     if assets_dir.is_dir():
         app.mount("/assets", _LongCacheStaticFiles(directory=assets_dir), name="spa-assets")
+
+    next_static_dir = static_dir / "_next" / "static"
+    if next_static_dir.is_dir():
+        # Next.js export layout: hashed assets live under /_next/static (no assets/ dir).
+        app.mount("/_next/static", _LongCacheStaticFiles(directory=next_static_dir), name="spa-next-static")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str) -> Response:

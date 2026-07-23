@@ -16,7 +16,7 @@
 # "frontend": not found / COPY failed: file not found.
 
 # ---------------------------------------------------------------------------
-# Stage 1 — build the React+Vite SPA
+# Stage 1 — build the Next.js static export
 # ---------------------------------------------------------------------------
 FROM node:24-alpine AS frontend-build
 
@@ -28,12 +28,13 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
-# tsc -b && vite build --logLevel warn (see frontend/package.json "build:ci"
-# script) -> ./dist. Uses the quiet variant, NOT plain "build": vite's default
-# log level prints a unicode checkmark ("modules transformed") that crashes
-# the local Windows az CLI's colorama layer mid-stream during `az acr build`
-# (cp1252 UnicodeEncodeError), which cancels the ACR run even though the
-# build itself succeeded. `build` (verbose) is still fine for local dev.
+# CI=true -> plain, non-interactive Next build logs so streamed output can
+# never re-trigger the Windows az CLI colorama/cp1252 crash (G5): Next's
+# interactive/animated build output includes unicode that crashed the local
+# Windows az CLI's colorama layer mid-stream during `az acr build` (the same
+# crash class hit by vite's default log level previously), which cancels the
+# ACR run even though the build itself succeeded.
+ENV CI=true
 RUN npm run build:ci
 
 # ---------------------------------------------------------------------------
@@ -77,8 +78,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY backend/jobs ./jobs
 
-# Built SPA from stage 1 -> served by FastAPI StaticFiles at STATIC_DIR.
-COPY --from=frontend-build /fe/dist ./static
+# Built frontend from stage 1 -> served by FastAPI StaticFiles at STATIC_DIR.
+COPY --from=frontend-build /fe/out ./static
 
 ENV STATIC_DIR=/app/static \
     APP_ENV=production \
