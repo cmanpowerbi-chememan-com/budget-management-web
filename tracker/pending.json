@@ -1,15 +1,39 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-23T13:43:55+0700",
+  "updated": "2026-07-23T14:22:32+0700",
   "tasks": [
+    {
+      "id": "log-153f355",
+      "state": "done",
+      "created": "2026-07-23T14:22:32+0700",
+      "updated": "2026-07-23T14:22:32+0700",
+      "agent": "autolog",
+      "ai": "merge origin/main (nightly graphify) into nextjs-migration [commit 153f355]"
+    },
+    {
+      "id": "log-a7ea9c1",
+      "state": "done",
+      "created": "2026-07-23T14:21:13+0700",
+      "updated": "2026-07-23T14:21:13+0700",
+      "agent": "autolog",
+      "ai": "docs(back): finish dist->out doc sweep in mount_frontend (kimi nit) [commit a7ea9c1]"
+    },
+    {
+      "id": "log-0a61603",
+      "state": "done",
+      "created": "2026-07-23T13:43:57+0700",
+      "updated": "2026-07-23T13:43:57+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): close nextjs-backend-static-wiring (774e8ad) [commit 0a61603]"
+    },
     {
       "id": "nextjs-backend-static-wiring",
       "state": "done",
       "created": "2026-07-23T13:35:23+0700",
-      "updated": "2026-07-23T13:43:55+0700",
-      "ai": "COMMITTED 774e8ad. Steps 9+9b done: Dockerfile /fe/out + ENV CI=true, config.py fallback frontend/out, static.py /_next/static long-cache mount (kept /assets rollback-compat), +1 TDD test, step-10 stale-dist sweep (main.py+test_security_headers comments). pytest test_static+security 19 pass, full 673 pass/46 desel. Gate 06+07+08 APPROVE (path-traversal same as /assets, no route shadow, STATIC_DIR override intact). Dockerfile NOT locally verifiable (no Docker) - az acr build next. Branch feat/frontend-nextjs-migration now merge-safe: deploy no longer breaks. Awaiting jakkaritw independent Kimi review per pattern. Not pushed/merged.",
-      "agent": "claude"
+      "updated": "2026-07-23T13:51:53+0700",
+      "ai": "KIMI REVIEW VERDICT #2 (2026-07-23, reviewer=kimi) on commit 774e8ad (steps 9+9b): APPROVE — branch feat/frontend-nextjs-migration is MERGE-READY.\n\nIndependently verified (diff read + re-ran tests myself, no edits): (1) backend/Dockerfile — stage-1 ENV CI=true before build:ci, stage-2 COPY /fe/dist→/fe/out, comments updated (G5 colorama class). (2) config.py — static_dir fallback frontend/dist→frontend/out; STATIC_DIR env override still wins. (3) static.py — /_next/static long-cache mount added BEFORE the SPA catch-all (registration order safe, no API shadowing), /assets mount kept for rollback (no-ops when dir absent). (4) New test test_static_dir_present_serves_next_asset_with_long_cache present and passing — re-ran: 19/19 (test_static+test_security_headers) and full mocked suite 673 passed/46 deselected — both EXACT match with claims. (5) Sweep confirmed: main.py + test_security_headers.py doc/comment dist→out. Stat confirms zero API/router/DB logic changes (6 files: Dockerfile, config.py, main.py docstring, static.py, 2 test files). Working tree clean except tracker autolog (expected post-commit hook artifact).\n\nNits (non-blocking, no re-work needed): static.py mount_frontend docstring still says 'Vite serves the frontend on its own port' — one stale word, cosmetic.\n\nREMAINING GATES (jakkaritw decisions, not code): (a) push + merge to main — git mutation, awaiting explicit go; (b) az acr build/deploy — separate approval per A14 runbook; Dockerfile correctness is only provable at that build (no local Docker). Follow-ups already tracked: #e2e-stale-specs-fix (3 pre-existing drifted specs), oxlint 2 pre-existing findings in e2e/ (suggested in verdict #1), :5180 staging-review proxy needs a next.config equivalent before next staging click-through.",
+      "agent": "kimi"
     },
     {
       "id": "log-af1ac51",
