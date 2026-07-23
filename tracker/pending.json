@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-23T13:29:26+0700",
+  "updated": "2026-07-23T13:43:55+0700",
   "tasks": [
+    {
+      "id": "nextjs-backend-static-wiring",
+      "state": "done",
+      "created": "2026-07-23T13:35:23+0700",
+      "updated": "2026-07-23T13:43:55+0700",
+      "ai": "COMMITTED 774e8ad. Steps 9+9b done: Dockerfile /fe/out + ENV CI=true, config.py fallback frontend/out, static.py /_next/static long-cache mount (kept /assets rollback-compat), +1 TDD test, step-10 stale-dist sweep (main.py+test_security_headers comments). pytest test_static+security 19 pass, full 673 pass/46 desel. Gate 06+07+08 APPROVE (path-traversal same as /assets, no route shadow, STATIC_DIR override intact). Dockerfile NOT locally verifiable (no Docker) - az acr build next. Branch feat/frontend-nextjs-migration now merge-safe: deploy no longer breaks. Awaiting jakkaritw independent Kimi review per pattern. Not pushed/merged.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-af1ac51",
+      "state": "done",
+      "created": "2026-07-23T13:29:37+0700",
+      "updated": "2026-07-23T13:29:37+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): close nextjs-migration-impl + log e2e-stale-specs-fix [commit af1ac51]"
+    },
     {
       "id": "e2e-stale-specs-fix",
       "state": "willdo",
