@@ -45,6 +45,60 @@ describe('MonthCell', () => {
     expect(input.value).toBe('123')
   })
 
+  it('preserves the decimal point when typing a fractional value (bug fix: was stripped to 1005)', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '100.5' } })
+    expect(input.value).toBe('100.5')
+    fireEvent.blur(input)
+    expect(onCommit).toHaveBeenCalledWith(100.5)
+  })
+
+  it('caps typed input to at most 2 decimal places', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '100.567' } })
+    expect(input.value).toBe('100.56')
+  })
+
+  it('keeps only the first decimal point when multiple dots are typed', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '1.2.3' } })
+    expect(input.value).toBe('1.23')
+  })
+
+  it('strips a leading minus sign — negatives are not allowed', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '-50' } })
+    expect(input.value).toBe('50')
+  })
+
+  it('regression: a lone "." commits 0, never NaN (Number(".") is NaN, must not reach onCommit)', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={500} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '.' } })
+    fireEvent.blur(input)
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith(0)
+    expect(Number.isNaN(onCommit.mock.calls[0][0])).toBe(false)
+  })
+
+  it('regression: a lone "." on a cell already at 0 does not commit (0 === 0, unchanged)', () => {
+    const onCommit = vi.fn()
+    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '.' } })
+    fireEvent.blur(input)
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
   it('resyncs the displayed value when the value prop changes externally (e.g. a conflict-refetch revert)', () => {
     const { rerender } = render(<MonthCell value={500} editable={true} onCommit={vi.fn()} label="Jan pending" />)
     const input = screen.getByRole('textbox') as HTMLInputElement

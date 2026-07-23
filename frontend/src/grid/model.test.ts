@@ -417,6 +417,24 @@ describe('formatThb', () => {
   it('formats zero as a dash placeholder', () => {
     expect(formatThb(0)).toBe('—')
   })
+  it('formats a whole number with no decimal places', () => {
+    expect(formatThb(450000)).toBe('450,000')
+  })
+  it('shows 2 decimal places when there is a fraction', () => {
+    expect(formatThb(416.66)).toBe('416.66')
+  })
+  it('shows 2 decimal places with thousands separators when there is a fraction', () => {
+    expect(formatThb(539118.41)).toBe('539,118.41')
+  })
+  it('pads a single-decimal fraction to 2 places', () => {
+    expect(formatThb(100.5)).toBe('100.50')
+  })
+  it('pads a sub-1 fraction to 2 places', () => {
+    expect(formatThb(0.4)).toBe('0.40')
+  })
+  it('rounds float noise to 2dp before deciding whole-vs-fraction', () => {
+    expect(formatThb(100.000001)).toBe('100')
+  })
 })
 
 describe('clampColumnWidth (UI-parity point 8c)', () => {

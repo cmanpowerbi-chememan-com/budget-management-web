@@ -572,8 +572,12 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
 }
 
 /** THB display formatting matching the mockup's `fmt()`: thousands
- * separators, zero shown as an em-dash placeholder (never a bare "0"). */
+ * separators, zero shown as an em-dash placeholder (never a bare "0").
+ * Decimals (up to 2dp) are shown only when the value actually has a
+ * fraction — a whole-baht value never grows a spurious ".00". */
 export function formatThb(value: number): string {
   if (!value) return '—'
-  return Math.round(value).toLocaleString('en-US')
+  const rounded = Math.round(value * 100) / 100
+  if (Number.isInteger(rounded)) return rounded.toLocaleString('en-US')
+  return rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }

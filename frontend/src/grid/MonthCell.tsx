@@ -15,6 +15,19 @@ export interface MonthCellProps {
   testId?: string
 }
 
+/** Sanitize free-typed month input: digits + at most one decimal point +
+ * at most 2 decimal places. Letters and minus signs are dropped (no
+ * negatives per business rule); extra dots beyond the first are dropped
+ * rather than resetting the field, so "1.2.3" becomes "1.23" not "1.2". */
+function sanitizeMonthInput(raw: string): string {
+  const digitsAndDot = raw.replace(/[^0-9.]/g, '')
+  const dotIndex = digitsAndDot.indexOf('.')
+  if (dotIndex === -1) return digitsAndDot
+  const intPart = digitsAndDot.slice(0, dotIndex)
+  const fracPart = digitsAndDot.slice(dotIndex + 1).replace(/\./g, '').slice(0, 2)
+  return `${intPart}.${fracPart}`
+}
+
 /** One month's amount, editable or read-only. Pure display + one commit
  * callback — the parent (`GridTable`/`BudgetGrid`) owns save/conflict
  * handling; this component never calls the API. */
@@ -48,9 +61,13 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
       aria-label={label}
       data-testid={testId}
       value={draft}
-      onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+      onChange={(e) => setDraft(sanitizeMonthInput(e.target.value))}
       onBlur={() => {
-        const parsed = draft === '' ? 0 : Number(draft)
+        const n = Number(draft)
+        // A bad partial input (e.g. a lone "." left after sanitizing) must
+        // never reach onCommit as NaN — NaN !== value is always true, which
+        // would fire an invalid commit regardless of the current value.
+        const parsed = draft === '' || Number.isNaN(n) ? 0 : n
         if (parsed !== value) onCommit(parsed)
       }}
     />
