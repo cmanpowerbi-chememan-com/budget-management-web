@@ -1,0 +1,110 @@
+{"id": "1.1", "status": "PASS", "detail": "cold 5665ms (incl. Vite dep pre-bundle), warm 5619ms, body 2859 chars, no white screen"}
+{"id": "1.2", "status": "PASS", "detail": "email+สายงาน ok, CC=1, ฝ่าย=1, GL=8"}
+{"id": "1.3", "status": "PASS", "detail": "filler: submit only, no approve/reject/admin-zone"}
+{"id": "1.4", "status": "PASS", "detail": "เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง ลองใหม่"}
+{"id": "1.5", "status": "PASS", "detail": "โหลดข้อมูลสิทธิ์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}
+{"id": "2.1", "status": "PASS", "detail": "auto-selected \"Solution Delivery\" (1 ฝ่าย in scope)"}
+{"id": "2.2", "status": "PASS", "detail": "ค้นหา → 1 แถว → highlight → Enter เลือกได้"}
+{"id": "2.3", "status": "PASS", "detail": "Esc ปิด panel โดยไม่เลือก"}
+{"id": "2.4", "status": "PASS", "detail": "?dept&year honored; out-of-scope ฝ่าย ignored (fell back to \"Solution Delivery\")"}
+{"id": "2.5", "status": "PASS", "detail": "legend: SAP/Approved=2026, Pending=2027 · picker=2027"}
+{"id": "2.6", "status": "PASS", "detail": "gl/glgroup/cc filters substring+case-insensitive; subtotal follows visible set (0)"}
+{"id": "2.7", "status": "PASS", "detail": "sap=7 · งบ=5 · pending=2 · zzz=0 rows w/ empty state"}
+{"id": "3.1", "status": "PASS", "detail": "8 txn blocks × 3 layers, labels ok"}
+{"id": "3.2", "status": "PASS", "detail": "sections=side-section-SGA (data has only SGA); per-side totals independent"}
+{"id": "3.3", "status": "PASS", "detail": "5 group subtotals + grand total match row sums"}
+{"id": "3.4", "status": "PASS", "detail": "scrollLeft=600, frozen x stayed 29px"}
+{"id": "3.5", "status": "PASS", "detail": "sap:54/54 approved:40/40 pending:42/42"}
+{"id": "3.6", "status": "PASS", "detail": "drag 112px→169px persisted; Reset cleared storage → 112px"}
+{"id": "3.7", "status": "PASS", "detail": "expanded[Cost Center|GL Code|GL Group|Remark|Status|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec] ↔ collapsed[Cost Center|GL Code|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec], colSpan 5↔2"}
+{"id": "3.8", "status": "PASS", "detail": "current month Jul highlighted (header ×1, cells ×24)"}
+{"id": "3.9", "status": "PASS", "detail": "4 special rows: subform button, no inline input; normal row editable"}
+{"id": "4.1", "status": "PASS", "detail": "m03=12345 saved, total_year=16789"}
+{"id": "4.2", "status": "PASS", "detail": "insert on SAP-only row 6211400010: m05=777, template=USER"}
+{"id": "4.3", "status": "PASS", "detail": "remark \"ทดสอบ remark ไทย 20:27:26\" persisted, months untouched"}
+{"id": "4.4", "status": "PASS", "detail": "409 → \"ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อ…\", DB keeps m07=4444, m09 stayed 0"}
+{"id": "4.5", "status": "PASS", "detail": "no out-of-scope row rendered; 4 special rows have no input; API rejects foreign CC with 403"}
+{"id": "4.6", "status": "PASS", "detail": "edit while PENDING_APPROVER1 → \"ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้ (Solution Delivery/2027 is…\", DB unchanged"}
+{"id": "5.1", "status": "PASS", "detail": "search by code/name/group all filter (103 → 1/5/3); Enter picks first; Esc closes"}
+{"id": "5.2", "status": "PASS", "detail": "\"ไม่พบ GL Code ที่ค้นหา\" (rendered uppercase by CSS: \"ไม่พบ GL CODE ที่ค้นหา\"); save blocked with \"กรุณาเลือก GL Code\", 0 API calls"}
+{"id": "5.3", "status": "PASS", "detail": "103 non-special GLs listed, 0 of the 43 special GLs (6 groups) offered"}
+{"id": "5.4", "status": "PASS", "detail": "dropdown = [10IT012000] = Fill scope exactly"}
+{"id": "5.5", "status": "PASS", "detail": "(10IT012000, 6210900060) → \"รายการนี้มีอยู่ในตารางแล้ว\", 0 API calls"}
+{"id": "5.6", "status": "PASS", "detail": "created 6211400040: row visible in grid, pending_budget row with total 0 / remark NULL"}
+{"id": "6.0.1", "status": "PASS", "detail": "JAN–DEC + รวม; total row live-updates; footer \"Rows: 1 · Year total: ฿350\""}
+{"id": "6.0.2", "status": "PASS", "detail": "1 click → 3 line writes → 3 lines saved, modal closed"}
+{"id": "6.0.3", "status": "PASS", "detail": "row 4 flagged \"รายการที่ 4: กรุณาพิมพ์ทะเบียนรถ…\"; healthy row saved; modal stayed open"}
+{"id": "6.0.4", "status": "PASS", "detail": "confirm \"ลบรายการนี้?\" → 3→2 lines, parent recomputed to SUM(remaining)"}
+{"id": "6.0.5", "status": "PASS", "detail": "grid cell 1,500 = parent m03 1500 = SUM(detail) for all 12 months"}
+{"id": "6A.1", "status": "PASS", "detail": "GL …030 external: 4 options [Customer, Business partner, หน่วยงานราชการ, อื่นๆ]"}
+{"id": "6A.2", "status": "PASS", "detail": "GL …031 internal: [พนักงานบริษัท, กรรมการบริษัท] only, no external values"}
+{"id": "6A.3", "status": "PASS", "detail": "รายละเอียด = free text, accepts Thai"}
+{"id": "6A.4", "status": "PASS", "detail": "meta_json = {\"ประเภทการรับรอง\":\"Business partner\",\"รายละเอียด\":\"รับรองพันธมิตร ทดสอบ UI\"} · m03=1500"}
+{"id": "6A.5", "status": "PASS", "detail": "select + text + month all restored on reopen"}
+{"id": "6B.1", "status": "PASS", "detail": "ประเภทรถ=[Car,Van,Trucks], ทะเบียนรถ=8 (6ขผ-3918,1นจ-3508…,อื่นๆ)"}
+{"id": "6B.2", "status": "PASS", "detail": "\"รายการที่ 2: กรุณาพิมพ์ทะเบียนรถ\" · 0 writes carrying the อื่นๆ literal"}
+{"id": "6B.3", "status": "PASS", "detail": "sent+stored ทะเบียนรถ=\"ฮฮ-1234 ทดสอบ\" (never \"อื่นๆ\")"}
+{"id": "6B.4", "status": "PASS", "detail": "row 2: select=\"อื่นๆ\", free-text prefilled \"ฮฮ-1234 ทดสอบ\""}
+{"id": "6B.5", "status": "PASS", "detail": "11 machinery types; ทะเบียนรถ LOCKED (—)"}
+{"id": "6B.6", "status": "PASS", "detail": "GL …050: ประเภทรถ + ทะเบียนรถ both LOCKED (—), สถานที่ใช้งาน still enterable"}
+{"id": "6B.7", "status": "PASS", "detail": "plants=[BK,TK,KK,PB,RY], กิจกรรม text; stored meta_json keys = กิจกรรม + ทะเบียนรถ + ประเภทรถ + สถานที่ใช้งาน"}
+{"id": "6C.1", "status": "PASS", "detail": "Project + รายละเอียด = text only, 0 dropdowns"}
+{"id": "6C.2", "status": "PASS", "detail": "2 separate detail lines (#33, #34), meta stays per row"}
+{"id": "6C.3", "status": "PASS", "detail": "m01=1000 / m07=2000 in the right slots; parent = Σ detail for all 12 months"}
+{"id": "6D.1", "status": "PASS", "detail": "single meta column \"รายละเอียด\" (text)"}
+{"id": "6D.2", "status": "PASS", "detail": "saved with empty meta (meta_json=null), m09=900"}
+{"id": "6D.3", "status": "PASS", "detail": "meta_json.รายละเอียด = \"บริจาคโรงเรียน ทดสอบ\""}
+{"id": "6E.1", "status": "PASS", "detail": "หลักสูตรอบรม (text) + Method dropdown [Inhouse, Public]"}
+{"id": "6E.2", "status": "PASS", "detail": "meta_json = {\"หลักสูตรอบรม\":\"อบรม Power BI ทดสอบ\",\"Method\":\"Public\"}, m10=4200"}
+{"id": "6E.3", "status": "PASS", "detail": "Method + หลักสูตรอบรม restored on reopen"}
+{"id": "6F.1", "status": "PASS", "detail": "1 save → trip #3 (side SGA) + 4 detail lines (1 per-diem + 3 manual)"}
+{"id": "6F.2", "status": "PASS", "detail": "DB-verified (the REST layer does not expose is_auto_calc): budget.pending_budget_detail #42, trip 3, gl 6210400010, is_auto_calc=1, m02=m03=5775.00, total 11550.00 = days 5 x rate_asian 70 USD x FX 33.0000; UI shows only the server numbers, an unsaved card shows 'ระบบจะคำนวณให้หลังกดบันทึก'"}
+{"id": "6F.3", "status": "PASS", "detail": "transport→6210400020, accommodation→6210400030, other→6210400999 (side=SGA), 0 lines on the opposite side"}
+{"id": "6F.4", "status": "PASS", "detail": "non-travel months render as — (no input, no per-diem cell) and stay 0 in every line"}
+{"id": "6F.5", "status": "PASS", "detail": "filler: locked (title=\"ฝ่ายนี้ใช้ฝั่งนี้ฝั่งเดียวตามข้อมูลจริง …\") · admin: unlocked"}
+{"id": "6F.6", "status": "PASS", "detail": "409 → \"ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อ…\" + โหลดข้อมูลล่าสุด button; DB keeps days=5"}
+{"id": "6F.7", "status": "PASS", "detail": "confirm \"ลบทริปนี้ทั้งหมด? รายการเบี้ยเลี้ยง/ค่าเดินทา…\" → trip+4 lines gone, parent m02 5775 → 5775"}
+{"id": "6F.8", "status": "PASS", "detail": "double-click on บันทึก → 1→2 trips (client_token idempotency held)"}
+{"id": "7.1", "status": "PASS", "detail": "delete offered on 1 row(s) [6211400040] = editable ∧ no SAP ∧ no Approved ∧ not Travelling ∧ pending exists"}
+{"id": "7.2", "status": "PASS", "detail": "confirm \"ลบรายการนี้? (10IT012000 · 6211400040)\" → row gone from grid and from pending_budget"}
+{"id": "7.3", "status": "PASS", "detail": "3 Travelling rows: no delete button (Trip Manager only)"}
+{"id": "7.4", "status": "PASS", "detail": "5 row(s) with no pending record → no delete button (guards the 422 empty-lock-token bug)"}
+{"id": "8.1", "status": "PASS", "detail": "confirm \"ยืนยันส่งอนุมัติงบประมาณฝ่าย \"Solution Delivery\" ปี 2027? · จำนวน 16 รายการ ใน 1 cost cent…\" → PENDING_APPROVER1, chip \"รออนุมัติ · ขั้น 1 (ผู้บังคับบัญชาสายตรง)\""}
+{"id": "8.2", "status": "PASS", "detail": "a1→a2→a3 = APPROVED, chip \"อนุมัติแล้ว\""}
+{"id": "8.3", "status": "PASS", "detail": "reason required → REJECTED by 101622 (arthids), reason echoed to the filler"}
+{"id": "8.4", "status": "PASS", "detail": "approver-1 approve → PENDING_APPROVER2 → approver-2 (Nipaporn) reject → REJECTED by 101032"}
+{"id": "8.5", "status": "PASS", "detail": "step3 reached, approver-3 (Waraporn) reject → REJECTED by 100427"}
+{"id": "8.6", "status": "PASS", "detail": "unlocked after reject (m11=321 saved) → resubmitted, back to PENDING_APPROVER1"}
+{"id": "8.7", "status": "PASS", "detail": "filler: no approve/reject · approver-1: approve+reject, no submit · approver-3 out of turn → 403"}
+{"id": "8.8", "status": "PASS", "detail": "bar below table (top 1190 ≥ table bottom 1156), chip \"รออนุมัติ · ขั้น 1 (ผู้บังคับบัญชาสายตรง)\""}
+{"id": "8.9", "status": "PASS", "detail": "pending-for-me=[Solution Delivery]; pill on the ฝ่าย row + on the trigger"}
+{"id": "9.1", "status": "SKIP", "detail": "NOT RUN by choice: a real upload writes into the company SharePoint library (Solution Delivery/2027/) and the app exposes no delete endpoint, so the test file could not be removed afterwards. Needs jakkaritw's go-ahead. The upload path is exercised indirectly by 9.2 (server-side rejection) and 9.4 (403)."}
+{"id": "9.2", "status": "PASS", "detail": "bad extension → \"คำขอไม่ถูกต้อง (file type '.txt' is not allowed — allowed: jpeg, jpg, …\"; 11MB pdf → HTTP 413; SharePoint list unchanged (0 files)"}
+{"id": "9.3", "status": "SKIP", "detail": "no file exists in Solution Delivery/2027/ to open, and 9.1 (upload) was deliberately not run — the list endpoint itself answered 200 with an empty list, and the download-url endpoint could not be exercised without a real item_id"}
+{"id": "9.4", "status": "PASS", "detail": "see-only: list 200, upload 403, no upload control in the UI"}
+{"id": "10.1", "status": "PASS", "detail": "see-only: 16 rows readable, 0 inputs / 0 delete / 0 submit / 0 subform buttons, badge \"ดูอย่างเดียว\""}
+{"id": "10.2", "status": "PASS", "detail": "admin zone with read-only FX + approved-budget note; picker lists all 114 ฝ่าย"}
+{"id": "10.3", "status": "PASS", "detail": "chip note shown, Submit hidden, subform write → 403 Solution Delivery/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked"}
+{"id": "10.4", "status": "FAIL", "detail": "admin-only GL lock NOT enforced on the staging server under test: dbo.gl_group holds 12 rows with edit_by='admin', yet GET /budget/gl-accounts returns all 146 GLs to filler suchanyay (admin list is identical). The local backend, with GL_EDIT_BY_ENABLED=true, correctly returns 134. Root cause = the staging container's GL_EDIT_BY_ENABLED flag, not app code."}
+{"id": "11.1", "status": "PASS", "detail": "6210900060: m03=12345.00, total_year=17110.00=Σ, template=USER, _user=suchanyay@chememan.com"}
+{"id": "11.10", "status": "PASS", "detail": "6211400010: created through the UI, m05=777.00, template=USER, _user=suchanyay@chememan.com"}
+{"id": "11.2", "status": "PASS", "detail": "6210900060: remark stored byte-exact incl. Thai ('ทดสอบ remark ไทย 20:27:26'), months untouched"}
+{"id": "11.3", "status": "PASS", "detail": "parent = SUM(detail) for all 12 months on 6211900030(2 lines, group=Entertainment), 6210100150(1 lines, group=Training & Seminar), 6211200060(3 lines, group=Lease & Rental); meta_json keys ['Method', 'หลักสูตรอบรม']"}
+{"id": "11.4", "status": "PASS", "detail": "trip #3 side=SGA days=5 group=2: 4 lines share trip_id, per-diem is_auto_calc=1 on 6210400010, manual ['6210400020', '6210400030', '6210400999'], parent=SUM everywhere"}
+{"id": "11.5", "status": "PASS", "detail": "trip #4: 0 lines + 0 trip rows left; 6211900030: 2 lines left, parent recomputed = SUM(remaining)"}
+{"id": "11.6", "status": "PASS", "detail": "13 log rows, contiguous status chain ending APPROVED; actions=SUBMIT→REJECT→RESUBMIT→APPROVE→REJECT→RESUBMIT→APPROVE→APPROVE→REJECT→RESUBMIT→APPROVE→APPROVE→APPROVE; actors=['arthids@chememan.com', 'nipapornt@chememan.com', 'suchanyay@chememan.com', 'warapornt@chememan.com']; 3 rejects all with a reason"}
+{"id": "11.7", "status": "PASS", "detail": "11550.0 = days 5 × rate_asian 70.0 × FX 33.0000; split evenly over ['m02', 'm03'] (02,03)"}
+{"id": "11.8", "status": "SKIP", "detail": "attachment upload (9.1) was deliberately not run — nothing was written to SharePoint, so there is no item to reconcile"}
+{"id": "11.9", "status": "PASS", "detail": "6211400040 gone from pending_budget + no orphan detail; 15 sibling rows untouched"}
+{"id": "12.1", "status": "PASS", "detail": "npm test -> 31 files / 475 tests passed, exit 0 (99.5s)"}
+{"id": "12.2", "status": "PASS", "detail": "pytest -q -> 672 passed, 46 deselected, exit 0 (5.0s)"}
+{"id": "12.3", "status": "FAIL", "detail": "npx playwright test -> 20/23 passed, 3 failed. (a) filler 1.1 and approver 2.1 look for getByRole('combobox', {name:/ปีงบประมาณ/}) but YearPicker's aria-label is now 'ปีฐาน (SAP/Approved · Pending = ปีถัดไป)' -> stale selectors after the year-picker redesign, not an app bug. (b) edge-states 4.1 expects a no-scope caller to fire ZERO /scope/departments calls; the app fires 1 (UserBar's useOwnDepartments runs for role='none'), a real behavioural drift. NOTE: the first run of the suite, executed while the vitest suite + live browser tests were competing for CPU, timed out 22/23 tests during page setup - the suite needs an otherwise-idle machine."}
+{"id": "12.4", "status": "PASS", "detail": "npm run build (tsc -b && vite build) -> built in 541ms, exit 0, no warnings; bundle 283.78 kB / gzip 83.65 kB"}
+{"id": "12.5", "status": "PASS", "detail": "the whole live run WAS the staging smoke: :5180 proxies to cman-budget-web-stg (health 200); grid, all 6 special subforms, Trip Manager, submit/approve/reject and attachments endpoints all exercised against staging + Fabric SQL"}
+{"id": "console-errors-t1", "status": "PASS", "detail": "none"}
+{"id": "console-errors-t2", "status": "PASS", "detail": "none"}
+{"id": "console-errors-t3", "status": "PASS", "detail": "none"}
+{"id": "console-errors-t4", "status": "PASS", "detail": "none"}
+{"id": "console-errors-t5", "status": "PASS", "detail": "none"}
+{"id": "console-errors-t6", "status": "PASS", "detail": "none"}
+{"id": "finding-approver-see-scope", "status": "FAIL", "detail": "approver-2/3 (Nipaporn/Waraporn) must approve Solution Delivery but 10IT012000 is NOT in their See scope (see=7 CCs, none of them this ฝ่าย) → the ฝ่าย never appears in their picker, so steps 2-3 are unreachable through the UI and had to be driven via the API"}
