@@ -1,22 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-23T13:28:21+0700",
+  "updated": "2026-07-23T13:29:26+0700",
   "tasks": [
     {
-      "id": "log-55db1b0",
-      "state": "done",
-      "created": "2026-07-23T13:28:21+0700",
-      "updated": "2026-07-23T13:28:21+0700",
-      "agent": "autolog",
-      "ai": "fix(grid): status cell fills full row height — move flex to inner content span [commit 55db1b0]"
+      "id": "e2e-stale-specs-fix",
+      "state": "willdo",
+      "created": "2026-07-23T13:29:26+0700",
+      "updated": "2026-07-23T13:29:26+0700",
+      "ai": "Fix 3 stale e2e specs (test-vs-app drift, NOT migration-related, confirmed failing pre-migration per docs/test/ui-test-results-2026-07-22.md 12.3 + Kimi re-run): (1) approver-journey 2.1 expects '— เลือกฝ่าย —' empty picker but app auto-selects single dept since 2026-07-21 resolveInitialDept; (2) filler-journey 1.1 locator /ปีงบประมาณ/ vs YearPicker new aria-label 'ปีฐาน (SAP/Approved · Pending = ปีถัดไป)'; (3) edge-states 4.1 expects 0 /scope/departments calls for role=none but UserBar useOwnDepartments fires 1 (benign empty response - either gate the hook or update the assertion; see plan/vite-to-nextjs-migration.md 8.C).",
+      "agent": "claude"
     },
     {
       "id": "nextjs-migration-impl",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-23T12:53:47+0700",
-      "updated": "2026-07-23T13:18:12+0700",
-      "ai": "KIMI REVIEW VERDICT (2026-07-23, reviewer=kimi): APPROVE WITH SUGGESTIONS — commit decision now rests with jakkaritw (suggest 2 commits: CSS fix first, then migration).\n\nReviewed uncommitted tree on branch feat/frontend-nextjs-migration against plan/vite-to-nextjs-migration.md + independently RE-RAN all verification suites (no fixes, no edits).\n\nFAITHFUL TO PLAN: steps 1-8,10,11 verified file-by-file — next.config.ts / vitest.config.ts / src/app/page.tsx verbatim from plan; package.json scripts per plan (next ^16.2.11, vite removed, @vitejs/plugin-react kept for vitest); single tsconfig.json replaces trio (jsx:'react-jsx' vs plan's 'preserve' — works under Next 16, non-issue); .gitignore/.dockerignore dist→out+.next; CLAUDE.md/README/plan.md updated; ADR-0025 well-formed (0018 was taken). ARCH-a/b/c deviations ACCEPTED: pre-paint theme script fixes real ssr:false FOUC; src/platform seam is small + signature-preserving; oxlint override for src/app/** necessary (Next metadata export convention). e2e selector rescope (edge-states 4.2 getByRole('alert')→.grid-error) is a LEGIT migration-caused fix (Next route-announcer injects role=alert), not masked regression. GridTable.tsx+global.css confirmed = unrelated earlier-session CSS row-height fix; split into own commit.\n\nINDEPENDENT RE-RUN RESULTS: vitest 475/475 EXACT (31 files, 76s). next build clean → out/ complete (index.html, 404.html, _next/static/, favicon.svg) — one cosmetic warning x3: 'rewrites will not work with output:export' (expected per plan G3; optionally gate rewrites behind PHASE_DEVELOPMENT_SERVER for quieter ACR logs). playwright 20/23 EXACT; all 3 failures verified PRE-EXISTING with zero migration signatures: (1) approver-journey 2.1 — dept auto-select (2026-07-21 app change) vs test's empty-picker expectation; (2) edge-states 4.1 — 1 extra /departments fetch = known role=none bug already in docs/test/ui-test-results-2026-07-22.md; (3) filler-journey 1.1 — stale /ปีงบประมาณ/ locator vs renamed YearPicker aria-label. oxlint exit 1: 1 error (rules-of-hooks FALSE POSITIVE on Playwright fixture 'use' at e2e/fixtures.ts:63) + 1 warning (unused CC2 import, approver-journey.spec.ts:5) — both on lines untouched by migration, pre-existing, and lint is NOT in CI (ci-tests.yml runs only npm ci/test/build); tiny follow-up suggested (e2e/ override + drop CC2).\n\nHOLDS (unchanged, already flagged by claude): (1) NO az acr build until step 9/9b lands — Dockerfile:81 still COPYs /fe/dist (build would fail at COPY), config.py:104 fallback still frontend/dist, static.py lacks /_next/static long-cache mount; (2) vite.review.config.ts (:5180 staging proxy) broken by design — needs next.config equivalent before next staging click-through; (3) 3 pre-existing e2e failures deserve their own fix task (test-vs-app drift, not migration).",
+      "updated": "2026-07-23T13:29:26+0700",
+      "ai": "COMMITTED on feat/frontend-nextjs-migration after Kimi independent re-run APPROVE W/ SUGGESTIONS (vitest 475/475, build+out/ ok, playwright 20/23=baseline all confirmed). 3 commits: 55db1b0 fix(grid) status-cell row-height CSS (earlier-session work, split per review), f6470e4 feat(front) Vite->Next.js static export migration (incl. Kimi suggestion 1: e2e rules-of-hooks override + CC2 import removed, lint exit 0), 0c5151f chore test-plan artifacts + graphify + PNG cleanup. Kimi suggestion 2 (rewrites warning cosmetic wrap) skipped; suggestion 3 logged as separate task. LEFTOVERS: steps 9/9b backend deploy-prep (Dockerfile /fe/dist, config.py, static.py) before any az acr build; :5180 vite.review.config.ts needs next.config equivalent; branch not merged to main, not pushed.",
       "agent": "kimi"
     },
     {
