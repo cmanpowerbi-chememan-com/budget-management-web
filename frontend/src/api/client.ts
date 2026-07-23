@@ -8,9 +8,14 @@
  *   decides on every request.
  * - Consistent error shapes for 403/5xx so hooks never each reinvent fetch
  *   error handling.
+ *
+ * Build-env read (`NEXT_PUBLIC_API_BASE`, same-origin `''` default) and
+ * browser navigation both go through `platform/` — see env.ts + location.ts.
  */
+import { apiBase } from '../platform/env'
+import { currentHref, navigate } from '../platform/location'
 
-const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
+const API_BASE: string = apiBase()
 
 export class ApiError extends Error {
   readonly status: number
@@ -43,7 +48,7 @@ export function buildLoginRedirectUrl(currentHref: string): string {
 }
 
 function defaultOnUnauthorized(): void {
-  window.location.href = buildLoginRedirectUrl(window.location.href)
+  navigate(buildLoginRedirectUrl(currentHref()))
 }
 
 /** Stable marker substring inside `write_model.DepartmentLockedError`'s

@@ -1,4 +1,4 @@
-# Frontend (React + Vite) — A7 scaffold
+# Frontend (React + Next.js, static export) — A7 scaffold
 
 This is the **app shell only** (BUILD_PLAN.md A7): Entra Easy Auth wiring, RLS scope
 fetch, and the ADR-0016 email deep-link parser, rendered as a placeholder shell. No
@@ -17,13 +17,13 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite dev server proxies `/health`, `/me`, `/scope`,
-`/budget`, `/approval` to `http://localhost:8000` (see `vite.config.ts`) — no CORS
-setup needed locally. In production, set `VITE_API_BASE` if the API is served from a
-different origin than the SPA; it defaults to same-origin (empty string).
+Open `http://127.0.0.1:3000`. The Next dev server proxies `/health`, `/me`, `/scope`,
+`/budget`, `/approval` to `http://127.0.0.1:8000` (see `next.config.ts`'s `rewrites()`)
+— no CORS setup needed locally. In production, set `NEXT_PUBLIC_API_BASE` if the API is
+served from a different origin than the SPA; it defaults to same-origin (empty string).
 
 To exercise the deep-link (ADR-0016), open e.g.:
-`http://localhost:5173/?dept=ฝ่ายบัญชี&year=2026`
+`http://127.0.0.1:3000/?dept=ฝ่ายบัญชี&year=2026`
 
 ## Why no `/api` prefix in the proxy
 
@@ -35,15 +35,19 @@ namespace as-is. Adding an `/api/*` prefix would need path-rewriting for no bene
 
 Phase-1 is a single page (ADR-0016: approval happens inline on the main page, no
 separate inbox screen) — `react-router` would add a dependency with nothing to route
-between. Deep-link params are read directly from `window.location.search` once on
-load. No Redux/Zustand/react-query either — two hooks (`useAuth`, `useScope`) covering
-two GET calls don't need a state library; revisit only if A8+ needs shared mutable
-state across many components.
+between, and the App Router's own file-based routing stays at one route
+(`app/page.tsx`) for the same reason. Deep-link params are read once on load via
+`platform/location.ts`'s guarded `currentSearch()`. No Redux/Zustand/react-query
+either — two hooks (`useAuth`, `useScope`) covering two GET calls don't need a state
+library; revisit only if A8+ needs shared mutable state across many components.
 
 ## Structure
 
 ```
 src/
+├── app/
+│   ├── layout.tsx      root layout — global CSS imports, fonts, pre-paint theme script
+│   └── page.tsx        the one client-only boundary (dynamic(..., { ssr: false }))
 ├── api/
 │   ├── client.ts      typed fetch wrapper — 401 → Easy Auth login redirect,
 │   │                  403/5xx/network → mapped ApiError
@@ -53,6 +57,10 @@ src/
 │   └── useScope.ts     GET /scope → RLS Fill/See scope + role (ADR-0019)
 ├── filters/
 │   └── deepLink.ts     parses ?dept=&year= (ADR-0016), convenience-only
+├── platform/
+│   ├── env.ts               the one build-env read (NEXT_PUBLIC_API_BASE)
+│   ├── location.ts          guarded window.location reads/navigation
+│   └── usePersistedToggle.ts shared persisted-state hook (theme + admin-view toggles)
 ├── styles/
 │   ├── tokens.css       design tokens ported from the canonical mockup
 │   │                    (design/mockups/0002claude design/0002.3budget-export.html)
@@ -78,4 +86,4 @@ deep-link filter.
 npm run build
 ```
 
-`tsc -b` (typecheck) then `vite build` → `dist/`.
+`next build` (typecheck is built in) with `output: 'export'` → static site in `out/`.

@@ -380,8 +380,9 @@ export function noScopeWorld(overrides: Partial<World> = {}): World {
 
 // ---------------------------------------------------------------------------
 // Route installation — one catch-all matcher on the known API path
-// namespaces (matches vite.config.ts's dev proxy list); everything else
-// (Vite's own JS/CSS/HMR) is passed through untouched via `route.continue()`.
+// namespaces (matches next.config.ts's dev proxy `rewrites()` list);
+// everything else (Next's own JS/CSS/HMR) is passed through untouched via
+// `route.continue()`.
 // ---------------------------------------------------------------------------
 const API_PREFIXES = ['/me', '/scope', '/budget', '/approval', '/attachments', '/reference']
 

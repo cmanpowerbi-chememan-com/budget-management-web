@@ -1,8 +1,56 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-21T20:56:34+0700",
+  "updated": "2026-07-23T13:28:21+0700",
   "tasks": [
+    {
+      "id": "log-55db1b0",
+      "state": "done",
+      "created": "2026-07-23T13:28:21+0700",
+      "updated": "2026-07-23T13:28:21+0700",
+      "agent": "autolog",
+      "ai": "fix(grid): status cell fills full row height — move flex to inner content span [commit 55db1b0]"
+    },
+    {
+      "id": "nextjs-migration-impl",
+      "state": "doing",
+      "created": "2026-07-23T12:53:47+0700",
+      "updated": "2026-07-23T13:18:12+0700",
+      "ai": "KIMI REVIEW VERDICT (2026-07-23, reviewer=kimi): APPROVE WITH SUGGESTIONS — commit decision now rests with jakkaritw (suggest 2 commits: CSS fix first, then migration).\n\nReviewed uncommitted tree on branch feat/frontend-nextjs-migration against plan/vite-to-nextjs-migration.md + independently RE-RAN all verification suites (no fixes, no edits).\n\nFAITHFUL TO PLAN: steps 1-8,10,11 verified file-by-file — next.config.ts / vitest.config.ts / src/app/page.tsx verbatim from plan; package.json scripts per plan (next ^16.2.11, vite removed, @vitejs/plugin-react kept for vitest); single tsconfig.json replaces trio (jsx:'react-jsx' vs plan's 'preserve' — works under Next 16, non-issue); .gitignore/.dockerignore dist→out+.next; CLAUDE.md/README/plan.md updated; ADR-0025 well-formed (0018 was taken). ARCH-a/b/c deviations ACCEPTED: pre-paint theme script fixes real ssr:false FOUC; src/platform seam is small + signature-preserving; oxlint override for src/app/** necessary (Next metadata export convention). e2e selector rescope (edge-states 4.2 getByRole('alert')→.grid-error) is a LEGIT migration-caused fix (Next route-announcer injects role=alert), not masked regression. GridTable.tsx+global.css confirmed = unrelated earlier-session CSS row-height fix; split into own commit.\n\nINDEPENDENT RE-RUN RESULTS: vitest 475/475 EXACT (31 files, 76s). next build clean → out/ complete (index.html, 404.html, _next/static/, favicon.svg) — one cosmetic warning x3: 'rewrites will not work with output:export' (expected per plan G3; optionally gate rewrites behind PHASE_DEVELOPMENT_SERVER for quieter ACR logs). playwright 20/23 EXACT; all 3 failures verified PRE-EXISTING with zero migration signatures: (1) approver-journey 2.1 — dept auto-select (2026-07-21 app change) vs test's empty-picker expectation; (2) edge-states 4.1 — 1 extra /departments fetch = known role=none bug already in docs/test/ui-test-results-2026-07-22.md; (3) filler-journey 1.1 — stale /ปีงบประมาณ/ locator vs renamed YearPicker aria-label. oxlint exit 1: 1 error (rules-of-hooks FALSE POSITIVE on Playwright fixture 'use' at e2e/fixtures.ts:63) + 1 warning (unused CC2 import, approver-journey.spec.ts:5) — both on lines untouched by migration, pre-existing, and lint is NOT in CI (ci-tests.yml runs only npm ci/test/build); tiny follow-up suggested (e2e/ override + drop CC2).\n\nHOLDS (unchanged, already flagged by claude): (1) NO az acr build until step 9/9b lands — Dockerfile:81 still COPYs /fe/dist (build would fail at COPY), config.py:104 fallback still frontend/dist, static.py lacks /_next/static long-cache mount; (2) vite.review.config.ts (:5180 staging proxy) broken by design — needs next.config equivalent before next staging click-through; (3) 3 pre-existing e2e failures deserve their own fix task (test-vs-app drift, not migration).",
+      "agent": "kimi"
+    },
+    {
+      "id": "nextjs-plan-arch-blend",
+      "state": "done",
+      "created": "2026-07-23T11:05:52+0700",
+      "updated": "2026-07-23T11:05:52+0700",
+      "ai": "Analyzed frontend architecture via 43-improve-codebase-architecture (Workflow: 6 dims x adversarial verify, 28 agents, 21/22 findings survived), blended into plan/vite-to-nextjs-migration.md. Verdict: keep migration a PURE framework swap - verify pass confirmed ~all deepenings touch files migration never opens. Revised plan: (1) top provenance note-block; (2) sharpened G1 - only App.tsx:19 readStoredTheme + :44 parseDeepLink genuinely crash prerender (model.ts/useAdminViewToggle already try/catch-guarded), ssr:false wrapper covers all, NO platform/ seam required to ship; (3) new Step 3[ARCH-a/b/c]: pre-paint theme script (DO, ssr:false worsens dark FOUC), usePersistedToggle + platform/location (OPTIONAL); (4) new section 8 Architecture backlog: 8.B ranked independent PRs (STRONG: describeApiError 10 copies, useResizableColumns extraction; WORTH: columnWidthStorage, useAsyncResource, subform saveAll drift fix[needs signoff], isConflict, planningYear/standingYear), 8.C two real bugs (loadGrid+ApprovalActionBar cancelled-guard race; /scope/departments double-fetch), 8.D rejected seams w/ deletion-test reasons (fat batch engine, shared conflict hook, platform/dialogs, hookify colFilters, collapse api wrappers), 8.E sequencing. NOTE: plan file was independently deepened on disk mid-edit (added backend coupling G9 + Step 9b) - preserved. Not committed.",
+      "agent": "claude"
+    },
+    {
+      "id": "arch-review-deletion-sweep",
+      "state": "done",
+      "created": "2026-07-23T10:54:40+0700",
+      "updated": "2026-07-23T10:54:53+0700",
+      "ai": "delivered 7 findings via StructuredOutput: (1) missing department-fetch seam + role=none leak bug, (2) resolveInitialDept orchestration in deptResolved flag, (3) clock-coupled year semantics x4, (4) persisted-toggle dup theme/admin, (5) theme FOUC under Next ssr:false, (6) useFillGlCount fetches whole grid for scalar, (7) glDropdownConstants partial parity. no code changed.",
+      "agent": "claude"
+    },
+    {
+      "id": "ui-test-plan-run",
+      "state": "done",
+      "created": "2026-07-22T03:04:48+0700",
+      "updated": "2026-07-22T05:32:46+0700",
+      "ai": "Ran docs/test/ui-test-plan.md end-to-end against 127.0.0.1:5180. KEY: 5180 = vite.review.config.ts -> proxies to STAGING container + injects spoof header suchanyay (NOT local :8000). Result 103 plan items: 98 PASS / 2 FAIL / 3 SKIP. FAIL 10.4 = GL_EDIT_BY_ENABLED off on staging (12 edit_by=admin GLs visible to filler; local backend correct). FAIL 12.3 = e2e 20/23 (2 stale selectors /ปีงบประมาณ/ vs new YearPicker aria-label; 1 real drift: role=none still fires 1 /scope/departments). SKIP 9.1/9.3/11.8 = no SharePoint upload (irreversible, needs jakkaritw ok). 12.1 vitest 475 pass, 12.2 pytest 672 pass, 12.4 build clean. FINDINGS: approver2/3 (Nipaporn/Waraporn) cannot reach Solution Delivery in UI (CC not in See scope) - steps 2/3 only via API; vite.review overwrites identity header so multi-persona UI testing needs a 2nd dev server; StrictMode double-load wipes subform drafts in dev; /budget/detail does not expose is_auto_calc. Test data on 10IT012000/FY2027 fully cleaned (0 rows in pending_budget/detail/trip/approval_status+log). Results: docs/test/ui-test-results-2026-07-22.md + .jsonl. Harness in scratchpad uitest/.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-71f67e5",
+      "state": "done",
+      "created": "2026-07-21T20:56:36+0700",
+      "updated": "2026-07-21T20:56:36+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log compact-mode + kimi-batch push (be898d9) [commit 71f67e5]"
+    },
     {
       "id": "grid-collapse-columns",
       "state": "done",

@@ -23,7 +23,13 @@ test.describe('edge states', () => {
 
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
 
-    await expect(page.getByRole('alert')).toContainText('เซิร์ฟเวอร์ขัดข้อง')
+    // Scoped to the app's own error banner (`.grid-error`, role="alert" in
+    // GridTable.tsx) rather than a bare getByRole('alert'): Next.js's App
+    // Router always injects its own empty `#__next-route-announcer__`
+    // (role="alert", accessibility live-region for route changes), which
+    // made the unscoped role query ambiguous post-migration. Same assertion
+    // intent, unambiguous locator.
+    await expect(page.locator('.grid-error')).toContainText('เซิร์ฟเวอร์ขัดข้อง')
     await expect(page.getByTestId('side-section-COST')).toHaveCount(0)
     await expect(page.getByText('ไม่มีรายการที่ตรงกับตัวกรองนี้')).toHaveCount(0) // not the silent-empty state either
   })

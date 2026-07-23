@@ -8,9 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
-dist-ssr
+out
 *.local
+
+# Next.js build cache (out/ = the exported static site, tracked as a build
+# artifact like the old dist/; next-env.d.ts is committed per create-next-app
+# convention — it is NOT ignored)
+.next
 
 # Playwright E2E — transient run artifacts (traces/screenshots on failure),
 # never the specs themselves (frontend/e2e/*.spec.ts IS committed)

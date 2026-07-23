@@ -2,7 +2,7 @@
  * approve/reject, required reject reason, resubmit chain-reset, and a
  * concurrent-approve 409. The approver here is `see_only` (not necessarily a
  * Filler of the department they approve) per the project's own decision. */
-import { approvalState, approverWorld, CC2, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
+import { approvalState, approverWorld, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('approver journey', () => {
   test('2.1 the รออนุมัติ badge marks only the department pending on this approver', async ({ page }) => {

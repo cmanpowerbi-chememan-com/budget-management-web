@@ -47,9 +47,9 @@ Pointers to specific reference files:
 
 ## Tech Stack (one line)
 
-React + Vite (frontend) · FastAPI (backend) · **Fabric SQL Database** (transactional, R/W) ·
+Next.js (static export, App Router) + React (frontend) · FastAPI (backend) · **Fabric SQL Database** (transactional, R/W) ·
 Fabric Lakehouse (analytical, medallion Bronze→Silver→Gold, R/O) · Entra ID (auth + RLS) ·
-Microsoft Graph API (email, no Power Automate). Full rationale → `docs/adr/` (0002 app, 0004 auth, 0017 DB).
+Microsoft Graph API (email, no Power Automate). Full rationale → `docs/adr/` (0002 app, 0004 auth, 0017 DB, 0025 Next.js).
 
 > **DB = Microsoft Fabric SQL Database**, NOT Azure SQL. Azure SQL is retiring (ADR-0017) —
 > do not write new code against it. Use the Service-Principal pyodbc pattern (global CLAUDE.md
@@ -125,7 +125,10 @@ fabric/                                ← PySpark scripts — copy into Fabric 
 graphify-out/                          ← knowledge-graph; graph.json/GRAPH_REPORT.md/graph.html tracked in git, rebuilt nightly via GitHub Actions (graphify-nightly.yml); cache/ and converted/ gitignored
 ```
 
-> **React + FastAPI main app: NOT yet built.** The budget submit/approve/dashboard app exists only as the wired mockup `0002.3budget-export.html` (default; gridgeist redesign of the earlier `0002.2`). Next phase scaffolds `frontend/` (React+Vite) + `backend/` (FastAPI). Auth = Entra ID Easy Auth + RLS layer (ADR-0004); old Streamlit MSAL flow archived with the scaffold.
+> **React + FastAPI main app** — `frontend/` (React + Next.js, static export, ADR-0025) + `backend/`
+> (FastAPI) are in active build; the original mockup `0002.3budget-export.html` (gridgeist redesign
+> of `0002.2`) remains the canonical source for sign-off specs. Auth = Entra ID Easy Auth + RLS
+> layer (ADR-0004); old Streamlit MSAL flow archived with the scaffold.
 
 ### Fabric Notebook scripts
 `fabric/` scripts use `spark` (Fabric built-in) and `abfss://` paths — they **do not run locally**. Copy into a Fabric Notebook cell and attach the `lakehouse` Lakehouse.
@@ -136,7 +139,7 @@ graphify-out/                          ← knowledge-graph; graph.json/GRAPH_REP
 
 - **Current deploy** = master-tables SWA + Azure Functions via `.github/workflows/master-tables-deploy.yml` (push → GitHub Actions).
 - **No-install machine** — developer has NO admin rights; cannot install Docker, Azure CLI, or any system tool (UAC + antivirus block it). All manual deploy via **Azure Cloud Shell** (portal.azure.com — Docker + az pre-installed).
-- Production main-app target (Phase 2+) = React+Vite + FastAPI on Container Apps — see `.claude/plan.md`.
+- Production main-app target (Phase 2+) = React+Next.js + FastAPI on Container Apps — see `.claude/plan.md`.
 - *(Archived: the old Streamlit deploy via ACR `cmanbudgetacr` + Container App `cman-budget-mngt-web` is dead; superseded by the React+FastAPI plan and the master-tables SWA.)*
 
 ---

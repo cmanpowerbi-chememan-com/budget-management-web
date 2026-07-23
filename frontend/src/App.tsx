@@ -4,30 +4,45 @@ import { useScope } from './auth/useScope'
 import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
 import { UserBar } from './userbar/UserBar'
-import './styles/global.css'
+import { currentSearch } from './platform/location'
+import { usePersistedState } from './platform/usePersistedToggle'
 
 const THEME_STORAGE_KEY = 'budget-theme'
 type Theme = 'light' | 'dark'
 
-function readStoredTheme(): Theme {
-  return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+function decodeTheme(raw: string | null): Theme {
+  return raw === 'dark' ? 'dark' : 'light'
+}
+
+function encodeTheme(theme: Theme): string {
+  return theme
 }
 
 /** Nav-bar dark/light toggle — demonstrates the ported dark-theme tokens
- * (tokens.css) actually work; A8+ can reuse the same `data-theme` switch. */
+ * (tokens.css) actually work; A8+ can reuse the same `data-theme` switch.
+ * Persistence guard shared with the admin-view toggle via
+ * platform/usePersistedToggle (ARCH-b); the pre-paint <script> in
+ * app/layout.tsx (ARCH-a) already applies the stored theme before this
+ * component ever mounts, so this effect only needs to keep the DOM attribute
+ * in sync with subsequent toggles. */
 function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(readStoredTheme)
+  const [theme, setTheme] = usePersistedState<Theme>(
+    THEME_STORAGE_KEY,
+    'local',
+    'light',
+    decodeTheme,
+    encodeTheme,
+  )
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
   }, [theme])
 
   return (
     <button
       type="button"
       className="icon-btn"
-      onClick={() => setTheme((current) => (current === 'light' ? 'dark' : 'light'))}
+      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
       aria-label="สลับโหมดสี"
       title="สลับโหมดสี (light/dark)"
     >
@@ -41,7 +56,7 @@ function App() {
   // server enforces scope regardless of what this pre-fills; BudgetGrid
   // validates `filter.dept` against the caller's actual scope before ever
   // using it (never a bearer of access).
-  const [filter] = useState(() => parseDeepLink(window.location.search))
+  const [filter] = useState(() => parseDeepLink(currentSearch()))
   const { email, loading: authLoading, error: authError } = useAuth()
   const scope = useScope()
 
