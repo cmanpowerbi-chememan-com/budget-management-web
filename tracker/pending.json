@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-23T14:22:32+0700",
+  "updated": "2026-07-23T14:25:00+0700",
   "tasks": [
     {
       "id": "log-153f355",
@@ -55,8 +55,8 @@
       "id": "nextjs-migration-impl",
       "state": "done",
       "created": "2026-07-23T12:53:47+0700",
-      "updated": "2026-07-23T13:29:26+0700",
-      "ai": "COMMITTED on feat/frontend-nextjs-migration after Kimi independent re-run APPROVE W/ SUGGESTIONS (vitest 475/475, build+out/ ok, playwright 20/23=baseline all confirmed). 3 commits: 55db1b0 fix(grid) status-cell row-height CSS (earlier-session work, split per review), f6470e4 feat(front) Vite->Next.js static export migration (incl. Kimi suggestion 1: e2e rules-of-hooks override + CC2 import removed, lint exit 0), 0c5151f chore test-plan artifacts + graphify + PNG cleanup. Kimi suggestion 2 (rewrites warning cosmetic wrap) skipped; suggestion 3 logged as separate task. LEFTOVERS: steps 9/9b backend deploy-prep (Dockerfile /fe/dist, config.py, static.py) before any az acr build; :5180 vite.review.config.ts needs next.config equivalent; branch not merged to main, not pushed.",
+      "updated": "2026-07-23T14:25:00+0700",
+      "ai": "MERGED + PUSHED to origin/main @0aa911e (2026-07-23). Kimi APPROVE round 2 (independent diff + re-run: build/out ok, vitest 475, full backend 673, static tests 19, all confirmed). Fixed kimi nit (mount_frontend docstring Vite->Next). Merged origin/main nightly graphify (resolved toward nightly). Branch feat/frontend-nextjs-migration deleted. Frontend=Next.js static export + backend static-serving wired (out/, /_next/static mount). REMAINING: (1) az acr build to verify Dockerfile + deploy = needs jakkaritw approval (still not deployed); (2) #e2e-stale-specs-fix willdo (3 pre-existing drift specs); (3) vite.review.config.ts :5180 broken - rebuild as next equivalent if staging click-through needed.",
       "agent": "kimi"
     },
     {
