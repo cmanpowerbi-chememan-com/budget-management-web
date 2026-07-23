@@ -405,8 +405,8 @@ function TxnBlock({
               <RemarkCell row={row} editable={editable} onCommitRemark={onCommitRemark} />
             </td>
             <td className="status-cell sap frz frz-5">
-          <span className="status-cell-content">SAP · ใช้จริง</span>
-        </td>
+              <span className="status-cell-content">SAP · ใช้จริง</span>
+            </td>
           </>
         )}
         <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
@@ -445,21 +445,23 @@ function TxnBlock({
         <td colSpan={identityColSpan(columnsCollapsed)} className={`frz frz-1${columnsCollapsed ? ' frz-edge' : ''}`} />
         {!columnsCollapsed && (
           <td className="status-cell pending frz frz-5">
-            Pending · รออนุมัติ
-            {canOpenSpecial && (
-              <button
-                type="button"
-                className="special-open-btn"
-                title={SPECIAL_GL_TOOLTIP}
-                data-testid={`open-subform-${cc}-${gl}`}
-                onClick={() => onOpenSpecial(row, meta.gl_group)}
-              >
-                {SPECIAL_GL_TOOLTIP} ↗
-              </button>
-            )}
-            {meta.is_special && !canOpenSpecial && (
-              <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
-            )}
+            <span className="status-cell-content">
+              Pending · รออนุมัติ
+              {canOpenSpecial && (
+                <button
+                  type="button"
+                  className="special-open-btn"
+                  title={SPECIAL_GL_TOOLTIP}
+                  data-testid={`open-subform-${cc}-${gl}`}
+                  onClick={() => onOpenSpecial(row, meta.gl_group)}
+                >
+                  {SPECIAL_GL_TOOLTIP} ↗
+                </button>
+              )}
+              {meta.is_special && !canOpenSpecial && (
+                <span className="special-hint"> {SPECIAL_GL_TOOLTIP}</span>
+              )}
+            </span>
           </td>
         )}
         <PendingCells

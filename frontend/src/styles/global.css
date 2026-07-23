@@ -1378,20 +1378,17 @@ body.col-dragging * {
   --chip-glow: rgba(34, 197, 94, 0.5);
 }
 /* Status indicator — swatch + text, never color alone (mockup 0002.3
-   lines 457-466). display:flex + flex-wrap:wrap lets the swatch+label sit
-   on one row while .special-hint/.reference-hint (flex-basis:100% below)
-   wrap onto their own full-width line underneath; .special-open-btn stays
-   a normal (non-full-width) flex item next to the label. Explicit
-   `background: var(--surface)` (not left transparent) so the cell reads as
-   the SAME opaque white/cream band as the frozen identity columns, matching
-   the `:not(.status-cell)` exclusion on the row-tint selectors below —
-   otherwise it would only LOOK untinted by incidentally showing the
-   table's own background through, not by actually being on --surface. */
+   lines 457-466). The td itself stays a NORMAL table-cell (never
+   display:flex — a flex td shrinks to content height, 33px under a 54px
+   row, and the leftover strip showed the row wash through as a "floating
+   white box", breaking the continuous row separators the identity columns
+   render). The flex layout lives on the inner .status-cell-content span
+   instead (wraps .special-hint/.special-open-btn onto their own line).
+   Explicit `background: var(--surface)` (not left transparent) so the cell
+   reads as the SAME opaque white/cream band as the frozen identity columns,
+   matching the `:not(.status-cell)` exclusion on the row-tint selectors
+   below. */
 .status-cell {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
   background: var(--surface);
   font-family: var(--mono);
   font-size: 10.5px;
@@ -1401,7 +1398,13 @@ body.col-dragging * {
   white-space: nowrap;
   color: var(--ink-3);
 }
-.status-cell::before {
+.status-cell-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.status-cell-content::before {
   content: '';
   width: 7px;
   height: 7px;
