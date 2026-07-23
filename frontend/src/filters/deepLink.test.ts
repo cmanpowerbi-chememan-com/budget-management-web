@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { parseDeepLink } from './deepLink'
 
 describe('parseDeepLink (ADR-0016 email deep-link)', () => {
-  it('parses a valid dept + year pair', () => {
+  it('parses a valid dept + year pair (URL carries the LABEL year, returns planning = label + 1)', () => {
     const currentYear = new Date().getFullYear()
     expect(parseDeepLink(`?dept=ฝ่ายบัญชี&year=${currentYear}`)).toEqual({
       dept: 'ฝ่ายบัญชี',
-      year: currentYear,
+      year: currentYear + 1,
     })
   })
 
@@ -19,9 +19,9 @@ describe('parseDeepLink (ADR-0016 email deep-link)', () => {
     expect(parseDeepLink('?dept=ฝ่ายขาย')).toEqual({ dept: 'ฝ่ายขาย', year: null })
   })
 
-  it('ignores a missing dept but keeps a valid year', () => {
+  it('ignores a missing dept but keeps a valid year (returns planning = label + 1)', () => {
     const currentYear = new Date().getFullYear()
-    expect(parseDeepLink(`?year=${currentYear}`)).toEqual({ dept: null, year: currentYear })
+    expect(parseDeepLink(`?year=${currentYear}`)).toEqual({ dept: null, year: currentYear + 1 })
   })
 
   it('ignores a non-4-digit year without crashing', () => {
@@ -38,14 +38,14 @@ describe('parseDeepLink (ADR-0016 email deep-link)', () => {
     expect(parseDeepLink(`?year=${farFuture}`).year).toBeNull()
   })
 
-  it('accepts the year exactly at the lower boundary of the ±5-year window', () => {
+  it('accepts the label year exactly at the lower boundary of the ±5-year window (returns label + 1)', () => {
     const lowerBoundary = new Date().getFullYear() - 5
-    expect(parseDeepLink(`?year=${lowerBoundary}`).year).toBe(lowerBoundary)
+    expect(parseDeepLink(`?year=${lowerBoundary}`).year).toBe(lowerBoundary + 1)
   })
 
-  it('accepts the year exactly at the upper boundary of the ±5-year window', () => {
+  it('accepts the label year exactly at the upper boundary of the ±5-year window (returns label + 1)', () => {
     const upperBoundary = new Date().getFullYear() + 5
-    expect(parseDeepLink(`?year=${upperBoundary}`).year).toBe(upperBoundary)
+    expect(parseDeepLink(`?year=${upperBoundary}`).year).toBe(upperBoundary + 1)
   })
 
   it('rejects the year one below the ±5-year window', () => {
@@ -64,5 +64,9 @@ describe('parseDeepLink (ADR-0016 email deep-link)', () => {
 
   it('returns both null with no query string at all', () => {
     expect(parseDeepLink('')).toEqual({ dept: null, year: null })
+  })
+
+  it('round-trips with the YearPicker label convention: URL label 2026 -> planning 2027', () => {
+    expect(parseDeepLink('?year=2026').year).toBe(2027)
   })
 })

@@ -39,12 +39,21 @@ def test_build_deep_link_url_encodes_thai_and_slash():
     link = build_deep_link("บัญชี/การเงิน", 2027, settings=_settings())
     assert link.startswith("https://budget.chememan.com/?dept=")
     assert "%2F" in link  # the '/' inside the department name is encoded
-    assert "&year=2027" in link
+    assert "&year=2026" in link  # URL carries the LABEL year (planning - 1)
 
 
 def test_build_deep_link_uses_configured_base_url():
     link = build_deep_link("IT", 2028, settings=_settings(app_base_url="https://example.test/"))
-    assert link == "https://example.test/?dept=IT&year=2028"
+    assert link == "https://example.test/?dept=IT&year=2027"  # label year = planning - 1
+
+
+def test_build_deep_link_label_year_round_trips_with_frontend_parser():
+    """Round-trip invariant with `frontend/src/filters/deepLink.ts`
+    `parseYear`: this emits `year=<planning - 1>` (the label year); the
+    frontend parser adds 1 back, returning the same planning year again."""
+    for planning_year in (2025, 2027, 2030):
+        link = build_deep_link("Accounting", planning_year, settings=_settings())
+        assert f"&year={planning_year - 1}" in link
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +157,27 @@ def test_notify_turn_resolves_email_and_sends_dry_run(monkeypatch):
     assert kwargs["dry_run"] is True
 
 
+def test_notify_turn_subject_and_body_show_both_planning_and_label_year(monkeypatch):
+    """Gate residual fix: recipient must see the SAME year the on-screen
+    YearPicker shows (label = planning - 1), alongside the correct planning
+    year, so the two never look contradictory."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_turn(
+        conn, department="Accounting", fiscal_year=2027, approver_empcode="200",
+        submitter_email="filler@chememan.com", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert "2027" in subject  # planning year kept
+    assert "Year 2026" in subject  # base-year label, matches on-screen YearPicker
+    assert "2027" in body
+    assert "Year 2026" in body
+
+
 def test_notify_turn_no_email_found_skips_without_error(monkeypatch):
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = None
@@ -177,6 +207,22 @@ def test_notify_reject_sends_to_submitter(monkeypatch):
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert "numbers look wrong" in body
+
+
+def test_notify_reject_subject_and_body_show_both_planning_and_label_year(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_reject(
+        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="numbers look wrong", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert "2027" in subject
+    assert "Year 2026" in subject
+    assert "2027" in body
+    assert "Year 2026" in body
 
 
 def test_notify_reject_no_submitter_email_skips(monkeypatch):
@@ -210,6 +256,22 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
     link = build_deep_link("Accounting", 2027, settings=_settings())
     assert link in body
     assert kwargs["dry_run"] is True
+
+
+def test_notify_approved_subject_and_body_show_both_planning_and_label_year(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert "2027" in subject
+    assert "Year 2026" in subject
+    assert "2027" in body
+    assert "Year 2026" in body
 
 
 def test_notify_approved_no_submitter_email_skips(monkeypatch):
@@ -248,6 +310,20 @@ def test_notify_reminder_lists_every_pending_department(monkeypatch):
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert "Accounting" in body and "IT" in body
+
+
+def test_notify_reminder_shows_both_planning_and_label_year_per_department(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_reminder(
+        "filler@chememan.com", [("Accounting", 2027), ("IT", 2028)], dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    # each department line carries its OWN planning year + matching label year
+    assert "2027" in body and "Year 2026" in body
+    assert "2028" in body and "Year 2027" in body
 
 
 def test_notify_reminder_empty_list_skips(monkeypatch):

@@ -5,7 +5,17 @@
  * otherwise ask the user to choose. The server always re-checks scope on
  * every request regardless of what this parses. Missing or invalid
  * params are ignored individually — never a crash, never a garbage
- * value. */
+ * value.
+ *
+ * Year convention: the URL's `year` is the LABEL (standing) year — the
+ * same year `YearPicker` DISPLAYS (`YearPicker.tsx`: label = value - 1).
+ * `DeepLinkFilter.year` is the PLANNING year (label + 1), matching what
+ * `BudgetGrid` feeds straight into `initialFilter.year`/the `GET /budget`
+ * `year` param (already the planning year, no downstream change needed).
+ * This keeps a hand-typed/hand-shared `?year=<label>` landing on the
+ * SAME grid view as picking the dropdown option labelled "Year <label>".
+ * Inverse of `backend/app/notifications.py` `build_deep_link`, which
+ * emits `year=<planning - 1>` for the same reason. */
 
 export interface DeepLinkFilter {
   dept: string | null
@@ -25,13 +35,17 @@ function parseYear(raw: string | null): number | null {
   const trimmed = raw.trim()
   if (!YEAR_PATTERN.test(trimmed)) return null
 
-  const year = Number(trimmed)
+  // `labelYear` is what the URL carries (matches the YearPicker's
+  // displayed label). The sane window is validated against this raw
+  // label value, unchanged from before this fix — only the RETURN value
+  // below changes (label -> planning).
+  const labelYear = Number(trimmed)
   const currentYear = new Date().getFullYear()
-  if (year < currentYear - YEAR_WINDOW_YEARS || year > currentYear + YEAR_WINDOW_YEARS) {
+  if (labelYear < currentYear - YEAR_WINDOW_YEARS || labelYear > currentYear + YEAR_WINDOW_YEARS) {
     return null
   }
 
-  return year
+  return labelYear + 1
 }
 
 function parseDept(raw: string | null): string | null {

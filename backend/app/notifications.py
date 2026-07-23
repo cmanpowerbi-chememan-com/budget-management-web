@@ -51,13 +51,35 @@ class NotificationResult:
 
 
 def build_deep_link(department: str, fiscal_year: int, settings: Settings | None = None) -> str:
-    """`?dept=<url-encoded ฝ่าย>&year=<fiscal_year>` (ADR-0016) — convenience
-    only, access is still enforced server-side on click. `quote(..., safe="")`
-    encodes Thai, spaces, AND a literal `/` in a department name (e.g.
+    """`?dept=<url-encoded ฝ่าย>&year=<label_year>` (ADR-0016) — convenience
+    only, access is still enforced server-side on click. `fiscal_year` here
+    stays the PLANNING year (unchanged contract, same as every other
+    argument named `fiscal_year` in this module) — callers do NOT change.
+    The emitted URL's `year` carries the LABEL year (`fiscal_year - 1`)
+    instead, matching what the YearPicker actually DISPLAYS
+    (`frontend/src/grid/YearPicker.tsx`: label = value - 1) so a
+    hand-typed/clicked `?year=` lands on the same grid view as the
+    dropdown option with that label. Inverse of
+    `frontend/src/filters/deepLink.ts` `parseYear` (label + 1 = planning) —
+    round-trip: planning P -> this emits `year=P-1` -> `parseDeepLink`
+    returns `{ year: P }` again. `quote(..., safe="")` encodes Thai,
+    spaces, AND a literal `/` in a department name (e.g.
     `บัญชี/การเงิน` -> `%2F`), matching the ADR's explicit example."""
     settings = settings or get_settings()
     base = settings.app_base_url.rstrip("/")
-    return f"{base}/?dept={quote(department, safe='')}&year={fiscal_year}"
+    label_year = fiscal_year - 1
+    return f"{base}/?dept={quote(department, safe='')}&year={label_year}"
+
+
+def _year_phrase(fiscal_year: int) -> str:
+    """Human-readable year mention for subject/body text (gate residual,
+    2026-07-23): always shows the planning year AND the on-screen label
+    year (`fiscal_year - 1`, `frontend/src/grid/YearPicker.tsx`) side by
+    side so a recipient reading the email never sees a different year than
+    the YearPicker they land on. Every notify_* builder below uses this ONE
+    helper so the wording can't drift between subject and body, or between
+    functions. Does NOT touch `build_deep_link` / the URL — text only."""
+    return f"ปีงบประมาณ {fiscal_year} (หน้าจอ: Year {fiscal_year - 1})"
 
 
 def _get_graph_token(settings: Settings) -> str:
@@ -148,10 +170,10 @@ def notify_turn(
         )
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] รออนุมัติงบประมาณ ฝ่าย {department} ปี {fiscal_year}"
+    subject = f"[Budget] รออนุมัติงบประมาณ ฝ่าย {department} {_year_phrase(fiscal_year)}"
     body = (
         "<p>เรียน ผู้อนุมัติ</p>"
-        f"<p>ฝ่าย <b>{department}</b> ปีงบประมาณ {fiscal_year} รอการอนุมัติจากท่าน "
+        f"<p>ฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} รอการอนุมัติจากท่าน "
         f"(ผู้ส่ง: {submitter_email or '-'})</p>"
         f'<p><a href="{link}">คลิกที่นี่เพื่อตรวจสอบและอนุมัติ</a></p>'
     )
@@ -170,10 +192,10 @@ def notify_reject(
         logger.warning("notify_reject: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] งบประมาณ ฝ่าย {department} ปี {fiscal_year} ถูกตีกลับ"
+    subject = f"[Budget] งบประมาณ ฝ่าย {department} {_year_phrase(fiscal_year)} ถูกตีกลับ"
     body = (
         "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        f"<p>ฝ่าย <b>{department}</b> ปีงบประมาณ {fiscal_year} ถูกตีกลับ พร้อมเหตุผล:</p>"
+        f"<p>ฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} ถูกตีกลับ พร้อมเหตุผล:</p>"
         f"<p>{reason}</p>"
         f'<p><a href="{link}">คลิกที่นี่เพื่อแก้ไขและส่งใหม่</a></p>'
     )
@@ -195,10 +217,10 @@ def notify_approved(
         logger.warning("notify_approved: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] งบประมาณของฝ่าย {department} ปี {fiscal_year} ได้รับการอนุมัติครบทุกขั้นแล้ว"
+    subject = f"[Budget] งบประมาณของฝ่าย {department} {_year_phrase(fiscal_year)} ได้รับการอนุมัติครบทุกขั้นแล้ว"
     body = (
         "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        f"<p>งบประมาณของฝ่าย <b>{department}</b> ปีงบประมาณ {fiscal_year} "
+        f"<p>งบประมาณของฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} "
         "ได้รับการอนุมัติครบทุกขั้นแล้ว</p>"
         f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
     )
@@ -218,7 +240,7 @@ def notify_reminder(
         return None
     settings = settings or get_settings()
     items = "".join(
-        f'<li><b>{dept}</b> (ปี {year}) — '
+        f'<li><b>{dept}</b> ({_year_phrase(year)}) — '
         f'<a href="{build_deep_link(dept, year, settings)}">ไปกรอกงบประมาณ</a></li>'
         for dept, year in pending_departments
     )
