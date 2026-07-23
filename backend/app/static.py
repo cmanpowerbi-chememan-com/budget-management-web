@@ -69,8 +69,9 @@ def mount_frontend(app: FastAPI, static_dir: Path) -> bool:
     """Mount the built SPA if `static_dir` (e.g. `frontend/out`) exists.
 
     Returns True if mounted, False if the directory (or its index.html) is
-    missing — the normal local-dev case where Vite serves the frontend on
-    its own port. Never raises: a missing static dir is not a startup error.
+    missing — the normal local-dev case where the Next.js dev server serves
+    the frontend on its own port. Never raises: a missing static dir is not a
+    startup error.
     """
     index_file = static_dir / "index.html"
     if not static_dir.is_dir() or not index_file.is_file():
