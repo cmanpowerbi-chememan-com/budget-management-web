@@ -1,14 +1,14 @@
 /** Admin (ผู้ดูแลระบบ) end-to-end journey — dual-role admin toggle (ADR-0014,
  * default OFF, resets the selected ฝ่าย, persists across reload), attachments
  * upload/list/download, and a pure admin's always-on wide-open view. */
-import { DEPT, dualRoleAdminWorld, installMocks, ok, PLANNING_YEAR, pureAdminWorld, parseMultipartFields, test, expect } from './fixtures'
+import { DEEP_LINK_YEAR, DEPT, dualRoleAdminWorld, installMocks, ok, PLANNING_YEAR, pureAdminWorld, parseMultipartFields, test, expect } from './fixtures'
 
 test.describe('admin journey', () => {
   test('3.1 the admin toggle is OFF by default, switches admin_view_enabled on refetch, resets the ฝ่าย, and persists across reload', async ({ page }) => {
     const world = dualRoleAdminWorld({ budgetGridQueue: [[]] })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await expect(page.getByRole('button', { name: DEPT })).toBeVisible()
 
     await expect.poll(() => world.captured.budgetQueries.length).toBeGreaterThan(0)
@@ -51,7 +51,7 @@ test.describe('admin journey', () => {
       }
     })
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await page.getByRole('button', { name: 'แนบไฟล์' }).click()
     await expect(page.getByTestId('attachments-modal')).toBeVisible()
     await expect(page.getByText('ยังไม่มีไฟล์ในโฟลเดอร์นี้')).toBeVisible()

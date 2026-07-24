@@ -7,6 +7,7 @@ import { ENTERTAINMENT_EXTERNAL_VALUES } from '../src/subform/glDropdownConstant
 import {
   approvalState,
   CC,
+  DEEP_LINK_YEAR,
   DEPT,
   err,
   fillerWorld,
@@ -37,10 +38,13 @@ test.describe('filler journey', () => {
     const world = fillerWorld({ budgetGridQueue: [[]] })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     await expect(page.getByRole('button', { name: DEPT })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: /ปีงบประมาณ/ })).toHaveValue(String(PLANNING_YEAR))
+    // aria-label renamed to "ปีฐาน (SAP/Approved · Pending = ปีถัดไป)" (YearPicker.tsx)
+    // — the picker's underlying `value` is still the PLANNING year (Y+1), only
+    // the label's semantics changed, so the assertion itself is unchanged.
+    await expect(page.getByRole('combobox', { name: /ปีฐาน/ })).toHaveValue(String(PLANNING_YEAR))
 
     await expect.poll(() => world.captured.budgetQueries.length).toBeGreaterThan(0)
     const query = world.captured.budgetQueries.at(-1)!
@@ -59,7 +63,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     const costSection = page.getByTestId('side-section-COST')
     const sgaSection = page.getByTestId('side-section-SGA')
@@ -94,7 +98,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
     await m01.fill('1500')
@@ -127,7 +131,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
     await m01.fill('999')
@@ -145,7 +149,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     // No editable input for this special-GL cell at all.
     await expect(page.locator(`[data-testid="pending-cell-${CC}-${GL_ENTERTAIN_EXT}-m01"] input`)).toHaveCount(0)
@@ -178,7 +182,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await page.getByTestId(`open-subform-${CC}-${GL_ENTERTAIN_EXT}`).click()
     await expect(page.getByTestId('detail-subform')).toBeVisible()
 
@@ -229,7 +233,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await page.getByTestId(`open-subform-${CC}-${GL_ENTERTAIN_EXT}`).click()
     await expect(page.getByTestId('detail-row-existing-42')).toBeVisible()
 
@@ -264,7 +268,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
     await expect(page.getByTestId('trip-manager')).toBeVisible()
 
@@ -316,7 +320,7 @@ test.describe('filler journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await expect(page.getByTestId('approval-submit-btn')).toBeVisible()
 
     let dialogMessage = ''

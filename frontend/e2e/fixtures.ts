@@ -78,6 +78,18 @@ export { expect } from '@playwright/test'
 // ---------------------------------------------------------------------------
 export const PLANNING_YEAR = new Date().getFullYear() + 1
 
+/** A `?year=` deep-link query param carries the LABEL (standing) year — the
+ * same year `YearPicker` displays — NOT the planning year (`filters/deepLink.ts`,
+ * fixed 2026-07-23 commit a02ec3c: `parseYear` now returns `labelYear + 1`).
+ * Every spec building a `?dept=...&year=...` URL must pass THIS constant, not
+ * `PLANNING_YEAR` directly, or the app parses the URL as one year further out
+ * than intended (`DeepLinkFilter.year` would become `PLANNING_YEAR + 1`). All
+ * other assertions in these specs (fiscal_year in a request body, the dialog
+ * text, the YearPicker's selected value) still compare against `PLANNING_YEAR`
+ * — that value is unaffected, it's only the URL's raw query param that uses
+ * the label convention. */
+export const DEEP_LINK_YEAR = PLANNING_YEAR - 1
+
 export const DIVISION = 'สายงานสนับสนุนองค์กร'
 export const C_LEVEL = 'CFO'
 

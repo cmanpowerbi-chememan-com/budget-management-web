@@ -2,7 +2,7 @@
  * approve/reject, required reject reason, resubmit chain-reset, and a
  * concurrent-approve 409. The approver here is `see_only` (not necessarily a
  * Filler of the department they approve) per the project's own decision. */
-import { approvalState, approverWorld, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
+import { approvalState, approverWorld, DEEP_LINK_YEAR, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('approver journey', () => {
   test('2.1 the รออนุมัติ badge marks only the department pending on this approver', async ({ page }) => {
@@ -13,7 +13,20 @@ test.describe('approver journey', () => {
     await expect.poll(() => world.captured.pendingForMeQueries.length).toBeGreaterThan(0)
     expect(world.captured.pendingForMeQueries.at(-1)).toMatchObject({ fiscal_year: String(PLANNING_YEAR) })
 
-    await page.getByRole('button', { name: '— เลือกฝ่าย —' }).click()
+    // 2026-07-21 jakkaritw product decision: the picker never lands
+    // unselected — with no deep-link it auto-selects the first ฝ่าย by
+    // Thai-locale sort (resolveInitialDept). Both approver departments share
+    // one division, so the sort is between the two ฝ่าย names directly:
+    // 'ฝ่ายจัดซื้อ' (DEPT2) sorts before 'ฝ่ายบัญชี' (DEPT) — confirmed via
+    // `String.localeCompare(..., 'th')`. Assert the auto-select actually
+    // landed AND drove the grid fetch, then open the picker on that trigger
+    // to check the badge — the test's real intent (only DEPT, the one
+    // pending on THIS approver, ever shows รออนุมัติ) is unchanged.
+    const trigger = page.getByRole('button', { name: DEPT2 })
+    await expect(trigger).toBeVisible()
+    await expect.poll(() => world.captured.budgetQueries.at(-1)?.department).toBe(DEPT2)
+
+    await trigger.click()
     const deptRow = page.locator('.dept-picker-row', { hasText: DEPT })
     const dept2Row = page.locator('.dept-picker-row', { hasText: DEPT2 })
     await expect(deptRow.getByText('รออนุมัติ')).toBeVisible()
@@ -30,7 +43,7 @@ test.describe('approver journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await expect(page.getByTestId('approval-approve-btn')).toBeVisible()
     await expect(page.getByTestId('approval-reject-btn')).toBeVisible()
 
@@ -59,7 +72,7 @@ test.describe('approver journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await page.getByTestId('approval-reject-btn').click()
 
     const confirmBtn = page.getByTestId('approval-reject-confirm-btn')
@@ -85,7 +98,7 @@ test.describe('approver journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await expect(page.getByTestId('approval-status-chip')).toContainText('ถูกตีกลับ')
 
     // Simulate "meanwhile, the filler resubmitted elsewhere" by mutating the
@@ -128,7 +141,7 @@ test.describe('approver journey', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     page.once('dialog', (dialog) => void dialog.accept())
     await page.getByTestId('approval-approve-btn').click()
 

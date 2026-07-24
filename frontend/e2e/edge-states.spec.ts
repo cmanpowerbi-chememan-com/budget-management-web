@@ -2,7 +2,7 @@
  * a silent empty grid), a /scope failure banner, an out-of-scope deep-link
  * dept being safely ignored, and the two specific 403 Thai messages
  * (past_deadline / department_locked) mapped in `src/api/client.ts`. */
-import { CC, DEPT, err, fillerWorld, GL_OFFICE_COST, installMocks, makeBudgetRow, noScopeWorld, PLANNING_YEAR, test, expect } from './fixtures'
+import { CC, DEEP_LINK_YEAR, DEPT, err, fillerWorld, GL_OFFICE_COST, installMocks, makeBudgetRow, noScopeWorld, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('edge states', () => {
   test('4.1 a no-scope caller sees the friendly empty state, never the grid', async ({ page }) => {
@@ -12,7 +12,7 @@ test.describe('edge states', () => {
     await page.goto('/')
 
     await expect(page.getByTestId('no-scope-empty-state')).toContainText('คุณไม่มีสิทธิ์กรอกงบประมาณ')
-    await expect(page.getByRole('combobox', { name: /ปีงบประมาณ/ })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: /ปีฐาน/ })).toHaveCount(0)
     expect(world.captured.budgetQueries.length).toBe(0)
     expect(world.captured.departmentsQueries.length).toBe(0)
   })
@@ -21,7 +21,7 @@ test.describe('edge states', () => {
     const world = fillerWorld({ budgetGridErrorStatus: 502 })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
     // Scoped to the app's own error banner (`.grid-error`, role="alert" in
     // GridTable.tsx) rather than a bare getByRole('alert'): Next.js's App
@@ -41,17 +41,22 @@ test.describe('edge states', () => {
     await page.goto('/')
 
     await expect(page.getByText('โหลดข้อมูลสิทธิ์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')).toBeVisible()
-    await expect(page.getByRole('combobox', { name: /ปีงบประมาณ/ })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: /ปีฐาน/ })).toHaveCount(0)
   })
 
   test('4.4 an out-of-scope deep-link department is safely ignored (never applied as a bearer of access)', async ({ page }) => {
     const world = fillerWorld({ budgetGridQueue: [[]] }) // departments list does NOT include "แผนกไม่มีจริง"
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent('แผนกไม่มีจริง')}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent('แผนกไม่มีจริง')}&year=${DEEP_LINK_YEAR}`)
 
-    await expect(page.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeVisible()
+    // The unmatched deep-link dept is never applied — instead of landing on
+    // it (or unselected), the picker falls through to the same "never land
+    // unselected" default as no deep-link at all (resolveInitialDept,
+    // 2026-07-21 jakkaritw): here the caller's only real ฝ่าย, DEPT.
+    await expect(page.getByRole('button', { name: DEPT })).toBeVisible()
     await expect(page.getByRole('button', { name: 'แผนกไม่มีจริง' })).toHaveCount(0)
+    await expect.poll(() => world.captured.budgetQueries.at(-1)?.department).toBe(DEPT)
   })
 
   test('4.5a a past-deadline save shows its OWN specific Thai message (distinct from department_locked)', async ({ page }) => {
@@ -61,7 +66,7 @@ test.describe('edge states', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
     await m01.fill('200')
     await m01.blur()
@@ -76,7 +81,7 @@ test.describe('edge states', () => {
     })
     await installMocks(page, world)
 
-    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${PLANNING_YEAR}`)
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
     await m01.fill('200')
     await m01.blur()
