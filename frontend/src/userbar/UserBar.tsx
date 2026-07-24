@@ -60,7 +60,13 @@ export interface UserBarProps {
 export function UserBar({ email, authLoading, authError, scope }: UserBarProps) {
   const isPureAdmin = scope.isAdmin && scope.fillCostCenters.length === 0 && scope.seeCostCenters.length === 0
   const ready = !authLoading && !scope.loading && !authError && !scope.error
-  const wantsScopeData = ready && !isPureAdmin
+  // A caller with role='none' (no admin, no Fill, no See) has nothing to show
+  // here either — same "no scope, no backend work" invariant BudgetGrid's own
+  // `hasNoScope` gate already enforces. Without this check, useOwnDepartments
+  // fired GET /scope/departments even for a no-scope caller (reproduced live,
+  // tracker e2e-stale-specs-fix): a wasted call the header can never use,
+  // since deriveScopeSummary of an empty/no-scope result renders nothing.
+  const wantsScopeData = ready && !isPureAdmin && scope.role !== 'none'
 
   const { departments, loading: departmentsLoading } = useOwnDepartments(wantsScopeData)
   const { count: glCount, loading: glCountLoading } = useFillGlCount(
