@@ -52,3 +52,22 @@ ceremony.
   per-status edit lock (submitter PENDING/APPROVED → read-only): all Pending inputs are currently plain
   editable regardless of status/role. Wiring the status×role edit-lock is deferred (same task as the
   "lock Pending read-only when an approver views").
+
+## Addendum (2026-07-24) — FX-reconciliation job is an explicit exception to the edit-lock
+
+The new job `backend/jobs/repersist_perdiem_fx.py` (financial reconciliation, GATE decision
+2026-07-24) is a deliberate, narrow exception to the edit-rights-by-status table above. It
+re-persists the **DERIVED, system-managed per-diem line** (the `per_diem_gl` detail row +
+its parent cell) for **every trip of a fiscal_year, regardless of `(department,
+fiscal_year)` approval status** — including `PENDING_APPROVER1/2/3` and `APPROVED` — and
+deliberately does **not** call `_ensure_department_not_locked` / look up
+`budget.approval_status` at all.
+
+This does not contradict "editing never changes status" above: the job is not a user
+edit. It never touches human-typed amounts (transport/accommodation/other travel lines, or
+any non-Travelling GL) and never moves status (no re-approval, no bounce-to-DRAFT) — it
+only re-derives the one per-diem figure that ADR-0015 already defines as a value tracking
+the shared Master FX, not a frozen number. Treat it like "admin edits an APPROVED ฝ่าย"
+above: a deliberate, logged (`_user="system:fx_repersist"`), authority-gated correction —
+run manually, dry-run by default — not a loophole. See ADR-0015's addendum (2026-07-24)
+for why the per-diem figure is allowed to move after approval in the first place.

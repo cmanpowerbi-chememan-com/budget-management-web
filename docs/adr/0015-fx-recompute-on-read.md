@@ -65,3 +65,24 @@ Key facts that drove the flip:
   localStorage key: Module 09 writes it (on seed + edit + delete); OPEX reads it on load and
   on the `storage` event → re-derives every trip's per-diem and the per-diem GL rows live
   (realtime when both tabs are open). OPEX has no FX input.
+
+## Addendum (2026-07-24) — `repersist_perdiem_fx` job persists "re-price ALL incl APPROVED" to the DB
+
+This ADR's decision ("editing the year's Master FX re-prices ALL overseas per-diem of
+that year immediately, including budgets already APPROVED") describes READ-time behavior:
+`GET /budget/trip` (`subform_read.fetch_trips`) already recomputes per-diem live with the
+current FX on every read. It does NOT re-write the STORED value in
+`budget.pending_budget_detail` / `budget.pending_budget` — those keep holding whatever was
+last saved, so the **main grid** (which renders the stored value, not a live recompute)
+can lag behind an FX change until a trip is manually re-saved.
+
+`backend/jobs/repersist_perdiem_fx.py` (GATE decision 2026-07-24) is the mechanism that
+closes that gap: a manual, dry-run-by-default batch job that re-derives every
+`fiscal_year` trip's per-diem with `derive_per_diem` (the same formula, unchanged) and
+re-writes it via the same `_upsert_trip_detail_line`/`_recompute_parent_cell` primitives
+the user-facing save path uses — for ALL trips regardless of approval status, matching
+this ADR's original "incl APPROVED, no per-budget review" intent, closing the
+grid-vs-subform lag. Domestic trips (`country_group=1`) are skipped (FX=1, never
+affected) and a per-trip data gap (no `dbo.per_diem_rate` row, or malformed stored trip
+data) is skipped+logged rather than aborting the run. See ADR-0013's addendum
+(2026-07-24) for how this reconciles with the user edit-lock.
