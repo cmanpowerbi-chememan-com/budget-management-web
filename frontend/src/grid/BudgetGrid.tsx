@@ -80,8 +80,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   function handleAdminModeToggle(next: boolean) {
     setAdminModeOn(next)
     // ADR-0014: switching hats resets the locked ฝ่าย — scope differs
-    // between "my ฝ่าย" and "every ฝ่าย".
+    // between "my ฝ่าย" and "every ฝ่าย" — then immediately re-resolves to
+    // the first ฝ่าย of the NEW scope via the same resolveInitialDept path
+    // as the initial mount (2026-07-24 jakkaritw: the 2026-07-21 "never
+    // land unselected" rule applies after a hat-switch too, not only on
+    // page load). deptResolved=false re-opens the resolution branch in the
+    // reference-data effect AND holds the grid-load gate, so the grid never
+    // flashes an unfiltered (department=null) load in between.
     setDepartment(null)
+    setDeptResolved(false)
   }
 
   // Reference data (GL master + department hierarchy) loads once, then

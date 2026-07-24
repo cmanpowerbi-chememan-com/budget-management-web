@@ -417,7 +417,7 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenLastCalledWith(expect.objectContaining({ adminViewEnabled: true })))
   })
 
-  it('resets the selected ฝ่าย to null when the admin-mode toggle switches (ADR-0014)', async () => {
+  it('re-auto-selects the first ฝ่าย after the admin-mode toggle switches (2026-07-24 rule)', async () => {
     const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
@@ -430,7 +430,32 @@ describe('BudgetGrid', () => {
 
     fireEvent.click(toggle)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '— เลือกฝ่าย —' })).toBeInTheDocument())
+    // The 2026-07-21 "never land unselected" rule now applies after a
+    // hat-switch too: no settled placeholder — the dept re-resolves.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: '— เลือกฝ่าย —' })).not.toBeInTheDocument()
+  })
+
+  it('after a hat-switch, auto-selects the FIRST ฝ่าย of the NEW scope (hierarchy order), not the previous pick', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    const TWO_DEPTS = [
+      { cost_center: 'CC2', department: 'Beta Dept', division: 'Div', c_level: 'X' },
+      { cost_center: 'CC1', department: 'Alpha Dept', division: 'Div', c_level: 'X' },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments)
+      .mockResolvedValueOnce(DEPARTMENTS) // initial mount: single ฝ่าย
+      .mockResolvedValue(TWO_DEPTS) // after toggle: the new, wider scope
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: null, year: null }} />)
+
+    const toggle = await screen.findByTestId('admin-mode-checkbox')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Alpha Dept' })).toBeInTheDocument())
   })
 
   it('shows the status legend with SAP/Approved at year-1 and Pending at the selected year (they disambiguate the prior-year baseline)', async () => {
