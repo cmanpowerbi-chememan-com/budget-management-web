@@ -323,10 +323,25 @@ def merge_budget_rows(
     (gl not admin-locked OR caller is admin OR admin_gl_codes is None).
     `None` (the default) preserves old behavior for callers that don't
     pass it (e.g. existing tests).
+
+    Net-zero GL row hiding (plan/hide-netzero-gl-rows.md, 2026-07-24
+    decision by jakkaritw): a `(cost_center, gl_account)` row is dropped
+    when its SAP layer nets to zero (a reversal-style posting, or no SAP
+    row at all) AND neither a board NOR a pending row exists for it —
+    presence, not value, so a genuinely all-zero board/pending row still
+    shows (WIP safeguard: a blank "+ เพิ่ม Transaction" row must never
+    vanish). Not flag-gated, not role-based; always applied.
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
     fill_ccs = set(scope.fill_cost_centers)
+
+    # Presence (not value) of a board/pending row per key, from the join
+    # rows themselves — `BoardLayer()`/`PendingLayer()` defaults look
+    # identical to a real all-zero row, so presence can't be read off the
+    # merged `BudgetRow` layer values.
+    board_present = {(jr["cost_center"], jr["gl_account"]) for jr in join_rows if jr.get("board_cost_center") is not None}
+    pending_present = {(jr["cost_center"], jr["gl_account"]) for jr in join_rows if jr.get("pending_cost_center") is not None}
 
     remaining_sap = dict(sap_actuals)
     merged: dict[tuple[str, str], BudgetRow] = {}
@@ -353,6 +368,8 @@ def merge_budget_rows(
             continue
         if admin_gl_codes is not None and gl in admin_gl_codes and not scope.is_admin:
             continue
+        if row.sap.total_year == 0 and (cc, gl) not in board_present and (cc, gl) not in pending_present:
+            continue  # net-zero GL row hide (2026-07-24, plan/hide-netzero-gl-rows.md)
         if cost_center_filter is not None and cc != cost_center_filter:
             continue
         if department_filter is not None:

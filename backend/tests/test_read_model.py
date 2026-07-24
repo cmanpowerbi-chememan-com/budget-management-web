@@ -195,7 +195,10 @@ def test_pending_layer_carries_updated_at_optimistic_lock_token():
 
 def test_pending_layer_updated_at_is_none_when_no_pending_row_exists():
     join_rows: list[dict] = []
-    sap_actuals = {("CC1", "GL1"): {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}}
+    # Non-zero m01 (not net-zero) keeps this SAP-only row visible under the
+    # 2026-07-24 net-zero-hide rule (see below) — an all-zero SAP total here
+    # would now be hidden, which is orthogonal to what this test checks.
+    sap_actuals = {("CC1", "GL1"): {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]} | {"m01": 100.0, "total_year": 100.0}}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
@@ -587,6 +590,129 @@ def test_master_filter_subtotal_excludes_dropped_row_no_double_count():
 
 
 # ---------------------------------------------------------------------------
+# merge_budget_rows — hide net-zero GL rows (plan/hide-netzero-gl-rows.md,
+# 2026-07-24 decision by jakkaritw). A (cc,gl) row whose SAP months net to
+# zero (e.g. a posting + its reversal, or simply no SAP row) is hidden ONLY
+# when NEITHER a board NOR a pending row exists for it. Presence, not value:
+# an all-zero board/pending row must still show (WIP safeguard) — see
+# `_ALL_ZERO_MONTHS` fixture rows below.
+# ---------------------------------------------------------------------------
+
+_ALL_MONTHS = [f"m{m:02d}" for m in range(1, 13)]
+
+
+def _net_zero_sap_months() -> dict[str, float]:
+    """+1,648.13 in m01 / -1,648.13 in m02 -> total_year == 0.0 — the
+    reversal-style case from the trigger finding (10GE000000/6210500010)."""
+    months = {c: 0.0 for c in _ALL_MONTHS}
+    months["m01"] = 1648.13
+    months["m02"] = -1648.13
+    months["total_year"] = 0.0
+    return months
+
+
+def test_net_zero_sap_key_no_board_no_pending_is_excluded():
+    join_rows: list[dict] = []
+    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert rows == []
+
+
+def test_net_zero_sap_key_with_pending_row_is_included_safeguard():
+    """Safeguard: even an all-zero pending row (blank "+ เพิ่ม Transaction"
+    row, or a deliberately-zeroed one) must never vanish."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]  # all pending amounts 0/None
+    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL1"]
+    assert rows[0].sap.total_year == 0.0
+    assert rows[0].pending.total_year == 0.0
+
+
+def test_net_zero_sap_key_with_board_row_is_included():
+    """Presence, not value: an all-zero Approved (board) row must still
+    show — same safeguard as pending, on the board side."""
+    join_rows = [_blank_join_row("CC1", "GL1", board_cost_center="CC1")]  # all board amounts 0/None
+    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL1"]
+    assert rows[0].board.total_year == 0.0
+
+
+def test_sap_key_with_non_zero_net_no_board_no_pending_is_included():
+    """Existing behavior unchanged: any SAP month != 0 (net total != 0) keeps
+    the row visible even with no board/pending, as before this rule."""
+    join_rows: list[dict] = []
+    months = {c: 0.0 for c in _ALL_MONTHS}
+    months["m03"] = 999.0
+    months["total_year"] = 999.0
+    sap_actuals = {("CC1", "GL1"): months}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL1"]
+
+
+def test_net_zero_join_row_with_both_presence_markers_null_is_excluded():
+    """Presence must come from `board_cost_center`/`pending_cost_center`
+    being non-null on the join row — NOT from mere membership in
+    `join_rows` — a degenerate join row with both markers null (should not
+    occur from the real FULL OUTER JOIN, but guards the presence-detection
+    logic itself) is treated the same as a pure-SAP key: hidden if net-zero."""
+    join_rows = [_blank_join_row("CC1", "GL1")]  # board_cost_center=None, pending_cost_center=None
+    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert rows == []
+
+
+def test_net_zero_hidden_row_contributes_nothing_to_grid_totals():
+    """TOTALS PARITY: the hidden net-zero row's layers are all exactly
+    zero (sap net-zero by construction, board/pending absent -> default
+    zero) -- so the grid-wide total is identical whether or not the row
+    is (would be) included."""
+    join_rows = [
+        _blank_join_row(
+            "CC1", "GL-VISIBLE", pending_cost_center="CC1",
+            pending_m01=500.0, pending_total_year=500.0,
+        ),
+    ]
+    netzero_months = _net_zero_sap_months()
+    sap_actuals = {
+        ("CC1", "GL-VISIBLE"): {c: 0.0 for c in _ALL_MONTHS} | {"total_year": 0.0},
+        ("CC1", "GL-NETZERO"): netzero_months,
+    }
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL-VISIBLE"]  # GL-NETZERO hidden
+
+    def _layer_total(r):
+        return r.sap.total_year + r.board.total_year + r.pending.total_year
+
+    total_returned = sum(_layer_total(r) for r in rows)
+    # The hidden row's own total (all 3 layers) — proven zero by
+    # construction (net-zero SAP, no board, no pending row for it).
+    hidden_row_total = netzero_months["total_year"]  # board/pending default to 0.0
+    assert hidden_row_total == 0.0
+    assert total_returned == 500.0
+    assert total_returned + hidden_row_total == 500.0  # including it changes nothing
+
+
+# ---------------------------------------------------------------------------
 # get_budget_grid — orchestrator
 # ---------------------------------------------------------------------------
 
@@ -842,10 +968,14 @@ def test_board_year_empty_returns_zero_filled_pending_and_sap_layers():
         ),
     ]
     # SAP data passed separately (ADR-0020: cross-store merge)
+    # total_year included (not net-zero) — matches the real SAP query, which
+    # always carries its own pre-computed total_year column; a fixture
+    # without it would look net-zero under the 2026-07-24 hide rule.
     sap_actuals = {
         ("CC1", "GL2"): {"m01": 50.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
                         "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,
-                        "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0}
+                        "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0,
+                        "total_year": 50.0}
     }
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
@@ -869,10 +999,12 @@ def test_board_year_partial_missing_cost_center_still_renders():
     CC still appear with zero-filled board layer — never lost."""
     join_rows = []  # No join row yet (board empty for CC_NEW)
     # But SAP has a row for CC_NEW
+    # total_year included (not net-zero) — see same note above.
     sap_actuals = {
         ("CC_NEW", "GL1"): {"m01": 200.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
                            "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,
-                           "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0}
+                           "m09": 0.0, "m10": 0.0, "m11": 0.0, "m12": 0.0,
+                           "total_year": 200.0}
     }
     scope = _scope(fill_cost_centers=["CC_NEW"], see_cost_centers=["CC_NEW"])
 
