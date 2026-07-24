@@ -1,8 +1,62 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-24T20:47:43+0700",
+  "updated": "2026-07-24T23:58:25+0700",
   "tasks": [
+    {
+      "id": "log-2693be7",
+      "state": "done",
+      "created": "2026-07-24T23:58:25+0700",
+      "updated": "2026-07-24T23:58:25+0700",
+      "agent": "autolog",
+      "ai": "fix(grid): admin-mode toggle re-auto-selects first ฝ่าย after hat-switch [commit 2693be7]"
+    },
+    {
+      "id": "hide-netzero-gl-rows",
+      "state": "done",
+      "created": "2026-07-24T23:33:31+0700",
+      "updated": "2026-07-24T23:49:21+0700",
+      "ai": "DONE + committed 81eac93 (main, not pushed). merge_budget_rows hides key iff sap.total_year==0 AND no board row AND no pending row (presence from join markers board_cost_center/pending_cost_center, never values; safeguard: pending/board presence -> always show). Live oracle: 56 net-zero FY2026, 51 hidden, grid 1041->1007, totals identical (SAP 70,612,040.65/Approved 205,307,324.11), original case 10GE000000/6210500010 gone, safeguard SHOW verified via merge injection. Gate 06 APPROVE-w-sugg(style only)/07 PASS/08 PASS 60/60+701/46. 6 new tests incl totals-parity. Frontend unchanged (grep clean). NOTE: :8000 still runs OLD code - restart needed to see hiding live in browser.",
+      "agent": "claude"
+    },
+    {
+      "id": "hide-netzero-gl-rows-plan",
+      "state": "done",
+      "created": "2026-07-24T23:30:23+0700",
+      "updated": "2026-07-24T23:55:53+0700",
+      "ai": "IMPLEMENTED + VERIFIED. CC built per plan/hide-netzero-gl-rows.md, commit 81eac93 on main. Kimi independent verification: (1) commit scope exact (merge_budget_rows drops key iff sap.total_year==0 AND no board AND no pending row, join-row markers); (2) full backend suite re-run: 701 passed / 46 deselected EXACT; (3) restarted :8000 with new code — live oracle: 10GE000000/6210500010 (the original reversal pair) ABSENT from grid ✓, and GE SAP total = 1,100,529.75 which reconciles exactly as 282,112.88 (filler view) + 818,416.87 (12 admin-locked GLs now visible because nipapornt was made admin) — NOT a totals regression, an identity change; (4) SAFEGUARD round-trip live: PUT blank pending row on the hidden GL -> HTTP 200 -> row re-appears; DELETE -> 200 -> hidden again ✓. CC's org-wide oracle stands: 56 net-zero keys -> 51 hidden, 1041->1007 rows, totals identical. Feature closed. NOTE: :8000 now runs the NEW code (kimi restarted it for verification) — browser needs one refresh to see hidden rows gone.",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "plan/hide-netzero-gl-rows.md",
+          "label": "hide rule spec"
+        }
+      ]
+    },
+    {
+      "id": "toggle-reautoselect-fix",
+      "state": "done",
+      "created": "2026-07-24T23:20:48+0700",
+      "updated": "2026-07-24T23:20:48+0700",
+      "ai": "fix(grid): admin-mode toggle now re-auto-selects the first ฝ่าย of the new scope after a hat-switch (jakkaritw decision 2026-07-24, option a — the 2026-07-21 'never land unselected' rule applies after toggling too, not only on mount). Change: BudgetGrid.tsx handleAdminModeToggle adds setDeptResolved(false) (+ comment) — the reset now flows through the SAME resolveInitialDept path as initial mount and the deptResolved gate prevents an unfiltered grid flash-load. Tests: rewrote the old 'resets to null' test into 2 new-behavior tests (re-auto-selects after toggle; selects FIRST of the NEW scope's hierarchy, not the previous pick) in BudgetGrid.test.tsx. Verify: vitest 489/489 (488+1); live Playwright as nipapornt (dual-role admin): fresh load auto-selects 'Budgeting and Management', toggle ON auto-selects first org-wide dept (no placeholder), toggle OFF re-selects 'Budgeting and Management' (no placeholder). UNCOMMITTED in working tree (BudgetGrid.tsx + BudgetGrid.test.tsx) — awaiting jakkaritw/CC commit flow.",
+      "agent": "kimi"
+    },
+    {
+      "id": "round2-reverify-kimi",
+      "state": "done",
+      "created": "2026-07-24T20:59:33+0700",
+      "updated": "2026-07-24T20:59:33+0700",
+      "ai": "Round-2 re-verify complete (plan/next-tests-round2-split.md done-definition). CC items 2-4 VERIFIED independently: (1) fix(userbar) d73deb6 confirmed live — no-scope probe (adirekn) now shows 0 /scope/departments calls (was 1 pre-fix), empty state intact; (2) jobs dry-run spot-check: auto_escalate --fiscal-year 2027 -> dry_run=True, notifications_dry_run=True, 0 stale PENDING, exit 0, zero writes — matches CC's report; (3) full Playwright suite run by kimi: 23 passed (1.8m) — green 23/23 confirmed, no pre-existing failures left. Also this closes the last open e2e item (#e2e-stale-specs-fix). Combined with Kimi's concurrency-races lane (4/4 PASS), test round 2 is fully done and verified. Remaining open items overall: staging az acr build (jakkaritw, Cloud Shell) only.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-2fc1840",
+      "state": "done",
+      "created": "2026-07-24T20:57:07+0700",
+      "updated": "2026-07-24T20:57:07+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker,plan): log round-2 test lanes + save test-split plans [commit 2fc1840]"
+    },
     {
       "id": "viewport-smoke-cc",
       "state": "done",

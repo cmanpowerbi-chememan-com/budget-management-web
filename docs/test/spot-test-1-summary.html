@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spot Test #1 — Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130e; --ink2:#4a4438; --ink3:#8a8272;
+    --line:#d8d2c4; --paper:#faf8f3; --card:#ffffff;
+    --green:#15803d; --green-bg:#eaf6ee;
+    --amber:#b45309; --amber-bg:#fdf3e3;
+    --mono:'IBM Plex Mono',monospace; --sans:'Archivo','IBM Plex Sans Thai',sans-serif; --thai:'IBM Plex Sans Thai',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--thai),var(--sans);background:var(--paper);color:var(--ink);width:1120px;padding:36px 40px}
+  .mono{font-family:var(--mono)}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  h1{font-family:var(--sans);font-size:30px;font-weight:800;letter-spacing:-.5px}
+  h1 em{font-style:normal;color:var(--green)}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;line-height:1.7}
+  .verdict{display:flex;gap:14px;align-items:stretch;margin:18px 0}
+  .verdict .big{flex:1;background:var(--green-bg);border:1.5px solid var(--green);padding:14px 18px}
+  .verdict .big .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--green)}
+  .verdict .big .t{font-size:13px;color:var(--ink2);margin-top:2px}
+  .verdict .side{width:300px;border:1.5px solid var(--line);background:var(--card);padding:14px 18px;font-size:12.5px;color:var(--ink2);line-height:1.65}
+  h2{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink3);margin:22px 0 8px}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .card{border:1.5px solid var(--line);background:var(--card);padding:12px 14px}
+  .card .k{font-size:11px;color:var(--ink3);letter-spacing:.4px}
+  .card .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:6px}
+  .card .s{font-size:10.5px;color:var(--ink3);margin-top:4px;line-height:1.5}
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  td,th{border:1px solid var(--line);padding:5px 9px;font-size:11.5px;text-align:left;vertical-align:top}
+  th{background:var(--ink);color:#fff;font-family:var(--sans);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;font-weight:600}
+  .ok{color:var(--green);font-weight:700}
+  .num{font-family:var(--mono)}
+  .cols{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:0}
+  .box{border:1.5px solid var(--line);background:var(--card);padding:12px 16px}
+  .box h3{font-family:var(--sans);font-size:13px;font-weight:700;margin-bottom:6px}
+  .box p, .box li{font-size:12px;color:var(--ink2);line-height:1.7}
+  .box ul{padding-left:18px}
+  .flow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+  .chip{border:1.5px solid var(--ink);padding:4px 10px;font-family:var(--mono);font-size:11.5px;background:var(--paper)}
+  .chip.g{border-color:var(--green);background:var(--green-bg)}
+  .arrow{color:var(--ink3);font-family:var(--mono)}
+  .obs{border:1.5px solid var(--amber);background:var(--amber-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  footer{margin-top:22px;border-top:1.5px solid var(--line);padding-top:10px;font-family:var(--mono);font-size:10px;color:var(--ink3);display:flex;justify-content:space-between}
+  .verify{color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Spot Test #1 — ผ่านครบ <em>17/17</em></h1>
+    <div style="font-size:13px;color:var(--ink2);margin-top:4px">Budget Management Web · หลัง migration Vite → Next.js (static export)</div>
+  </div>
+  <div class="meta">
+    user: suchanyay@chememan.com (filler)<br>
+    filter: ปี 2026 · cc 10IT012000 (ฝ่าย Solution Delivery)<br>
+    branch: feat/frontend-nextjs-migration · 2026-07-23<br>
+    ผู้เทส: Claude Code · ตรวจซ้ำอิสระ: Kimi
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="big">
+    <div class="n">17 / 17 ข้อ ผ่าน</div>
+    <div class="t">front-end = ข้อมูลใน DB จริง 100% ทั้งก่อนและหลังกรอก — ยืนยัน 2 ชั้น: JSON ที่ browser ดึง เทียบ DB ระดับสเตต์เมนต์ และตัวเลขที่ render บนตารางเทียบ DB (ระดับบาทตามจุดทศนิยม)</div>
+  </div>
+  <div class="side">
+    <b>ข้อสังเกต 4 ข้อ — ไม่ใช่ blocker:</b> (a) ความหมายของ "ปี 2026" บนจอ · (b) เงื่อนไขข้อ 12.3 · (c) รายละเอียดข้อ 401 · (d) หมายเหตุ FX/admin GL — รายละเอียดเต็มอยู่ในรายงานของ CC
+  </div>
+</div>
+
+<h2>ตัวเลขหลัก (ground truth เทียบ DB)</h2>
+<div class="cards">
+  <div class="card"><div class="k">Cost Center ที่เห็น</div><div class="v">1</div><div class="s mono">10IT012000 — ตรง cc_filler_map</div></div>
+  <div class="card"><div class="k">GL (distinct บน grid)</div><div class="v">8</div><div class="s mono">ตรง DB ทุกตัว</div></div>
+  <div class="card"><div class="k">SAP total (FY2026)</div><div class="v">539,118.41</div><div class="s mono">gold.fact_gl_trans</div></div>
+  <div class="card"><div class="k">Approved total (FY2026)</div><div class="v">1,480,104.00</div><div class="s mono">dbo.board_budget · 5 GL</div></div>
+  <div class="card"><div class="k">Pending ระหว่างเทส → หลัง cleanup</div><div class="v">1,042,174.32 → 0</div><div class="s mono">เขียนครบแล้วลบตรงตัว (ข้อ 17)</div></div>
+</div>
+
+<h2>ผลรายข้อ</h2>
+<table>
+  <tr><th style="width:34px">#</th><th>หัวข้อ</th><th>ผล</th><th style="width:34px">#</th><th>หัวข้อ</th><th>ผล</th></tr>
+  <tr><td class="num">1</td><td>Dept filter default</td><td class="ok">✓ ฝ่ายเดียว → auto-select Solution Delivery</td><td class="num">10</td><td>theme dark จำค่าหลัง refresh</td><td class="ok">✓ localStorage + script ก่อน paint</td></tr>
+  <tr><td class="num">2</td><td>Cost Center count = DB</td><td class="ok">✓ 1</td><td class="num">11</td><td>401 → /.auth/login/aad</td><td class="ok">✓ redirect ถูก (ข้อสังเกต c)</td></tr>
+  <tr><td class="num">3</td><td>GL count = DB</td><td class="ok">✓ 8</td><td class="num">12.1</td><td>ชน 2 tab → 409</td><td class="ok">✓ "ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น…"</td></tr>
+  <tr><td class="num">4</td><td>SAP total = SAP</td><td class="ok num">✓ 539,118.41</td><td class="num">12.2</td><td>ฝ่ายรอ/อนุมัติแล้ว → 403</td><td class="ok">✓ "อยู่ระหว่างรออนุมัติ…"</td></tr>
+  <tr><td class="num">5</td><td>Approved = board_budget (cc/gl/fy)</td><td class="ok num">✓ 1,480,104.00</td><td class="num">12.3</td><td>ค่า invalid → ระบุชื่อ field</td><td class="ok">✓ (มีเงื่อนไข — ข้อสังเกต b)</td></tr>
+  <tr><td class="num">6.1</td><td>กรอก normal GL ~20 ช่องเดือน</td><td class="ok">✓ 4 GL × 5 เดือน ทุกช่องลง DB</td><td class="num">13</td><td>Console (F12) ว่าง</td><td class="ok">✓ ไม่มี error / hydration warning</td></tr>
+  <tr><td class="num">6.2</td><td>special GL 1 รายการ/กลุ่ม + per-diem</td><td class="ok">✓ Prof&amp;Legal 1 detail (3 เดือน) + Travel 2 ทริป</td><td class="num">14</td><td>ตปท.แปลง FX + 13 admin GL ไม่โผล่</td><td class="ok">✓ FX ถูก; admin GL ไม่โผล่ (ข้อสังเกต d)</td></tr>
+  <tr><td class="num">6.2/14</td><td>per-diem ไทย/ตปท. + แปลง THB</td><td class="ok num">✓ ไทย 5×250×1=1,250 · ตปท. asian 4×80×FX33.0=10,560 (FX แปลงจริง)</td><td class="num">15</td><td>Negative RLS (deep-link ฝ่ายอื่น)</td><td class="ok">✓ server คืน 0 แถว ไม่รั่วข้อมูลฝ่ายอื่น</td></tr>
+  <tr><td class="num">7</td><td>FE = backend 100%</td><td class="ok">✓ JSON ที่ browser ได้ = DB ระดับสเตต์เมนต์</td><td class="num">16</td><td>totals หลังเขียน = DB (ไม่ใช่ cache)</td><td class="ok num">✓ Pending รวม 1,042,174.32 ตรงทั้ง API และ DOM</td></tr>
+  <tr><td class="num">8</td><td>deep-link /?dept=..&amp;year=2026</td><td class="ok">✓ ยิง param ตรง (ข้อสังเกต a)</td><td class="num">17</td><td>Cleanup ลบตรงตัว</td><td class="ok">✓ ลบ detail 3 / trip 2 / pending 6 → เหลือ 0 ทุกตาราง</td></tr>
+  <tr><td class="num">9</td><td>F5 กลางหน้า grid</td><td class="ok">✓ HTTP 200 grid กลับมาครบ ไม่ขาว ไม่ 404</td><td></td><td></td><td></td></tr>
+</table>
+
+<div class="cols" style="margin-top:14px">
+  <div class="box">
+    <h3>ข้อสังเกต (a) — "filter yr = 2026" คือปีไหน (สำคัญตอนเทียบตัวเลข)</h3>
+    <p>YearPicker ออกแบบให้ <b>label = ปีตั้งต้น</b> แต่<b>ค่าที่ส่ง = ปี Pending (ปีถัดไป)</b> — ดังนั้นหน้าจอ "2026" ของ suchanyay:</p>
+    <div class="flow">
+      <span class="chip">จอแสดง "2026"</span><span class="arrow">→</span>
+      <span class="chip">API year=2027</span><span class="arrow">→</span>
+      <span class="chip g">SAP + Approved = FY2026</span><span class="arrow">+</span>
+      <span class="chip g">Pending (ที่กรอก) = FY2027</span>
+    </div>
+  </div>
+  <div class="box">
+    <h3>เทสขนานโดย Kimi — nipapornt@chememan.com (read-only)</h3>
+    <ul>
+      <li><b>Header ทะลุ proxy</b> :3000→:8000 — identity ถูก ไม่ตกไปเป็น fallback</li>
+      <li><b>RLS A/B:</b> query เดียวกัน (10GE000000, FY2026) — <span class="mono">nipapornt 20 rows / suchanyay 0 rows</span> (scope แค่ 10IT012000)</li>
+      <li>read-path นอก scope = <span class="mono">[]</span> เงียบ (by design — 403 อยู่ชั้น write)</li>
+      <li>deep-link → prefill + render GL จริง ✓</li>
+    </ul>
+  </div>
+</div>
+
+<div class="obs">
+  <b>Kimi re-verify อิสระ (ผ่าน API โดยตรง ไม่ผ่านรายงาน):</b> query <span class="mono">year=2027, cc=10IT012000</span> ได้ <span class="verify">8 GLs · SAP 539,118.41 · Approved 1,480,104.00 · Pending 0.00</span> — ตรงรายงานเป๊ะทุกตัว รวมถึงยืนยัน cleanup เหลือ 0 จริง
+</div>
+
+<footer>
+  <span>spot-test-1-summary · generated 2026-07-23</span>
+  <span>data: gold.fact_gl_trans / dbo.board_budget / cc_filler_map · env: local dev :3000+:8000 → Fabric SQL</span>
+</footer>
+
+</body>
+</html>

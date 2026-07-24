@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spot Test #2 — Approver Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130e; --ink2:#4a4438; --ink3:#8a8272;
+    --line:#d8d2c4; --paper:#faf8f3; --card:#ffffff;
+    --green:#15803d; --green-bg:#eaf6ee;
+    --amber:#b45309; --amber-bg:#fdf3e3;
+    --blue:#1d4ed8; --blue-bg:#e8eefc;
+    --mono:'IBM Plex Mono',monospace; --sans:'Archivo','IBM Plex Sans Thai',sans-serif; --thai:'IBM Plex Sans Thai',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--thai),var(--sans);background:var(--paper);color:var(--ink);width:1120px;padding:36px 40px}
+  .mono{font-family:var(--mono)}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  h1{font-family:var(--sans);font-size:30px;font-weight:800;letter-spacing:-.5px}
+  h1 em{font-style:normal;color:var(--green)}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;line-height:1.7}
+  .verdict{display:flex;gap:14px;align-items:stretch;margin:18px 0}
+  .verdict .big{flex:1;background:var(--green-bg);border:1.5px solid var(--green);padding:14px 18px}
+  .verdict .big .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--green)}
+  .verdict .big .t{font-size:13px;color:var(--ink2);margin-top:2px}
+  .verdict .side{width:330px;border:1.5px solid var(--line);background:var(--card);padding:14px 18px;font-size:12.5px;color:var(--ink2);line-height:1.65}
+  h2{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink3);margin:22px 0 8px}
+  .chain{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{border:1.5px solid var(--ink);padding:6px 12px;font-family:var(--mono);font-size:11.5px;background:var(--card)}
+  .chip.fill{background:var(--ink);color:#fff}
+  .chip.g{border-color:var(--green);background:var(--green-bg)}
+  .chip.a{border-color:var(--amber);background:var(--amber-bg)}
+  .arrow{color:var(--ink3);font-family:var(--mono);font-size:14px}
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  td,th{border:1px solid var(--line);padding:5px 9px;font-size:11.5px;text-align:left;vertical-align:top}
+  th{background:var(--ink);color:#fff;font-family:var(--sans);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;font-weight:600}
+  .ok{color:var(--green);font-weight:700}
+  .num{font-family:var(--mono)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .box{border:1.5px solid var(--line);background:var(--card);padding:12px 16px}
+  .box h3{font-family:var(--sans);font-size:13px;font-weight:700;margin-bottom:6px}
+  .box p,.box li{font-size:12px;color:var(--ink2);line-height:1.7}
+  .box ul{padding-left:18px}
+  .warn{border:1.5px solid var(--amber);background:var(--amber-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  .verify-strip{border:1.5px solid var(--green);background:var(--green-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  footer{margin-top:22px;border-top:1.5px solid var(--line);padding-top:10px;font-family:var(--mono);font-size:10px;color:var(--ink3);display:flex;justify-content:space-between}
+  .verify{color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Spot Test #2 — Approver Journey: ผ่าน <em>9/9</em></h1>
+    <div style="font-size:13px;color:var(--ink2);margin-top:4px">concept ใหม่ล้วน — workflow อนุมัติกับ user จริงหลาย persona ครั้งแรก (ไม่ซ้ำรอบ #1/#1b)</div>
+  </div>
+  <div class="meta">
+    dept: Solution Delivery · cc 10IT012000 · FY2027<br>
+    personas: suchanyay (filler) → arthids → nipapornt → warapornt (approvers)<br>
+    branch: feat/frontend-nextjs-migration · 2026-07-23<br>
+    ผู้เทส: Kimi · insert log: docs/test/spot-test-2-insert-log.md
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="big">
+    <div class="n">9 / 9 ขั้น ผ่าน · cleanup 0 แถว</div>
+    <div class="t">SUBMIT → REJECT (พร้อมเหตุผล) → RESUBMIT → APPROVE ครบ 3 ชั้น → APPROVED — lock ถูกทุกจังหวะ, guard คนผิดตัวครบ, audit log เรียงถูก, ไม่มีเมลจริงออก (dry-run)</div>
+  </div>
+  <div class="side">
+    <b>ข้อเท็จจริงสภาพแวดล้อม:</b> chain จาก DB = <span class="mono">arthids(101622) → nipapornt(101032) → warapornt(100427)</span> · หน่วยอนุมัติ = (department, fiscal_year) · deadline FY2027 = 2026-10-31 (cycle เปิด)
+  </div>
+</div>
+
+<h2>State machine ที่พิสูจน์แล้ว</h2>
+<div class="chain">
+  <span class="chip fill">DRAFT</span><span class="arrow">→</span>
+  <span class="chip">SUBMIT (suchanyay)</span><span class="arrow">→</span>
+  <span class="chip g">PENDING_APPROVER1 · arthids</span><span class="arrow">→</span>
+  <span class="chip g">PENDING_APPROVER2 · nipapornt</span><span class="arrow">→</span>
+  <span class="chip g">PENDING_APPROVER3 · warapornt</span><span class="arrow">→</span>
+  <span class="chip fill">APPROVED</span>
+</div>
+<div class="chain" style="margin-top:6px">
+  <span class="chip a">REJECT จากทุก PENDING_* (เหตุผลบังคับ)</span><span class="arrow">→</span>
+  <span class="chip">REJECTED → filler แก้ได้อีกครั้ง → RESUBMIT (chain เริ่มใหม่)</span>
+</div>
+
+<h2>ผล 9 ขั้น</h2>
+<table>
+  <tr><th style="width:34px">#</th><th>ขั้น</th><th>ผล + หลักฐาน</th></tr>
+  <tr><td class="num">1</td><td>Setup: filler กรอก 2 rows (311/322)</td><td class="ok">✓ DB ตรงทั้ง 2 แถว</td></tr>
+  <tr><td class="num">2</td><td>Submit → ล็อกทันที</td><td class="ok">✓ PENDING_APPROVER1 · filler PUT ต่อ → <b>403</b> "mid-approval … editing is locked"</td></tr>
+  <tr><td class="num">3</td><td>pending-for-me ตามลำดับชั้น</td><td class="ok">✓ L1: เห็นเฉพาะ arthids · nipapornt/warapornt/suchanyay = []</td></tr>
+  <tr><td class="num">4</td><td>Guard คนผิดตัว approve</td><td class="ok">✓ ผิดชั้น / filler / คนนอก → <b>403</b> "not the current approver" ทั้ง 3 · ไม่มี state/log เปลี่ยน</td></tr>
+  <tr><td class="num">5</td><td>Reject path</td><td class="ok">✓ ไม่ส่ง reason → 422 · reason ว่าง → 400 "required" (ดูหมายเหตุ) · reject จริง → ปลดล็อก filler เขียนได้ต่อ</td></tr>
+  <tr><td class="num">6</td><td>Resubmit → approve ครบ 3 ชั้น</td><td class="ok">✓ chain เริ่มใหม่ · pending-for-me สลับตามชั้นถูกต้องจนถึง APPROVED</td></tr>
+  <tr><td class="num">7</td><td>สถานะหลังอนุมัติ</td><td class="ok">✓ pending rows อยู่ครบไม่ถูกย้าย/แก้ · ฝ่ายล็อกถาวร (PUT → 403 "APPROVED")</td></tr>
+  <tr><td class="num">8</td><td>Audit trail</td><td class="ok">✓ log 6 แถวเรียงลำดับ: SUBMIT→REJECT(มีเหตุผล)→RESUBMIT→APPROVE×3 ครบ actor/เวลา/prev→new</td></tr>
+  <tr><td class="num">9</td><td>UI: ปุ่มอนุมัติเฉพาะคนถึงตา</td><td class="ok">✓ arthids (ตาตัวเอง) เห็น chip "รออนุมัติ · ขั้น 1" + ปุ่ม approve/reject · filler เห็น 0 ปุ่ม</td></tr>
+</table>
+
+<div class="cols" style="margin-top:14px">
+  <div class="box">
+    <h3>Email gate — ปลอดภัย (ตรวจก่อนเริ่ม)</h3>
+    <p><span class="mono">NOTIFICATIONS_DRY_RUN</span> ไม่ถูกตั้ง → default <span class="mono">True</span> → <span class="mono">send_mail()</span> ไม่ออก HTTP call ใดๆ (notifications.py) · router กัน error ของ notify ไว้แล้ว — <b>ไม่มีเมลจริงถูกส่งตลอดการเทส</b></p>
+  </div>
+  <div class="box">
+    <h3>สิ่งที่อยู่นอกขอบเขตโดยตั้งใจ (ครอบแล้วในรอบ #1/#1b)</h3>
+    <p>RLS read/write scope · grid totals เทียบ DB · per-diem/FX · theme/F5/deep-link · console · 409/422 field shapes · admin-GL visibility — รอบนี้เฉพาะ approval workflow เท่านั้น</p>
+  </div>
+</div>
+
+<div class="warn">
+  <b>Anomaly / ข้อสังเกต 3 จุด:</b>
+  (1) พบ <b>debris row</b> ยอด 0 ใน pending_budget ตอนเริ่ม (identity = suchanyay ผ่าน .env fallback — แปลว่ามี request <b>ไม่ใส่ header</b> เขียนเข้ามา ~40 นาทีก่อนเทส น่าสงสัยจากรอบ parallel หรือ browser ที่เปิดค้าง — ลบออกตอน cleanup แล้ว ควรเช็คนิสัยการยิง unheadered) ·
+  (2) reject reason ว่าง → <b>400</b> ไม่ใช่ 422 ตามที่ comment ใน <span class="mono">approval.ts:35</span> เขียนไว้ — doc drift เล็ก (behavior ถูก) ·
+  (3) GET /budget คืน <span class="mono">editable:true</span> แม้ฝ่าย APPROVED (read_model คิดจาก Fill scope ล้วน by design — บังคับจริงที่ write ซึ่ง 403 ถูกแล้ว; UX: พิมพ์ได้แต่ save ไม่ผ่าน)
+</div>
+
+<div class="verify-strip">
+  <b>Kimi re-verify อิสระหลัง cleanup:</b> approval status กลับ <span class="verify">DRAFT (ทุก field null)</span> · grid กลับ baseline <span class="verify">8 rows · pending 0.00 · SAP 539,118.41 ไม่ขยับ</span> · log ยืนยัน 0 แถวทั้ง 5 ตาราง (pending_budget / detail / trip / approval_status / approval_log ทั้งตาราง)
+</div>
+
+<footer>
+  <span>spot-test-2-summary · generated 2026-07-23 · ขนานกับ admin round ของ CC (คนละ CC ไม่ชนกัน)</span>
+  <span>lane: 10IT012000 FY2027 + /approval/* เท่านั้น · env: local dev :3000+:8000 → Fabric SQL</span>
+</footer>
+
+</body>
+</html>

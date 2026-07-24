@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spot Test #3k — see_only + no-scope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130e; --ink2:#4a4438; --ink3:#8a8272;
+    --line:#d8d2c4; --paper:#faf8f3; --card:#ffffff;
+    --green:#15803d; --green-bg:#eaf6ee;
+    --amber:#b45309; --amber-bg:#fdf3e3;
+    --mono:'IBM Plex Mono',monospace; --sans:'Archivo','IBM Plex Sans Thai',sans-serif; --thai:'IBM Plex Sans Thai',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--thai),var(--sans);background:var(--paper);color:var(--ink);width:1120px;padding:36px 40px}
+  .mono{font-family:var(--mono)}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  h1{font-family:var(--sans);font-size:30px;font-weight:800;letter-spacing:-.5px}
+  h1 em{font-style:normal;color:var(--green)}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;line-height:1.7}
+  .verdict{display:flex;gap:14px;align-items:stretch;margin:18px 0}
+  .verdict .big{flex:1;background:var(--green-bg);border:1.5px solid var(--green);padding:14px 18px}
+  .verdict .big .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--green)}
+  .verdict .big .t{font-size:13px;color:var(--ink2);margin-top:2px}
+  .verdict .side{width:320px;border:1.5px solid var(--line);background:var(--card);padding:14px 18px;font-size:12.5px;color:var(--ink2);line-height:1.65}
+  h2{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink3);margin:22px 0 8px}
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  td,th{border:1px solid var(--line);padding:5px 9px;font-size:11.5px;text-align:left;vertical-align:top}
+  th{background:var(--ink);color:#fff;font-family:var(--sans);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;font-weight:600}
+  .ok{color:var(--green);font-weight:700}
+  .num{font-family:var(--mono)}
+  .warn{border:1.5px solid var(--amber);background:var(--amber-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:12px}
+  .verify-strip{border:1.5px solid var(--green);background:var(--green-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  footer{margin-top:22px;border-top:1.5px solid var(--line);padding-top:10px;font-family:var(--mono);font-size:10px;color:var(--ink3);display:flex;justify-content:space-between}
+  .verify{color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Spot Test #3 (kimi lane) — see_only + no-scope: ผ่าน <em>10/10</em></h1>
+    <div style="font-size:13px;color:var(--ink2);margin-top:4px">ปิด role matrix ช่องสุดท้าย — read-only rendering + empty state กับ user จริงครั้งแรก (ไม่ซ้ำ lane ของ CC)</div>
+  </div>
+  <div class="meta">
+    users: bunpotk@chememan.com (see_only, 112 CC) · adirekn@chememan.com (no-scope)<br>
+    branch: main (post Next.js migration) · 2026-07-24<br>
+    ผู้เทส: Kimi (รันเองโดยตรง หลัง subagent ค้าง) · zero DB footprint
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="big">
+    <div class="n">10 / 10 ข้อ ผ่าน · เขียน DB = 0 แถว</div>
+    <div class="t">see-only เห็นข้อมูลได้แต่แก้ไม่ได้ทุกช่อง (editable=false ทั้ง API และ DOM) · เขียนทุก path โดน 403 · no-scope เห็นเฉพาะ empty state แม้ยิง deep-link ไปฝ่ายอื่น · ไม่มีเมล/ไม่มีข้อมูลค้าง</div>
+  </div>
+  <div class="side">
+    <b>users ค้นจาก DB จริง ไม่เดา:</b> see_only = manager ของ fillers แต่ไม่ใช่ filler (20 คนที่มีสิทธิ์แบบนี้) · no-scope = employee ที่ไม่ใช่ทั้ง filler และ manager — ยืนยันผ่าน <span class="mono">/scope</span> ทั้งคู่
+  </div>
+</div>
+
+<h2>ผลรายข้อ</h2>
+<table>
+  <tr><th style="width:44px">#</th><th>หัวข้อ</th><th>ผล + หลักฐาน</th></tr>
+  <tr><td class="num">A1</td><td>departments ของ see_only</td><td class="ok num">✓ 121 rows (112 CCs) ตรง DB</td></tr>
+  <tr><td class="num">A2</td><td>grid read บน see-CC</td><td class="ok num">✓ 10MN011100: 8 rows · SAP 69,107.94 · <b>editable=false ทุกแถว</b></td></tr>
+  <tr><td class="num">A3</td><td>UI read-only rendering</td><td class="ok">✓ deep-link prefill ถูก · GL แสดงจริง · <b>192 span cells · input เหลือแค่ 5 ตัว (ล้วน filter) · month input = 0</b> · console ว่าง</td></tr>
+  <tr><td class="num">A4</td><td>เขียนบน see-only CC → 403</td><td class="ok">✓ "10MN011100 is not in your Fill scope" (adirekn โดนเหมือนกัน)</td></tr>
+  <tr><td class="num">A5</td><td>submit ฝ่าย see-only → 403</td><td class="ok">✓ "does not Fill any cost center of…" · status คง DRAFT · ไม่มี status/log row เกิด</td></tr>
+  <tr><td class="num">B6</td><td>no-scope reads</td><td class="ok num">✓ departments = 0 · budget บน CC ที่มีข้อมูล = [] ไม่รั่ว</td></tr>
+  <tr><td class="num">B7</td><td>friendly empty state</td><td class="ok">✓ ข้อความไม่มีสิทธิ์ · ไม่มี grid · identity ถูก · <b>bug เก่า reproduce สด: /scope/departments ยิงเกิน 1 ครั้ง</b></td></tr>
+  <tr><td class="num">B8</td><td>deep-link ไปฝ่ายที่ไม่มีสิทธิ์</td><td class="ok">✓ ยัง empty state · ไม่มีข้อมูล Solution Delivery บนจอ</td></tr>
+  <tr><td class="num">B9</td><td>zero footprint</td><td class="ok num">✓ pending_budget / approval_status / approval_log = 0 แถว (DB ยืนยัน)</td></tr>
+  <tr><td class="num">B10</td><td>console</td><td class="ok">✓ 0 errors ทุก run (inject header เฉพาะ same-origin)</td></tr>
+</table>
+
+<div class="warn">
+  <b>หมายเหตุการรัน:</b> subagent ตัวแรกค้าง (2 ชม. + resume แล้วเงียบ 25 นาที) → ผม stop แล้วรันเองทั้งหมดจนจบ · ระหว่างรันพบ <b>:3000 ค้าง</b> (next dev process เก่า PID 37488 ยึด port แต่ไม่ตอบ) → kill แล้ว start ใหม่ (รันอยู่ปกติ) · การค้นพบ <b>/scope/departments ยิงเกิน 1 ครั้งตอน no-scope</b> เป็น bug pre-existing ที่อยู่ใน tracker (<span class="mono">#e2e-stale-specs-fix</span>) — รอบนี้ยืนยันมันเกิดบนระบบจริง ไม่ใช่แค่ใน e2e mock
+</div>
+
+<div class="verify-strip">
+  <b>Role matrix ปิดครบหลังรอบนี้:</b> <span class="verify">filler 1CC (#1) · filler หลายฝ่าย (#1b) · admin (CC) · approver chain 3 ชั้น (#2) · see_only · no-scope (#3k)</span> — เหลือเฉพาะ lane ของ CC: attachments, deadline-lock, "+เพิ่ม transaction" picker
+</div>
+
+<footer>
+  <span>spot-test-3k-summary · generated 2026-07-24</span>
+  <span>env: local dev :3000+:8000 → Fabric SQL · header impersonation (APP_ENV=local)</span>
+</footer>
+
+</body>
+</html>

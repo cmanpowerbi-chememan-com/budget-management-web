@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spot Test #1b — Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130e; --ink2:#4a4438; --ink3:#8a8272;
+    --line:#d8d2c4; --paper:#faf8f3; --card:#ffffff;
+    --green:#15803d; --green-bg:#eaf6ee;
+    --amber:#b45309; --amber-bg:#fdf3e3;
+    --blue:#1d4ed8; --blue-bg:#e8eefc;
+    --mono:'IBM Plex Mono',monospace; --sans:'Archivo','IBM Plex Sans Thai',sans-serif; --thai:'IBM Plex Sans Thai',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--thai),var(--sans);background:var(--paper);color:var(--ink);width:1120px;padding:36px 40px}
+  .mono{font-family:var(--mono)}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  h1{font-family:var(--sans);font-size:30px;font-weight:800;letter-spacing:-.5px}
+  h1 em{font-style:normal;color:var(--green)}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;line-height:1.7}
+  .verdict{display:flex;gap:14px;align-items:stretch;margin:18px 0}
+  .verdict .big{flex:1;background:var(--green-bg);border:1.5px solid var(--green);padding:14px 18px}
+  .verdict .big .n{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--green)}
+  .verdict .big .t{font-size:13px;color:var(--ink2);margin-top:2px}
+  .verdict .side{width:320px;border:1.5px solid var(--line);background:var(--card);padding:14px 18px;font-size:12.5px;color:var(--ink2);line-height:1.65}
+  h2{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink3);margin:22px 0 8px}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .card{border:1.5px solid var(--line);background:var(--card);padding:12px 14px}
+  .card .k{font-size:11px;color:var(--ink3);letter-spacing:.4px}
+  .card .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:6px}
+  .card .s{font-size:10.5px;color:var(--ink3);margin-top:4px;line-height:1.5}
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  td,th{border:1px solid var(--line);padding:5px 9px;font-size:11.5px;text-align:left;vertical-align:top}
+  th{background:var(--ink);color:#fff;font-family:var(--sans);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;font-weight:600}
+  .ok{color:var(--green);font-weight:700}
+  .ref{color:var(--blue);font-weight:700}
+  .num{font-family:var(--mono)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:0}
+  .box{border:1.5px solid var(--line);background:var(--card);padding:12px 16px}
+  .box h3{font-family:var(--sans);font-size:13px;font-weight:700;margin-bottom:6px}
+  .box p,.box li{font-size:12px;color:var(--ink2);line-height:1.7}
+  .box ul{padding-left:18px}
+  .obs{border:1.5px solid var(--amber);background:var(--amber-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  .verify-strip{border:1.5px solid var(--green);background:var(--green-bg);padding:10px 16px;font-size:12px;color:var(--ink2);line-height:1.7;margin-top:10px}
+  footer{margin-top:22px;border-top:1.5px solid var(--line);padding-top:10px;font-family:var(--mono);font-size:10px;color:var(--ink3);display:flex;justify-content:space-between}
+  .verify{color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Spot Test #1b — ผ่านครบ <em>17/17</em></h1>
+    <div style="font-size:13px;color:var(--ink2);margin-top:4px">รอบ user ที่สอง (multi-dept filler) · เขียน DB จริงแล้ว cleanup ครบ · คู่ขนานกับ Spot Test #1 (suchanyay)</div>
+  </div>
+  <div class="meta">
+    user: nipapornt@chememan.com (filler, 7 CCs)<br>
+    filter: ปี 2026 → API year=2027 (SAP/Approved FY2026 · Pending FY2027)<br>
+    branch: feat/frontend-nextjs-migration · 2026-07-23<br>
+    ผู้เทส: Kimi (2 phases: read-only → write round) · insert log แนบ
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="big">
+    <div class="n">17 / 17 ข้อ ผ่าน</div>
+    <div class="t">15 ข้อรันใหม่ในรอบนี้ + ข้อ 8 (deep-link) และ 15 (negative RLS) ผ่านจากรอบ parallel ก่อนหน้า — ข้อ 11 (401) อ้างอิงผล Spot Test #1 (code path เดียวกัน ไม่ขึ้นกับ identity) · ทุกยอดเขียนถูก cleanup กลับ baseline 0 แถว</div>
+  </div>
+  <div class="side">
+    <b>สภาพแวดล้อมที่ต้องรู้:</b> backend local เปิด <span class="mono">gl_edit_by_enabled=True</span> → GL admin-locked ถูกซ่อนจริง 12 ตัว (master 146 → เห็น 134) + กฎ master-membership ซ่อน GL ที่ไม่อยู่ใน <span class="mono">dbo.gl_group</span> — ตัวเลข raw table จึงต่างจากหน้าแอป <b>โดย design</b>
+  </div>
+</div>
+
+<h2>ตัวเลขหลัก (ground truth เทียบ DB)</h2>
+<div class="cards">
+  <div class="card"><div class="k">Cost Centers / ฝ่าย</div><div class="v">7 / 5</div><div class="s mono">= cc_filler_map 7 rows · picker default auto-select "Budgeting and Management"</div></div>
+  <div class="card"><div class="k">GL บน grid (dept General)</div><div class="v">11</div><div class="s mono">UI = API = DB (หลัง master+admin-lock filter)</div></div>
+  <div class="card"><div class="k">SAP total FY2026 (10GE)</div><div class="v">282,112.88</div><div class="s mono">gold.fact_gl_trans — ตรงถึงสตางค์</div></div>
+  <div class="card"><div class="k">Approved FY2026 (10GE)</div><div class="v">117,000.00</div><div class="s mono">board_budget 1 row · อีก 4 rows ถูก admin-lock ซ่อนถูกต้อง</div></div>
+  <div class="card"><div class="k">Pending เขียนทดสอบ → cleanup</div><div class="v">12,773 → 0</div><div class="s mono">3,791 (10AC) + 8,982 (10GE) → ลบครบทุกตาราง</div></div>
+</div>
+
+<h2>ผลรายข้อ</h2>
+<table>
+  <tr><th style="width:34px">#</th><th>หัวข้อ</th><th>ผล</th><th style="width:34px">#</th><th>หัวข้อ</th><th>ผล</th></tr>
+  <tr><td class="num">1</td><td>Dept filter default (7 ฝ่าย — เคสที่ยังไม่เคยเทส)</td><td class="ok">✓ auto-select "Budgeting and Management" (ตัวแรกตาม Thai-locale sort) ไม่ลงจอว่าง</td><td class="num">10</td><td>theme dark จำค่าหลัง refresh</td><td class="ok">✓ pre-paint script ทำงาน · มี hydration warning 1 ตัว (benign, จาก ARCH-a)</td></tr>
+  <tr><td class="num">2</td><td>Cost Center count = DB</td><td class="ok">✓ 7 = cc_filler_map 7 rows (5 ฝ่าย)</td><td class="num">11</td><td>401 → /.auth/login/aad</td><td class="ref">↳ อ้างอิง Spot Test #1 (code path เดียวกัน)</td></tr>
+  <tr><td class="num">3</td><td>GL count = DB</td><td class="ok">✓ 11 = UI = API = DB</td><td class="num">12.1</td><td>ชน 2 tab → 409</td><td class="ok">✓ stale token → 409 (ภาษาไทยฝั่ง FE ตาม design)</td></tr>
+  <tr><td class="num">4</td><td>SAP total = SAP</td><td class="ok num">✓ 282,112.88 ตรงสตางค์</td><td class="num">12.2</td><td>เขียน CC นอก scope → 403</td><td class="ok">✓ "10IT012000 is not in your Fill scope" · DB ไม่มีอะไรถูกเขียน</td></tr>
+  <tr><td class="num">5</td><td>Approved = board_budget</td><td class="ok num">✓ 117,000.00</td><td class="num">12.3</td><td>ค่า invalid → ระบุ field</td><td class="ok">✓ 1e16 → 422 ระบุ m01 · หมายเหตุ: ค่าติดลบ → 400 ตาม design (NegativeMonthError)</td></tr>
+  <tr><td class="num">6.1</td><td>กรอก normal GL ~20 ช่องเดือน</td><td class="ok">✓ 4 rows / 20 cells (10AC+10GE) — DB ตรง 20/20</td><td class="num">13</td><td>Console (F12) ว่าง</td><td class="ok">✓ 0 errors (inject header เฉพาะ same-origin จึงไม่มี font-CORS noise)</td></tr>
+  <tr><td class="num">6.2</td><td>special GL ทุกกลุ่ม + per-diem</td><td class="ok">✓ ครบ 6 กลุ่ม: 5 details + 2 trips (parent=SUM(detail) ทุกตัว)</td><td class="num">14</td><td>ตปท.แปลง FX + admin GL ไม่โผล่</td><td class="ok num">✓ 2×80×33.0 = 5,280.00 ใน DB เป๊ะ · 12 admin GLs ถูกซ่อน</td></tr>
+  <tr><td class="num">6.2/14</td><td>per-diem ไทย/ตปท. + แปลง THB</td><td class="ok num">✓ ไทย 3×250 = 750.00 · ตปท. Malaysia 2×80×33.0 = 5,280.00 (rate จาก master)</td><td class="num">15</td><td>Negative RLS</td><td class="ok">✓ (รอบ parallel: query เดียวกัน nipapornt 20 rows / suchanyay 0 rows)</td></tr>
+  <tr><td class="num">7</td><td>FE = backend 100%</td><td class="ok">✓ 143 cells หลังเขียน 0 mismatch + pre-fill = 0</td><td class="num">16</td><td>totals หลังเขียน = DB (ไม่ใช่ cache)</td><td class="ok num">✓ 3,791.00 / 8,982.00 ตรง API และ DB aggregate</td></tr>
+  <tr><td class="num">8</td><td>deep-link</td><td class="ok">✓ (รอบ parallel: prefill + fetch + render GL จริง)</td><td class="num">17</td><td>Cleanup ลบตรงตัว</td><td class="ok">✓ 0 แถวทั้ง 3 ตาราง (pending_budget/detail/trip) + insert log แนบ</td></tr>
+  <tr><td class="num">9</td><td>F5 กลางหน้า grid</td><td class="ok">✓ กลับมา ~3.4s grid ครบ (dept กลับ default — by design ไม่ persist)</td><td></td><td></td><td></td></tr>
+</table>
+
+<div class="cols" style="margin-top:14px">
+  <div class="box">
+    <h3>พบระหว่างเทส — ประเด็น data/master (ไม่ใช่ bug ของแอป แต่กระทบตัวเลขจริง)</h3>
+    <ul>
+      <li><b>10IB000000:</b> GL ทั้ง 4 ตัว (6410100140/160/170/180) <b>ไม่อยู่ใน dbo.gl_group</b> → ยอด actuals ของ IB ถูกซ่อนทั้งหมดบนแอป</li>
+      <li><b>10GE000000:</b> มี actuals ~<span class="mono">15.27M</span> บาท บน GL นอก master 5 ตัว + <span class="mono">818,416.87</span> บาท บน GL ที่ admin-locked — ถูกซ่อนตามกฎ แต่ความครบของ master มีผลเงินมาก</li>
+      <li><span class="mono">gl_access.py</span> docstring เขียนว่า admin-locked 13 ตัว แต่ live DB มี 12 — doc drift เล็ก</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>พฤติกรรมแอปที่ควรจำ (by design ยืนยันแล้ว)</h3>
+    <ul>
+      <li>จอ "2026" → API <span class="mono">year=2027</span> → SAP/Approved = FY2026, Pending (ช่องกรอก) = FY2027</li>
+      <li>grid subtotal row แสดงเฉพาะ <b>Pending layer</b> (ไม่มีแถวรวม SAP/Approved บนจอ — เทียบ per-cell แทน)</li>
+      <li>ค่าเดือนติดลบ → <span class="mono">400</span> (business rule) ไม่ใช่ 422 (malformed) — แยกชั้นถูกต้องใน write_model.py</li>
+      <li>cosmetic: badge หัวกลุ่ม picker ติดกัน เช่น "Budgeting &amp; Cost Accounting2" (ขาด space)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="verify-strip">
+  <b>Kimi re-verify อิสระหลัง cleanup:</b> re-query API <span class="mono">year=2027</span> ทั้ง 2 CC — <span class="verify">pending = 0.00 ทั้งคู่ · SAP 10GE = 282,112.88 ไม่ขยับจาก baseline · insert log ยืนยัน 0 แถวทุกตาราง (pending_budget / detail / trip) ไม่มี orphan, ไม่แตะ approval state</span>
+</div>
+
+<footer>
+  <span>spot-test-1b-summary · generated 2026-07-23 · insert log: docs/test/spot-test-1b-insert-log.md</span>
+  <span>data: gold.fact_gl_trans / dbo.board_budget / cc_filler_map / gl_group · env: local dev :3000+:8000 → Fabric SQL</span>
+</footer>
+
+</body>
+</html>
