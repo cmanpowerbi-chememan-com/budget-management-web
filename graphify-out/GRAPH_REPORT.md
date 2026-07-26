@@ -1,16 +1,16 @@
-# Graph Report - .  (2026-07-25)
+# Graph Report - .  (2026-07-26)
 
 ## Corpus Check
 - 348 files · ~393,280 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3061 nodes · 7133 edges · 155 communities (133 shown, 22 thin omitted)
+- 3061 nodes · 7133 edges · 152 communities (132 shown, 20 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 547 edges (avg confidence: 0.53)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a2eb4a70`
+- Built from commit: `d5bef089`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -139,21 +139,18 @@
 - [[_COMMUNITY_Community 121|Community 121]]
 - [[_COMMUNITY_Community 122|Community 122]]
 - [[_COMMUNITY_Community 123|Community 123]]
-- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
 - [[_COMMUNITY_Community 126|Community 126]]
 - [[_COMMUNITY_Community 127|Community 127]]
 - [[_COMMUNITY_Community 128|Community 128]]
 - [[_COMMUNITY_Community 129|Community 129]]
-- [[_COMMUNITY_Community 130|Community 130]]
-- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 132|Community 132]]
+- [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
 - [[_COMMUNITY_Community 136|Community 136]]
 - [[_COMMUNITY_Community 137|Community 137]]
 - [[_COMMUNITY_Community 138|Community 138]]
 - [[_COMMUNITY_Community 139|Community 139]]
-- [[_COMMUNITY_Community 140|Community 140]]
-- [[_COMMUNITY_Community 141|Community 141]]
-- [[_COMMUNITY_Community 142|Community 142]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Settings` - 99 edges
@@ -189,7 +186,7 @@
 - 1-file cycle: `backend/app/static.py -> backend/app/static.py`
 - 1-file cycle: `backend/app/per_diem.py -> backend/app/per_diem.py`
 
-## Communities (155 total, 22 thin omitted)
+## Communities (152 total, 20 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.05
@@ -216,24 +213,24 @@ Cohesion: 0.08
 Nodes (66): _apply_update(), archive_path(), atomic_write_json(), build_parser(), cmd_add(), cmd_archive(), cmd_autolog(), cmd_check() (+58 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.06
-Nodes (65): Upsert each row of `rows` independently (never-cut: one row's 403/400/409     ne, save_pending_rows(), _admin_scope(), _flag_on(), Unit tests for app.write_model — budget WRITE path (A5): pending_budget + detail, D1 SHOWSTOPPER fix: the live `dbo.per_diem_rate` column is `job_level`,     not, Live-DB confirmed corruption (2026-07-16): the Thai label embedded as a     plai, D13: the 400 body reaches the client via `detail` — must never echo     `dbo.gl_ (+57 more)
-
-### Community 7 - "Community 7"
-Cohesion: 0.06
-Nodes (61): Upsert each trip of `trips` independently. Per-diem's missing-FX /     missing-r, save_trip(), D12 policy (decided): 0.00 IS a valid configured rate (e.g. a     Department Hea, Never-cut: per-diem is DERIVED ON READ (ADR-0015) — a Master-FX edit     must re, A5 gate MUST-FIX 4 + D8 (NEVER-CUT COST/SGA + parent==SUM): updating a     trip', Covers the update / side-flip path: the deadline gate runs before the     FIRST, Retry-after-lost-response: the token already has a row for this user ->     retu, If the user edited fields between the lost response and the retry, the     reply (+53 more)
-
-### Community 8 - "Community 8"
 Cohesion: 0.13
 Nodes (59): AdminCannotSubmitInCycleError, Admin is not a filler of this department, it is not orphan, it has no     Templa, PastDeadlineError, A normal (non-admin) user tried to submit or edit past     `dbo.submission_deadl, MissingFxRateError, MissingPerDiemRateError, Raised when the traveler's position has no matching `per_diem_rate` row,     or, Raised when `country_group` is asian(2)/other(3) — which need FX — but     no `f (+51 more)
 
-### Community 9 - "Community 9"
+### Community 7 - "Community 7"
 Cohesion: 0.07
 Nodes (52): fetch_detail_lines(), fetch_trips(), Read-only support for the A9 special-GL/Trip-Manager subforms — a gap closed in, All `pending_budget_detail` lines for one (cost_center, gl_account,     fiscal_y, All `budget_trip` rows for one (cost_center, fiscal_year) — both     COST and SG, Scope, DetailLineRow, _ensure_read_scope() (+44 more)
 
-### Community 10 - "Community 10"
+### Community 8 - "Community 8"
 Cohesion: 0.05
 Nodes (43): FileTooLargeError, File exceeds `MAX_ATTACHMENT_BYTES`., App configuration — env-driven settings.  Fail-closed default: APP_ENV defaults, Misconfiguration guard: `app_base_url` is meant to be overridden         with th, Runs once per Settings load (pydantic v2 hook) — see         `_warn_if_productio, Env-driven settings. Unknown env vars (e.g. the repo-root .env's legacy     Azur, Settings, Path (+35 more)
+
+### Community 9 - "Community 9"
+Cohesion: 0.06
+Nodes (53): Upsert each row of `rows` independently (never-cut: one row's 403/400/409     ne, save_pending_rows(), _admin_scope(), _flag_on(), D13: the 400 body reaches the client via `detail` — must never echo     `dbo.gl_, Batch semantics: one row's department_locked error must never block     another, Unknown CC->department mapping (department resolves to None): treated     as 'no, Flag OFF (default, no settings passed): the gl_group lookup must stay     a plai (+45 more)
+
+### Community 10 - "Community 10"
+Cohesion: 0.08
+Nodes (52): Upsert each trip of `trips` independently. Per-diem's missing-FX /     missing-r, save_trip(), D12 policy (decided): 0.00 IS a valid configured rate (e.g. a     Department Hea, Never-cut: per-diem is DERIVED ON READ (ADR-0015) — a Master-FX edit     must re, A5 gate MUST-FIX 4 + D8 (NEVER-CUT COST/SGA + parent==SUM): updating a     trip', Covers the update / side-flip path: the deadline gate runs before the     FIRST, Retry-after-lost-response: the token already has a row for this user ->     retu, If the user edited fields between the lost response and the retry, the     reply (+44 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.10
@@ -281,67 +278,67 @@ Nodes (39): _admin_direct_approve(), _advance_one_step(), _append_log(), Approva
 
 ### Community 22 - "Community 22"
 Cohesion: 0.08
-Nodes (31): fetch_sap_actuals(), SAP actuals read-through (ADR-0020, A4) — the DW `gold.fact_gl_trans` warehouse, Fetch + pivot one fiscal year of SAP actuals.      Returns `{(cost_center, gl_ac, Connection, _override_auth(), `resolve_scope` used to run OUTSIDE the try/except — a pyodbc.Error     while re, A raw `pyodbc.Error` (not wrapped in `SapActualsFetchError`) reaching     the ha, Never-cut: a failed SAP read-through must be a loud error, never a     200 with (+23 more)
+Nodes (39): Upsert each special-GL detail line of `lines` independently., save_detail_lines(), _detail(), Same D6 fix, for save_detail_lines (write_model.py:654 in the finding)., A5 re-gate BLOCKER: _save_one_detail_line must reject an excluded CC     (spec D, Defense in depth (rule 4): an admin-only GL is also never a special     GL, so t, Per-diem lines are managed only through save_trip (ADR-0005 ordering: trips crea, Never-cut: COST 5xxx vs SG&A 6xxx never cross on one trip. (+31 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.09
-Nodes (37): Upsert each special-GL detail line of `lines` independently., save_detail_lines(), _detail(), Same D6 fix, for save_detail_lines (write_model.py:654 in the finding)., Defense in depth (rule 4): an admin-only GL is also never a special     GL, so t, Per-diem lines are managed only through save_trip (ADR-0005 ordering: trips crea, Never-cut: COST 5xxx vs SG&A 6xxx never cross on one trip., D3/D4 IDOR fix: an attacker cannot rewrite an existing detail_id that     belong (+29 more)
+Cohesion: 0.08
+Nodes (31): fetch_sap_actuals(), SAP actuals read-through (ADR-0020, A4) — the DW `gold.fact_gl_trans` warehouse, Fetch + pivot one fiscal year of SAP actuals.      Returns `{(cost_center, gl_ac, Connection, _override_auth(), `resolve_scope` used to run OUTSIDE the try/except — a pyodbc.Error     while re, A raw `pyodbc.Error` (not wrapped in `SapActualsFetchError`) reaching     the ha, Never-cut: a failed SAP read-through must be a loud error, never a     200 with (+23 more)
 
 ### Community 24 - "Community 24"
+Cohesion: 0.06
+Nodes (37): delete_pending_row(), Delete one manually-added Pending row by its natural key (see     `_delete_one_p, Unit tests for app.write_model — budget WRITE path (A5): pending_budget + detail, D1 SHOWSTOPPER fix: the live `dbo.per_diem_rate` column is `job_level`,     not, Live-DB confirmed corruption (2026-07-16): the Thai label embedded as a     plai, D11: a cost_center can have more than one row in dbo.cc_filler_map     (one per, Build the replay row in whatever order `_TRIP_REPLAY_COLUMNS`     declares — rob, A5 gate cheap fix: out-of-range country_group must be rejected at the     Pydant (+29 more)
+
+### Community 25 - "Community 25"
 Cohesion: 0.09
 Nodes (26): closeConfirm(), deleteCC(), deleteOrg(), editCC(), editOrg(), escapeHtml(), executeConfirmedDelete(), flashWarning() (+18 more)
 
-### Community 25 - "Community 25"
+### Community 26 - "Community 26"
 Cohesion: 0.11
 Nodes (32): _fake_state(), _override_auth(), Unit tests for the A6 approval endpoints — POST /approval/submit|approve| reject, B1 gate fix: an out-of-scope (or nonexistent-department) caller must     get 403, A12 turn-notify: landing on PENDING_APPROVER1 must trigger     notify_turn for t, Never-cut: a notify_turn exception must not roll back or fail the     already-co, current_position is None once status reaches APPROVED -- no approver     left to, Guard against regression: a mid-chain approve (status still     PENDING_*) must (+24 more)
 
-### Community 26 - "Community 26"
+### Community 27 - "Community 27"
 Cohesion: 0.12
 Nodes (25): PendingForMeResponse, PendingRowState, SapLayer, TripState, API_PREFIXES, approvalState(), approverWorld(), blankLayer() (+17 more)
 
-### Community 27 - "Community 27"
+### Community 28 - "Community 28"
 Cohesion: 0.11
 Nodes (24): BoardLayer, BudgetRow, DetailLineInput, GlAccount, LayerAmounts, PendingLayer, TripInput, AddResult (+16 more)
 
-### Community 28 - "Community 28"
+### Community 29 - "Community 29"
 Cohesion: 0.13
 Nodes (33): annotate(), body_para(), build_annotated_images(), build_body(), bullet(), cell_para(), content_types_xml(), document_rels_xml() (+25 more)
 
-### Community 29 - "Community 29"
+### Community 30 - "Community 30"
 Cohesion: 0.16
 Nodes (33): annotate(), body_para(), build_body(), bullet(), caption(), cell_para(), _circle(), content_types_xml() (+25 more)
 
-### Community 30 - "Community 30"
+### Community 31 - "Community 31"
 Cohesion: 0.10
 Nodes (17): ScopeResponse, ScopeRole, EMPTY_SCOPE, ScopeState, useScope(), countDistinctFillGlAccounts(), deriveScopeSummary(), distinctSortedTh() (+9 more)
 
-### Community 31 - "Community 31"
+### Community 32 - "Community 32"
 Cohesion: 0.10
 Nodes (31): fetch_admin_gl_codes(), fetch_master_gl_codes(), is_admin_only_gl(), normalize_edit_by(), GL `dbo.gl_group` master-membership + `edit_by` admin-only lock — shared GL-mast, Only a literal 'admin' (case-insensitive, trimmed) locks a GL to     admin-only;, The full set of `gl_code` values that exist in the GL master     (`dbo.gl_group`, The current set of `gl_code` values locked to admin-only. Used by     `read_mode (+23 more)
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.10
 Nodes (22): askDelete(), closeConfirm(), createNewGroup(), editRecord(), escapeHtml(), executeConfirmedDelete(), glGroupDims, masterData (+14 more)
 
-### Community 33 - "Community 33"
+### Community 34 - "Community 34"
 Cohesion: 0.09
 Nodes (29): is_post_deadline(), No `dbo.submission_deadline` row for this fiscal_year -> treat as OPEN     (neve, Connection, Settings, Settings, _find_true_draft_departments(), _gl_exclusion_clause(), A11 scheduled job — auto-submit true-DRAFT departments at the planning year's de (+21 more)
 
-### Community 34 - "Community 34"
+### Community 35 - "Community 35"
 Cohesion: 0.18
 Nodes (30): admin_block(), body_para(), build_body(), bullet(), cell_para(), content_types_xml(), cover_logo_para(), document_rels_xml() (+22 more)
 
-### Community 35 - "Community 35"
+### Community 36 - "Community 36"
 Cohesion: 0.09
 Nodes (24): _allowed_emails(), authenticate(), AuthError, SWA principal header auth with email allowlist.  Reads ADMIN_EMAILS env var (com, Read SWA-injected headers, check email allowlist. Raise AuthError on failure., HttpRequest, HttpResponse, HttpRequest (+16 more)
 
-### Community 36 - "Community 36"
+### Community 37 - "Community 37"
 Cohesion: 0.14
 Nodes (22): approveDepartment(), fetchApprovalStatus(), fetchPendingForMe(), rejectDepartment(), submitDepartment(), ApprovalStatusState, ApprovalActionBar(), ApprovalActionBarProps (+14 more)
-
-### Community 37 - "Community 37"
-Cohesion: 0.16
-Nodes (29): annotate(), body_para(), build_annotated_images(), build_body(), bullet(), cell_para(), content_types_xml(), document_rels_xml() (+21 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.16
@@ -356,156 +353,156 @@ Cohesion: 0.16
 Nodes (29): annotate(), body_para(), build_annotated_images(), build_body(), bullet(), cell_para(), content_types_xml(), document_rels_xml() (+21 more)
 
 ### Community 41 - "Community 41"
+Cohesion: 0.16
+Nodes (29): annotate(), body_para(), build_annotated_images(), build_body(), bullet(), cell_para(), content_types_xml(), document_rels_xml() (+21 more)
+
+### Community 42 - "Community 42"
 Cohesion: 0.10
 Nodes (24): exists(), HttpRequest, HttpResponse, HttpRequest, HttpResponse, HttpRequest, HttpResponse, GlGroupMappingBase (+16 more)
 
-### Community 42 - "Community 42"
+### Community 43 - "Community 43"
 Cohesion: 0.14
 Nodes (28): mount_frontend(), Mount the built SPA if `static_dir` (e.g. `frontend/out`) exists.      Returns T, FastAPI, _assert_no_leak(), _build_test_app(), _build_traversal_app(), Unit tests for SPA static serving (A14 step 1).  Mounting the built frontend is, A broken/missing asset reference (has a file extension) must 404,     never sile (+20 more)
 
-### Community 43 - "Community 43"
+### Community 44 - "Community 44"
 Cohesion: 0.07
 Nodes (28): dependencies, next, react, react-dom, devDependencies, jsdom, oxlint, @playwright/test (+20 more)
 
-### Community 44 - "Community 44"
+### Community 45 - "Community 45"
 Cohesion: 0.10
 Nodes (12): useAdminViewToggle(), MeResponse, AuthState, useAuth(), parseDeepLink(), parseDept(), parseYear(), StorageKind (+4 more)
 
-### Community 45 - "Community 45"
+### Community 46 - "Community 46"
 Cohesion: 0.13
 Nodes (26): RLS scope resolution — Fill/See cost centers + role (ADR-0019).  Fill = every Co, Resolve one user's Fill/See cost-center scope and role.      `admin_view_enabled, resolve_scope(), Connection, Settings, A3 RLS against the real DB: the discovered filler's Fill scope is     non-empty, test_scope_resolution_against_live_data(), _make_conn() (+18 more)
 
-### Community 46 - "Community 46"
+### Community 47 - "Community 47"
 Cohesion: 0.12
 Nodes (23): _override_auth(), Unit tests for GET /budget/gl-accounts + GET /scope/departments — DB always mock, Never-cut: a non-admin passing admin_view_enabled=True must still get     their, A pyodbc.Error inside `resolve_scope` used to run outside the     try/except (HT, Identity-only auth: a shared reference list, never RLS-scoped —     resolve_scop, Flag OFF (default Settings): resolve_scope must not even be called,     and fetc, test_countries_502_on_db_error(), test_countries_returns_list_without_scope_resolution() (+15 more)
 
-### Community 47 - "Community 47"
+### Community 48 - "Community 48"
 Cohesion: 0.09
 Nodes (18): Entra Easy Auth identity extraction (ADR-0004).  The platform (Container Apps Ea, _acquire_access_token(), _build_conn_string(), _connect(), DbConnectionError, _get_msal_app(), Fabric SQL connection factories — two stores (ADR-0023):  1. `get_fabric_conn()`, Connection-OPEN failure: msal token acquisition failed before     pyodbc.connect (+10 more)
 
-### Community 48 - "Community 48"
+### Community 49 - "Community 49"
 Cohesion: 0.11
 Nodes (26): _pack_access_token(), Pack per the ODBC SQL_COPT_SS_ACCESS_TOKEN spec: a 4-byte     little-endian leng, _clear_msal_app_cache(), _mock_msal(), Unit tests for app.db — connection factories, pyodbc + msal fully mocked.  No li, The open-error surface is DbConnectionError — a pyodbc.Error subclass     (so ev, Repeat calls must not rebuild ConfidentialClientApplication — msal's     own cac, Same client_id under two different tenant_ids must NOT share a     cached app in (+18 more)
 
-### Community 49 - "Community 49"
+### Community 50 - "Community 50"
 Cohesion: 0.18
 Nodes (24): annotate(), body_para(), build_body(), bullet(), capture(), cell_para(), _circle(), content_types_xml() (+16 more)
-
-### Community 50 - "Community 50"
-Cohesion: 0.19
-Nodes (25): annotate(), body_para(), build_body(), bullet(), capture(), cell_para(), _circle(), content_types_xml() (+17 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.19
 Nodes (25): annotate(), body_para(), build_body(), bullet(), capture(), cell_para(), _circle(), content_types_xml() (+17 more)
 
 ### Community 52 - "Community 52"
+Cohesion: 0.19
+Nodes (25): annotate(), body_para(), build_body(), bullet(), capture(), cell_para(), _circle(), content_types_xml() (+17 more)
+
+### Community 53 - "Community 53"
 Cohesion: 0.11
 Nodes (24): approve_department(), list_departments_pending_my_approval(), A10 รออนุมัติ badge data source (`GET /approval/pending-for-me`):     every depa, approver1_empcode was frozen == NIPAPORN_EMPCODE (invalid-approver1     fallback, Build a raw DB row tuple matching app.approval._STATUS_COLUMNS order., Defense-in-depth: the job's own discovery query should never call this     for a, _status_row(), test_approve_advances_to_next_step() (+16 more)
 
-### Community 53 - "Community 53"
+### Community 54 - "Community 54"
 Cohesion: 0.15
 Nodes (22): get_settings(), Cached settings singleton. Call get_settings.cache_clear() in tests     that mut, ArgumentParser, Namespace, Namespace, main(), main(), add_common_args() (+14 more)
 
-### Community 54 - "Community 54"
+### Community 55 - "Community 55"
 Cohesion: 0.08
 Nodes (23): compilerOptions, allowImportingTsExtensions, allowJs, esModuleInterop, incremental, jsx, lib, module (+15 more)
 
-### Community 55 - "Community 55"
+### Community 56 - "Community 56"
 Cohesion: 0.09
 Nodes (23): get_budget_grid(), Orchestrator: board_year = planning_year - 1 (SAP + Approved both use     the st, Scope, Admin-wide (is_admin AND admin_view_enabled): the SQL-side filter must     be sk, A non-admin (or admin without the toggle) must NEVER skip the     SQL-side restr, D10: fetch_cc_dims (an extra DB round-trip) must only run when the     caller ac, An admin who has NOT enabled the admin-wide toggle is treated like a     normal, Unlike the flag-gated admin-GL strip, the master filter is NOT     role-based — (+15 more)
 
-### Community 56 - "Community 56"
+### Community 57 - "Community 57"
 Cohesion: 0.14
 Nodes (21): fetch_departments(), fetch_gl_accounts(), Reference-data reads for the frontend pickers — no RLS write path, no approval c, Full GL master, one row per GL account. No RLS — GL codes are a     shared refer, One deterministic row per cost_center (same D11 tie-break as     `read_model.fet, Unit tests for app.reference_data — GL-account list (A8 "+ เพิ่ม transaction" pi, Flag OFF (default param) — identical SQL to before this feature., SECRET (design v2): the admin GL is dropped entirely, not just its     edit_by f (+13 more)
 
-### Community 57 - "Community 57"
+### Community 58 - "Community 58"
 Cohesion: 0.13
 Nodes (21): fetch_board_pending_rows(), Run the local board+pending cross-schema join for one (board_year,     pending_y, Unit tests for app.read_model — board+pending local join, SAP merge, and RLS fil, A FULL OUTER JOIN returning 0 board rows (mid-sync) must not crash,     just ret, Admin-wide bypass: `cost_centers=None` must not restrict either side., Never-cut: an empty See scope must return zero rows WITHOUT executing     any qu, SQL shape: the pending-side subquery must select `_updated_at` so the     optimi, Never-cut: SAP-only (cc,gl) must still render, with a blank (all-zero)     Pendi (+13 more)
 
-### Community 58 - "Community 58"
+### Community 59 - "Community 59"
 Cohesion: 0.12
 Nodes (14): DataLakeServiceClient, get_fs_client(), main(), AccessToken, Path, Ingest SAP flat files from local path → Fabric Lakehouse Files/00landing  Source, _StaticTokenCredential, upload_file() (+6 more)
 
-### Community 59 - "Community 59"
+### Community 60 - "Community 60"
 Cohesion: 0.13
 Nodes (22): _cleanup_approval(), _discover_full_chain_filler(), _discover_nipaporn_waraporn_shared_department(), _log_actions(), A department both Nipaporn and Waraporn personally Fill (real, verified     2026, Returns (department, filler_email, manager_email) for a filler whose     Primary, Nipaporn submits one of her own departments -- the chain collapses to     ONE st, A department name with ZERO rows in dbo.cc_filler_map (nobody can Fill     or su (+14 more)
 
-### Community 60 - "Community 60"
+### Community 61 - "Community 61"
 Cohesion: 0.16
 Nodes (20): _current_step_started_at(), is_step_stale(), Best available signal for "when did the CURRENT PENDING_* step     begin" — flag, True once the CURRENT PENDING_* step has sat unactioned for     `threshold_days`, datetime, Build a row dict in the shape `_fetch_row`/`fetch_pending_rows` return     (keye, ADR-0006: never a silent jump to APPROVED just because someone was     slow -- a, active=[1,3] (invalid-approver1 fallback) -- escalating position 1     must land (+12 more)
 
-### Community 61 - "Community 61"
+### Community 62 - "Community 62"
 Cohesion: 0.15
 Nodes (18): bangkok_today(), Anchor "today" to Asia/Bangkok explicitly instead of the server-local     `date., date, _find_still_not_submitted_departments(), _group_by_filler(), A12 scheduled job (automation D) — pre-deadline reminder emails to Fillers of st, Returns `{filler_email: [department, ...]}`, one entry per Filler,     each list, Returns the number of Fillers reminded (dry-run: the number that     WOULD be). (+10 more)
 
-### Community 62 - "Community 62"
+### Community 63 - "Community 63"
 Cohesion: 0.14
 Nodes (19): _board_layer(), _board_pending_join_sql(), BoardLayer, BudgetRow, _cc_filter_clause(), LayerAmounts, _num(), _pending_layer() (+11 more)
 
-### Community 63 - "Community 63"
+### Community 64 - "Community 64"
 Cohesion: 0.17
 Nodes (19): _border(), build_excel(), _center(), download_from_sharepoint(), _fill(), _font(), _get_token(), _left() (+11 more)
 
-### Community 64 - "Community 64"
+### Community 65 - "Community 65"
 Cohesion: 0.13
 Nodes (19): ApprovalRecordNotFoundError, _ensure_admin_overwrite_allowed(), MidChainAdminOverwriteError, NotAuthorizedToViewDepartmentError, NotCurrentApproverError, NotFillerOfDepartmentError, B2 gate fix — fail-closed guard (default policy until jakkaritw     confirms oth, approve/reject called for a `(department, fiscal_year)` with no     approval_sta (+11 more)
 
-### Community 65 - "Community 65"
+### Community 66 - "Community 66"
 Cohesion: 0.16
 Nodes (18): ApprovalStatusState, Connection, approve(), ApproveBody, DepartmentYearBody, _notify_after_transition(), pending_for_me(), PendingForMeResponse (+10 more)
 
-### Community 66 - "Community 66"
+### Community 67 - "Community 67"
 Cohesion: 0.16
 Nodes (8): make_request(), Unit tests for GL Group Master handlers.  Mocks pyodbc helpers + auth so tests r, Pydantic regex validation rejects non-digit gl_code, Fail Fast: locked decision #5, create_on_save: new group_name → INSERT dim, then mapping, TestDeleteHandler, TestListHandler, TestSaveHandler
 
-### Community 67 - "Community 67"
+### Community 68 - "Community 68"
 Cohesion: 0.18
 Nodes (18): Connection, date, datetime, _cleanup_sentinel(), _discover_real_filler_email(), _insert_deadline_row(), _insert_sentinel_approval_status_row(), _insert_sentinel_pending_row() (+10 more)
 
-### Community 68 - "Community 68"
+### Community 69 - "Community 69"
 Cohesion: 0.20
 Nodes (16): _conn_str(), execute(), fetchall(), fetchall_lakehouse(), fetchone(), get_conn(), get_lakehouse_conn(), _open_conn() (+8 more)
 
-### Community 69 - "Community 69"
+### Community 70 - "Community 70"
 Cohesion: 0.14
 Nodes (14): HttpRequest, HttpResponse, HttpRequest, HttpResponse, HttpRequest, HttpResponse, handle(), DELETE /api/master/gl-group/delete  Hard delete by gl_code (single PK). Locked d (+6 more)
 
-### Community 70 - "Community 70"
+### Community 71 - "Community 71"
 Cohesion: 0.31
 Nodes (15): cc_delete_route(), cc_list_route(), cc_reference_route(), cc_save_route(), delete_route(), hd_delete_route(), hd_list_route(), hd_save_route() (+7 more)
 
-### Community 71 - "Community 71"
+### Community 72 - "Community 72"
 Cohesion: 0.16
 Nodes (13): _is_contained(), Serve the frontend build output — `frontend/out` (Next.js export), previously `f, True if `candidate` resolves to a path inside `static_dir`.      `full_path` com, FastAPI, Path, _assert_all_security_headers(), Security response headers — set by `app.main`'s `add_security_headers` middlewar, SPA fallback (index.html for a deep link) carries the headers too.      Isolated (+5 more)
 
-### Community 72 - "Community 72"
+### Community 73 - "Community 73"
 Cohesion: 0.15
 Nodes (12): _c(), left(), leftof(), Render the Budget Closing Date MODULE page (demo) to screenshots + measure marke, Marker at left margin, leader pointing right into element's left edge., Marker sits just left of a right-aligned element., Marker above element, leader pointing down into it., top() (+4 more)
 
-### Community 73 - "Community 73"
+### Community 74 - "Community 74"
 Cohesion: 0.22
 Nodes (4): build(), PDF, Generate Approval Workflow Spec PDF (sign-off version) Usage: python requirement, FPDF
 
-### Community 74 - "Community 74"
+### Community 75 - "Community 75"
 Cohesion: 0.13
 Nodes (15): _active_positions(), The 3 fixed positions, minus self-skip (occupant == submitter) and     dedup (oc, Resolve + freeze one submission's chain. Returns     `(submitter_empcode, approv, resolve_chain(), ADR-0019: a Filler absent from dbo.v_employee_budget_01 still submits,     but w, ADR-0006 worked example: Nipaporn's manager is Waraporn -> raw     [Waraporn, Ni, ADR-0006 worked example: Waraporn's manager is Piyada -> raw     [Piyada, Nipapo, approver1_empcode already forced to Nipaporn (ADR-0006 invalid-approver1     fal (+7 more)
 
-### Community 75 - "Community 75"
+### Community 76 - "Community 76"
 Cohesion: 0.19
 Nodes (14): Connection, Request, Scope, attachments(), _authorize(), _department_cost_centers(), download_url(), SharePoint attachments (A10, spec R1) — GET /attachments (list), POST /attachmen (+6 more)
 
-### Community 76 - "Community 76"
+### Community 77 - "Community 77"
 Cohesion: 0.25
 Nodes (8): find_group_id_by_name(), cleanup(), _delete_test_group(), _delete_test_row(), make_req(), Integration tests — real Fabric SQL Database, no mocks.  Tests the full handler, Ensure no stale test row from a previous failed run., TestIntegration
 
-### Community 77 - "Community 77"
+### Community 78 - "Community 78"
 Cohesion: 0.21
 Nodes (13): get_current_user_email(), Resolve the authenticated user's email, or raise 401.      Priority: real Easy A, Settings, Unit tests for app.auth — Easy Auth header extraction + DEV override.  No live D, Malformed header (blank/whitespace-only) must not silently authenticate., DEV_AUTH_EMAIL must never leak into a non-local environment., test_blank_header_treated_as_missing_raises_401(), test_dev_override_ignored_when_not_local_even_if_configured() (+5 more)
-
-### Community 78 - "Community 78"
-Cohesion: 0.12
-Nodes (14): delete_trip(), Delete one trip and every one of its lines by id (see     `_delete_one_trip`). S, After the trip's lines are gone, each of the 4 travel-GL parent rows     gets th, A5 gate cheap fix: negative days must be rejected at the input layer., A client sending '03,03' as a single list element (instead of two     entries) m, test_delete_trip_forbidden_when_actual_cc_outside_caller_scope(), test_delete_trip_not_found_is_conflict_not_500(), test_delete_trip_rejected_when_deadline_has_passed_no_db_write() (+6 more)
 
 ### Community 79 - "Community 79"
 Cohesion: 0.26
@@ -520,52 +517,52 @@ Cohesion: 0.15
 Nodes (11): Per-diem calculation — pure, no I/O (ADR-0005 rounding, ADR-0015 recompute-on-re, Raised when the SAP gold-warehouse read-through query fails (missing     grant,, SapActualsFetchError, _fetch_current_total(), _fetch_trips_for_year(), FxRateMissingError, FX reconciliation job — re-persist every fiscal_year trip's STORED per-diem with, The per-diem detail line's currently-stored `total_year` for     (trip_id, gl_ac (+3 more)
 
 ### Community 82 - "Community 82"
+Cohesion: 0.15
+Nodes (13): delete_detail_line(), Delete one special-GL detail line by id (see `_delete_one_detail_line`     for t, The caller's OWN Fill scope (CC-MINE) never includes the row's ACTUAL     owning, Same commit-order rule as every other write in this module: db.py has     no imp, Deleting the LAST remaining detail line removes the now-empty parent     row too, test_delete_detail_line_admin_bypasses_deadline_and_scope(), test_delete_detail_line_commit_happens_after_delete_and_recompute(), test_delete_detail_line_deleting_last_line_removes_the_empty_parent() (+5 more)
+
+### Community 83 - "Community 83"
 Cohesion: 0.29
 Nodes (12): datetime, create_trip(), delete_detail(), delete_row(), delete_trip_endpoint(), put_detail_line(), put_row(), _raise_for_result() (+4 more)
 
-### Community 83 - "Community 83"
+### Community 84 - "Community 84"
 Cohesion: 0.17
 Nodes (10): add_security_headers(), FastAPI app entrypoint — A2 backend foundation, A3 RLS scope resolution, A4 main, Set the security response headers on EVERY response (API, errors,     /health, S, Request, Response, client(), _hermetic_unit_settings(), Shared pytest fixtures for backend unit tests. (+2 more)
 
-### Community 84 - "Community 84"
-Cohesion: 0.17
-Nodes (12): delete_detail_line(), Delete one special-GL detail line by id (see `_delete_one_detail_line`     for t, The caller's OWN Fill scope (CC-MINE) never includes the row's ACTUAL     owning, Same commit-order rule as every other write in this module: db.py has     no imp, Deleting the LAST remaining detail line removes the now-empty parent     row too, test_delete_detail_line_commit_happens_after_delete_and_recompute(), test_delete_detail_line_deleting_last_line_removes_the_empty_parent(), test_delete_detail_line_forbidden_when_actual_cc_outside_caller_scope() (+4 more)
-
 ### Community 85 - "Community 85"
+Cohesion: 0.17
+Nodes (12): delete_trip(), Delete one trip and every one of its lines by id (see     `_delete_one_trip`). S, Process each item of a batch independently: known business exceptions     become, _run_per_item(), After the trip's lines are gone, each of the 4 travel-GL parent rows     gets th, test_delete_trip_forbidden_when_actual_cc_outside_caller_scope(), test_delete_trip_not_found_is_conflict_not_500(), test_delete_trip_rejected_when_deadline_has_passed_no_db_write() (+4 more)
+
+### Community 86 - "Community 86"
 Cohesion: 0.20
 Nodes (10): fetch_travelers(), Department-scoped traveler list for the login, sorted by Thai name.      Scoped, Connection, Dept-scoped roster from dbo.v_traveler_picker keyed by the login     email (same, A login email absent from the picker view (admin/test account) gets     the FULL, API contract is plain strings — a NULL HR field renders as '' in the     picker,, test_fetch_travelers_closes_cursor(), test_fetch_travelers_coerces_null_name_or_position_to_empty_string() (+2 more)
 
-### Community 86 - "Community 86"
+### Community 87 - "Community 87"
 Cohesion: 0.27
 Nodes (9): Scope, DepartmentRow, departments(), _ensure_see_scope(), gl_accounts(), GlAccount, Reference-data endpoints for the frontend pickers:  - `GET /budget/gl-accounts`, Same read-RLS rule as routers/subform.py: the caller must See the     cost_cente (+1 more)
 
-### Community 87 - "Community 87"
+### Community 88 - "Community 88"
 Cohesion: 0.29
 Nodes (9): capture(), _grab(), _grab_above(), _markers_above(), _markers_from_rects(), Toolbar variant: clip-screenshot with headroom ABOVE, place circles above., Measure child rects, screenshot the base element, store markers., Convert page rects -> image-pixel markers relative to a screenshotted box. (+1 more)
 
-### Community 88 - "Community 88"
+### Community 89 - "Community 89"
 Cohesion: 0.29
 Nodes (9): _assert_502_generic(), _clear_msal_app_cache(), Connection-OPEN failure contract — every DB-backed endpoint returns 502 with a g, pyodbc.Error raised at `with get_fabric_conn()` entry (driver-level     connect, msal token acquisition fails at open (the REAL get_fabric_conn runs;     only th, Same isolation as test_db.py — the module-level msal app cache must     not leak, _request(), test_driver_error_at_connection_open_returns_502() (+1 more)
 
-### Community 89 - "Community 89"
+### Community 90 - "Community 90"
 Cohesion: 0.20
 Nodes (10): _cleanup_sentinel_year(), D5 (never-cut): two REAL connections each save a detail line to the     SAME par, D6 (never-cut): two detail lines each entered as 100.005 must each     persist a, Delete every row at FISCAL_YEAR across the 3 transactional tables,     then veri, The exact scenario the A5 gate flagged: user enters Entertainment     1,000 -> A, Add a 2nd Entertainment detail line (500) alongside a 1st (1000) ->     the pare, test_add_second_detail_line_parent_cell_sums_both(), test_concurrent_detail_saves_never_lose_a_line_in_the_parent_sum() (+2 more)
 
-### Community 90 - "Community 90"
+### Community 91 - "Community 91"
 Cohesion: 0.33
 Nodes (9): apply_edits(), esc(), expand(), load(), main(), rPr of the text run with the most characters (dominant style)., rebuild_para(), rpr_template() (+1 more)
 
-### Community 91 - "Community 91"
+### Community 92 - "Community 92"
 Cohesion: 0.28
 Nodes (8): Path, check(), main(), Smoke test for 0008 Hide Document Number page (multi-chip + free-text + validate, # IMPORTANT: clear via JS to avoid Backspace popping a chip, Serve `directory` over HTTP on a random localhost port. Returns (server, port)., start_static_server(), TCPServer
 
-### Community 92 - "Community 92"
-Cohesion: 0.22
-Nodes (9): fetch_countries(), Country → per-diem group list, ints per the API contract (1=domestic,     2=asia, countries(), Live dbo.country_group stores group NAMES ('domestic'/'asian' —     introspected, A typo'd/new group name in the master must never silently mis-map to     a per-d, test_fetch_countries_closes_cursor(), test_fetch_countries_maps_group_names_to_ints_and_sorts_domestic_first(), test_fetch_countries_queries_dbo_country_group() (+1 more)
-
 ### Community 93 - "Community 93"
 Cohesion: 0.22
-Nodes (9): delete_pending_row(), Delete one manually-added Pending row by its natural key (see     `_delete_one_p, Process each item of a batch independently: known business exceptions     become, _run_per_item(), test_delete_pending_row_forbidden_when_outside_fill_scope_no_db_call(), test_delete_pending_row_rejected_when_deadline_has_passed_no_db_write(), test_delete_pending_row_rejected_when_department_is_locked(), test_delete_pending_row_stale_token_is_conflict_no_commit() (+1 more)
+Nodes (9): fetch_countries(), Country → per-diem group list, ints per the API contract (1=domestic,     2=asia, countries(), Live dbo.country_group stores group NAMES ('domestic'/'asian' —     introspected, A typo'd/new group name in the master must never silently mis-map to     a per-d, test_fetch_countries_closes_cursor(), test_fetch_countries_maps_group_names_to_ints_and_sorts_domestic_first(), test_fetch_countries_queries_dbo_country_group() (+1 more)
 
 ### Community 94 - "Community 94"
 Cohesion: 0.22
@@ -640,38 +637,34 @@ Cohesion: 0.67
 Nodes (3): get_connection(), test_connection(), Connection
 
 ### Community 116 - "Community 116"
-Cohesion: 0.50
-Nodes (4): Build the replay row in whatever order `_TRIP_REPLAY_COLUMNS`     declares — rob, A token replay must return the STORED project (like every other     stored field, _stored_trip_row(), test_trip_create_replay_returns_stored_project()
-
-### Community 117 - "Community 117"
 Cohesion: 0.83
 Nodes (3): main(), prot(), words()
 
-### Community 118 - "Community 118"
+### Community 117 - "Community 117"
 Cohesion: 0.67
 Nodes (3): main(), Return dict of protected-token-kind -> list, extracted from text t., tokens()
 
-### Community 119 - "Community 119"
+### Community 118 - "Community 118"
 Cohesion: 0.83
 Nodes (3): load_xml(), main(), write_docx()
 
-### Community 120 - "Community 120"
+### Community 119 - "Community 119"
 Cohesion: 0.83
 Nodes (3): body_text(), metrics(), q()
 
 ## Knowledge Gaps
 - **140 isolated node(s):** `glApiClient`, `occApiClient`, `sapGlCodes`, `glGroupDims`, `masterData` (+135 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **22 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DeleteRequest` connect `Community 69` to `Community 41`, `Community 19`?**
+- **Why does `DeleteRequest` connect `Community 70` to `Community 42`, `Community 19`?**
   _High betweenness centrality (0.057) - this node is a cross-community bridge._
-- **Why does `AuthError` connect `Community 35` to `Community 66`, `Community 68`, `Community 69`, `Community 102`, `Community 41`, `Community 14`?**
+- **Why does `AuthError` connect `Community 36` to `Community 67`, `Community 69`, `Community 70`, `Community 102`, `Community 42`, `Community 14`?**
   _High betweenness centrality (0.037) - this node is a cross-community bridge._
-- **Why does `Scope` connect `Community 8` to `Community 64`, `Community 0`, `Community 2`, `Community 9`, `Community 10`, `Community 75`, `Community 45`, `Community 13`, `Community 46`, `Community 19`, `Community 21`, `Community 86`, `Community 55`, `Community 60`, `Community 62`, `Community 95`?**
+- **Why does `Scope` connect `Community 6` to `Community 0`, `Community 65`, `Community 2`, `Community 7`, `Community 8`, `Community 76`, `Community 13`, `Community 46`, `Community 47`, `Community 19`, `Community 21`, `Community 87`, `Community 56`, `Community 61`, `Community 95`, `Community 63`?**
   _High betweenness centrality (0.033) - this node is a cross-community bridge._
 - **Are the 69 inferred relationships involving `Settings` (e.g. with `AttachmentInfo` and `AttachmentsNotConfiguredError`) actually correct?**
   _`Settings` has 69 INFERRED edges - model-reasoned connections that need verification._
