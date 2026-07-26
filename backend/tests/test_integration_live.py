@@ -999,29 +999,34 @@ def test_sap_failure_is_loud_not_silent(monkeypatch: pytest.MonkeyPatch) -> None
 @pytest.mark.integration
 def test_board_pending_join_runs_live() -> None:
     """The real board x pending FULL OUTER JOIN (`read_model.fetch_board_pending_rows`)
-    executes against the live DB and returns board rows. `budget.pending_budget`
-    is empty today, so every board row must survive the join as a board-only
-    row — that is exactly ADR-0010's FULL OUTER guarantee (not a board-only
-    LEFT join)."""
+    executes against the live DB and EVERY board row survives the join —
+    that is ADR-0010's FULL OUTER guarantee (not a board-only LEFT join).
+    Pending-only rows (a pending key with no board row) must survive too.
+    Updated 2026-07-25: the original version asserted join count == board
+    count under the premise "pending_budget is empty today" — real FY2027
+    fills (suchanyay, 2026-07-24) broke that premise, so the test now
+    asserts the join's SEMANTICS (set equality on the board side), which
+    holds regardless of how much real pending data exists."""
     with get_fabric_conn() as conn:
         board_year = _discover_board_year(conn)
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT COUNT(*) FROM dbo.board_budget WHERE fiscal_year = ?", board_year)
-            expected_board_rows = cursor.fetchone()[0]
+            cursor.execute("SELECT cost_center, gl_account FROM dbo.board_budget WHERE fiscal_year = ?", board_year)
+            board_keys = {(r[0], r[1]) for r in cursor.fetchall()}
         finally:
             cursor.close()
 
         join_rows = fetch_board_pending_rows(conn, board_year=board_year, pending_year=board_year + 1, cost_centers=None)
 
     assert join_rows, f"fetch_board_pending_rows returned nothing for board_year={board_year}"
-    assert len(join_rows) == expected_board_rows, (
-        f"expected {expected_board_rows} board rows to survive the FULL OUTER join, got {len(join_rows)}"
+    board_side_keys = {(r["cost_center"], r["gl_account"]) for r in join_rows if r["board_cost_center"] is not None}
+    assert board_side_keys == board_keys, (
+        f"every board row must survive the FULL OUTER join exactly once — "
+        f"{len(board_keys - board_side_keys)} missing, {len(board_side_keys - board_keys)} unexpected"
     )
-    board_only = [r for r in join_rows if r["pending_cost_center"] is None]
-    assert len(board_only) == len(join_rows), (
-        "budget.pending_budget is expected to be empty right now — every joined row should be board-only; "
-        "if this fails, pending_budget is no longer empty (re-check test isolation before trusting this failure)"
+    pending_only = [r for r in join_rows if r["board_cost_center"] is None]
+    assert all(r["pending_cost_center"] is not None for r in pending_only), (
+        "a join row with neither a board nor a pending key violates the FULL OUTER shape"
     )
 
 
@@ -1973,10 +1978,14 @@ def _cleanup_delete_sentinel_year(conn: pyodbc.Connection) -> None:
 
 
 @pytest.mark.integration
-def test_delete_detail_line_zeroes_parent_cell_live(discovered: tuple[str, str, str]) -> None:
+def test_delete_detail_line_drops_orphaned_parent_live(discovered: tuple[str, str, str]) -> None:
     """Create an Entertainment detail line (1000) -> parent cell is really
-    1000 -> delete it -> parent cell is really 0 (row kept, zeroed, never
-    removed) and the detail row itself is gone."""
+    1000 -> delete it (the parent's only line) -> the detail row is gone
+    AND the now-orphaned parent row is dropped entirely — the 2026-07-21
+    contract change (e6f669b): the earlier "keep the zeroed parent"
+    behavior left undead zero rows on the grid, and read_model display-
+    fills a zero Pending layer for cells with no parent row, so dropping
+    the row loses nothing."""
     cost_center, filler_email, gl_account = discovered
 
     try:
@@ -2000,19 +2009,17 @@ def test_delete_detail_line_zeroes_parent_cell_live(discovered: tuple[str, str, 
             cursor = verify_conn.cursor()
             try:
                 cursor.execute(
-                    "SELECT m01, total_year FROM budget.pending_budget "
+                    "SELECT COUNT(*) FROM budget.pending_budget "
                     "WHERE cost_center = ? AND gl_account = ? AND fiscal_year = ?",
                     cost_center, gl_account, DELETE_FISCAL_YEAR,
                 )
-                parent_row = cursor.fetchone()
+                parent_left = cursor.fetchone()[0]
                 cursor.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE detail_id = ?", detail_id)
                 detail_left = cursor.fetchone()[0]
             finally:
                 cursor.close()
 
-        assert parent_row is not None, "parent row must be KEPT (zeroed), not removed"
-        assert float(parent_row[0]) == 0, f"parent m01 = {parent_row[0]}, expected 0 after deleting the only line"
-        assert float(parent_row[1]) == 0, f"parent total_year = {parent_row[1]}, expected 0"
+        assert parent_left == 0, "the orphaned parent row must be DROPPED, not kept zeroed (2026-07-21 contract, e6f669b)"
         assert detail_left == 0, "the detail row itself must be gone after delete"
     finally:
         with get_fabric_conn() as cleanup_conn:
@@ -2063,7 +2070,10 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovere
     """Create a trip (auto-derived per-diem) + its 3 manual expense lines
     (transport/accommodation/other) -> delete the trip -> the trip row is
     gone, every one of its detail lines (all 4 types) is gone, and all 4
-    of that side's travel-GL parent cells are really 0."""
+    of that side's travel-GL parent rows — the trip was their only
+    content — are DROPPED as orphaned (2026-07-21 contract, e6f669b:
+    read_model display-fills a zero Pending layer for cells with no
+    parent row, so keeping zeroed parents just left undead grid rows)."""
     cost_center, filler_email, _ = discovered
 
     with get_fabric_conn() as conn:
@@ -2133,8 +2143,8 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovere
 
         assert trip_left == 0, "trip header row must be gone after delete"
         assert lines_left == 0, "every one of the trip's detail lines must be gone after delete"
-        assert all(total == 0 for total in parent_totals.values()), (
-            f"expected all 4 COST-side parent cells to be 0 (row kept, zeroed), got {parent_totals}"
+        assert all(total is None for total in parent_totals.values()), (
+            f"orphaned parent rows must be DROPPED, not kept zeroed (2026-07-21 contract, e6f669b), got {parent_totals}"
         )
     finally:
         with get_fabric_conn() as cleanup_conn:
@@ -2313,13 +2323,22 @@ def test_a13_pending_row_persists_across_reconnect_live() -> None:
 # =========================================================================
 # GL edit_by admin-only lock (design v2, 2026-07-17) — READ-ONLY, no writes
 # =========================================================================
-# The DW sync is already deployed + verified live (per the task brief):
-# `dbo.gl_group.edit_by` is populated, 13 admin / 133 user / 0 NULL. This
-# proves app.gl_access's flag-ON code path against the REAL column, while
-# the feature itself still ships flag OFF (Settings.gl_edit_by_enabled).
+# Proves app.gl_access's flag-ON code path against the REAL
+# `dbo.gl_group.edit_by` column, while the feature itself still ships flag
+# OFF (Settings.gl_edit_by_enabled).
+#
+# Counts as confirmed 2026-07-25: 12 admin / 134 user / 0 NULL (146 rows).
+# SOURCE OF TRUTH IS A LIVING FILE: the owner's `gl group_gl th name.xlsx`
+# on SharePoint (CMANDWPRD), full-reloaded into dbo.gl_group by the daily
+# ~06:31 master sync — the owner can edit it any day. Provenance of the
+# current counts: 2026-07-17 17:33 the owner (Nipaporn) flipped exactly
+# ONE cell — 6211300999 admin->user — verified via SharePoint version
+# history diff (v9->v12, 146 rows both sides, no other change; tracker
+# gl-editby-6211300999-forensics). If this test fails after a sync night,
+# check the Excel version history FIRST before suspecting app code.
 
 @pytest.mark.integration
-def test_gl_group_edit_by_live_counts_match_the_confirmed_13_admin_133_user() -> None:
+def test_gl_group_edit_by_live_counts_match_the_confirmed_12_admin_134_user() -> None:
     from app.gl_access import fetch_admin_gl_codes, normalize_edit_by
 
     with get_fabric_conn() as conn:
@@ -2331,20 +2350,21 @@ def test_gl_group_edit_by_live_counts_match_the_confirmed_13_admin_133_user() ->
             cursor.close()
         admin_codes = fetch_admin_gl_codes(conn)
 
-    assert len(rows) == 146, f"expected 133 user + 13 admin = 146 GL rows, found {len(rows)}"
+    assert len(rows) == 146, f"expected 134 user + 12 admin = 146 GL rows, found {len(rows)}"
     normalized_counts: dict[str, int] = {"user": 0, "admin": 0}
     for _, edit_by in rows:
         normalized_counts[normalize_edit_by(edit_by)] += 1
-    assert normalized_counts == {"user": 133, "admin": 13}
-    assert len(admin_codes) == 13
-    assert None not in (edit_by for _, edit_by in rows), "0 NULL edit_by expected per the task brief"
+    assert normalized_counts == {"user": 134, "admin": 12}
+    assert len(admin_codes) == 12
+    assert None not in (edit_by for _, edit_by in rows), "0 NULL edit_by expected"
 
 
 @pytest.mark.integration
 def test_reference_data_fetch_gl_accounts_excludes_admin_gls_for_non_admin_live() -> None:
     """Proves the SECRET rule end-to-end against the real table: a
-    non-admin caller's gl-accounts list never contains any of the 13
-    admin-only GLs, an admin caller's list contains all of them."""
+    non-admin caller's gl-accounts list never contains any of the live
+    admin-only GLs (whatever the owner's Excel currently marks), an admin
+    caller's list contains all of them."""
     from app.gl_access import fetch_admin_gl_codes
     from app.reference_data import fetch_gl_accounts
 
