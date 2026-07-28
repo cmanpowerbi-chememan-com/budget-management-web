@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T14:53:13+0700",
+  "updated": "2026-07-28T15:39:08+0700",
   "tasks": [
+    {
+      "id": "plan-progress-section",
+      "state": "done",
+      "created": "2026-07-28T15:39:08+0700",
+      "updated": "2026-07-28T15:39:08+0700",
+      "ai": "เพิ่มส่วน Progress ใน plan/post-deploy-smoke-uat-plan.md: บันทึก DONE (decisions+3 executed, data readiness FY2027, GL master 12, P0-22 fix, test coverage ทั้งหมด, debris cleanup) / REMAINING (Phase 0-3 รอ deploy, flips 4 ตัว, sap-actuals-view blocked) / NEXT = deploy Container App",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-7dcbc17",
+      "state": "done",
+      "created": "2026-07-28T14:53:20+0700",
+      "updated": "2026-07-28T14:53:20+0700",
+      "agent": "autolog",
+      "ai": "docs: admin GL count 13->12 (forensics-verified) + tracker cleanup [commit 7dcbc17]"
+    },
     {
       "id": "deploy-prep-data-readiness",
       "state": "done",

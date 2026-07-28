@@ -32,6 +32,50 @@ Related docs — this plan does NOT duplicate them, it points at them:
 
 ---
 
+# Progress (updated 2026-07-28)
+
+**DONE — pre-work and decisions (no deploy needed):**
+- Appendix E: all 10 decisions recorded; 3 already executed —
+  FX workflow split (`fx-repersist.yml`), SharePoint folder script ready
+  (`setup/create_attachment_folders.py`, dry-run verified against live
+  Graph: 114 ฝ่าย), `ADMIN_EMAILS` set locally (3 emails, P0-05/P0-22 fix).
+- Data readiness (Phase 0.2, checked live FY2027): `submission_deadline`
+  2027 row (deadline 2026-10-31, reminder 2026-10-15) · 24 per-diem rates ·
+  FX row for 2027 · `board_budget` for base year 2026. ALL PRESENT.
+- Master data: `dbo.gl_group.edit_by` fully populated, admin count = 12
+  (correct per gl-editby-6211300999-forensics — the "13th" was deliberately
+  removed by the master owner). `GL_EDIT_BY_ENABLED` precondition met.
+- Approver reachability (P0-22): FIXED locally — waraporn added to
+  `ADMIN_EMAILS`, verified `is_admin=True` (matches Spec A v2 dual-role).
+- Automated test coverage behind this plan: 701 backend unit + 46 live
+  integration (green 2026-07-28) · 483 frontend vitest · 23 mocked
+  Playwright · 1 live-backend e2e (`npm run test:e2e:live`) · 4 real probe
+  emails sent and visually confirmed.
+- Housekeeping: approval debris from the 2026-07-24 test flow deleted
+  (Solution Delivery/FY2027 — verified 0 rows left company-wide).
+
+**REMAINING — blocked on the Container App existing:**
+- Phase 0 infra items (P0-01…): create the Container App via Azure Cloud
+  Shell (`docs/deploy/A14_RUNBOOK.md`), prod env vars (incl. `ADMIN_EMAILS`
+  = the 3 emails, `APP_BASE_URL` = FQDN for pilot), Easy Auth, DNS/HTTPS,
+  Fabric IP firewall, Log Analytics/ops readiness.
+- Phase 1 smoke (20 items) — needs the real URL.
+- Phase 2 functional (77 items) — runs on prod.
+- Phase 3 UAT (47 items) — pilot users; jakkaritw picks pilot ฝ่าย #2 +
+  trial dates (Appendix E #8).
+- Small flips at their planned moments: `--apply` folder creation (228
+  folders for FY2027) at rollout · `GL_EDIT_BY_ENABLED=true` at soft launch ·
+  `NOTIFICATIONS_DRY_RUN=false` after Phase 2 first-submit verification ·
+  cron uncomment in `budget-automations.yml` at go-live.
+- Known open, not part of this plan: `sap-actuals-view` blocked since
+  2026-07-09 — SP `cman-fabric-write` needs a grant on the gold warehouse
+  workspace (someone with Fabric admin must grant; not a code issue).
+
+**NEXT ACTION: deploy the Container App (Phase 0 start).**
+
+---
+
+
 # Phase 0 — Pre-flight (must pass BEFORE any user logs in)
 
 ## 0.1 Infrastructure & config
