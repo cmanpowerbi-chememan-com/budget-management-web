@@ -372,6 +372,30 @@ numbers, not just a tick.
 > filler persona → section F); B3/B4 sub-parts needing approver personas or a
 > mailbox also → section F/G.
 
+> **D–L RESULT 2026-07-28 — 27 PASS / 1 FAIL / 13 DEFER / 4 COVERED**
+> (verifier: kimi, harness `setup/phase2_harness_dkl.py`, full write-up
+> `docs/test/phase2-results-2026-07-28.md`; sentinel 2099 cleanup verified 0
+> rows, temp `submission_deadline` 2099 row removed, real-year control
+> numbers unchanged — `budget.*` is still genuinely empty pre-UAT):
+> **D** ✅ upload/list/download byte-exact, .exe→400, 11MB→413, CON.pdf→400,
+> traversal sanitized inside folder, missing-folder→502 legible, overwrite
+> confirmed, download URL = pre-auth Graph link (PDPA note) · **E4/E5** ✅
+> (wide view 1005 rows; mid-chain admin overwrite → 409 guard holds) ·
+> **G5** ✅ no PDPA over-share in the 4 mail bodies · **H** ✅ dry-runs no-op
+> correctly (dates not reached; FX dry-run fx=33.0000, 0 trips) · **I1–I3** ✅
+> Bangkok-inclusive deadline proven end-to-end via a temp 2099 deadline row
+> (removed) · **J1/J3/J4/J5** ✅ (492 grid cells vs gold DB 0 mismatch;
+> 10OS011400 no double-count; 874 non-master keys intentionally hidden) ·
+> **K2** ✅ p50=1.19s p95=1.39s vs 3s · **K5** ✅ bogus cookie → clean 401.
+> **K4 FAIL**: 10 concurrent grid GETs 7.0–11.1s (~7x single-user) — capacity
+> decision needed (accept a concurrent-load threshold vs min-replicas/CPU
+> bump), recorded in `docs/test/phase2-results-2026-07-28.md`.
+> SharePoint scratch files (3 × TEST-PROBE) stay in
+> `เอกสาร ฝ่าย/Accounting Division/2099/` per the scratch decision.
+> DEFER batch (personas/browser/mailbox): B6, D6, E1/E2/E3, E6 (GL_EDIT_BY
+> flip at soft launch), E7/K6/K8, G1/G2/G3 (jakkaritw's mailbox), H4 --run +
+> J2 (controlled year), H6 (cron at go-live), I3 non-admin half, I4.
+
 ## A. Write path & validation
 
 - [ ] **P2-A1** Edit a Pending cell → save → reload → value persisted

@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T23:05:01+0700",
+  "updated": "2026-07-28T23:37:56+0700",
   "tasks": [
+    {
+      "id": "phase2-dkl-harness",
+      "state": "done",
+      "created": "2026-07-28T23:37:56+0700",
+      "updated": "2026-07-28T23:37:56+0700",
+      "ai": "Phase 2 D-L บน prod: 27 PASS/1 FAIL/13 DEFER/4 COVERED — D attachments ครบ (byte-exact/rejects/sanitize/overwrite/pre-auth URL), E4/E5 guard 409 ผ่าน, I deadline BKK inclusive ผ่าน (temp row cleanup), J3 492 cells 0 mismatch, K2 p95=1.39s ผ่าน, K5 clean 401. K4 FAIL: 10 concurrent GETs 7-11s (~7x) — ต้องตัดสินใจ threshold/min-replicas. harness setup/phase2_harness_dkl.py + ผลเต็ม docs/test/phase2-results-2026-07-28.md; SharePoint scratch 3 ไฟล์ TEST-PROBE ที่ Accounting Division/2099; cleanup 2099=0 ครบ",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-95f9890",
+      "state": "done",
+      "created": "2026-07-28T23:05:49+0700",
+      "updated": "2026-07-28T23:05:49+0700",
+      "agent": "autolog",
+      "ai": "test(phase2): A/B/C prod harness green after B3 fix — 16 PASS/0 FAIL/1 DEFER [commit 95f9890]"
+    },
     {
       "id": "fix-b3-concurrent-submit-502",
       "state": "done",
