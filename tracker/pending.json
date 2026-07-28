@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T21:40:16+0700",
+  "updated": "2026-07-28T23:05:01+0700",
   "tasks": [
+    {
+      "id": "fix-b3-concurrent-submit-502",
+      "state": "done",
+      "created": "2026-07-28T22:18:28+0700",
+      "updated": "2026-07-28T23:05:01+0700",
+      "ai": "FIXED+VERIFIED ON PROD: commit ace0f00 (_admin_direct_approve catch IntegrityError→ConcurrentApprovalError + unit test). Deploy: user rebuild image ace0f00 → stg+prd. Re-run phase2_harness_abc: 16 PASS/0 FAIL/1 DEFER — B3 concurrent submits→[200,409] message ถูก. smoke_prd regression: 15/0/8 เท่าเดิม. cleanup 2099=0 ครบ",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-5e58ba1",
+      "state": "done",
+      "created": "2026-07-28T21:40:37+0700",
+      "updated": "2026-07-28T21:40:37+0700",
+      "agent": "autolog",
+      "ai": "test(smoke): Phase 1 harness setup/smoke_prd.py — 15 PASS/0 FAIL/8 DEFER on prd [commit 5e58ba1]"
+    },
     {
       "id": "phase1-smoke-prd",
       "state": "done",

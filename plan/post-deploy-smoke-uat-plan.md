@@ -357,6 +357,21 @@ Dev-driven writes use sentinel `fiscal_year = 2099` unless the item explicitly
 needs the real cycle (approval-loop items do — flagged). Record the actual
 numbers, not just a tick.
 
+> **A/B/C RESULT 2026-07-28 — 16 PASS / 0 FAIL / 1 DEFER** (verifier: kimi,
+> harness `setup/phase2_harness_abc.py`, admin session cookie, sentinel 2099,
+> cleanup verified 0 rows in the 5 tables pre+post):
+> A1–A8 ✅ (money 2dp + total==SUM exact in SQL · 400 codes · Thai round-trip
+> no mojibake · add-txn dims + 409 dedup) · B1 ✅ [200,409] · B2 ✅ [200,200]
+> row-grain · B4 ✅ retry→409, 1 status/1 log · B5 ✅ client_token→1 trip ·
+> C1 ✅ all 6 groups parent==SUM(detail) in SQL every step · C2 ✅ 400s.
+> **B3 found a REAL product bug on the first run** (concurrent submits →
+> [200, 502] — `_admin_direct_approve` missed the IntegrityError→409 mapping):
+> fixed in `ace0f00`, redeployed stg+prd, re-run → **[200, 409] PASS**, and
+> `setup/smoke_prd.py` regression re-run clean (15/0/8).
+> DEFER: B6 (admin bypasses the lock by design ADR-0012 — needs a non-admin
+> filler persona → section F); B3/B4 sub-parts needing approver personas or a
+> mailbox also → section F/G.
+
 ## A. Write path & validation
 
 - [ ] **P2-A1** Edit a Pending cell → save → reload → value persisted
