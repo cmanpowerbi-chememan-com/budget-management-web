@@ -809,11 +809,13 @@ UAT observation sheet (one row per user session):
    `dbo.gl_group`; if the check fails, launch with OFF and flip later.
 3. **`budget-automations.yml`** → **Split** the FX re-persist into its own
    workflow (kills the P0-28 trap: preview-clicking the other 3 jobs can
-   never re-price per-diem).
+   never re-price per-diem). **DONE 2026-07-28** — `.github/workflows/fx-repersist.yml`.
 4. **Attachment folders** → **Pilot: create the 1–2 folders manually**;
    full rollout: one-off bulk-create script in `setup/` using the existing
    Graph SP pattern (`cman-fabric-write` has Sites.ReadWrite.All). No new
-   app feature.
+   app feature. **Script ready 2026-07-28** — `setup/create_attachment_folders.py`
+   (dry-run default, `--apply` creates; resolves all 114 departments from
+   `dbo.cc_filler_map`).
 5. **Same-name upload overwrites, no delete** → **Accept for v1**, document
    in the user guide ("name the file correctly before uploading; re-upload
    overwrites"). Build delete/versioning only if users ask.

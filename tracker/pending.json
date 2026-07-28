@@ -1,14 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T13:18:44+0700",
+  "updated": "2026-07-28T13:28:42+0700",
   "tasks": [
     {
+      "id": "sharepoint-bulk-folders",
+      "state": "done",
+      "created": "2026-07-28T13:23:21+0700",
+      "updated": "2026-07-28T13:28:42+0700",
+      "ai": "setup/create_attachment_folders.py: dry-run default, --apply สร้าง 2 ระดับ <root>/<ฝ่าย>/<year> (conflictBehavior fail, 409=exists); reuse helpers จาก app.attachments; dry-run จริงผ่าน: 114 ฝ่ายจาก cc_filler_map + Graph site/drive resolve OK. ยังไม่ได้ --apply (เป็น rollout action จริง รอคำสั่ง)",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-86dc03a",
+      "state": "done",
+      "created": "2026-07-28T13:19:09+0700",
+      "updated": "2026-07-28T13:19:09+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record Appendix E decisions (2026-07-28) for post-deploy smoke+UAT [commit 86dc03a]"
+    },
+    {
       "id": "split-fx-workflow",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-07-28T13:18:44+0700",
-      "updated": "2026-07-28T13:18:44+0700",
-      "ai": "ตัดสินใจแล้ว (Appendix E ข้อ 3): แยก repersist_perdiem_fx ออกจาก budget-automations.yml เป็น workflow ของตัวเอง กัน P0-28 (execute=true เพื่อ preview 3 job แรกแต่ job 4 เขียนจริง เพราะไม่อ่าน DRY_RUN — repersist_perdiem_fx.py:282)",
+      "updated": "2026-07-28T13:28:41+0700",
+      "ai": "แยก FX ออกเป็น .github/workflows/fx-repersist.yml (inputs เดิม fiscal_year+execute, step เดียว --run) ออกจาก budget-automations.yml ที่เหลือ 3 jobs; YAML parse ผ่านทั้งคู่; อัปเดต Appendix E ข้อ 3 = DONE",
       "agent": "kimi"
     },
     {

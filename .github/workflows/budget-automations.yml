@@ -4,7 +4,10 @@
 # independent safety layer (jobs/common.py: --execute alone is not enough —
 # DRY_RUN must ALSO be explicitly 'false'). Real email sends are additionally
 # gated by Settings.notifications_dry_run (backend/app/config.py, default True).
-name: Budget Automations (auto-submit / auto-escalate / reminders / fx-repersist)
+# NOTE (2026-07-28): the FX re-persist job was split into fx-repersist.yml
+# (Appendix E decision 3, P0-28) — `execute=true` here can no longer re-price
+# per-diem by accident.
+name: Budget Automations (auto-submit / auto-escalate / reminders)
 
 on:
   # schedule:
@@ -84,27 +87,3 @@ jobs:
           ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
           python -m jobs.send_reminders $ARGS
-
-      - name: FX reconciliation — re-persist per-diem after a master-currency FX change (GATE 2026-07-24)
-        # RUNBOOK: run this AFTER the Master Currency SharePoint->Fabric sync
-        # (NB_budget_masters_sync, workspace cman-dw-ws) has landed the new
-        # dbo.master_currency_rate row for fiscal_year — running it before the
-        # sync just re-persists the OLD rate (harmless, but the "update" won't
-        # show yet). No cron here either — manual click only, same as the jobs above.
-        # BACKLOG (not built here): have that sync notebook fire a GitHub
-        # repository_dispatch to auto-trigger this step instead of a manual
-        # click (docs/specs/feature-fx-repersist-perdiem.md §5, alternative (i)).
-        # NOTE: unlike the 3 jobs above, this job's CLI flag is `--run` (not
-        # `--execute`) and it does NOT read the DRY_RUN env var — dry-run is
-        # controlled ONLY by omitting `--run` (see jobs/repersist_perdiem_fx.py).
-        working-directory: backend
-        env:
-          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
-          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
-          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
-          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
-          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
-        run: |
-          ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
-          if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --run"; fi
-          python -m jobs.repersist_perdiem_fx $ARGS

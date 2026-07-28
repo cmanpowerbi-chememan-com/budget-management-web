@@ -1,0 +1,65 @@
+# FX reconciliation — re-persist per-diem THB amounts after a master-currency
+# FX rate change (GATE 2026-07-24). Split OUT of budget-automations.yml on
+# 2026-07-28 (Appendix E decision 3, P0-28): the automations workflow's shared
+# `execute=true` input used to add `--run` to THIS job too — previewing the
+# other 3 jobs with execute=true re-priced every trip for real, because this
+# job reads ONLY `--run`, not the DRY_RUN env var (jobs/repersist_perdiem_fx.py).
+# In its own workflow, `execute` here can affect nothing else.
+#
+# RUNBOOK: run this AFTER the Master Currency SharePoint->Fabric sync
+# (NB_budget_masters_sync, workspace cman-dw-ws) has landed the new
+# dbo.master_currency_rate row for fiscal_year — running it before the sync
+# just re-persists the OLD rate (harmless, but the "update" won't show yet).
+# BACKLOG (not built here): have that sync notebook fire a GitHub
+# repository_dispatch to auto-trigger this workflow instead of a manual
+# click (docs/specs/feature-fx-repersist-perdiem.md §5, alternative (i)).
+name: FX Re-persist Per-Diem
+
+on:
+  workflow_dispatch:
+    inputs:
+      fiscal_year:
+        description: "Planning fiscal year to re-persist (no auto-detect — always explicit)"
+        required: true
+        type: string
+      execute:
+        description: "Actually re-persist (unchecked = dry-run preview only)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  fx-repersist:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ODBC Driver 17 for SQL Server
+        run: |
+          sudo apt-get update -qq
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Re-persist per-diem THB with the latest FX rate
+        working-directory: backend
+        env:
+          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
+          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
+          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
+        run: |
+          ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
+          if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --run"; fi
+          python -m jobs.repersist_perdiem_fx $ARGS
