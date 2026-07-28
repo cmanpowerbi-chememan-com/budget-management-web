@@ -59,7 +59,12 @@ Related docs — this plan does NOT duplicate them, it points at them:
       Secret **values** never appear in chat or in this repo. → `manual`
 - [ ] **P0-05** 🔴 `ADMIN_EMAILS` = exactly the intended admin list (this
       allowlist bypasses Fill-scope, can edit any CC, and can submit for
-      others — ADR-0012/0014). Read it back from the running app, not from a
+      others — ADR-0012/0014). **Required value (decided 2026-07-28, matches
+      Spec A v2): `jakkaritw@chememan.com,nipapornt@chememan.com,warapornt@chememan.com`**
+      — jakkaritw = permanent admin (no toggle); nipaporn/waraporn = dual-role
+      with the 🛡️ admin-mode toggle, which is ALSO their P0-22 fix (admin
+      wide view reaches all 114 ฝ่าย; their personal See scope covers only
+      ~5). Read it back from the running app, not from a
       note: `GET /scope` as each listed person → `is_admin: true`, and as a
       normal filler → `false`. → `curl`
 - [ ] **P0-06** 🔴 Easy Auth enabled and covering **all** paths — including
@@ -829,9 +834,13 @@ UAT observation sheet (one row per user session):
    **3–5 working days**.
 9. **Rollout abort threshold** → **abort if >20% of pilot users hit the same
    blocking issue, or any blocker stays open > 1 working day** (P3-41).
-10. **Approver-reachability (P0-22)** → **widen approver-2/3 See scope**
-    (master-data change, no code, no new attack surface). The approver-only
-    route is rejected for now — new code + new risk, not worth it.
+10. **Approver-reachability (P0-22)** → ~~widen approver-2/3 See scope~~
+    **SUPERSEDED 2026-07-28: add warapornt@chememan.com to `ADMIN_EMAILS`**
+    (nipaporn was already listed). Matches Spec A v2 — dual-role approvers
+    get the 🛡️ admin-mode toggle; the admin wide view fixes reachability
+    (waraporn's personal See scope covers only 5/114 ฝ่าย). Verified locally:
+    `resolve_scope('warapornt@…')` → `is_admin=True`. MUST be set in the
+    production env at deploy — see P0-05.
 
 ---
 

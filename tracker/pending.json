@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T13:28:42+0700",
+  "updated": "2026-07-28T14:36:36+0700",
   "tasks": [
+    {
+      "id": "waraporn-admin-emails",
+      "state": "done",
+      "created": "2026-07-28T14:36:36+0700",
+      "updated": "2026-07-28T14:36:36+0700",
+      "ai": "เพิ่ม warapornt@chememan.com เข้า ADMIN_EMAILS ใน backend/.env (แก้ P0-22 ให้ approver ขั้น 3) — verify resolve_scope is_admin=True แล้ว. อุบัติเหตุ: sed pattern เผลอลบ prefix ADMIN_EMAILS= แก้คืนแล้ว. อัปเดต plan: P0-05 ระบุค่า 3 อีเมลชัดเจน + Appendix E ข้อ 10 superseded จาก See scope เป็น ADMIN_EMAILS (ตรง Spec A v2 dual-role)",
+      "agent": "kimi"
+    },
+    {
+      "id": "predeploy-master-checks",
+      "state": "done",
+      "created": "2026-07-28T13:39:21+0700",
+      "updated": "2026-07-28T13:44:39+0700",
+      "ai": "(1) edit_by: 146/146 ตั้งแล้ว, admin=12 — ขาด 6211300999 Insurance Premium-Others SGA ที่เป็น user (ทั้งที่คู่ COST 5211300999 เป็น admin) ตรงกับ forensics task 2026-07-26 (2) P0-22 วัดจริง: nipaporn is_admin=True (รอดผ่าน admin view) แต่ waraporn is_admin=False เห็น 5/114 ฝ่าย — ขาด 109 ต้องขยาย See scope หรือพิจารณา ADMIN_EMAILS (3) push สำเร็จหลัง rebase บน origin (graphify-nightly commit) — มีอุบัติเหตุ: post-commit hook เขียน pending.json ระหว่าง rebase ทำ rebase ค้าง แก้ด้วย checkout+continue",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-126cc07",
+      "state": "done",
+      "created": "2026-07-28T13:29:01+0700",
+      "updated": "2026-07-28T13:29:01+0700",
+      "agent": "autolog",
+      "ai": "feat(ops): split FX re-persist into own workflow + SharePoint folder bulk-create script [commit 126cc07]"
+    },
     {
       "id": "sharepoint-bulk-folders",
       "state": "done",
