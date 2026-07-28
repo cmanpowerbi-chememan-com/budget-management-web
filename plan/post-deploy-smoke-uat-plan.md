@@ -798,31 +798,38 @@ UAT observation sheet (one row per user session):
 | User | Role | ฝ่าย | Scenario IDs done | Hesitations (>10s, where) | Errors seen (what the user saw) | Feedback items | Time on task |
 |---|---|---|---|---|---|---|---|
 
-# Appendix E — Decisions needed from jakkaritw (before Phase 2/3)
+# Appendix E — Decisions (DECIDED 2026-07-28 by jakkaritw)
 
-1. **Custom domain** — go live on the Container App FQDN, or configure
-   `budget.chememan.com` first (needs DNS + cert + an Entra redirect URI)?
-   `APP_BASE_URL` and every email link depend on the answer.
-2. **`GL_EDIT_BY_ENABLED`** — ON (hide the 12–13 admin-only GLs from
-   fillers/approvers) or OFF for go-live?
-3. **`budget-automations.yml`** — split the FX re-persist into its own
-   workflow, or keep one workflow and accept that `execute=true` really
-   re-prices per-diem (P0-28)? Recommend splitting.
-4. **Attachment folder creation at scale** — who creates
-   `เอกสาร ฝ่าย/<ฝ่าย>/<year>/` for every ฝ่าย in each rollout wave, and by
-   when? (No auto-create in the app; no delete endpoint either.)
-5. **Same-name upload overwrites, no delete** — accept and document in the
-   user guide, or build delete/versioning first?
-6. **Performance threshold** — the actual number for grid load p95 that counts
-   as pass (P2-K2).
-7. **Test data on prod** — approve the sentinel-year (2099) write/cleanup
-   pattern, and say whether any test file may remain in SharePoint.
-8. **Pilot ฝ่าย + trial deadline dates** — which 1–2 ฝ่าย, and which window.
-9. **Rollout abort threshold** — the "% of users blocked" number in P3-41.
-10. **Approver-reachability fix** — if P0-22 fails for a pilot ฝ่าย: widen
-    those approvers' See scope, or add an approver-only route into the ฝ่าย
-    that does not depend on See scope? (Blocks approvers acting through the
-    UI at all.)
+1. **Custom domain** → **Pilot on the Container App FQDN first**; configure
+   the custom domain at full rollout. Register BOTH redirect URIs (FQDN +
+   future domain) in Entra now so nothing needs re-work later. Set
+   `APP_BASE_URL` to the FQDN for the pilot.
+2. **`GL_EDIT_BY_ENABLED`** → **ON, conditional on a data check first**: run
+   one query verifying `edit_by` is populated for the 13 admin-only GLs in
+   `dbo.gl_group`; if the check fails, launch with OFF and flip later.
+3. **`budget-automations.yml`** → **Split** the FX re-persist into its own
+   workflow (kills the P0-28 trap: preview-clicking the other 3 jobs can
+   never re-price per-diem).
+4. **Attachment folders** → **Pilot: create the 1–2 folders manually**;
+   full rollout: one-off bulk-create script in `setup/` using the existing
+   Graph SP pattern (`cman-fabric-write` has Sites.ReadWrite.All). No new
+   app feature.
+5. **Same-name upload overwrites, no delete** → **Accept for v1**, document
+   in the user guide ("name the file correctly before uploading; re-upload
+   overwrites"). Build delete/versioning only if users ask.
+6. **Performance threshold** → **grid load p95 ≤ 3s for the largest
+   department; general API p95 ≤ 2s** (P2-K2 pass/fail uses these numbers).
+7. **Test data on prod** → **Sentinel-year 2099 pattern approved for the
+   DB** (write + cleanup the 5 tables). **No test files left in SharePoint** —
+   upload as `TEST-PROBE-*.txt`, verify, then delete via the SharePoint UI.
+8. **Pilot ฝ่าย + dates** → **ฝ่ายบัญชี + one heavy special-GL/trip ฝ่าย**
+   (jakkaritw picks the second and the exact dates); trial window
+   **3–5 working days**.
+9. **Rollout abort threshold** → **abort if >20% of pilot users hit the same
+   blocking issue, or any blocker stays open > 1 working day** (P3-41).
+10. **Approver-reachability (P0-22)** → **widen approver-2/3 See scope**
+    (master-data change, no code, no new attack surface). The approver-only
+    route is rejected for now — new code + new risk, not worth it.
 
 ---
 

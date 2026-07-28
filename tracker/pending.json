@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T13:07:37+0700",
+  "updated": "2026-07-28T13:18:44+0700",
   "tasks": [
+    {
+      "id": "split-fx-workflow",
+      "state": "willdo",
+      "created": "2026-07-28T13:18:44+0700",
+      "updated": "2026-07-28T13:18:44+0700",
+      "ai": "ตัดสินใจแล้ว (Appendix E ข้อ 3): แยก repersist_perdiem_fx ออกจาก budget-automations.yml เป็น workflow ของตัวเอง กัน P0-28 (execute=true เพื่อ preview 3 job แรกแต่ job 4 เขียนจริง เพราะไม่อ่าน DRY_RUN — repersist_perdiem_fx.py:282)",
+      "agent": "kimi"
+    },
+    {
+      "id": "appendix-e-decisions",
+      "state": "done",
+      "created": "2026-07-28T13:18:43+0700",
+      "updated": "2026-07-28T13:18:43+0700",
+      "ai": "ตอบ 10 ข้อ Appendix E ใน plan/post-deploy-smoke-uat-plan.md: FQDN ก่อน(domain rollout เต็ม), GL_EDIT_BY ON หลังเช็ค master, แยก workflow FX, โฟลเดอร์ pilot มือ+script bulk, รับ no-delete+คู่มือ, perf p95 grid<=3s api<=2s, sentinel 2099 OK/SharePoint ลบมือ, pilot ฝ่ายบัญชี+1 ฝ่าย 3-5 วัน, abort >20% หรือ blocker>1วัน, ขยาย See scope ให้ approver",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-9818096",
+      "state": "done",
+      "created": "2026-07-28T13:08:02+0700",
+      "updated": "2026-07-28T13:08:02+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): expand post-deploy smoke+UAT plan to 179 items across 4 phases [commit 9818096]"
+    },
     {
       "id": "post-deploy-plan-review",
       "state": "done",
