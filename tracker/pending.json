@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T12:41:35+0700",
+  "updated": "2026-07-28T13:07:37+0700",
   "tasks": [
+    {
+      "id": "post-deploy-plan-review",
+      "state": "done",
+      "created": "2026-07-28T13:01:56+0700",
+      "updated": "2026-07-28T13:07:37+0700",
+      "ai": "DONE: plan/post-deploy-smoke-uat-plan.md rewritten in place 140->838 lines, 179 numbered items (P0=35 preflight, P1=20 smoke, P2=77 functional across 12 areas A-L, P3=47 UAT/rollout/monitoring), 47 marked critical. Grounded in real code+ops facts: ERROR_HTTP_STATUS map (403/409/400/413/500-fail-loud), 9 routers, deadline.py bangkok_today inclusive rule, attachments (6 ext/10MB/folders NOT auto-created/no delete/pre-auth download URL), 4 jobs. NEW findings flagged: (1) repersist_perdiem_fx ignores DRY_RUN and takes --run, so workflow execute=true is a REAL FX re-write while the other 3 stay preview -> recommend splitting workflow; (2) approver step2/3 UI-unreachable defect from 2026-07-22 promoted to P0-22 blocker + Appendix E Q10; (3) header-spoof test P1-06 added (app trusts x-ms-client-principal-name, Easy Auth is sole guard); (4) session-expiry-mid-edit P2-K5, cold-start P2-K1, Safe-Links link rewrite P2-G2, Outlook render matrix P2-G1; (5) P0 data-readiness gates for FX/per-diem/board_budget/deadline rows (missing = 500 fail-loud or silent no-op). Appendices: A known-open carried items, B tester traps, C commands, D evidence log templates, E 10 decisions for jakkaritw. NOT done: no code/config changed, nothing executed against prod.",
+      "agent": "claude"
+    },
+    {
+      "id": "post-deploy-smoke-uat-plan",
+      "state": "done",
+      "created": "2026-07-28T12:54:58+0700",
+      "updated": "2026-07-28T12:54:58+0700",
+      "ai": "เขียน plan/post-deploy-smoke-uat-plan.md — checklist 4 phases: pre-flight config, automated smoke, functional verify บน prod (write/subforms/attachments/approve loop ครบวง+เมลจริง/RLS/jobs/perf), UAT pilot 1-2 ฝ่ายพร้อม go/no-go criteria",
+      "agent": "kimi"
+    },
+    {
+      "id": "integration-rerun-kimi",
+      "state": "done",
+      "created": "2026-07-28T12:45:58+0700",
+      "updated": "2026-07-28T12:50:00+0700",
+      "ai": "integration live-DB suite 46 passed, 701 deselected, 3m22s (HEAD 0ec7b4c หลัง email template + subject reformat + live e2e) — cleanup sentinel 2099 ผ่าน ไม่มี leftover",
+      "agent": "kimi"
+    },
     {
       "id": "email-subject-reformat",
       "state": "done",
