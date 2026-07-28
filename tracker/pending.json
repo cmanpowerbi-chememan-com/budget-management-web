@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T21:13:17+0700",
+  "updated": "2026-07-28T21:40:16+0700",
   "tasks": [
+    {
+      "id": "phase1-smoke-prd",
+      "state": "done",
+      "created": "2026-07-28T21:16:02+0700",
+      "updated": "2026-07-28T21:40:16+0700",
+      "ai": "Phase 1 smoke บน prd: 15 PASS / 0 FAIL / 8 DEFER — P1-06 🔴 header-spoof แพ้ทั้ง unauth+in-session (session ตอบ jakkaritw เสมอ), headers ครบ 4, SPA+fallback, /budget 200, attachments 200. harness ใหม่ setup/smoke_prd.py ใช้ AppServiceAuthSession cookie (SP Bearer โดน 403 โดย design 'this application itself' — เก็บ posture นี้ไว้). DEFER ทั้ง 8 มี coverage (unit/e2e/Phase 2 personas). harness bug 1 จุด: pending-for-me ต้องมี fiscal_year param แก้แล้ว",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-8469656",
+      "state": "done",
+      "created": "2026-07-28T21:13:59+0700",
+      "updated": "2026-07-28T21:13:59+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): production deployed 2026-07-28 — image 35e3482 live on stg+prd, Easy Auth on, §7 verified; next = Phase 1 smoke on prd FQDN [commit 8469656]"
+    },
     {
       "id": "deploy-runbook-prep",
       "state": "done",

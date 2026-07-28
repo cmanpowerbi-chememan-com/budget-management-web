@@ -262,6 +262,20 @@ deploy **and after every subsequent revision** — this is the regression net.
 Steps marked (§7.n) are the runbook's verify-deploy-landed items; keep them in
 one script so they are never partially done.
 
+> **PHASE 1 RESULT 2026-07-28 — 15 PASS / 0 FAIL / 8 DEFER** (verifier: kimi,
+> harness `setup/smoke_prd.py` against prd FQDN, admin session cookie):
+> P1-01 ✅ 401 · P1-02 ✅ 401 both · P1-03 ✅ (browser, jakkaritw, manual) ·
+> P1-04 ✅ ok+db:ok · P1-05 ✅ real identity · **P1-06 🔴 ✅ forged header
+> loses BOTH unauth and inside a real session** · P1-07 ✅ all 4 headers ·
+> P1-08 ✅ SPA 200 · P1-09 ✅ fallback 200 · P1-13 ✅ 200 · P1-14 ✅ 200 ·
+> P1-15 ✅ 200 (after harness param fix) · P1-16 ✅ 200.
+> DEFER with existing coverage: P1-10 (live e2e locally) · P1-11
+> (font-blocked work 2026-07-24) · P1-12/P1-17 (need real personas → Phase 2) ·
+> P1-18/P1-19/P1-20 (unit+e2e covered). Side finding (good posture, kept):
+> Easy Auth 403s SP client-credentials tokens ("client application
+> requirement: this application itself") — automation therefore uses a
+> copied session cookie, never a loosened authZ config.
+
 ## 1.1 Platform & auth
 
 - [ ] **P1-01** 🔴 Unauthenticated `GET /health` → 401 or 302-to-login (§7.1).
