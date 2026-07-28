@@ -6,6 +6,10 @@ import { defineConfig, devices } from '@playwright/test'
  * `page.route()` in `e2e/fixtures.ts` — no live backend/DB is ever touched. */
 export default defineConfig({
   testDir: './e2e',
+  // The LIVE-stack specs (live-*.spec.ts) run under playwright.live.config.ts
+  // against a real backend + real DB — the default mocked suite must never
+  // pick them up.
+  testIgnore: '**/live-*.spec.ts',
   fullyParallel: true,
   // Capped low deliberately: every test hits the SAME single Next dev
   // server instance (webServer below) — 3 workers keeps it parallel without

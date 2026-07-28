@@ -1,15 +1,79 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-24T23:58:25+0700",
+  "updated": "2026-07-28T11:40:15+0700",
   "tasks": [
     {
-      "id": "log-2693be7",
+      "id": "e2e-real-backend",
       "state": "done",
-      "created": "2026-07-24T23:58:25+0700",
-      "updated": "2026-07-24T23:58:25+0700",
+      "created": "2026-07-28T11:11:33+0700",
+      "updated": "2026-07-28T11:40:15+0700",
+      "ai": "สร้าง live e2e (browser→FastAPI→Fabric SQL จริง ไม่ mock): playwright.live.config.ts + e2e/live-backend.spec.ts + e2e/live_db.py (discover/cleanup sentinel year 2099, 5 tables รวม approval_status/log); package.json เพิ่ม test:e2e:live; playwright.config.ts testIgnore live-*. ผล: live 1 passed (1.2m รวม next build), mocked suite 23 passed ไม่โดนกระทบ. Caveat: spec pin browser Date=2098-06-15 เพราะ UI จำกัด year window ±5 (by design), extraHTTPHeaders ทำ Google Fonts CORS noise (allowlist แล้ว). ยังไม่ commit",
+      "agent": "kimi"
+    },
+    {
+      "id": "approval-debris-cleanup-kimi",
+      "state": "doing",
+      "created": "2026-07-26T10:34:29+0700",
+      "updated": "2026-07-26T10:34:29+0700",
+      "ai": "Deleting the approval debris from the 2026-07-24 15:57 test flow (jakkaritw confirmed 'ลบ' 2026-07-25): approval_log ids 519+520 and approval_status Solution Delivery/FY2027 (PENDING_APPROVER2). Verifying 0 left + company-wide FY2027 approval tables empty after.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-89c57e3",
+      "state": "done",
+      "created": "2026-07-26T10:33:21+0700",
+      "updated": "2026-07-26T10:33:21+0700",
       "agent": "autolog",
-      "ai": "fix(grid): admin-mode toggle re-auto-selects first ฝ่าย after hat-switch [commit 2693be7]"
+      "ai": "test(backend): integration suite green 46/46 — first full live-DB run [commit 89c57e3]"
+    },
+    {
+      "id": "gl-editby-6211300999-forensics",
+      "state": "done",
+      "created": "2026-07-26T07:51:21+0700",
+      "updated": "2026-07-26T07:54:47+0700",
+      "ai": "ANSWERED. SharePoint version history (Graph API, file gl group_gl th name.xlsx on CMANDWPRD): edit made by Nipaporn Tongking (nipapornt@chememan.com) 2026-07-17 17:32:52-17:33:40 BKK (v10-v12, one editing session, ~1.5h AFTER the 16:11 rollout verify that saw admin=13). Content diff v9(pre-edit) vs v12(current): EXACTLY ONE cell changed - 6211300999 edit_by admin->user; 146 rows both sides, nothing added/removed, 5211300999 untouched (admin). Current file: 146 total/12 admin - matches DB since 18Jul 06:31 sync. Verdict: surgical single-cell edit by the master's owner (budget dept) = intentional beyond reasonable doubt; formal confirm = one-line ask to Nipaporn. Next: Kimi updates integration test 13->12 (+note source of truth = daily-synced Excel) and commits. DB direct check failed (INFORMATION_SCHEMA empty via SP - separate known perm quirk, not needed; app verifies covered 12/134 since 19Jul).",
+      "agent": "claude"
+    },
+    {
+      "id": "integration-live-run-kimi",
+      "state": "done",
+      "created": "2026-07-25T21:02:42+0700",
+      "updated": "2026-07-26T10:33:34+0700",
+      "ai": "CLOSED 2026-07-25, committed (see log). Full integration suite 46/46 GREEN (249.8s) - first-ever complete live-DB run. 4 stale tests fixed (join premise -> FULL OUTER semantics; 2 delete tests -> e6f669b orphan-drop contract; edit_by counts -> 12/134 with provenance note pointing at the living owner Excel + gl-editby-6211300999-forensics). Pending debris cleaned (2 rows, FY2027 pending=0, jakkaritw confirmed). Sentinel years all 0. OPEN ITEM handed back: APPROVAL debris from the same 2026-07-24 15:57 flow still live - approval_status Solution Delivery/FY2027=PENDING_APPROVER2 + approval_log 519/520 - jakkaritw to confirm cleanup (not deleted: approval tables need explicit ok). OPEN: approval-debris-cleanup confirm.",
+      "agent": "kimi"
+    },
+    {
+      "id": "gl-editby-flag-rollout",
+      "state": "willdo",
+      "created": "2026-07-25T20:45:00+0700",
+      "updated": "2026-07-25T20:45:00+0700",
+      "ai": "Rollout GL_EDIT_BY_ENABLED (created willdo 2026-07-25 per jakkaritw when closing gl-visibility-rules, so it never drops from memory). Scope when rollout decided: (1) flip GL_EDIT_BY_ENABLED=true in Container Apps config - staging first then PRD, deploy needs jakkaritw approval per DEPLOY gate; (2) verify on staging: non-admin sees 134/146 GLs (12 admin GLs stripped server-side), admin sees all 146; (3) carry gl-editby-column leftovers: submit-guard widening, DDL budget_app_tables.sql +edit_by column, dup-fix at source. BLOCKED-BY: staging deploy (az acr build) gate still pending - no staging running current code yet, so flag-ON staging test impossible until that lands. ON behavior already verified in dev.",
+      "agent": "claude"
+    },
+    {
+      "id": "review-admin-journey-31-respec",
+      "state": "done",
+      "created": "2026-07-25T19:50:50+0700",
+      "updated": "2026-07-25T20:02:21+0700",
+      "ai": "[UPDATE] Commit landed as 715597d test(e2e): spec 3.1 -> post-hat-switch re-auto-select (2026-07-24 rule). Lane closed.",
+      "agent": "claude"
+    },
+    {
+      "id": "post-feature-regression-kimi",
+      "state": "done",
+      "created": "2026-07-25T17:46:44+0700",
+      "updated": "2026-07-25T20:00:06+0700",
+      "ai": "COMMITTED as 715597d (test(e2e): spec 3.1 -> post-hat-switch re-auto-select) after jakkaritw's review approved 2026-07-25 (CC re-ran the suite itself: 23/23 green, 153s). Spec-only commit per the 5467ef5 pattern; ledger + graphify artifacts stay for a later chore commit.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-c9d12c7",
+      "state": "done",
+      "created": "2026-07-24T23:58:45+0700",
+      "updated": "2026-07-24T23:58:45+0700",
+      "agent": "autolog",
+      "ai": "chore(docs,tracker): spot-test artifacts, integrity audit script, ledger updates [commit c9d12c7]"
     },
     {
       "id": "hide-netzero-gl-rows",
@@ -313,10 +377,10 @@
     },
     {
       "id": "spot-test-status-kimi",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-24T10:22:46+0700",
-      "updated": "2026-07-24T10:22:46+0700",
-      "ai": "STATUS for CC (2026-07-23): (1) approver chain = DONE - Spot Test #2 9/9 pass (chain arthids->nipapornt->warapornt, wrong-actor 403s, reject/resubmit, audit 6 rows, no real email - dry_run, cleanup 0 rows all 5 tables, kimi re-verified API+DB). Evidence: docs/test/spot-test-2-summary.png + insert-log. (2) see_only/no-scope = NOT started yet (queued). (3) MAP CORRECTION: multi-dept filler WAS tested (#1b nipapornt 7 CC/5 depts, picker auto-select first by Thai-locale sort, write 403) - the genuinely untested case = see>fill asymmetry (editable=false rows) + 46-dept scale picker. (4) GREEN-LIGHT Spot #3 (CC): good scope, lanes clear. 2 additions: (a) item1 - do NOT assume 'default empty no auto-select' - verify auto-select holds at 46 depts (2026-07-21 decision = never land unselected); (b) please answer the debris anomaly from spot#2: a zero-amount pending_budget row written via suchanyay fallback identity ~40min before my test = some call went UNHEADERED - confirm CC's rounds always attach x-ms-client-principal-name. (5) kimi can run see_only/no-scope in parallel (read-mostly + negative-write 403 attempts) to close the role matrix - awaiting jakkaritw go.",
+      "updated": "2026-07-25T18:03:31+0700",
+      "ai": "Closing stale umbrella STATUS entry (2026-07-23). All queued items it tracked were completed in their own entries: see_only/no-scope -> spot-test-3-seeonly-noscope (done 2026-07-24), see>fill asymmetry + 46-dept picker -> spot-test-3-coverage / spot-test-4-travel-deep (done), approver chain -> spot-test-2-approver-journey (done, kimi re-verified). No leftover work.",
       "agent": "kimi"
     },
     {
@@ -625,10 +689,10 @@
     },
     {
       "id": "gl-visibility-rules",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-19T00:24:05+0700",
-      "updated": "2026-07-19T00:24:05+0700",
-      "ai": "GL visibility rules DONE. Rule2 edit_by: GL_EDIT_BY_ENABLED=true in backend/.env (dev-only gitignored) -> non-admin sees 134 (12 admin GL stripped); PRD needs deployed config+jakkaritw. Rule1 master-membership committed 8dc59c3, gate 06/07/08 PASS. DELIBERATELY hides 5120500010(~46M FY2025/134CC)+6410200250(~7.2M)=53M FY2025 informed signed-off (memory project_gl_master_visibility_hide). CAVEAT flag ON exposes 65 pre-existing test_write_model.py fails (tests read .env not mock flag).",
+      "updated": "2026-07-25T20:44:31+0700",
+      "ai": "CLOSED 2026-07-25 per jakkaritw: keep GL_EDIT_BY_ENABLED OFF on staging/PRD for Phase-1; open a NEW task when rollout is wanted (deploy config + jakkaritw approval + staging test that non-admin sees 134 GLs). Code fully done: Rule1 master-membership 8dc59c3 (gate 06/07/08 PASS), Rule2 edit_by flag-gated, conftest monkeypatches flag=false so unit tests clean. Deliberate hides (53M FY2025: 5120500010+6410200250) signed off - do NOT 'fix'.",
       "agent": "claude"
     },
     {
@@ -665,10 +729,10 @@
     },
     {
       "id": "signoff-spec-pdf-rebuild",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-18T23:11:32+0700",
-      "updated": "2026-07-18T23:11:32+0700",
-      "ai": "Signoff specs rebuilt docx->PDF V2.0, ALL UNCOMMITTED in working tree: 7 old docx deleted (01/03/06/07/08/09/10 + laddawan Spec A/C docx), V2.0 PDFs added under laddawan/, new assets (speca2_*, sub_*, main_* pngs), build_main_web_app_spec.py + build_special_gl_subform_spec.py modified, jakkaritw/ dir new, Spec B docx modified. Found in tracker audit 2026-07-18 - owner session unknown; verify + commit before marking done.",
+      "updated": "2026-07-25T20:00:27+0700",
+      "ai": "Confirmed done by jakkaritw 2026-07-25. Verified before closing: requirement_spec/ working tree clean, V2.0 rebuild landed as 0a91a4f (Spec A V2.0 3-part restructure) + 2ba6c5a (cursive signatures laddawan Spec A/B/C) + 0b77eb7 (docx->PDF rebuild + reorganize by owner). Original 2026-07-18 audit concern (uncommitted tree, unknown owner session) resolved.",
       "agent": "kimi"
     },
     {
