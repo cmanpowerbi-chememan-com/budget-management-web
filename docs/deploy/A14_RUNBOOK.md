@@ -193,7 +193,7 @@ repo, never pasted into chat.
 | `FABRIC_SQL_DATABASE` | plain env var | `fabric_sql_database` |
 | `GOLD_SQL_SERVER` | plain env var | SAP gold warehouse host |
 | `GOLD_SQL_DATABASE` | plain env var | `cman_dw_wh_gold` |
-| `ADMIN_EMAILS` | plain env var | `jakkaritw@chememan.com` (add more, comma-separated, if needed) |
+| `ADMIN_EMAILS` | plain env var | `jakkaritw@chememan.com,nipapornt@chememan.com,warapornt@chememan.com` (decided 2026-07-28 — matches Spec A v2 dual-role; also the approver-reachability fix, see post-deploy plan P0-05) |
 | `APP_BASE_URL` | plain env var | the Container App's own FQDN (fetched in section 5/6 below) — **not** `budget.chememan.com` yet |
 | `ENTRA_CLIENT_ID` | **containerapp secret** | Service Principal `cman-fabric-write` |
 | `ENTRA_CLIENT_SECRET` | **containerapp secret** | Service Principal `cman-fabric-write` |
@@ -280,7 +280,7 @@ az containerapp update \
     FABRIC_SQL_DATABASE=fabric_sql_database \
     GOLD_SQL_SERVER=<value> \
     GOLD_SQL_DATABASE=cman_dw_wh_gold \
-    ADMIN_EMAILS=jakkaritw@chememan.com \
+    ADMIN_EMAILS=jakkaritw@chememan.com,nipapornt@chememan.com,warapornt@chememan.com \
     APP_BASE_URL=https://$FQDN \
     ENTRA_CLIENT_ID=secretref:entra-client-id \
     ENTRA_CLIENT_SECRET=secretref:entra-client-secret \
