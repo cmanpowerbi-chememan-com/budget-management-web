@@ -810,7 +810,7 @@ UAT observation sheet (one row per user session):
    future domain) in Entra now so nothing needs re-work later. Set
    `APP_BASE_URL` to the FQDN for the pilot.
 2. **`GL_EDIT_BY_ENABLED`** → **ON, conditional on a data check first**: run
-   one query verifying `edit_by` is populated for the 13 admin-only GLs in
+   one query verifying `edit_by` is populated for the 12 admin-only GLs in
    `dbo.gl_group`; if the check fails, launch with OFF and flip later.
 3. **`budget-automations.yml`** → **Split** the FX re-persist into its own
    workflow (kills the P0-28 trap: preview-clicking the other 3 jobs can

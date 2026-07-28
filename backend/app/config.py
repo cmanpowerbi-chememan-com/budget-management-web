@@ -85,8 +85,10 @@ class Settings(BaseSettings):
     # GL `edit_by` admin-only lock (design v2, 2026-07-17) — OFF by default:
     # while False, no code path in this app ever SELECTs `dbo.gl_group.edit_by`
     # or changes behavior at all. jakkaritw flips this on when ready to go
-    # live with the 13 secret admin-only GLs (Insurance Premium, Employee
-    # benefits severance, Depreciation).
+    # live with the 12 admin-only GLs (Insurance Premium ×9, Depreciation,
+    # Employee benefits severance ×2 — count confirmed by
+    # gl-editby-6211300999-forensics: the budget dept owner deliberately set
+    # 6211300999 to user, so 12 is the intended number, not 13).
     gl_edit_by_enabled: bool = False
 
     # A14 — built frontend location (`frontend/out`, Next.js static export;
