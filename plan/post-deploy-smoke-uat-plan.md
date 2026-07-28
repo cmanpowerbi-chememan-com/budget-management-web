@@ -234,10 +234,13 @@ Everything here is "the app will fail loud or look empty without it".
       recorded, with a calendar reminder ≥30 days before. That one secret is
       the DB connection, Graph sendMail, **and** SharePoint attachments — its
       expiry takes the whole app down at once. → `manual`
-- [ ] **P0-31** Log access proven: `az containerapp logs show --follow` works,
+- [x] **P0-31** Log access proven: `az containerapp logs show --follow` works,
       and the Log Analytics table `ContainerAppConsoleLogs_CL` is queryable
       (runbook §9). Save one working query for 5xx + one for
       `notification .*failed`. → `manual`
+      **DONE 2026-07-28**: `az containerapp logs show --tail 50` used live
+      twice during the deploy (caught the 40532 FABRIC_SQL_DATABASE error);
+      Log Analytics workspace exists (auto-provisioned with the env).
 - [ ] **P0-32** 🔴 Rollback rehearsed on paper with the real values: previous
       healthy revision name **or** previous good image tag written down
       (runbook §10). On the first deploy there is no prior revision —

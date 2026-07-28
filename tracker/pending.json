@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-29T00:15:04+0700",
+  "updated": "2026-07-29T00:17:58+0700",
   "tasks": [
+    {
+      "id": "uat-quick-guide",
+      "state": "done",
+      "created": "2026-07-29T00:17:58+0700",
+      "updated": "2026-07-29T00:17:58+0700",
+      "ai": "ร่าง plan/uat-quick-guide.md ภาษาไทย 1 หน้า (filler/approver flow, กติกา attachments, อาการที่ต้องรายงาน, FAQ) — เหลือเติมวันที่+ฝ่ายที่ 2+ช่องทาง support รอ jakkaritw เลือก. P0-31 log access ปิด (ใช้จริงตอน deploy 2 ครั้ง)",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-1c95cc1",
+      "state": "done",
+      "created": "2026-07-29T00:15:09+0700",
+      "updated": "2026-07-29T00:15:09+0700",
+      "agent": "autolog",
+      "ai": "docs(phase2): section G complete — G1/G2/G3 verified in real mailbox [commit 1c95cc1]"
+    },
     {
       "id": "phase2-g-mailbox-verified",
       "state": "done",
