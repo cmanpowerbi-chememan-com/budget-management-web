@@ -55,7 +55,7 @@ tables after each run (`frontend/e2e/live_db.py cleanup`). Harnesses: `setup/pha
 
 | item | result | evidence |
 |---|---|---|
-| P2-G1 | DEFER | rendering in Outlook desktop/web/mobile — jakkaritw's mailbox: he already has the 4 probe emails from today (probe_notifications_live.py --send): check Thai subject not garbled, table/borders survive, dark mode readable, no broken images |
+| P2-G1 | PASS | jakkaritw verified 2026-07-28: all 4 types render correctly in Outlook desktop + web + mobile — Thai subjects clean, table/borders/colors/signature intact |
 | P2-G2 | DEFER | Safe Links/ATP rewrite — click the deep link FROM THE REAL MAILBOX (one of the 4 probe emails) and confirm it lands on TEST-PROBE/2099 still authenticated |
 | P2-G3 | DEFER | Inbox-not-Junk + sender display name — check the 4 probe emails' placement in jakkaritw@chememan.com (and one strict-filter approver at go-live) |
 | P2-G4 | COVERED | notification failure never fails the action — unit: test_approval_router.py::test_submit_notification_failure_never_fails_the_request and ::test_approve_final_step_notification_failure_never_fails_the_request (response carries notification_warning, action commits) |

@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-29T00:06:05+0700",
+  "updated": "2026-07-29T00:15:04+0700",
   "tasks": [
+    {
+      "id": "phase2-g-mailbox-verified",
+      "state": "done",
+      "created": "2026-07-29T00:15:04+0700",
+      "updated": "2026-07-29T00:15:04+0700",
+      "ai": "Section G ปิดครบ: G1 render สวยครบ 3 platforms (desktop/web/mobile), G2 Safe Links ไม่ rewrite + click-through จากเมลจริงลงแอปถูกฝ่าย/ปี authenticated (ส่ง probe พิเศษ Accounting Division/2027 ชี้ prd FQDN), G3 5 ฉบับเข้า Inbox ครบไม่ตก Junk — Phase 2 เหลือแค่ persona batch (F/E1-3/B6/D6) + flips ตอน go-live",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-b429c6d",
+      "state": "done",
+      "created": "2026-07-29T00:06:12+0700",
+      "updated": "2026-07-29T00:06:12+0700",
+      "agent": "autolog",
+      "ai": "docs(phase2): K4 PASS under two-tier threshold (single-user <=3s, 10-concurrent <=8s) [commit b429c6d]"
+    },
     {
       "id": "k4-concurrency-threshold",
       "state": "done",

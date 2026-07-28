@@ -552,15 +552,24 @@ Order matters: the first submit happens while notifications are still dry-run.
 
 ## G. Notifications & email quality (real users judge the app by these)
 
-- [ ] **P2-G1** All 4 types render correctly in **Outlook desktop, Outlook
+> **G RESULT 2026-07-28 — ALL PASS** (jakkaritw's mailbox, real probe mails):
+> G1 ✅ renders correctly in Outlook desktop + web + mobile (tables, colors,
+> Thai, signature) · G2 🔴 ✅ Safe Links does not rewrite the URL; click-through
+> from the real mailbox lands on the app at the right ฝ่าย/year, authenticated
+> (verified with a live `Accounting Division/2027` link to the prd FQDN) ·
+> G3 ✅ all 5 probe mails landed in Inbox, none in Junk · G4 ✅ unit-covered ·
+> G5 ✅ no PDPA over-share (harness-checked the 4 bodies against all 114 dept
+> names — no foreign ฝ่าย, no amounts).
+
+- [x] **P2-G1** All 4 types render correctly in **Outlook desktop, Outlook
       web, and Outlook mobile**: `notify_turn`, `notify_reject`,
       `notify_approved`, `notify_reminder` (styled HTML templates, 2026-07-28).
       Check: Thai subject not truncated/garbled, table/borders survive
       Outlook's renderer, dark mode readable, no broken images.
-- [ ] **P2-G2** 🔴 The deep link survives **Microsoft Safe Links / ATP
+- [x] **P2-G2** 🔴 The deep link survives **Microsoft Safe Links / ATP
       rewriting** — click it from the real mailbox (not from the log) and land
       on the right ฝ่าย/year, still authenticated.
-- [ ] **P2-G3** Mail lands in Inbox, not Junk (sender
+- [x] **P2-G3** Mail lands in Inbox, not Junk (sender
       `jakkaritw@chememan.com`; check with at least one approver who has
       strict filtering) — and the display name is acceptable for a
       company-wide tool.
