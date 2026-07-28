@@ -652,14 +652,23 @@ def _admin_direct_approve(
     cursor = conn.cursor()
     try:
         if existing is None:
-            cursor.execute(
-                """
-                INSERT INTO budget.approval_status
-                    (department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at, _updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                department, fiscal_year, APPROVED, admin_empcode, admin_email, now, now,
-            )
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO budget.approval_status
+                        (department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at, _updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    department, fiscal_year, APPROVED, admin_empcode, admin_email, now, now,
+                )
+            except pyodbc.IntegrityError as exc:
+                # Same concurrent-PK-violation mapping as _insert_new_approval_row
+                # (S2 gate fix) — without it a lost race escaped as a raw
+                # pyodbc.Error and the router returned a misleading 502
+                # "Database unavailable" (Phase 2 P2-B3 prod finding 2026-07-28).
+                raise ConcurrentApprovalError(
+                    f"{department}/{fiscal_year} was submitted concurrently by another request"
+                ) from exc
         else:
             cursor.execute(
                 """

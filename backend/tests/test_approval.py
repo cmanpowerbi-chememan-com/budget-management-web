@@ -370,6 +370,28 @@ def test_admin_submit_via_template_2_door_logs_admin_submit():
     assert "budget.approval_log" in insert_sql
 
 
+def test_admin_direct_approve_concurrent_insert_race_raises_conflict_not_pyodbc():
+    """P2-B3 prod finding (2026-07-28): two concurrent admin submits, the
+    loser's INSERT hits the PK — _admin_direct_approve must map that to
+    ConcurrentApprovalError (-> 409) exactly like _insert_new_approval_row,
+    never let a raw pyodbc.IntegrityError escape to the router's 502."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,           # _fetch_row
+        (1,),           # _department_has_admin_template_rows -> found
+        ("500", None),  # resolve_submitter (admin)
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+    # 4 dummy calls (_fetch_row, _department_has_admin_template_rows,
+    # resolve_submitter, +1) then the INSERT raises the PK violation.
+    cursor.execute.side_effect = [None, None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
+
+    with pytest.raises(ConcurrentApprovalError):
+        submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+    conn.commit.assert_not_called()
+
+
 def test_admin_submit_orphan_department_logs_admin_override():
     conn = MagicMock()
     cursor = conn.cursor.return_value
