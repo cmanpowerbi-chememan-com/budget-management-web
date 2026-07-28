@@ -32,7 +32,17 @@ Related docs — this plan does NOT duplicate them, it points at them:
 
 ---
 
-# Progress (updated 2026-07-28)
+# Progress (updated 2026-07-28, second update — PRODUCTION DEPLOYED)
+
+**DEPLOYED 2026-07-28:** image `budget-web:35e3482` live on BOTH
+`cman-budget-web-stg` and `cman-budget-web-prd`
+(`cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io`,
+min-replicas 1). Easy Auth ON for both (app regs `7035aa47…` stg /
+`61d5d556…` prd), unauth → 401, `/health?deep=1` → `db:ok`, §7 verified
+end-to-end on both. `ADMIN_EMAILS` = the 3 emails, `APP_BASE_URL` = prd
+FQDN. Gotcha recorded: `FABRIC_SQL_DATABASE` must carry the GUID-suffixed
+name from `.env` (wrong hardcode → 40532 login failed).
+**NEXT ACTION: Phase 1 automated smoke against the prd FQDN, then Phase 2.**
 
 **DONE — pre-work and decisions (no deploy needed):**
 - Appendix E: all 10 decisions recorded; 3 already executed —

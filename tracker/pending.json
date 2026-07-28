@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T19:38:46+0700",
+  "updated": "2026-07-28T21:13:17+0700",
   "tasks": [
     {
       "id": "deploy-runbook-prep",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-28T19:38:46+0700",
-      "updated": "2026-07-28T19:38:46+0700",
-      "ai": "เตรียม deploy: อัปเดต A14_RUNBOOK ADMIN_EMAILS 3 อีเมล (ตาราง§4 + คำสั่ง§5) แล้วสรุปชุดคำสั่ง Cloud Shell ให้ user — staging มีอยู่แล้ว (2026-07-16) ต้อง build image ใหม่จาก main ล่าสุด + เช็ค firewall 40.119.206.243 ก่อน",
+      "updated": "2026-07-28T21:13:17+0700",
+      "ai": "DEPLOY สำเร็จ 2026-07-28: image 35e3482 → staging (Easy Auth ใหม่ app reg 7035aa47) เขียวครบ §7 → production cman-budget-web-prd (min-replicas 1, Easy Auth app reg 61d5d556, ADMIN_EMAILS 3 อีเมล, APP_BASE_URL=prd FQDN) verify ครบ: unauth 401, db:ok, /me, /docs login, / เร็ว, /budget 200. บทเรียน: FABRIC_SQL_DATABASE ต้องมี GUID suffix (v1 hardcode ผิด→40532) แก้ด้วย v2 จาก .env; tmp secrets file ลบแล้ว",
       "agent": "kimi"
     },
     {
