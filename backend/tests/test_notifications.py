@@ -157,10 +157,12 @@ def test_notify_turn_resolves_email_and_sends_dry_run(monkeypatch):
     assert kwargs["dry_run"] is True
 
 
-def test_notify_turn_subject_and_body_show_both_planning_and_label_year(monkeypatch):
-    """Gate residual fix: recipient must see the SAME year the on-screen
-    YearPicker shows (label = planning - 1), alongside the correct planning
-    year, so the two never look contradictory."""
+def test_notify_turn_subject_format_and_body_shows_both_years(monkeypatch):
+    """Subject = status-first short form with the planning year only
+    (2026-07-28 user-requested format). Body keeps the gate residual fix:
+    recipient must see the SAME year the on-screen YearPicker shows
+    (label = planning - 1), alongside the correct planning year, so the
+    two never look contradictory."""
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
     calls = []
@@ -172,8 +174,7 @@ def test_notify_turn_subject_and_body_show_both_planning_and_label_year(monkeypa
     )
 
     (to_email, subject, body), kwargs = calls[0]
-    assert "2027" in subject  # planning year kept
-    assert "Year 2026" in subject  # base-year label, matches on-screen YearPicker
+    assert subject == "รอการอนุมัติ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
     assert "2027" in body
     assert "Year 2026" in body
 
@@ -209,7 +210,7 @@ def test_notify_reject_sends_to_submitter(monkeypatch):
     assert "numbers look wrong" in body
 
 
-def test_notify_reject_subject_and_body_show_both_planning_and_label_year(monkeypatch):
+def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
@@ -219,8 +220,7 @@ def test_notify_reject_subject_and_body_show_both_planning_and_label_year(monkey
     )
 
     (to_email, subject, body), kwargs = calls[0]
-    assert "2027" in subject
-    assert "Year 2026" in subject
+    assert subject == "ถูกตีกลับ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
     assert "2027" in body
     assert "Year 2026" in body
 
@@ -251,14 +251,13 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
     assert result == "SENTINEL"
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
-    assert "Accounting" in subject and "2027" in subject
-    assert "อนุมัติครบทุกขั้น" in subject
+    assert subject == "ได้รับการอนุมัติ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
     link = build_deep_link("Accounting", 2027, settings=_settings())
     assert link in body
     assert kwargs["dry_run"] is True
 
 
-def test_notify_approved_subject_and_body_show_both_planning_and_label_year(monkeypatch):
+def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
@@ -268,8 +267,6 @@ def test_notify_approved_subject_and_body_show_both_planning_and_label_year(monk
     )
 
     (to_email, subject, body), kwargs = calls[0]
-    assert "2027" in subject
-    assert "Year 2026" in subject
     assert "2027" in body
     assert "Year 2026" in body
 

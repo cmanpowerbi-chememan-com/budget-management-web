@@ -76,10 +76,79 @@ def _year_phrase(fiscal_year: int) -> str:
     2026-07-23): always shows the planning year AND the on-screen label
     year (`fiscal_year - 1`, `frontend/src/grid/YearPicker.tsx`) side by
     side so a recipient reading the email never sees a different year than
-    the YearPicker they land on. Every notify_* builder below uses this ONE
-    helper so the wording can't drift between subject and body, or between
-    functions. Does NOT touch `build_deep_link` / the URL — text only."""
+    the YearPicker they land on. Used by the BODY of every notify_* builder
+    (subjects carry the planning year only, 2026-07-28 user-requested
+    format) so the wording can't drift between mail types. Does NOT touch
+    `build_deep_link` / the URL — text only."""
     return f"ปีงบประมาณ {fiscal_year} (หน้าจอ: Year {fiscal_year - 1})"
+
+
+# --- HTML template (2026-07-28, styled after the Contract Management sample) ---
+# Inline styles only — email clients strip <style>/<head>. Font stack favors
+# Segoe UI / Leelawadee UI (both ship with Windows + render Thai cleanly).
+_FONT_WRAP = "font-family:'Segoe UI','Leelawadee UI',Tahoma,sans-serif;font-size:14px;color:#333333;line-height:1.6;"
+_HL_BLUE = "color:#2E74B5;font-weight:bold;"
+_HL_RED = "color:#C55A11;font-weight:bold;"
+
+
+def _hl(text: str) -> str:
+    """Blue bold highlight — department names, key values (sample's blue)."""
+    return f'<span style="{_HL_BLUE}">{text}</span>'
+
+
+def _hl_red(text: str) -> str:
+    """Red-orange bold highlight — deadlines / things needing action (sample's red date)."""
+    return f'<span style="{_HL_RED}">{text}</span>'
+
+
+def _wrap(content_html: str) -> str:
+    """One shared envelope: font wrapper + signature, so all 4 mail types
+    look identical in structure (sample: 'Best Regards,' + bold team name)."""
+    return (
+        f'<div style="{_FONT_WRAP}">'
+        f"{content_html}"
+        '<p style="margin-top:24px;">Best Regards,<br><b>Budget Management Team</b></p>'
+        "</div>"
+    )
+
+
+# --- Shared table styles (Contract Management sample's label/value table) ---
+_TD = "padding:8px 12px;border-bottom:1px solid #E5E7EB;"
+_LABEL_TD = f"{_TD}color:#6B7280;font-weight:bold;"
+# Highlight-row variants: 'red' = needs action (sample's Expired Date row),
+# 'green' = good news (fully approved).
+_HIGHLIGHT_ROW = {
+    "red": ("background:#FDECEA;", _HL_RED),
+    "green": ("background:#E8F5E9;", "color:#2E7D32;font-weight:bold;"),
+}
+
+
+def _label_value_table(rows: list[tuple[str, str, str | None]]) -> str:
+    """Label/value detail table like the sample: gray bold label column,
+    zebra rows, one optional highlight row ('red'/'green'). Each row is
+    (label, value_html, variant)."""
+    trs = []
+    for i, (label, value_html, variant) in enumerate(rows):
+        if variant:
+            bg, value_style = _HIGHLIGHT_ROW[variant]
+            trs.append(
+                f'<tr style="{bg}">'
+                f'<td style="{_LABEL_TD}">{label}</td>'
+                f'<td style="{_TD}{value_style}">{value_html}</td>'
+                "</tr>"
+            )
+        else:
+            trs.append(
+                f'<tr style="background:{"#FFFFFF" if i % 2 == 0 else "#F5F7FA"};">'
+                f'<td style="{_LABEL_TD}">{label}</td>'
+                f'<td style="{_TD}">{value_html}</td>'
+                "</tr>"
+            )
+    return (
+        '<table style="border-collapse:collapse;width:100%;max-width:640px;'
+        'border:1px solid #E5E7EB;">'
+        f"{''.join(trs)}</table>"
+    )
 
 
 def _get_graph_token(settings: Settings) -> str:
@@ -170,12 +239,17 @@ def notify_turn(
         )
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] รออนุมัติงบประมาณ ฝ่าย {department} {_year_phrase(fiscal_year)}"
-    body = (
+    subject = f"รอการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
+    body = _wrap(
         "<p>เรียน ผู้อนุมัติ</p>"
-        f"<p>ฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} รอการอนุมัติจากท่าน "
-        f"(ผู้ส่ง: {submitter_email or '-'})</p>"
-        f'<p><a href="{link}">คลิกที่นี่เพื่อตรวจสอบและอนุมัติ</a></p>'
+        "<p>มีงบประมาณรอการอนุมัติจากท่าน รายละเอียดดังนี้:</p>"
+        + _label_value_table([
+            ("ฝ่าย", _hl(department), None),
+            ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
+            ("ผู้ส่ง", submitter_email or "-", None),
+            ("สถานะ", "รอการอนุมัติจากท่าน", "red"),
+        ])
+        + f'<p><a href="{link}">คลิกที่นี่เพื่อตรวจสอบและอนุมัติ</a></p>'
     )
     return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)
 
@@ -192,12 +266,17 @@ def notify_reject(
         logger.warning("notify_reject: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] งบประมาณ ฝ่าย {department} {_year_phrase(fiscal_year)} ถูกตีกลับ"
-    body = (
+    subject = f"ถูกตีกลับ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
+    body = _wrap(
         "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        f"<p>ฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} ถูกตีกลับ พร้อมเหตุผล:</p>"
-        f"<p>{reason}</p>"
-        f'<p><a href="{link}">คลิกที่นี่เพื่อแก้ไขและส่งใหม่</a></p>'
+        "<p>งบประมาณของท่านถูกตีกลับ รายละเอียดดังนี้:</p>"
+        + _label_value_table([
+            ("ฝ่าย", _hl(department), None),
+            ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
+            ("สถานะ", "ถูกตีกลับ", "red"),
+            ("เหตุผล", reason, None),
+        ])
+        + f'<p><a href="{link}">คลิกที่นี่เพื่อแก้ไขและส่งใหม่</a></p>'
     )
     return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
 
@@ -217,12 +296,16 @@ def notify_approved(
         logger.warning("notify_approved: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
     link = build_deep_link(department, fiscal_year, settings)
-    subject = f"[Budget] งบประมาณของฝ่าย {department} {_year_phrase(fiscal_year)} ได้รับการอนุมัติครบทุกขั้นแล้ว"
-    body = (
+    subject = f"ได้รับการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
+    body = _wrap(
         "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        f"<p>งบประมาณของฝ่าย <b>{department}</b> {_year_phrase(fiscal_year)} "
-        "ได้รับการอนุมัติครบทุกขั้นแล้ว</p>"
-        f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
+        "<p>งบประมาณของท่านได้รับการอนุมัติครบทุกขั้นแล้ว รายละเอียดดังนี้:</p>"
+        + _label_value_table([
+            ("ฝ่าย", _hl(department), None),
+            ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
+            ("สถานะ", "อนุมัติครบทุกขั้นแล้ว", "green"),
+        ])
+        + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
     )
     return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
 
@@ -239,16 +322,42 @@ def notify_reminder(
     if not to_email or not pending_departments:
         return None
     settings = settings or get_settings()
-    items = "".join(
-        f'<li><b>{dept}</b> ({_year_phrase(year)}) — '
-        f'<a href="{build_deep_link(dept, year, settings)}">ไปกรอกงบประมาณ</a></li>'
-        for dept, year in pending_departments
+    # Table layout (styled after the Contract Management sample's detail
+    # table): gray bold label header, zebra rows, one department per row.
+    header = (
+        '<tr style="background:#F5F7FA;">'
+        f'<td style="{_LABEL_TD}">ฝ่าย</td>'
+        f'<td style="{_LABEL_TD}">ปีงบประมาณ</td>'
+        f'<td style="{_TD}"></td>'
+        "</tr>"
     )
-    subject = "[Budget] แจ้งเตือน: ยังไม่ได้ส่งงบประมาณ"
-    body = (
+    rows = "".join(
+        f'<tr style="background:{"#FFFFFF" if i % 2 == 0 else "#F5F7FA"};">'
+        f'<td style="{_TD}">{_hl(dept)}</td>'
+        f'<td style="{_TD}">{_year_phrase(year)}</td>'
+        f'<td style="{_TD}"><a href="{build_deep_link(dept, year, settings)}">กรอกงบประมาณ</a></td>'
+        "</tr>"
+        for i, (dept, year) in enumerate(pending_departments)
+    )
+    table = (
+        '<table style="border-collapse:collapse;width:100%;max-width:640px;'
+        'border:1px solid #E5E7EB;">'
+        f"{header}{rows}</table>"
+    )
+    # Red call-to-action row, mirroring the sample's highlighted "Expired Date" row.
+    cta = (
+        '<table style="border-collapse:collapse;width:100%;max-width:640px;margin-top:8px;">'
+        '<tr style="background:#FDECEA;">'
+        f'<td style="{_TD}border-bottom:none;">{_hl_red("กรุณาดำเนินการก่อนถึงกำหนดปิดรับ")}</td>'
+        "</tr></table>"
+    )
+    # Subject names the planning year(s) covered — normally one cycle, but a
+    # filler could owe two years at a cycle boundary; join distinct years.
+    years = ", ".join(str(y) for y in sorted({year for _, year in pending_departments}))
+    subject = f"แจ้งเตือน: ยังไม่ได้ส่งงบประมาณ ปีงบประมาณ {years}"
+    body = _wrap(
         "<p>เรียน ผู้กรอกงบประมาณ</p>"
         "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:</p>"
-        f"<ul>{items}</ul>"
-        "<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ</p>"
+        f"{table}{cta}"
     )
     return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)

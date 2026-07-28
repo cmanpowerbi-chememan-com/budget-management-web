@@ -1,8 +1,40 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-28T11:40:15+0700",
+  "updated": "2026-07-28T12:41:35+0700",
   "tasks": [
+    {
+      "id": "email-subject-reformat",
+      "state": "done",
+      "created": "2026-07-28T12:41:35+0700",
+      "updated": "2026-07-28T12:41:35+0700",
+      "ai": "เปลี่ยน subject เมล 4 แบบเป็นฟอร์แมต status-first ไทยล้วน (เอา [Budget] และ label year ออกจาก subject; body ยังแสดงปี 2 แบบ): รอการอนุมัติ/ถูกตีกลับ/ได้รับการอนุมัติ งบประมาณของฝ่าย X ปีงบประมาณ Y + reminder แสดงปีที่ค้าง. tests อัปเดต 69 passed, probe ส่งจริง user ยืนยัน pass",
+      "agent": "kimi"
+    },
+    {
+      "id": "email-template-styling",
+      "state": "done",
+      "created": "2026-07-28T12:22:24+0700",
+      "updated": "2026-07-28T12:23:25+0700",
+      "ai": "notifications.py เพิ่ม _wrap/_hl/_hl_red template: font Segoe UI/Leelawadee UI, highlight ฟ้า #2E74B5 (ฝ่าย/ปี) แดง #C55A11 (ตีกลับ/กำหนดปิดรับ), ลายเซ็น Best Regards Budget Management Team ทุกฉบับ. tests 69 passed (notifications+approval_router+jobs 3 ไฟล์). ส่ง probe จริง 4 ฉบับชุดใหม่แล้ว รอ user เช็ค inbox",
+      "agent": "kimi"
+    },
+    {
+      "id": "email-live-probe",
+      "state": "done",
+      "created": "2026-07-28T12:08:25+0700",
+      "updated": "2026-07-28T12:12:09+0700",
+      "ai": "ส่งจริงครบ 4 แบบผ่าน path production (notifications.py -> Graph sendMail) หา jakkaritw คนเดียว: notify_turn/reject/approved/reminder ทั้งหมด 202 sent. script ใหม่ setup/probe_notifications_live.py (default probe, --send ส่งจริง). Note: jakkaritw ไม่อยู่ใน v_employee_budget_01 เลย stub เฉพาะ recipient lookup ของ notify_turn; dry_run ใน .env ไม่ได้แตะ. ยังไม่ commit",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-ca330ad",
+      "state": "done",
+      "created": "2026-07-28T11:42:44+0700",
+      "updated": "2026-07-28T11:42:44+0700",
+      "agent": "autolog",
+      "ai": "test(e2e): add live-backend happy-path spec (real FastAPI + Fabric SQL, no mocks) [commit ca330ad]"
+    },
     {
       "id": "e2e-real-backend",
       "state": "done",
