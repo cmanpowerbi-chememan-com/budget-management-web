@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-28)
+# Graph Report - .  (2026-07-29)
 
 ## Corpus Check
 - 360 files · ~419,250 words
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7a17e8c2`
+- Built from commit: `c1f34e31`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
