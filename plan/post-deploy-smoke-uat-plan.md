@@ -157,7 +157,15 @@ name from `.env` (wrong hardcode → 40532 login failed).
       `https://login.microsoftonline.com/<tenant>/adminconsent?client_id=<appId>`
       page (that page consents to every requested scope, including the OIDC
       ones). Repeat for **every** new app registration (a custom domain or a
-      new environment = a new consent check).
+      new environment = a new consent check) — this is structural, not bad
+      luck: the tenant lets users self-consent only to permissions classified
+      "low", and Microsoft Graph has **zero** delegated-permission
+      classifications here, so self-consent is effectively closed for every
+      new app. Verified 2026-07-30; the tenant's Conditional Access and
+      admin-consent-request policies are **not readable** with Application
+      Administrator alone (403), so a CA policy affecting other users cannot
+      be ruled out from the CLI — the first real login of each wave is the
+      test.
 - [ ] **P0-37** `appRoleAssignmentRequired` on the Easy Auth enterprise app is
       the deliberate choice: `false` (verified 2026-07-30) = any tenant user
       passes login and app-level RLS decides what they see (no-scope users get
@@ -227,6 +235,17 @@ Everything here is "the app will fail loud or look empty without it".
       `GET /scope/departments` must both include the ฝ่าย. If not → fix scope
       or the picker before UAT; do not hand a user a link they cannot use.
       → `curl`
+      **Still unfixed as of 2026-07-30** (verified against prod): Nipaporn
+      escapes it only because she is on the `ADMIN_EMAILS` allowlist — the
+      admin overlay short-circuits the status-view authorization, and
+      `pending-for-me` filters purely on the frozen approver's employee code
+      with no See-scope filter. Her own See scope is 7 cost centers / 5 of 114
+      ฝ่าย. So **any non-admin step-2/3 approver still hits the wall**: the
+      badge says work is waiting, the picker cannot open it. Decide before the
+      first rollout wave (tracker `#approver-nonadmin-scope-risk`): widen those
+      approvers' See scope · let the picker include any ฝ่าย where the caller
+      is a frozen approver · or put every step-2/3 approver on the admin
+      allowlist (weakest option).
 - [ ] **P0-23** Pilot fillers' own scope is sane: `GET /scope` shows the ฝ่าย
       count they expect (45% of fillers span >1 ฝ่าย, max 46 — a 1-ฝ่าย filler
       auto-selects, >1 starts blank; that is by design). → `curl`
@@ -264,6 +283,14 @@ Everything here is "the app will fail loud or look empty without it".
       recorded, with a calendar reminder ≥30 days before. That one secret is
       the DB connection, Graph sendMail, **and** SharePoint attachments — its
       expiry takes the whole app down at once. → `manual`
+- [ ] **P0-38** Uptime monitoring decision: Easy Auth is configured with
+      `excludedPaths = []` (verified 2026-07-30), so **`/health` is behind the
+      login redirect too** — an external uptime monitor cannot probe it
+      unauthenticated. Either accept "no external uptime check" and rely on the
+      platform's internal TCP probe + log alerts, or exclude `/health` from
+      Easy Auth (which makes it publicly reachable — it returns only a status
+      word, never connection details, but it is still a decision, not a
+      default).
 - [x] **P0-31** Log access proven: `az containerapp logs show --follow` works,
       and the Log Analytics table `ContainerAppConsoleLogs_CL` is queryable
       (runbook §9). Save one working query for 5xx + one for

@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T09:42:39+0700",
+  "updated": "2026-07-30T10:14:55+0700",
   "tasks": [
+    {
+      "id": "approver-nonadmin-scope-risk",
+      "state": "willdo",
+      "created": "2026-07-30T10:13:33+0700",
+      "updated": "2026-07-30T10:13:33+0700",
+      "ai": "OPEN RISK confirmed by workflow wf_40087ffc-985 (2026-07-30, read-only): the 2026-07-22 'approver cannot reach own pending department in UI' defect is NOT fixed - Nipaporn only escapes it because she is in ADMIN_EMAILS on prd revision 0000005 (admin bypass: authorize_status_view returns early when scope.is_admin, and list_departments_pending_my_approval filters purely on frozen approver empcode with NO See-scope filter). Her own See scope is just 7 cost centers / 5 of 114 departments. => ANY NON-ADMIN step-2/step-3 approver (e.g. a department head who is not on the admin allowlist) will still see 'you have items pending' via /approval/pending-for-me yet be unable to open that department in the picker. Blocks plan item P0-22 for real rollout waves. Options to decide with jakkaritw: (a) widen those approvers' See scope in the scope model, (b) let the department picker include any department where the caller is a frozen approver regardless of See scope, (c) accept and put every step-2/3 approver on the admin allowlist (weakest). Also verified: prd transactional tables are EMPTY (approval_status 0 rows, pending_budget 0 rows) so nothing is broken for users today; dbo.cc_filler_map = 484 rows / 211 cost centers / 99 distinct filler emails, so any tenant user absent from that map lands on an empty app after login (role=none).",
+      "agent": "claude"
+    },
+    {
+      "id": "nipaporn-scope-resolve",
+      "state": "done",
+      "created": "2026-07-30T09:51:00+0700",
+      "updated": "2026-07-30T09:51:18+0700",
+      "ai": "RESULT: email CONFIRMED nipapornt@chememan.com (empcode 101032, นิภาพร ทองกิ่ง, mgr warapornt) present in dbo.v_employee_budget_01 AND v_employee_primary; Entra UPN==mail==same => header match OK. role=admin (ADMIN_EMAILS in BOTH prd+stg containers contains her exactly; 3 entries) + base role=filler => DUAL-ROLE admin, 'โหมด Admin' toggle default OFF. Fill=See=7 CC (10AC020000,10CO000000,10FA000000,10FA010000,10FN012000,10GE000000,10IB000000) = 5 depts (Budgeting & Cost Accounting / Budgeting and Management / Chief Financial Officer / Chief Operating Officer / General); 0 subordinate fillers so See==Fill exactly. Toggle ON = 211 CC/114 depts. Grid FY2027 personal scope 17 rows/4 CC (auto-selected first dept 'Budgeting & Cost Accounting' = 2 rows editable) => NOT empty. RISKS: (1) approve/reject buttons hidden while admin-mode ON (showApproveReject=status.can_act && !adminViewEnabled) and DeptPicker only lists See-scoped depts => as global position-2 approver for 114 depts she can only reach 5 in personal mode -> UI-unreachable approvals (confirms ui-test-results-2026-07-22 defect; server-side approve is NOT scope-blocked, only UI nav). (2) dept 'Chief Financial Officer' = 0 grid rows (blank grid if picked). (3) budget.pending_budget EMPTY + approval_status 0 rows => pending-for-me=0 for FY2026/2027 today. (4) NOTIFICATIONS_DRY_RUN unset in prd => notification emails are log-only previews. No writes performed.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-b565f9e",
+      "state": "done",
+      "created": "2026-07-30T09:43:08+0700",
+      "updated": "2026-07-30T09:43:08+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): P0-36 records the measured consent outcome (tenant User.Read alone unblocked login) [commit b565f9e]"
+    },
     {
       "id": "log-03f7a09",
       "state": "done",
@@ -15,8 +39,8 @@
       "id": "entra-admin-consent-login-block",
       "state": "done",
       "created": "2026-07-30T09:30:57+0700",
-      "updated": "2026-07-30T09:42:39+0700",
-      "ai": "RESOLVED 2026-07-30, confirmed by jakkaritw: real users can access the web app now. Fix that worked = az ad app permission admin-consent on BOTH Easy Auth appIds (61d5d556 prd, 7035aa47 stg) creating consentType=AllPrincipals scope='User.Read'. EMPIRICAL FINDING: that single tenant-wide User.Read grant was SUFFICIENT - 'openid profile email' remained a per-user Principal grant for jakkaritw and did NOT block anyone; do not chase the OIDC scopes. The blocked Graph PATCH turned out unnecessary. Opening /adminconsent URL after the CLI grant changed nothing (Easy Auth 'successfully signed in' page is a redirect page, not a consent confirmation). No IT ticket needed - jakkaritw holds Application Administrator. Docs updated: plan/post-deploy-smoke-uat-plan.md P0-36 now records the measured outcome (was over-strict, demanded OIDC scopes tenant-wide) + P0-37 documents appRoleAssignmentRequired=false as deliberate. Memory saved: gotcha_entra_need_admin_approval_easyauth. STILL OPEN (separate, tracked by workflow wf_40087ffc-985): whether Nipaporn as approver step 2 can reach her pending department in the UI (the 2026-07-22 See-scope defect, plan item P0-22).",
+      "updated": "2026-07-30T10:14:55+0700",
+      "ai": "[CLOSED+PROVEN 2026-07-30 via workflow wf_40087ffc-985, 9 agents read-only] Entra sign-in log confirms the fix: nipapornt sign-in 2026-07-30T02:40:04Z errorCode=0 with NO Principal grant for her, conditionalAccessStatus=notApplied (device NB627/Edge, Bangkok). Login flow requests only openid+profile+email; User.Read is never requested at sign-in, yet admin-consenting the app is what unblocked it => the proposed PATCH of the AllPrincipals scope and adding OIDC perms to requiredResourceAccess are BOTH unnecessary - do not do them. STRUCTURAL follow-on: tenant authorizationPolicy allows self-consent only for 'low'-classified permissions and MS Graph has ZERO delegatedPermissionClassifications here + app has no verified publisher => EVERY future app registration (custom domain, new env) hits the same 'Need admin approval' wall until an admin consents. Also verified prd Easy Auth config: require auth ON, unauthenticatedClientAction=RedirectToLoginPage, excludedPaths=[] (so /health is behind auth - external uptime probe impossible, now plan item P0-38), allowedApplications=[appId], allowedPrincipals={} (no extra allowlist), redirect URI byte-exact vs live FQDN, APP_BASE_URL identical (no trailing-slash drift), revision 0000005 Succeeded. NOT readable with App Admin role (403): Conditional Access policies, adminConsentRequestPolicy, appConsentRequests, permissionGrantPolicies includes - so CA cannot be ruled out for other users; first real login per rollout wave is the test. Docs: plan P0-36 (tenant-policy reason added), P0-38 (new), P0-22 (updated with the admin-shield nuance); memory gotcha_entra_need_admin_approval_easyauth updated. Spawned #approver-nonadmin-scope-risk for the still-unfixed approver-scope defect.",
       "agent": "claude"
     },
     {
