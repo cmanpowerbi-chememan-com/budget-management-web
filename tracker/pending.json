@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T11:13:39+0700",
+  "updated": "2026-07-30T11:24:02+0700",
   "tasks": [
     {
       "id": "no-scope-empty-state-ux",
@@ -27,8 +27,8 @@
       "id": "no-access-empty-state-copy",
       "state": "done",
       "created": "2026-07-30T10:40:39+0700",
-      "updated": "2026-07-30T11:13:39+0700",
-      "ai": "SHIPPED 2026-07-30. frontend/src/grid/BudgetGrid.tsx no-scope branch now renders 3 Thai lines: heading 'ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ' + 'บัญชีของคุณ {email} ยังไม่ได้รับสิทธิ์กรอกงบประมาณ' (omitted entirely when email null) + 'กรุณาติดต่อ nipapornt@chememan.com เพื่อเพิ่มสิทธิ์ที่ไฟล์ cc dept.xlsx (SharePoint › Budgeting and Management)'. No button/mailto (jakkaritw's choice). Constants exported as SCOPE_ACCESS_CONTACT_EMAIL / SCOPE_ACCESS_SOURCE_FILE for reuse (DeptPicker empty state is the obvious next consumer). useScope.ts now carries email from GET /scope (backend already returned it; no new request, no backend change). testid no-scope-empty-state kept. TDD RED-first verified. Tests: targeted 29/29 (re-run by main session AFTER the CSS revert, still 29/29), full frontend suite 494/494, oxlint clean. GATE VERDICT was REQUEST-CHANGES on exactly one point: the implementer had added 12 lines to frontend/src/styles/global.css, which the parallel-session protocol assigns to Kimi's in-flight year-total work -> main session REVERTED those 12 lines (global.css now shows only Kimi's 3 total-year rules, 18 lines, still uncommitted and untouched); class hooks stay in the JSX, CSS polish deferred to a plan.md checkbox. Commit includes ONLY: BudgetGrid.tsx, BudgetGrid.test.tsx, useScope.ts, useScope.test.tsx, UserBar.test.tsx (mechanical fixture field), .claude/plan.md, tracker/pending.json - global.css deliberately excluded. #no-scope-empty-state-ux is a duplicate entry for this same work.",
+      "updated": "2026-07-30T11:24:02+0700",
+      "ai": "[VISUAL SIGN-OFF 2026-07-30] jakkaritw reviewed 3 real-app screenshots (light 1280, dark 1280, mobile 390 - rendered via next dev with only /me and /scope stubbed to role='none', all other markup real) and replied 'pass'. Screenshots left at frontend/noscope-{light-1280,dark-1280,mobile-390}.png at his request - UNTRACKED and NOT gitignored, so the parallel session must not 'git add -A'. Code already committed as 059ebe0. REMAINING: (1) not deployed - real users still see the old 'ดูข้อมูลได้ที่ Dashboard' copy until a new image is built and deployed, which needs jakkaritw's deploy approval; (2) CSS polish (.no-scope-empty spacing + heading weight) still deferred until the parallel session commits frontend/src/styles/global.css - checkbox open in .claude/plan.md; (3) DeptPicker's 'ไม่พบฝ่ายในสิทธิ์ของคุณ' empty text NOT changed (out of scope, easy now that SCOPE_ACCESS_CONTACT_EMAIL/SCOPE_ACCESS_SOURCE_FILE are exported).",
       "agent": "claude"
     },
     {
