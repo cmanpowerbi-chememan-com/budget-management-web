@@ -134,6 +134,34 @@ name from `.env` (wrong hardcode → 40532 login failed).
       sees all 146). Evidence = the GL count per role, not the env var:
       `GET /budget/gl-accounts` as admin vs as a filler. Staging drifted here
       (146 vs 134) in the 2026-07-22 run — see Appendix A. → `curl`
+- [ ] **P0-36** 🔴 **Tenant-wide admin consent granted for the Easy Auth app** —
+      otherwise every non-admin user hits Entra's *"Need admin approval"* page
+      and cannot sign in at all, even though the app and Easy Auth are
+      configured correctly. Real incident 2026-07-30: Nipaporn was blocked
+      this way; both apps had only a per-user (`consentType: Principal`) grant
+      for jakkaritw. Verify from data, not from a login attempt:
+      ```bash
+      # prd appId 61d5d556-ee48-44f7-91b3-b8e05d6419aa (SP 15d7755f-1853-4116-abb2-4a9d55d26d66)
+      # stg appId 7035aa47-0398-4b71-8411-7fc372e82123 (SP 7b6a00c6-083b-4963-bb1b-3393114bda07)
+      az rest --method GET --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?\$filter=clientId eq '<SP-objectId>'" \
+        --query "value[].{consentType:consentType,scope:scope}" -o json
+      ```
+      Expect a `consentType: AllPrincipals` row covering **`User.Read` AND
+      `openid profile email`**. A grant that covers only `User.Read` may still
+      leave the OIDC scopes needing per-user consent — confirm with one real
+      non-admin login before declaring it done. Granting requires the
+      Application Administrator role (jakkaritw has it — no IT ticket needed):
+      `az ad app permission admin-consent --id <appId>`, or the
+      `https://login.microsoftonline.com/<tenant>/adminconsent?client_id=<appId>`
+      page (that page consents to every requested scope, including the OIDC
+      ones). Repeat for **every** new app registration (a custom domain or a
+      new environment = a new consent check).
+- [ ] **P0-37** `appRoleAssignmentRequired` on the Easy Auth enterprise app is
+      the deliberate choice: `false` (verified 2026-07-30) = any tenant user
+      passes login and app-level RLS decides what they see (no-scope users get
+      the empty state, P2-E1). Flip to `true` only if the business wants
+      login itself restricted — that then needs every one of the ~273 users
+      assigned to the app, an ongoing task.
 - [ ] **P0-09** Replica settings recorded: `min-replicas` / `max-replicas`.
       If `min=0`, cold start is real — P2-K1 measures it. If `max>1`, P2-K3
       checks multi-replica behavior. → `manual`

@@ -1,8 +1,40 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-29T00:17:58+0700",
+  "updated": "2026-07-30T09:34:39+0700",
   "tasks": [
+    {
+      "id": "entra-admin-consent-login-block",
+      "state": "doing",
+      "created": "2026-07-30T09:30:57+0700",
+      "updated": "2026-07-30T09:34:39+0700",
+      "ai": "[PROGRESS 2026-07-30] jakkaritw APPROVED (AskUserQuestion) -> ran az ad app permission admin-consent on BOTH appIds, exit=0 both. VERIFIED: each SP now has consentType=AllPrincipals scope='User.Read' alongside the old Principal grant scope=' openid profile email'. GAP: tenant-wide grant covers User.Read only; OIDC scopes still per-user. Attempted PATCH oauth2PermissionGrants scope='openid profile email User.Read' -> BLOCKED by Claude Code permission classifier (mutating Graph call), not retried. NEXT: have a non-admin user (Nipaporn or suchanyay) attempt login NOW; if 'Need admin approval' persists, jakkaritw opens https://login.microsoftonline.com/13c85daf-a73b-4705-8244-f89c655ab851/adminconsent?client_id=61d5d556-ee48-44f7-91b3-b8e05d6419aa (and the stg appId) and clicks Accept - that flow consents all requested scopes incl OIDC. Also captured as plan items P0-36/P0-37 in plan/post-deploy-smoke-uat-plan.md.",
+      "agent": "claude"
+    },
+    {
+      "id": "status-report-card-2026-08",
+      "state": "doing",
+      "created": "2026-07-29T20:09:41+0700",
+      "updated": "2026-07-29T21:02:07+0700",
+      "ai": "REV3 (size): rebuilt for PowerPoint 16:9 slide — CSS 1920x1080, exported 3840x2160 @2x = exactly 13.333x7.5in at 288dpi, fills a slide edge-to-edge with no letterbox. Content refitted to 1080px (fonts/rows/paddings tightened, concern became a single-line strip); generator now FAILS LOUD if any text overflows or clips so future text edits cannot silently cut on the slide. Asserts PASS 8/8: 3840x2160, no v/h overflow, 0 clipped, 6+6 bullets, progress 0.60, today==Aug1 gridline (1242px), strip inside slide. AWAITING jakkaritw visual confirm",
+      "agent": "claude"
+    },
+    {
+      "id": "monthly-highlight-2026-07",
+      "state": "done",
+      "created": "2026-07-29T19:55:24+0700",
+      "updated": "2026-07-29T19:58:37+0700",
+      "ai": "Delivered monthly report highlights for 2026-07: (a) 'Activities last month' 6 English bullets (app build A2-A14, prod deploy 2026-07-28, 179-item post-deploy plan + 15/15 smoke + 43 PASS functional, live-DB 46/46 + 475 FE/673 BE tests, email 4 types verified in real mailboxes, master data + signoff V2.0 + Thai UAT guide); (b) 'Ongoing this month' (Aug) = UAT pilot -> Go/No-Go -> staged rollout to 114 depts, grounded in plan/post-deploy-smoke-uat-plan.md Phase 3 + Appendix E decisions. Open blockers named for jakkaritw: 2nd pilot dept + dates, support channel, P0-10/21/22 chain confirmation, NOTIFICATIONS_DRY_RUN flip, GL_EDIT_BY data check. No code change. Doc-only answer, nothing committed",
+      "agent": "claude"
+    },
+    {
+      "id": "log-7a17e8c",
+      "state": "done",
+      "created": "2026-07-29T00:18:01+0700",
+      "updated": "2026-07-29T00:18:01+0700",
+      "agent": "autolog",
+      "ai": "docs(uat): quick guide 1-pager for pilot users (Thai) + close P0-31 log access [commit 7a17e8c]"
+    },
     {
       "id": "uat-quick-guide",
       "state": "done",
