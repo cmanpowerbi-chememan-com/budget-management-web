@@ -1,15 +1,15 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T11:27:38+0700",
+  "updated": "2026-07-30T11:37:18+0700",
   "tasks": [
     {
-      "id": "log-b07765d",
-      "state": "done",
-      "created": "2026-07-30T11:27:38+0700",
-      "updated": "2026-07-30T11:27:38+0700",
-      "agent": "autolog",
-      "ai": "chore: gitignore the prod Easy Auth cookie file and throwaway review screenshots [commit b07765d]"
+      "id": "kimi-handoff-deploy-95dfd64",
+      "state": "willdo",
+      "created": "2026-07-30T11:37:18+0700",
+      "updated": "2026-07-30T11:37:18+0700",
+      "ai": "HANDOFF DOC for the Kimi session: plan/kimi-handoff-deploy-and-remaining-work.md. Covers: (1) deploy 95dfd64 staging->prd incl. the THREE errors in the deploy sequence circulated in chat (build tags 'budget:<tag>' but deploys pull 'budget-web:<tag>'; staging RG written CMAN-BUDGETNGT-WEB-RG vs prd CMAN-BUDGET-MNGT-WEB-RG; prd line uses '--' instead of '--image') plus two unverified assumptions to check first (does ACR cmanbudgetacr still exist and is it the registry the apps pull from; does backend/Dockerfile actually build frontend/out in the image or would az acr build ship an image WITHOUT today's frontend change); (2) post-deploy testing = run plan/post-deploy-smoke-uat-plan.md Phase 1 (P1-01..P1-20) then the Phase-2 subset that today's changes touch (P2-E1 new no-scope message, P2-E2/E3/E7 negative cases, P2-A2 money invariant total_year==SUM(m01..m12) for the new grand-total/รวมทั้งปี column, P2-J3 grid-DB reconcile, P2-K1/K5); (3) CSS polish now unblocked since global.css landed in 95dfd64 - 3 rules + tick the plan.md checkbox; (4) P0-22 approver-scope risk with 3 options (recommend: picker includes any ฝ่าย where caller is a frozen approver); (5) six open decisions incl. P0-38 health-probe, GL_EDIT_BY_ENABLED, custom domain, cookie file, FX-job workflow split, NOTIFICATIONS_DRY_RUN stays true. INDEPENDENT VERIFICATION by this session (not trusting the other session's numbers): frontend vitest 494/494 in 31 files exit 0, backend pytest 702 passed/46 deselected exit 0, local==origin/main==95dfd64 with 0 ahead/0 behind, and setup/_auth_cookie.tmp.txt confirmed ABSENT from origin/main tree and history (now gitignored via b07765d).",
+      "agent": "claude"
     },
     {
       "id": "log-8618a7f",
@@ -33,10 +33,10 @@
     },
     {
       "id": "grid-totals-3layer-yearcol",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-30T10:56:33+0700",
-      "updated": "2026-07-30T10:56:33+0700",
-      "ai": "Grid totals rework (kimi session 2026-07-30): (1) side grand total now renders 3 layer rows (SAP/Approved/Pending) both COST+SGA sides; (2) new รวมทั้งปี (total_year) column before Jan on all rows+subtotals; (3) group subtotal label marked Pending-only. Tests: GridTable+model 136/136 green, tsc clean. NOT committed yet; pre-existing unrelated WIP in useScope/BudgetGrid/UserBar has 2 red tests (owner unknown). Next: visual verify screenshot -> jakkaritw review -> commit/push -> Cloud Shell staging -> PRD per docs/deploy/A14_RUNBOOK.md",
+      "updated": "2026-07-30T11:28:26+0700",
+      "ai": "Done+deployed to git: commit 95dfd64 pushed to origin/main (2026-07-30). 3-layer grand total both sides + รวมทั้งปี column before Jan + header 14.7px/800. Full frontend suite 494/494, tsc clean, visual verify PASS (jakkaritw approved screenshots). Leftover: image build+staging+PRD deploy via Azure Cloud Shell per docs/deploy/A14_RUNBOOK.md (tag=95dfd64); backend pytest + 07-security gate still to run before PRD.",
       "agent": "kimi"
     },
     {
