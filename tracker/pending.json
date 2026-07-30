@@ -1,14 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T09:34:39+0700",
+  "updated": "2026-07-30T09:42:39+0700",
   "tasks": [
     {
+      "id": "log-03f7a09",
+      "state": "done",
+      "created": "2026-07-30T09:35:18+0700",
+      "updated": "2026-07-30T09:35:18+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): add P0-36/P0-37 tenant admin-consent gate after real login block [commit 03f7a09]"
+    },
+    {
       "id": "entra-admin-consent-login-block",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-30T09:30:57+0700",
-      "updated": "2026-07-30T09:34:39+0700",
-      "ai": "[PROGRESS 2026-07-30] jakkaritw APPROVED (AskUserQuestion) -> ran az ad app permission admin-consent on BOTH appIds, exit=0 both. VERIFIED: each SP now has consentType=AllPrincipals scope='User.Read' alongside the old Principal grant scope=' openid profile email'. GAP: tenant-wide grant covers User.Read only; OIDC scopes still per-user. Attempted PATCH oauth2PermissionGrants scope='openid profile email User.Read' -> BLOCKED by Claude Code permission classifier (mutating Graph call), not retried. NEXT: have a non-admin user (Nipaporn or suchanyay) attempt login NOW; if 'Need admin approval' persists, jakkaritw opens https://login.microsoftonline.com/13c85daf-a73b-4705-8244-f89c655ab851/adminconsent?client_id=61d5d556-ee48-44f7-91b3-b8e05d6419aa (and the stg appId) and clicks Accept - that flow consents all requested scopes incl OIDC. Also captured as plan items P0-36/P0-37 in plan/post-deploy-smoke-uat-plan.md.",
+      "updated": "2026-07-30T09:42:39+0700",
+      "ai": "RESOLVED 2026-07-30, confirmed by jakkaritw: real users can access the web app now. Fix that worked = az ad app permission admin-consent on BOTH Easy Auth appIds (61d5d556 prd, 7035aa47 stg) creating consentType=AllPrincipals scope='User.Read'. EMPIRICAL FINDING: that single tenant-wide User.Read grant was SUFFICIENT - 'openid profile email' remained a per-user Principal grant for jakkaritw and did NOT block anyone; do not chase the OIDC scopes. The blocked Graph PATCH turned out unnecessary. Opening /adminconsent URL after the CLI grant changed nothing (Easy Auth 'successfully signed in' page is a redirect page, not a consent confirmation). No IT ticket needed - jakkaritw holds Application Administrator. Docs updated: plan/post-deploy-smoke-uat-plan.md P0-36 now records the measured outcome (was over-strict, demanded OIDC scopes tenant-wide) + P0-37 documents appRoleAssignmentRequired=false as deliberate. Memory saved: gotcha_entra_need_admin_approval_easyauth. STILL OPEN (separate, tracked by workflow wf_40087ffc-985): whether Nipaporn as approver step 2 can reach her pending department in the UI (the 2026-07-22 See-scope defect, plan item P0-22).",
       "agent": "claude"
     },
     {

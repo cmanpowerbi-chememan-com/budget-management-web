@@ -146,10 +146,12 @@ name from `.env` (wrong hardcode → 40532 login failed).
       az rest --method GET --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?\$filter=clientId eq '<SP-objectId>'" \
         --query "value[].{consentType:consentType,scope:scope}" -o json
       ```
-      Expect a `consentType: AllPrincipals` row covering **`User.Read` AND
-      `openid profile email`**. A grant that covers only `User.Read` may still
-      leave the OIDC scopes needing per-user consent — confirm with one real
-      non-admin login before declaring it done. Granting requires the
+      Expect a `consentType: AllPrincipals` row for **`User.Read`**. Measured
+      outcome 2026-07-30: that one tenant-wide `User.Read` grant was
+      **sufficient** — real non-admin users signed in immediately afterwards,
+      even though `openid profile email` stayed a per-user (`Principal`) grant
+      for jakkaritw only. Do not chase the OIDC scopes unless a real login
+      still fails. Granting requires the
       Application Administrator role (jakkaritw has it — no IT ticket needed):
       `az ad app permission admin-consent --id <appId>`, or the
       `https://login.microsoftonline.com/<tenant>/adminconsent?client_id=<appId>`
