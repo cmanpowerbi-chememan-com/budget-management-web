@@ -1,0 +1,22 @@
+SAP actuals parity — web (gold.fact_gl_trans via fetch_sap_actuals) vs SAP export (2026_1_4.xlsx), fiscal_year=2026, months=(1, 2, 3, 4)
+cells compared: 8 | mismatches: 6
+
+MISMATCH CELLS (excel = truth):
+10AC012000/6210900060 m02: excel=8623.00 web=7979.00 delta=-644.00
+    docs MISSING in DW (2): 1110000641, 1900000370
+    docs in DW not in Excel (0): (none)
+10AC012000/6210900060 m03: excel=10345.88 web=358.00 delta=-9987.88
+    docs MISSING in DW (2): 3110001512, 3110001584
+    docs in DW not in Excel (0): (none)
+10AC012000/6210900060 m04: excel=3507.00 web=8981.00 delta=5474.00
+    docs MISSING in DW (2): 1110001487, 1900000724
+    docs in DW not in Excel (0): (none)
+10AC013000/5210600010 m02: excel=500.00 web=-500.00 delta=-1000.00
+    docs MISSING in DW (2): 1110000607, 3110001330
+    docs in DW not in Excel (0): (none)
+10AC013000/5210600010 m03: excel=500.00 web=1000.00 delta=500.00
+    docs MISSING in DW (1): 1900000371
+    docs in DW not in Excel (0): (none)
+10AC013000/5210600010 m04: excel=500.00 web=-500.00 delta=-1000.00
+    docs MISSING in DW (2): 1110001426, 3110003046
+    docs in DW not in Excel (0): (none)
