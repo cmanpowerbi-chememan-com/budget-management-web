@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T11:24:02+0700",
+  "updated": "2026-07-30T11:27:38+0700",
   "tasks": [
+    {
+      "id": "log-b07765d",
+      "state": "done",
+      "created": "2026-07-30T11:27:38+0700",
+      "updated": "2026-07-30T11:27:38+0700",
+      "agent": "autolog",
+      "ai": "chore: gitignore the prod Easy Auth cookie file and throwaway review screenshots [commit b07765d]"
+    },
+    {
+      "id": "log-8618a7f",
+      "state": "done",
+      "created": "2026-07-30T11:24:10+0700",
+      "updated": "2026-07-30T11:24:10+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): record visual sign-off for the no-scope access message [commit 8618a7f]"
+    },
     {
       "id": "no-scope-empty-state-ux",
       "state": "done",

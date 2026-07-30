@@ -11,7 +11,7 @@ import {
   type RefObject,
   type TouchEvent as ReactTouchEvent,
 } from 'react'
-import type { BudgetRow, GlAccount } from '../api/types'
+import type { BudgetRow, GlAccount, LayerAmounts } from '../api/types'
 import { MonthCell } from './MonthCell'
 import {
   BLANK_COLUMN_FILTERS,
@@ -216,7 +216,7 @@ function MonthCells({
   gl,
   nowMonth,
 }: {
-  values: Record<MonthKey, number>
+  values: LayerAmounts
   layerTestId: 'sap-value' | 'board-value'
   /** Data-layer pill color (mockup 0002.3budget-export.html) — SAP = green,
    * Approved (board, read-only) = blue. A zero value always mutes the pill
@@ -230,6 +230,14 @@ function MonthCells({
 }) {
   return (
     <>
+      {/* Year-total column sits BEFORE Jan (user requirement 2026-07-30):
+          sum of m01..m12 for this row+layer, read straight off the stored
+          total_year. */}
+      <td className="month-cell total-year-cell" data-testid={`${layerTestId}-${cc}-${gl}-year`}>
+        <span className={`month-value ${variant}${values.total_year === 0 ? ' zero' : ''}`}>
+          {formatThb(values.total_year)}
+        </span>
+      </td>
       {MONTH_KEYS.map((m) => {
         const value = values[m]
         const className = `month-value ${variant}${value === 0 ? ' zero' : ''}`
@@ -261,6 +269,13 @@ function PendingCells({
   const { cost_center: cc, gl_account: gl } = row
   return (
     <>
+      {/* Year-total column (before Jan) — read-only even when the row is
+          editable; it is the derived sum, not an input. */}
+      <td className="month-cell total-year-cell" data-testid={`pending-cell-${cc}-${gl}-year`}>
+        <span className={`month-value pending-readonly${row.pending.total_year === 0 ? ' zero' : ''}`}>
+          {formatThb(row.pending.total_year)}
+        </span>
+      </td>
       {MONTH_KEYS.map((m) => (
         <td
           key={m}
@@ -486,15 +501,19 @@ function TxnBlock({
 function SubtotalRow({
   label,
   totals,
+  layer,
   columnsCollapsed,
 }: {
   label: string
   totals: ReturnType<typeof sectionTotals>
+  /** Which layer this subtotal line displays. Group subtotals stay
+   * pending-only; the side grand total renders one row per layer. */
+  layer: 'sap' | 'board' | 'pending'
   columnsCollapsed: boolean
 }) {
   return (
     <tbody>
-      <tr className="subtotal-row">
+      <tr className="subtotal-row" data-layer={layer}>
         {/* colSpan covers the frozen identity band (+ Status when expanded) —
            frozen at left:0 (not left-unfrozen) so the label never scrolls
            out of view under the horizontally-scrolled month columns
@@ -502,9 +521,12 @@ function SubtotalRow({
         <td colSpan={subtotalLabelColSpan(columnsCollapsed)} className="frz frz-1 frz-edge">
           {label}
         </td>
+        <td className="month-cell total-year-cell">
+          {formatThb(totals[layer].total_year)}
+        </td>
         {MONTH_KEYS.map((m) => (
           <td key={m} className="month-cell">
-            {formatThb(totals.pending[m])}
+            {formatThb(totals[layer][m])}
           </td>
         ))}
         <td className="action-cell" />
@@ -766,6 +788,7 @@ export function GridTable({
                         <col className="status-col" />
                       </>
                     )}
+                    <col className="m-col total-year-col" />
                     {MONTH_KEYS.map((m) => (
                       <col key={m} className="m-col" />
                     ))}
@@ -791,6 +814,9 @@ export function GridTable({
                           <th className="frz frz-5 frz-edge" />
                         </>
                       )}
+                      <th className="month-group-label total-year-head">
+                        <span className="th-label">รวมทั้งปี</span>
+                      </th>
                       <th colSpan={12} className="month-group-label">
                         <span className="th-label">งบประมาณรายเดือน (บาท)</span>
                       </th>
@@ -936,6 +962,13 @@ export function GridTable({
                           </th>
                         </>
                       )}
+                      {/* Year-total column header — class `total-year-col`
+                          (NOT `month-col`) on purpose: tests + the `.now`
+                          highlight logic count exactly the 12 month th's. */}
+                      <th className="total-year-col">
+                        <span className="th-label">Jan–Dec</span>
+                        <div className="col-filter-spacer" />
+                      </th>
                       {MONTH_KEYS.map((m) => (
                         <th key={m} className={`month-col${m === nowMonth ? ' now' : ''}`}>
                           <span className="th-label">{MONTH_LABELS[m]}</span>
@@ -973,14 +1006,31 @@ export function GridTable({
                               columnsCollapsed={columnsCollapsed}
                             />
                           ))}
-                          <SubtotalRow label={`รวม ${group.glGroup}`} totals={group.subtotal} columnsCollapsed={columnsCollapsed} />
+                          {/* Group subtotal stays pending-only (it mirrors the
+                              editable cells above it) — the label says so. */}
+                          <SubtotalRow label={`รวม ${group.glGroup} · Pending`} totals={group.subtotal} layer="pending" columnsCollapsed={columnsCollapsed} />
                         </Fragment>
                       ))}
-                      <SubtotalRow
-                        label={`รวมทั้งหมด · ${SIDE_LABEL[side]}`}
-                        totals={sectionTotals(groups.flatMap((g) => g.rows))}
-                        columnsCollapsed={columnsCollapsed}
-                      />
+                      {/* Side grand total: one row per layer (SAP actual /
+                          Approved budget / Pending draft), each summing every
+                          cc+gl row currently shown in this side (filteredRows),
+                          month by month. Applies to BOTH sides — COST (5xxx)
+                          and SGA (6xxx) — via the shared render below. */}
+                      {(
+                        [
+                          ['sap', 'รวมทั้งหมด · SAP · ใช้จริง'],
+                          ['board', 'รวมทั้งหมด · Approved · งบ'],
+                          ['pending', 'รวมทั้งหมด · Pending · รออนุมัติ'],
+                        ] as const
+                      ).map(([layer, label]) => (
+                        <SubtotalRow
+                          key={layer}
+                          label={label}
+                          totals={sectionTotals(groups.flatMap((g) => g.rows))}
+                          layer={layer}
+                          columnsCollapsed={columnsCollapsed}
+                        />
+                      ))}
                     </>
                   )}
                 </table>

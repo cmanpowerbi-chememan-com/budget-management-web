@@ -418,10 +418,11 @@ export function identityColSpan(collapsed: boolean): number {
 }
 
 /** colSpan for a full-width row (the per-row message row + the
- * filtered-empty row): identity band + Status (expanded only) + the 12
- * month columns + the trailing action column. 18 expanded, 15 collapsed. */
+ * filtered-empty row): identity band + Status (expanded only) + the
+ * year-total column + the 12 month columns + the trailing action column.
+ * 19 expanded, 16 collapsed. */
 export function fullRowColSpan(collapsed: boolean): number {
-  return identityColSpan(collapsed) + (collapsed ? 0 : 1) + MONTH_KEYS.length + 1
+  return identityColSpan(collapsed) + (collapsed ? 0 : 1) + 1 + MONTH_KEYS.length + 1
 }
 
 /** colSpan for the subtotal row's label cell: the identity band, plus the

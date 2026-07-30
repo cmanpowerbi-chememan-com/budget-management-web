@@ -271,6 +271,90 @@ describe('GridTable', () => {
       expect(costSection).toHaveTextContent('100')
     })
 
+    it('renders the side grand total as 3 layer rows, each summing every shown cc+gl row month by month', () => {
+      const mkLayer = (m01: number, m02: number) => ({ ...blankLayer({ m01, m02, total_year: m01 + m02 }) })
+      const rows = [
+        makeRow({
+          cost_center: 'CC1', gl_account: '5211800030', editable: true,
+          sap: mkLayer(100, 1) as BudgetRow['sap'],
+          board: { ...mkLayer(200, 2), gl_name: null, gl_group: null, c_level: null, division: null, department: null } as BudgetRow['board'],
+          pending: { ...mkLayer(300, 3), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+        }),
+        makeRow({
+          cost_center: 'CC2', gl_account: '5211800030', editable: true,
+          sap: mkLayer(10, 0) as BudgetRow['sap'],
+          board: { ...mkLayer(20, 0), gl_name: null, gl_group: null, c_level: null, division: null, department: null } as BudgetRow['board'],
+          pending: { ...mkLayer(30, 0), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+        }),
+        // One SGA row — the 3-layer grand total must exist on BOTH sides.
+        makeRow({
+          cost_center: 'CC1', gl_account: '6211800030', editable: true,
+          sap: mkLayer(7, 0) as BudgetRow['sap'],
+        }),
+      ]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      for (const side of ['COST', 'SGA'] as const) {
+        const section = screen.getByTestId(`side-section-${side}`)
+        expect(within(section).getByText('รวมทั้งหมด · SAP · ใช้จริง')).toBeInTheDocument()
+        expect(within(section).getByText('รวมทั้งหมด · Approved · งบ')).toBeInTheDocument()
+        expect(within(section).getByText('รวมทั้งหมด · Pending · รออนุมัติ')).toBeInTheDocument()
+      }
+
+      const cost = screen.getByTestId('side-section-COST')
+      const sapTotal = within(cost).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement
+      expect(within(sapTotal).getByText('110')).toBeInTheDocument() // m01: 100 + 10
+      expect(within(sapTotal).getByText('1')).toBeInTheDocument() // m02: 1 + 0
+      const boardTotal = within(cost).getByText('รวมทั้งหมด · Approved · งบ').closest('tr') as HTMLElement
+      expect(within(boardTotal).getByText('220')).toBeInTheDocument()
+      const pendingTotal = within(cost).getByText('รวมทั้งหมด · Pending · รออนุมัติ').closest('tr') as HTMLElement
+      expect(within(pendingTotal).getByText('330')).toBeInTheDocument()
+      expect(within(pendingTotal).queryByText('110')).not.toBeInTheDocument() // layers must not bleed into each other
+
+      const sga = screen.getByTestId('side-section-SGA')
+      const sgaSapTotal = within(sga).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement
+      // Year-total cell = 7 (m01=7 → total_year=7 shows in BOTH cells now).
+      expect(sgaSapTotal.querySelector('td.total-year-cell')).toHaveTextContent('7')
+    })
+
+    it('shows a รวมทั้งปี (year-total) column BEFORE Jan on data rows and on every subtotal row', () => {
+      const rows = [
+        makeRow({
+          cost_center: 'CC1', gl_account: '5211800030', editable: true,
+          sap: blankLayer({ m01: 100, m02: 1, total_year: 101 }) as BudgetRow['sap'],
+          board: { ...blankLayer({ m01: 200, total_year: 200 }), gl_name: null, gl_group: null, c_level: null, division: null, department: null } as BudgetRow['board'],
+          pending: { ...blankLayer({ m03: 40, total_year: 40 }), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+        }),
+      ]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      // Row-level year totals, one per layer.
+      expect(screen.getByTestId('sap-value-CC1-5211800030-year')).toHaveTextContent('101')
+      expect(screen.getByTestId('board-value-CC1-5211800030-year')).toHaveTextContent('200')
+      expect(screen.getByTestId('pending-cell-CC1-5211800030-year')).toHaveTextContent('40')
+
+      // The year cell sits immediately before the Jan (m01) cell in each layer row.
+      const sapYear = screen.getByTestId('sap-value-CC1-5211800030-year')
+      expect(sapYear.nextElementSibling).toBe(screen.getByTestId('sap-value-CC1-5211800030-m01'))
+      const pendingYear = screen.getByTestId('pending-cell-CC1-5211800030-year')
+      expect(pendingYear.nextElementSibling).toBe(screen.getByTestId('pending-cell-CC1-5211800030-m01'))
+
+      // Header: รวมทั้งปี label + a Jan–Dec th before the 12 month th's.
+      const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
+      expect(table.querySelector('th.total-year-col .th-label')).toHaveTextContent('Jan–Dec')
+      const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
+      const ths = [...colRow.querySelectorAll('th')]
+      const yearTh = colRow.querySelector('th.total-year-col') as HTMLTableCellElement
+      expect(ths.indexOf(yearTh)).toBe(ths.findIndex((th) => th.classList.contains('month-col')) - 1)
+      expect(table.querySelector('th.total-year-head .th-label')).toHaveTextContent('รวมทั้งปี')
+
+      // Subtotal rows carry the year total too (group subtotal pending = 40).
+      const groupSubtotal = within(table as unknown as HTMLElement).getByText(/รวม Office expenses/).closest('tr') as HTMLElement
+      expect(groupSubtotal.querySelector('td.total-year-cell')).toHaveTextContent('40')
+      const grandSap = within(table as unknown as HTMLElement).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement
+      expect(grandSap.querySelector('td.total-year-cell')).toHaveTextContent('101')
+    })
+
     it('filters by the STATUS column — keeps only rows whose matched layer has a value', () => {
       const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
       const withSap = { ...base, sap: { ...base.sap, m01: 100 } }

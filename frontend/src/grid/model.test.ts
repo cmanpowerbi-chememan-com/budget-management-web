@@ -399,9 +399,9 @@ describe('identityColSpan / fullRowColSpan / subtotalLabelColSpan (compact-mode 
     expect(identityColSpan(true)).toBe(2)
   })
 
-  it('fullRowColSpan: 18 expanded (4 identity + status + 12 months + action), 15 collapsed (2 identity + 12 months + action)', () => {
-    expect(fullRowColSpan(false)).toBe(18)
-    expect(fullRowColSpan(true)).toBe(15)
+  it('fullRowColSpan: 19 expanded (4 identity + status + year-total + 12 months + action), 16 collapsed (2 identity + year-total + 12 months + action)', () => {
+    expect(fullRowColSpan(false)).toBe(19)
+    expect(fullRowColSpan(true)).toBe(16)
   })
 
   it('subtotalLabelColSpan: identityColSpan + 1 for the Status band expanded, no +1 collapsed', () => {

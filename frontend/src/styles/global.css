@@ -878,6 +878,11 @@ input:focus-visible {
 .data-table col.m-col {
   width: 98px;
 }
+/* Year-total column (before Jan) — slightly wider than a month col: yearly
+   sums run 1-2 digits longer than any single month. */
+.data-table col.total-year-col {
+  width: 112px;
+}
 /* Trailing "ลบ" (delete) column (grid-level row delete) — a single icon
    button, so a narrow fixed width is enough; kept visually recessive
    (quiet border, no fill until hover) so it never competes with the data. */
@@ -1248,12 +1253,22 @@ body.col-dragging * {
 }
 /* Larger month labels (UI-parity point 8a, mockup lines 438-440) — the
    header row's own uppercase/10.5px base is meant for short column names
-   ("Status" etc.); month names read better bigger, normal case. */
-.data-table thead th.month-col .th-label {
+   ("Status" etc.); month names read better bigger, normal case. The
+   year-total ("Jan–Dec") header shares this exact format so the whole
+   money block reads as one family. */
+.data-table thead th.month-col .th-label,
+.data-table thead th.total-year-col .th-label {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: none;
+}
+/* The year-total ("Jan–Dec") header reads as the SUM of the 12 month
+   headers next to it — same family but a step heavier/larger (+5% on the
+   14px month size) so the eye lands on the total first. */
+.data-table thead th.total-year-col .th-label {
+  font-size: 14.7px;
+  font-weight: 800;
 }
 /* Current-month highlight (UI-parity point 8a, mockup lines 444-448) — a
    tinted header cell + gold dot/underline mark "today" so users don't have
@@ -1430,6 +1445,19 @@ body.col-dragging * {
 }
 .month-cell {
   text-align: right;
+}
+/* Year-total cell (before Jan) — visually set apart from the monthly cells:
+   bolder pill + a quiet separator on the Jan side so the eye reads
+   "total | months" as two zones. Header th matches via .total-year-col. */
+.total-year-cell .month-value {
+  font-weight: 700;
+}
+.total-year-cell {
+  border-right: 1px solid var(--line-2);
+}
+th.total-year-col {
+  text-align: right;
+  border-right: 1px solid var(--line-2);
 }
 /* Base pill shape (mockup 0002.3budget-export.html). .month-input (the
    editable input) shares this class but redeclares every property it needs
