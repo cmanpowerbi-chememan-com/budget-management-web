@@ -1,14 +1,54 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T11:37:18+0700",
+  "updated": "2026-07-30T12:19:50+0700",
   "tasks": [
+    {
+      "id": "staging-95dfd64-verified",
+      "state": "done",
+      "created": "2026-07-30T12:03:07+0700",
+      "updated": "2026-07-30T12:03:07+0700",
+      "ai": "Staging deploy+verify done 2026-07-30: image cmanbudgetacr.azurecr.io/budget-web:95dfd64 (ACR run cmc, built from clean worktree @95dfd64) -> cman-budget-web-stg revision cman-budget-web-stg--0000011. Discovery corrected 3 handoff errors: RG=CMAN-BUDGET-MNGT-WEB-RG both apps, repo=budget-web, --image flag. Smoke setup/smoke_prd.py --staging with real stg cookie: PASS 15 / FAIL 0 / DEFER 8 (same as 2026-07-28 prod baseline); db:ok, forged-header loses, headers, SPA fallback. 07-security-checklist on diff 95dfd64^..4052730: PASS 8/8 (display-only). Rollback line ready: --0000010. Next: jakkaritw approval gate -> PRD.",
+      "agent": "kimi"
+    },
+    {
+      "id": "sap-parity-test",
+      "state": "willdo",
+      "created": "2026-07-30T12:01:51+0700",
+      "updated": "2026-07-30T12:01:51+0700",
+      "ai": "Kimi task: build backend/tests/tests_data_sync/test_sap_actuals_parity.py per plan/sap-actuals-dw-gap-fix.md section 5 — Book2 2.xlsx vs fetch_sap_actuals(2026) doc-level parity; expected to FAIL until DW reload lands; parser unit tests must pass",
+      "agent": "kimi"
+    },
+    {
+      "id": "actuals-month-mismatch",
+      "state": "done",
+      "created": "2026-07-30T11:46:06+0700",
+      "updated": "2026-07-30T12:01:50+0700",
+      "ai": "ROOT CAUSE CONFIRMED: not app bug — SAP_ACTUALS_SQL reproduces gold exactly (m01 7979/m02 7979/m03 358/m04 8981). gold.fact_gl_trans missing docs: SAP daily entry-date files SAP_T_GL_TRANS_*_(YYYYMMDD).TXT -> bronze ACDOCA(transient) -> silver append -> gold rebuild 2026-06-23; loaded entry-day windows have holes ~2026-02-26..03-30 and >=2026-04-30, nothing loaded after 2026-06-05. FY2026 cc1000 docs/mo: Jan 33821/Feb 26901/Mar 8640/Apr 27654 (baseline 29-38k) — all CC/GL affected. Missing docs for 10AC012000/6210900060: 1900000370,1110000641,3110001512,3110001584,1900000724,1110001487. gold_bi FY2026 empty. Fix owner = DW pipeline (reload files + schedule daily). Plan+Kimi prompt: plan/sap-actuals-dw-gap-fix.md. Memory: gotcha_fact_gl_trans_entry_day_holes",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-95dfd64-handoff",
+      "state": "doing",
+      "created": "2026-07-30T11:38:43+0700",
+      "updated": "2026-07-30T11:38:43+0700",
+      "ai": "Following plan/kimi-handoff-deploy-and-remaining-work.md: deploy 95dfd64 (staging->prd with jakkaritw approval), post-deploy tests per plan/post-deploy-smoke-uat-plan.md, CSS polish no-scope, P0-22 decision. Step 1: verify Dockerfile build context + run az discovery (or hand to Cloud Shell if az missing locally).",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-f72098e",
+      "state": "done",
+      "created": "2026-07-30T11:37:22+0700",
+      "updated": "2026-07-30T11:37:22+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): handoff for the Kimi session - deploy 95dfd64 + remaining open items [commit f72098e]"
+    },
     {
       "id": "kimi-handoff-deploy-95dfd64",
       "state": "willdo",
       "created": "2026-07-30T11:37:18+0700",
-      "updated": "2026-07-30T11:37:18+0700",
-      "ai": "HANDOFF DOC for the Kimi session: plan/kimi-handoff-deploy-and-remaining-work.md. Covers: (1) deploy 95dfd64 staging->prd incl. the THREE errors in the deploy sequence circulated in chat (build tags 'budget:<tag>' but deploys pull 'budget-web:<tag>'; staging RG written CMAN-BUDGETNGT-WEB-RG vs prd CMAN-BUDGET-MNGT-WEB-RG; prd line uses '--' instead of '--image') plus two unverified assumptions to check first (does ACR cmanbudgetacr still exist and is it the registry the apps pull from; does backend/Dockerfile actually build frontend/out in the image or would az acr build ship an image WITHOUT today's frontend change); (2) post-deploy testing = run plan/post-deploy-smoke-uat-plan.md Phase 1 (P1-01..P1-20) then the Phase-2 subset that today's changes touch (P2-E1 new no-scope message, P2-E2/E3/E7 negative cases, P2-A2 money invariant total_year==SUM(m01..m12) for the new grand-total/รวมทั้งปี column, P2-J3 grid-DB reconcile, P2-K1/K5); (3) CSS polish now unblocked since global.css landed in 95dfd64 - 3 rules + tick the plan.md checkbox; (4) P0-22 approver-scope risk with 3 options (recommend: picker includes any ฝ่าย where caller is a frozen approver); (5) six open decisions incl. P0-38 health-probe, GL_EDIT_BY_ENABLED, custom domain, cookie file, FX-job workflow split, NOTIFICATIONS_DRY_RUN stays true. INDEPENDENT VERIFICATION by this session (not trusting the other session's numbers): frontend vitest 494/494 in 31 files exit 0, backend pytest 702 passed/46 deselected exit 0, local==origin/main==95dfd64 with 0 ahead/0 behind, and setup/_auth_cookie.tmp.txt confirmed ABSENT from origin/main tree and history (now gitignored via b07765d).",
+      "updated": "2026-07-30T12:19:50+0700",
+      "ai": "[VERIFIED AGAINST LIVE AZURE 2026-07-30, workflow wf_20fc93c2-de7, 7 agents read-only] Handoff doc plan/kimi-handoff-deploy-and-remaining-work.md now carries CONFIRMED values + a paste-ready corrected sequence. FOUR BLOCKERS in the circulated deploy sequence, all confirmed: (1) 'az acr build --image budget:95dfd64' - registry cmanbudgetacr has ONLY repo 'budget-web'; the wrong name SUCCEEDS at build (creates a 2nd repo) then both updates pull budget-web:95dfd64 which does not exist => image-pull failure AFTER the operator was told build passed; correct = --image budget-web:95dfd64 (matches runbook sec3 + Dockerfile header). (2) staging RG 'CMAN-BUDGETNGT-WEB-RG' DOES NOT EXIST; staging is in the SAME RG as prod = CMAN-BUDGET-MNGT-WEB-RG (both apps share env managedEnvironment-CMANBUDGETMNGTW-b33f). (3) prd line uses '--' instead of '--image'. (4) ROLLBACK METHOD UNUSABLE: prd is activeRevisionsMode=Single with exactly ONE revision (cman-budget-web-prd--0000005), so 'revision activate' + 'ingress traffic set --revision-weight' is rejected; working rollback = az containerapp update --image cmanbudgetacr.azurecr.io/budget-web:ace0f00. OTHER CONFIRMED FACTS: both apps currently run budget-web:ace0f00 (2026-07-28); tag 95dfd64 not built yet; registry auth = system-assigned MI with AcrPull verified on both principals (no secrets needed); jakkaritw is Owner+Contributor at subscription scope; env vars/secrets already set so this is an image-only update (do NOT re-run runbook sec5/6 secret blocks); backend/Dockerfile IS 2-stage and builds the frontend in-image (node:24-alpine npm ci + build:ci -> COPY --from=frontend-build /fe/out ./static, STATIC_DIR=/app/static) with host frontend/out dockerignored, so the deploy WILL contain today's frontend change and repo-root context is required; the old tsc-sweeps-tests trap is not a risk (root .dockerignore excludes docs/ and **/*.md); staging minReplicas=0 => cold start on first smoke request, prd minReplicas=2. NEW HARDENING ITEMS (non-blocking, jakkaritw's call): GitHub repo is PUBLIC; ACR adminUserEnabled=true while apps use managed identity.",
       "agent": "claude"
     },
     {

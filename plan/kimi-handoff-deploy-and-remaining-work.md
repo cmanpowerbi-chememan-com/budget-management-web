@@ -41,60 +41,97 @@ Reference docs — read, do not duplicate:
 
 ## 1. Deploy `95dfd64` (staging first, then production)
 
+### 1.0 Verified live facts (checked read-only against Azure on 2026-07-30 — use these, do not re-guess)
+
+| thing | verified value |
+|---|---|
+| Registry | `cmanbudgetacr` (`cmanbudgetacr.azurecr.io`), Basic, in `CMAN-BUDGET-MNGT-WEB-RG` |
+| Image repository | **`budget-web` — the ONLY repo in that registry. There is no `budget` repo.** |
+| Currently live image (BOTH apps) | `cmanbudgetacr.azurecr.io/budget-web:ace0f00` (pushed 2026-07-28) |
+| Tag `95dfd64` | does **not** exist yet — the build has not been run |
+| Resource group | `CMAN-BUDGET-MNGT-WEB-RG` for **both** apps — staging is in the SAME RG as production, sharing env `managedEnvironment-CMANBUDGETMNGTW-b33f` |
+| App names | `cman-budget-web-stg` (rev `--0000010`, minReplicas **0** → cold start on the first smoke request) · `cman-budget-web-prd` (rev `--0000005`, minReplicas 2) |
+| Registry auth | system-assigned managed identity with **AcrPull** on the registry, verified for both apps' principals — no secret to touch, no admin creds in use |
+| Your Azure rights | jakkaritw is **Owner + Contributor at subscription scope**, so `az acr build` and `containerapp update` are both covered |
+| Env vars / secrets | **already configured** on both apps from the `ace0f00` deploy → this is an image-only update; do NOT re-run the runbook §5/§6 `secret set` / `--set-env-vars` blocks |
+| `backend/Dockerfile` | 2-stage and it **does** build the frontend in-image (`node:24-alpine` → `npm ci` → `npm run build:ci` → `COPY --from=frontend-build /fe/out ./static`, `STATIC_DIR=/app/static`). Host `frontend/out` is dockerignored, so a stale local build can never leak in. **Build context must be the repo root.** |
+| The old `tsc`-sweeps-tests trap | not a risk here: the root `.dockerignore` excludes `docs/` and `**/*.md`, and the test that imports a `docs/` fixture is excluded from the production build |
+| GitHub repo | **PUBLIC** — the unattended `git clone` in Cloud Shell will not prompt for credentials (and this is why the gitignored prod cookie mattered) |
+
 ### 1.1 Gates that are NOT optional
 1. **jakkaritw's explicit approval before the production step.** A "yes" to
    staging is not a yes to production. Ask as a direct question and wait.
 2. **Staging must pass `A14_RUNBOOK.md` §7 before production is touched.**
-3. **Have the rollback line ready BEFORE you deploy**, with the current revision
-   name already filled in — not looked up after something breaks. The prd app's
-   revision as of today is `cman-budget-web-prd--0000005`; confirm it is still
-   the active one, then keep it in front of you (§10).
+3. **Have the rollback line ready BEFORE you deploy.** ⚠️ The rollback method
+   circulated in chat (`az containerapp revision activate` +
+   `ingress ic set --revision-weight`) **CANNOT WORK HERE**: production runs in
+   `activeRevisionsMode = Single` with exactly ONE revision
+   (`cman-budget-web-prd--0000005`), and in Single mode traffic always follows
+   the latest revision, so a revision-weight command is rejected. The working
+   rollback is to redeploy the last good tag:
+   ```bash
+   az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG \
+     --image cmanbudgetacr.azurecr.io/budget-web:ace0f00
+   ```
+   `ace0f00` is the image both apps are running today — keep it in front of you
+   before you touch anything.
 4. Both container apps pull the SAME image tag. Build once, deploy twice.
 5. `07-security-checklist` before production. Today's changes are frontend
    display-only, so this is a short pass — but it is on the never-cut list, so
    run it and record the verdict in the tracker `ai` field.
 
-### 1.2 Three errors in the sequence handed over earlier — fix before running
-The version circulated in chat cannot work as written:
+### 1.2 Four errors in the sequence handed over earlier — all confirmed against live Azure
 
-| line | problem | fix |
+| line | problem (verified) | fix |
 |---|---|---|
-| `az acr build ... --image budget:95dfd64` then `--image .../budget-web:95dfd64` | the build tags **`budget`** but both deploys pull **`budget-web`** — the deploy fails on image pull (or silently keeps the old image) | pick ONE repository name and use it in all three commands; confirm which one the live apps already pull (command below) |
-| `-g CMAN-BUDGETNGT-WEB-RG` (staging) | looks like a typo — production is `CMAN-BUDGET-MNGT-WEB-RG` | discover staging's real resource group, do not guess |
-| `az containerapp update -n cman-budget-web-prd -g ... -- cmanbudgetacr.azurecr.io/...` | `--` instead of `--image`; az will reject or misparse it | `--image cmanbudgetacr.azurecr.io/<repo>:95dfd64` |
+| `az acr build ... --image budget:95dfd64` | **BLOCKER, and it fails LATE.** The registry has only the repo `budget-web`. This command would *succeed* and quietly create a second repo `budget`, so the build looks fine — then both `containerapp update` lines pull `budget-web:95dfd64`, which does not exist → image-pull failure, revision stuck unhealthy, after you were told the build passed. It also contradicts Kimi's own deploy lines, `backend/Dockerfile`'s header comment, and runbook §3, which all say `budget-web`. | `--image budget-web:95dfd64` |
+| `-g CMAN-BUDGETNGT-WEB-RG` (staging) | **BLOCKER.** That resource group does not exist in the subscription (missing the `M` of `MNGT`). Staging lives in the same RG as production. Fails instantly with `ResourceGroupNotFound`. | `-g CMAN-BUDGET-MNGT-WEB-RG` |
+| `az containerapp update -n cman-budget-web-prd -g ... -- cmanbudgetacr.azurecr.io/...` | **BLOCKER.** `--` instead of `--image`; az rejects/misparses it. | `--image cmanbudgetacr.azurecr.io/budget-web:95dfd64` |
+| rollback via `revision activate` / `ingress traffic set` | **BLOCKER.** Production is `activeRevisionsMode = Single` with exactly one revision, so traffic always follows the latest revision and a revision-weight command is rejected. | redeploy the previous tag — see §1.1 item 3 (`budget-web:ace0f00`) |
 
-Also unverified and worth one command each before you build:
-- Does registry `cmanbudgetacr` still exist and is it the registry these apps
-  actually pull from? (`CLAUDE.md` records the old Streamlit-era ACR as
-  archived, and `A14_RUNBOOK.md` §2 has a step to check exactly this.)
-- Does `backend/Dockerfile` build the Next.js frontend inside the image, and
-  does the repo-root build context reach `frontend/`? If it expects a
-  pre-built `frontend/out`, an `az acr build` from a clean clone ships an image
-  WITHOUT today's frontend changes and the deploy will look successful while
-  changing nothing visible. Read the Dockerfile and any `.dockerignore` before
-  building, and compare against the runbook's own §3 build command.
-- Repo trap on record: a production `tsc -b` once swept in `*.test.ts` that
-  imported a `docs/` fixture and broke `az acr build` while the local build
-  passed. Tests were added to `frontend/src` today — if the image build fails on
-  type-checking test files, that is the known cause, not a mystery.
+### 1.3 Corrected, paste-ready sequence (Cloud Shell or local `az` — every value verified)
 
-Read-only discovery commands (run these, then write the real sequence):
 ```bash
-az containerapp list -o table                       # both app names + real RGs
-az containerapp show -n cman-budget-web-prd -g <rg> --query "properties.template.containers[].image" -o tsv
-az containerapp show -n cman-budget-web-prd -g <rg> --query "properties.configuration.registries" -o json
-az acr list -o table
-az acr repository list --name <registry> -o table    # is the repo budget or budget-web?
-```
-Do **not** dump the container's full env to a file — query only the fields you
-need. A subagent doing that today triggered a credential-materialization
-warning; the app keeps its secrets as `secretRef`, so there is no reason to
-read them at all.
+# --- 0) get the code at the exact commit -------------------------------------
+git clone https://github.com/cmanpowerbi-chememan-com/budget-management-web.git
+cd budget-management-web
+git rev-parse --short HEAD          # MUST print 95dfd64 — stop if it does not
 
-### 1.3 Deploy is the ONE place where a wrong value is expensive
-If any discovery command contradicts something in this document, trust the live
-resource and say so in the tracker — this document is a snapshot, the live
-resource is the truth.
+# --- 1) build ONCE, repo root as context, repo name budget-web ---------------
+az acr build --registry cmanbudgetacr \
+  --image budget-web:95dfd64 \
+  --file backend/Dockerfile .
+az acr repository show-tags --name cmanbudgetacr --repository budget-web \
+  --orderby time_desc -o table      # 95dfd64 must now be listed
+
+# --- 2) STAGING first (runbook forbids skipping this) ------------------------
+az containerapp update -n cman-budget-web-stg -g CMAN-BUDGET-MNGT-WEB-RG \
+  --image cmanbudgetacr.azurecr.io/budget-web:95dfd64
+
+# >>> STOP. Run A14_RUNBOOK.md §7 against the STAGING FQDN, plus Phase 1 of
+#     plan/post-deploy-smoke-uat-plan.md. Staging has minReplicas=0, so the
+#     first request is a cold start — do not read a slow first response as a
+#     failure. Only continue when every §7 item passes.
+
+# --- 3) PRODUCTION — only after jakkaritw says yes to THIS step --------------
+az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG \
+  --image cmanbudgetacr.azurecr.io/budget-web:95dfd64
+
+# --- 4) verify prod, then rollback line kept ready --------------------------
+# repeat §7 + Phase 1 against the prod FQDN. If it is bad:
+az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG \
+  --image cmanbudgetacr.azurecr.io/budget-web:ace0f00
+```
+
+Notes on verifying: `/health` sits behind Easy Auth, so `curl` alone can only
+prove the unauthenticated 401/302 case (§7 step 1) — the rest needs a signed-in
+browser tab. Do **not** dump the container's env to a file to "check config";
+query only the field you need. A subagent doing that today triggered a
+credential-materialization warning, and the app keeps its secrets as
+`secretRef` anyway, so there is nothing to read.
+
+If any command's output contradicts this document, trust the live resource, stop,
+and record the discrepancy in the tracker — this file is a 2026-07-30 snapshot.
 
 ---
 
@@ -204,6 +241,13 @@ not start the rollout waves before it is closed.
    (plan item P0-28). Recommended: split.
 6. **`NOTIFICATIONS_DRY_RUN`** stays `true` until the Phase-2 first-submit
    verification (P2-F2 → P2-F4). Do not flip it as part of this deploy.
+7. **Two hardening items surfaced while verifying the deploy path** (neither
+   blocks this deploy, both are jakkaritw's call): the GitHub repo
+   `cmanpowerbi-chememan-com/budget-management-web` is **public** — fine for
+   code, unforgiving about anything secret ever being committed; and the ACR
+   `cmanbudgetacr` has `adminUserEnabled = true` while the apps authenticate by
+   managed identity, so the admin credential path is unused and could be turned
+   off.
 
 ---
 
