@@ -8,14 +8,12 @@
 - Deploy path: staging → PRD per `docs/deploy/A14_RUNBOOK.md` (image tag = this commit's SHA).
 
 ## No-scope empty state made actionable (2026-07-30, frontend only, TDD)
-- [ ] **Visual polish deferred on purpose**: the 3 CSS rules for `.no-scope-empty` /
+- [x] **Visual polish — LANDED 2026-07-30 (Kimi, handoff §3)**: the 3 CSS rules for `.no-scope-empty` /
   `.no-scope-empty-heading` (heading weight + tighter paragraph spacing) were written
-  and then REVERTED before commit — `frontend/src/styles/global.css` belongs to the
+  and then REVERTED before the original commit — `frontend/src/styles/global.css` belonged to the
   parallel session's in-flight year-total-column work under the 2026-07-30
-  parallel-session protocol (tracker `#no-access-empty-state-copy`). The class hooks
-  are already in the JSX; add the rules once that session's global.css lands. Until
-  then the three lines render on browser-default paragraph margins — readable
-  (`.grid-empty` is not a flex container), just looser than intended.
+  parallel-session protocol (tracker `#no-access-empty-state-copy`). That work landed in
+  `95dfd64`, so the rules were re-added after `.grid-empty` in this commit.
 - [x] **Replaced the useless "ดูข้อมูลได้ที่ Dashboard" no-scope message** (`frontend/src/grid/BudgetGrid.tsx`'s `hasNoScope` branch, `role==='none'` only) — Dashboard does not exist in Phase 1 and the old copy gave no path to get access. New 3-line Thai message (jakkaritw-approved wording, no button/no mailto per his explicit choice): heading "ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ", a caller-email line ("บัญชีของคุณ {email} ยังไม่ได้รับสิทธิ์กรอกงบประมาณ") rendered only when `scope.email` is truthy, and a contact line pointing at nipapornt@chememan.com + the `cc dept.xlsx` master (SharePoint › Budgeting and Management, ADR-0019 — the file that feeds `dbo.cc_filler_map`). Contact email + filename are named/exported module-level constants `SCOPE_ACCESS_CONTACT_EMAIL`/`SCOPE_ACCESS_SOURCE_FILE` for future reuse (e.g. DeptPicker). `data-testid="no-scope-empty-state"` kept unchanged for existing e2e specs. `useScope.ts`: extended `ScopeState`/`EMPTY_SCOPE` with `email: string | null`, populated from `GET /scope`'s already-returned `email` field (no new network call, no backend change — `Scope` model/`ScopeResponse` already had it). TDD RED-first: reverted both source files, confirmed 4 tests failed for the right reason (old copy/`undefined` email), restored, GREEN. Tests: 2 new/updated in `useScope.test.tsx` (email populated on success, null on failure) + `BudgetGrid.test.tsx` no-scope test rewritten (heading/caller-email/contact-email/`cc dept.xlsx` present, "Dashboard" absent) + 3 new (email-omitted-when-null, filler keeps full page, see_only keeps full page); `UserBar.test.tsx`'s `scope()` test factory updated with the new required field (mechanical, no behavior change). Targeted run 29/29 pass (confirmed non-flaky over 3 repeats); full frontend suite 494/494 pass, no regressions; `npx oxlint` clean (both targeted files and whole project). Not committed (per instructions — main session commits). `frontend/src/grid/GridTable.tsx`/`GridTable.test.tsx` NOT touched (another session's in-flight work).
 
 ## Hide net-zero GL rows on the budget grid (2026-07-24, backend only, TDD, UNCOMMITTED)

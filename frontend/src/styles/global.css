@@ -793,6 +793,19 @@ input:focus-visible {
   border: 1px dashed var(--line);
   border-radius: var(--r);
 }
+/* No-scope empty state (059ebe0 shipped the markup hooks without CSS while
+   this file was in flight in a parallel session — handoff §3): tighten the
+   3-line message off browser-default paragraph margins. */
+.no-scope-empty p {
+  margin: 0 0 6px;
+}
+.no-scope-empty p:last-child {
+  margin-bottom: 0;
+}
+.no-scope-empty-heading {
+  font-weight: 600;
+  color: var(--ink-2);
+}
 .grid-error {
   display: flex;
   align-items: center;
