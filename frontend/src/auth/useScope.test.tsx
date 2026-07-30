@@ -38,6 +38,7 @@ describe('useScope', () => {
     expect(result.current.isAdmin).toBe(false)
     expect(result.current.fillCostCenters).toEqual(['10CA013000'])
     expect(result.current.seeCostCenters).toEqual(['10CA013000', '10CA013001'])
+    expect(result.current.email).toBe('user@chememan.com')
     expect(result.current.error).toBeNull()
   })
 
@@ -50,6 +51,7 @@ describe('useScope', () => {
     expect(result.current.role).toBeNull()
     expect(result.current.fillCostCenters).toEqual([])
     expect(result.current.seeCostCenters).toEqual([])
+    expect(result.current.email).toBeNull()
     expect(result.current.error).not.toBeNull()
   })
 })

@@ -7,6 +7,10 @@ export interface ScopeState {
   isAdmin: boolean
   fillCostCenters: string[]
   seeCostCenters: string[]
+  /** The caller's own email, straight from `GET /scope` — used to personalize
+   * empty states (e.g. BudgetGrid's no-scope message). Never a bearer of
+   * access, display-only. */
+  email: string | null
   loading: boolean
   error: string | null
 }
@@ -16,6 +20,7 @@ const EMPTY_SCOPE = {
   isAdmin: false,
   fillCostCenters: [] as string[],
   seeCostCenters: [] as string[],
+  email: null as string | null,
 }
 
 /** Resolves the caller's RLS Fill/See cost-center scope by calling
@@ -37,6 +42,7 @@ export function useScope(): ScopeState {
           isAdmin: data.is_admin,
           fillCostCenters: data.fill_cost_centers,
           seeCostCenters: data.see_cost_centers,
+          email: data.email || null,
           loading: false,
           error: null,
         })

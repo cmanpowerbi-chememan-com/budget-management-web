@@ -25,6 +25,13 @@ export interface BudgetGridProps {
   initialFilter: DeepLinkFilter
 }
 
+/** Single source of truth for the "no Fill/See scope" contact — the CC↔Filler
+ * master (`cc dept.xlsx`, ADR-0019) that feeds `dbo.cc_filler_map`. Exported
+ * so any other empty state needing the same contact (e.g. DeptPicker) reuses
+ * these instead of re-typing the email/filename. */
+export const SCOPE_ACCESS_CONTACT_EMAIL = 'nipapornt@chememan.com'
+export const SCOPE_ACCESS_SOURCE_FILE = 'cc dept.xlsx'
+
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
 }
@@ -311,8 +318,13 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   if (hasNoScope) {
     return (
       <div className="budget-grid">
-        <div className="grid-empty" data-testid="no-scope-empty-state">
-          คุณไม่มีสิทธิ์กรอกงบประมาณ — ดูข้อมูลได้ที่ Dashboard
+        <div className="grid-empty no-scope-empty" data-testid="no-scope-empty-state">
+          <p className="no-scope-empty-heading">ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ</p>
+          {scope.email && <p>บัญชีของคุณ {scope.email} ยังไม่ได้รับสิทธิ์กรอกงบประมาณ</p>}
+          <p>
+            กรุณาติดต่อ {SCOPE_ACCESS_CONTACT_EMAIL} เพื่อเพิ่มสิทธิ์ที่ไฟล์ {SCOPE_ACCESS_SOURCE_FILE}
+            {' '}(SharePoint › Budgeting and Management)
+          </p>
         </div>
       </div>
     )

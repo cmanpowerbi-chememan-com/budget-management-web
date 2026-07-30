@@ -1,8 +1,44 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T10:14:55+0700",
+  "updated": "2026-07-30T11:13:39+0700",
   "tasks": [
+    {
+      "id": "no-scope-empty-state-ux",
+      "state": "done",
+      "created": "2026-07-30T10:58:01+0700",
+      "updated": "2026-07-30T11:13:39+0700",
+      "ai": "DUPLICATE of #no-access-empty-state-copy (created by the implement subagent for the same change). The authoritative record, incl. the approved wording, the parallel-session protocol and the commit hash, lives on #no-access-empty-state-copy. No separate work here.",
+      "agent": "claude",
+      "skills": [
+        "32-design-an-interface",
+        "00-engineering-methodology"
+      ]
+    },
+    {
+      "id": "grid-totals-3layer-yearcol",
+      "state": "doing",
+      "created": "2026-07-30T10:56:33+0700",
+      "updated": "2026-07-30T10:56:33+0700",
+      "ai": "Grid totals rework (kimi session 2026-07-30): (1) side grand total now renders 3 layer rows (SAP/Approved/Pending) both COST+SGA sides; (2) new รวมทั้งปี (total_year) column before Jan on all rows+subtotals; (3) group subtotal label marked Pending-only. Tests: GridTable+model 136/136 green, tsc clean. NOT committed yet; pre-existing unrelated WIP in useScope/BudgetGrid/UserBar has 2 red tests (owner unknown). Next: visual verify screenshot -> jakkaritw review -> commit/push -> Cloud Shell staging -> PRD per docs/deploy/A14_RUNBOOK.md",
+      "agent": "kimi"
+    },
+    {
+      "id": "no-access-empty-state-copy",
+      "state": "done",
+      "created": "2026-07-30T10:40:39+0700",
+      "updated": "2026-07-30T11:13:39+0700",
+      "ai": "SHIPPED 2026-07-30. frontend/src/grid/BudgetGrid.tsx no-scope branch now renders 3 Thai lines: heading 'ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ' + 'บัญชีของคุณ {email} ยังไม่ได้รับสิทธิ์กรอกงบประมาณ' (omitted entirely when email null) + 'กรุณาติดต่อ nipapornt@chememan.com เพื่อเพิ่มสิทธิ์ที่ไฟล์ cc dept.xlsx (SharePoint › Budgeting and Management)'. No button/mailto (jakkaritw's choice). Constants exported as SCOPE_ACCESS_CONTACT_EMAIL / SCOPE_ACCESS_SOURCE_FILE for reuse (DeptPicker empty state is the obvious next consumer). useScope.ts now carries email from GET /scope (backend already returned it; no new request, no backend change). testid no-scope-empty-state kept. TDD RED-first verified. Tests: targeted 29/29 (re-run by main session AFTER the CSS revert, still 29/29), full frontend suite 494/494, oxlint clean. GATE VERDICT was REQUEST-CHANGES on exactly one point: the implementer had added 12 lines to frontend/src/styles/global.css, which the parallel-session protocol assigns to Kimi's in-flight year-total work -> main session REVERTED those 12 lines (global.css now shows only Kimi's 3 total-year rules, 18 lines, still uncommitted and untouched); class hooks stay in the JSX, CSS polish deferred to a plan.md checkbox. Commit includes ONLY: BudgetGrid.tsx, BudgetGrid.test.tsx, useScope.ts, useScope.test.tsx, UserBar.test.tsx (mechanical fixture field), .claude/plan.md, tracker/pending.json - global.css deliberately excluded. #no-scope-empty-state-ux is a duplicate entry for this same work.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-2a07036",
+      "state": "done",
+      "created": "2026-07-30T10:15:26+0700",
+      "updated": "2026-07-30T10:15:26+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): P0-22 approver-scope defect still open; P0-36 tenant cause; P0-38 health-probe gap [commit 2a07036]"
+    },
     {
       "id": "approver-nonadmin-scope-risk",
       "state": "willdo",

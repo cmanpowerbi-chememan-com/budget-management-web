@@ -33,6 +33,7 @@ function scope(overrides: Partial<ScopeState> = {}): ScopeState {
     isAdmin: false,
     fillCostCenters: [],
     seeCostCenters: [],
+    email: null,
     loading: false,
     error: null,
     ...overrides,

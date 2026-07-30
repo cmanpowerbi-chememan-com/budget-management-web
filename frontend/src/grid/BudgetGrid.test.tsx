@@ -7,7 +7,7 @@ import * as approvalApi from '../api/approval'
 import * as budgetApi from '../api/budget'
 import * as referenceApi from '../api/reference'
 import * as subformApi from '../api/subform'
-import { BudgetGrid } from './BudgetGrid'
+import { BudgetGrid, SCOPE_ACCESS_CONTACT_EMAIL, SCOPE_ACCESS_SOURCE_FILE } from './BudgetGrid'
 import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
 
 vi.mock('../api/budget')
@@ -24,6 +24,7 @@ const SCOPE: ScopeState = {
   isAdmin: false,
   fillCostCenters: ['CC1'],
   seeCostCenters: ['CC1'],
+  email: 'user@chememan.com',
   loading: false,
   error: null,
 }
@@ -379,14 +380,59 @@ describe('BudgetGrid', () => {
     expect(select).toBeDisabled() // single side across the ฝ่าย + non-admin
   })
 
-  it('shows the no-scope empty state and never calls the budget/departments endpoints (A10 scope-role UX)', async () => {
-    const NONE_SCOPE: ScopeState = { role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [], loading: false, error: null }
+  it('shows an actionable no-scope message (caller email + contact + master file) and never calls the budget/departments endpoints (A10 scope-role UX)', async () => {
+    const NONE_SCOPE: ScopeState = {
+      role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [],
+      email: 'suchanyay@chememan.com', loading: false, error: null,
+    }
 
     render(<BudgetGrid scope={NONE_SCOPE} initialFilter={{ dept: null, year: null }} />)
 
-    expect(await screen.findByTestId('no-scope-empty-state')).toHaveTextContent('ดูข้อมูลได้ที่ Dashboard')
+    const empty = await screen.findByTestId('no-scope-empty-state')
+    expect(empty).toHaveTextContent('ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ')
+    expect(empty).toHaveTextContent('suchanyay@chememan.com')
+    expect(empty).toHaveTextContent(SCOPE_ACCESS_CONTACT_EMAIL)
+    expect(empty).toHaveTextContent(SCOPE_ACCESS_SOURCE_FILE)
+    expect(empty).not.toHaveTextContent('Dashboard')
     expect(budgetApi.fetchDepartments).not.toHaveBeenCalled()
     expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalled()
+  })
+
+  it('omits the caller-email line entirely when scope.email is null (never prints "null" or a blank gap)', async () => {
+    const NONE_SCOPE_NO_EMAIL: ScopeState = {
+      role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [],
+      email: null, loading: false, error: null,
+    }
+
+    render(<BudgetGrid scope={NONE_SCOPE_NO_EMAIL} initialFilter={{ dept: null, year: null }} />)
+
+    const empty = await screen.findByTestId('no-scope-empty-state')
+    expect(empty).toHaveTextContent('ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ')
+    expect(empty).toHaveTextContent(SCOPE_ACCESS_CONTACT_EMAIL)
+    expect(empty).not.toHaveTextContent('null')
+    expect(empty).not.toHaveTextContent('บัญชีของคุณ')
+  })
+
+  it('never shows the no-scope empty state for a filler scope (full page renders instead)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
+    expect(screen.queryByTestId('no-scope-empty-state')).not.toBeInTheDocument()
+  })
+
+  it('never shows the no-scope empty state for a see_only scope (full page renders instead)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={{ ...SCOPE, role: 'see_only', fillCostCenters: [] }} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
+    expect(screen.queryByTestId('no-scope-empty-state')).not.toBeInTheDocument()
   })
 
   it('shows the รออนุมัติ badge on the ฝ่าย picker when the caller is the current approver for it', async () => {
@@ -401,7 +447,7 @@ describe('BudgetGrid', () => {
   })
 
   it('a dual-role admin gets an admin-mode toggle that switches admin_view_enabled', async () => {
-    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
     vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
@@ -418,7 +464,7 @@ describe('BudgetGrid', () => {
   })
 
   it('re-auto-selects the first ฝ่าย after the admin-mode toggle switches (2026-07-24 rule)', async () => {
-    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
     vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
@@ -437,7 +483,7 @@ describe('BudgetGrid', () => {
   })
 
   it('after a hat-switch, auto-selects the FIRST ฝ่าย of the NEW scope (hierarchy order), not the previous pick', async () => {
-    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], loading: false, error: null }
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null }
     const TWO_DEPTS = [
       { cost_center: 'CC2', department: 'Beta Dept', division: 'Div', c_level: 'X' },
       { cost_center: 'CC1', department: 'Alpha Dept', division: 'Div', c_level: 'X' },
@@ -485,7 +531,7 @@ describe('BudgetGrid', () => {
   })
 
   it('shows the read-only "Approved · Admin" info strip for an admin scope, with the FX year one behind the selected planning year', async () => {
-    const ADMIN_SCOPE: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [], loading: false, error: null }
+    const ADMIN_SCOPE: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
     vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
