@@ -52,6 +52,11 @@ graphify-out/.graphify_labels.json
 bin/
 # Playwright stored auth state (transient, never commit)
 .playwright_auth.json
+# Easy Auth session cookie pasted in by hand for the prod harnesses
+# (setup/smoke_prd.py, phase2_harness_*.py) — a LIVE credential, never commit
+setup/_auth_cookie.tmp.txt
+# Throwaway UI review screenshots rendered for a visual sign-off
+noscope-*.png
 
 # Large source/demo data dumps (xlsx/csv/SAP exports) — not source, exceed GitHub limits
 docs/demo_data/
