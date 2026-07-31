@@ -1,25 +1,45 @@
-"""A12 scheduled job (automation D) — reminder emails, 2026-07-31 revamp
-(plan/email-notify-revamp.md). TWO phases in ONE job (no new job created):
+"""A12 scheduled job (automation D) — reminder emails, §7 rework
+(plan/email-notify-revamp.md §7, 2026-07-31): GROUPED one-mail-per-person
+reminders + bulk-send hardening. TWO phases in ONE job (no new job created):
 
-Phase A — TURN reminders: every `budget.approval_status` row sitting in
-PENDING_APPROVER1/2/3 whose current turn started >= 7 days ago gets a
-`notify_turn(reminder=True)` nudge to the CURRENT approver, repeated every
-7 days until they act. The turn-start anchor is `app.approval.current_turn_info`
-— the SAME anchor the 30-day auto-escalate (`is_step_stale`) uses, so the
-two clocks can never drift (plan invariant §5).
+Phase A — TURN reminders: ONE mail per APPROVER listing every department
+currently waiting on them (`notify_turn_reminder`), each row with that
+department's days-pending. Due gate is per PERSON: they are due when ≥1 of
+their pending items is ≥7 days old (turn_start from
+`app.approval.current_turn_info` — the SAME anchor the 30-day auto-escalate
+uses) AND their person-level cadence is clear (never reminded, or last
+reminder ≥7 days ago). The mail CONTENT is always ALL departments waiting
+on them, including ones younger than 7 days (spec §7.1: "ลิสต์ทุกฝ่ายที่รอ
+เขาอยู่") — the 7-day gate throttles the person, not the row.
 
-Phase B — DEADLINE reminders (rework of the old behavior): Fillers of
-still-not-submitted departments (NO approval_status row = DRAFT, or status
-REJECTED — departments already in the chain are Phase A's job, never both).
-ONE email per (department, filler) — replaces the old grouped per-filler
-mail — To the filler, cc the derived approver1 (the filler's
-`manager_employee_code` from `dbo.v_employee_budget_01`, fallback Nipaporn
-— the same rule `app.approval.resolve_chain` freezes at submit time).
+Phase B — DEADLINE reminders: ONE mail per FILLER listing every
+still-not-submitted department they Fill (NO approval_status row = DRAFT,
+or status REJECTED — departments already in the chain are Phase A's job,
+never both), each row with its own deep link. To the filler, cc the derived
+approver1 (the filler's `manager_employee_code` from
+`dbo.v_employee_budget_01`, fallback Nipaporn — the same rule
+`app.approval.resolve_chain` freezes at submit time, ONE address).
 
-Cadence bookkeeping lives in `budget.reminder_log` (db/ddl/budget_reminder_log.sql):
-one row per (reminder_type, department, fiscal_year, recipient), updated
-after each SUCCESSFUL send. A mail that fails is never logged, so it is
-retried on the next run. Dry-run never sends and never writes the log.
+Cadence bookkeeping lives in `budget.reminder_log` (db/ddl/budget_reminder_log.sql),
+keyed per PERSON per year on the '*' department sentinel (the mail is no
+longer about one department): ('turn','*',fy,empcode) /
+('deadline','*',fy,filler_email). Accepted trade-off (§7.2, documented in
+the DDL): cadence is per-person-per-year, so a department that newly goes
+pending mid-week does NOT trigger a fresh mail immediately — it rides the
+person's next 7-day round (event mails at submit/approve/reject still fire
+instantly, so nobody misses work). Updated after each SUCCESSFUL send only;
+a failed mail is never logged, so it is retried on the next run. Dry-run
+never sends and never writes the log.
+
+Bulk-send hardening (§7.3): the Graph token is fetched once per round
+(module-level cache in app.notifications), transient 429/503/504 are
+retried with Retry-After/backoff inside `send_mail`, the job PACES sends
+(`reminder_send_delay_seconds`, injectable sleep) and CAPS each phase
+(`reminder_max_sends_per_run`, 0 = unlimited — over-cap recipients are
+skipped loudly via a "capped N" line and get no log row, so next run
+reminds them), and each phase closes with ONE summary line:
+attempted/sent/failed/retried/capped (`retried` = mails that needed ≥1
+retry attempt). Per-recipient failure isolation + conn.rollback() unchanged.
 
 Run (from `backend/`):
     python -m jobs.send_reminders --fiscal-year 2027            # dry-run preview (default)
@@ -29,7 +49,9 @@ The old gate is unchanged: `--execute` + `DRY_RUN=false` (jobs/common.py,
 untouched) + `Settings.notifications_dry_run` for the actual Graph send.
 """
 import logging
+import time
 from datetime import date, datetime, timezone
+from typing import Callable
 
 from app import notifications
 from app.approval import (
@@ -50,17 +72,20 @@ logger = logging.getLogger("jobs.send_reminders")
 TURN_REMINDER_TYPE = "turn"
 DEADLINE_REMINDER_TYPE = "deadline"
 REMINDER_INTERVAL_DAYS = 7
+# §7.2: reminder mails are grouped per PERSON, so the reminder_log
+# `department` column carries this sentinel instead of a real ฝ่าย.
+PERSON_SENTINEL = "*"
 
 
 # ---------------------------------------------------------------------------
-# reminder_log bookkeeping (budget.reminder_log, plan §3.3)
+# reminder_log bookkeeping (budget.reminder_log, plan §3.3 + §7.2)
 # ---------------------------------------------------------------------------
 
 def _last_sent_at(conn, reminder_type: str, department: str, fiscal_year: int, recipient: str) -> datetime | None:
     """MAX(sent_at) ever logged for this exact (type, department, year,
-    recipient) — None when never reminded. For turn reminders `recipient`
-    is the current approver's empcode, so an approver CHANGE (re-freeze on
-    resubmit) naturally starts a fresh cadence."""
+    recipient) — None when never reminded. Since §7.2 `department` is the
+    '*' sentinel for both types (mails are per-person now), so a person's
+    cadence follows THEM, not any single department."""
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -76,9 +101,9 @@ def _last_sent_at(conn, reminder_type: str, department: str, fiscal_year: int, r
 
 def _log_reminder(conn, reminder_type: str, department: str, fiscal_year: int, recipient: str, sent_at: datetime) -> None:
     """Upsert the cadence row AFTER a successful send only (callers never
-    reach here on failure or dry-run — a failed mail must be retried next
-    run). UPDATE-first keeps the PK (reminder_type, department, fiscal_year,
-    recipient) stable across repeats."""
+    reach here on failure, cap, or dry-run — those recipients must be
+    retried next run). UPDATE-first keeps the PK (reminder_type, department,
+    fiscal_year, recipient) stable across repeats."""
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -103,34 +128,50 @@ def _naive(dt: datetime) -> datetime:
     return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
-def _turn_due(turn_start: datetime, last_sent: datetime | None, now: datetime) -> bool:
-    """7-day turn cadence (plan §3.3): due when the turn has sat >= 7 days
-    and either no reminder was ever sent THIS turn, or the last one went out
-    >= 7 days ago. A `last_sent` BEFORE `turn_start` belongs to a previous
-    chain cycle (reject -> resubmit re-froze the row) and counts as never
-    sent."""
-    if last_sent is not None and _naive(last_sent) < _naive(turn_start):
-        last_sent = None
-    anchor = last_sent if last_sent is not None else turn_start
-    return (_naive(now) - _naive(anchor)).days >= REMINDER_INTERVAL_DAYS
+def _person_cadence_clear(last_sent: datetime | None, now: datetime) -> bool:
+    """§7 person-level 7-day cadence: clear when this PERSON was never
+    reminded, or their last reminder went out >= 7 days ago. Replaces the
+    per-(department, recipient) cadence of the first revamp — the reminder
+    mail is grouped per person now, so the throttle is per person too."""
+    if last_sent is None:
+        return True
+    return (_naive(now) - _naive(last_sent)).days >= REMINDER_INTERVAL_DAYS
 
 
 def _deadline_due(last_sent: datetime | None, today: date) -> bool:
-    """7-day deadline cadence (plan §3.3): due when never sent, or the last
-    send was >= 7 days ago. (The window check — reminder_date..deadline_date
-    — happens once per run in `_run_deadline_reminders`, not here.)"""
+    """Deadline-phase person cadence (date-granularity twin of
+    `_person_cadence_clear`): due when never sent, or the last send was
+    >= 7 days ago. (The window check — reminder_date..closing_date —
+    happens once per run in `_run_deadline_reminders`, not here.)"""
     if last_sent is None:
         return True
     return (today - _naive(last_sent).date()).days >= REMINDER_INTERVAL_DAYS
 
 
+def _apply_cap(due: list, max_sends: int, phase: str, fiscal_year: int) -> tuple[list, int]:
+    """§7.3.4 per-phase send cap (0 = unlimited). Over-cap recipients are
+    NOT sent and NOT logged — never silently: a loud 'capped N' line is
+    written so a partial round is always visible in the job log."""
+    if not max_sends or len(due) <= max_sends:
+        return due, 0
+    capped = len(due) - max_sends
+    logger.warning(
+        "fiscal_year=%s phase=%s: %d recipient(s) due but cap is %d — capped %d (not sent, not logged; next run retries)",
+        fiscal_year, phase, len(due), max_sends, capped,
+    )
+    return due[:max_sends], capped
+
+
 # ---------------------------------------------------------------------------
-# Phase A — turn reminders (PENDING_APPROVER1/2/3)
+# Phase A — turn reminders, ONE grouped mail per approver (PENDING_APPROVER1/2/3)
 # ---------------------------------------------------------------------------
 
-def _run_turn_reminders(conn, fiscal_year: int, dry_run: bool, notifications_dry_run: bool, now: datetime) -> int:
+def _run_turn_reminders(
+    conn, fiscal_year: int, dry_run: bool, notifications_dry_run: bool, now: datetime,
+    *, sleep: Callable[[float], None] = time.sleep, send_delay_seconds: float = 2.0, max_sends: int = 150,
+) -> int:
     rows = fetch_pending_rows(conn, fiscal_year)
-    due: list[tuple[dict, datetime, str]] = []
+    by_approver: dict[str, list[tuple[str, int]]] = {}  # empcode -> [(department, days_pending)]
     for row in rows:
         turn_start, approver_empcode = current_turn_info(row)
         if not approver_empcode:
@@ -139,51 +180,71 @@ def _run_turn_reminders(conn, fiscal_year: int, dry_run: bool, notifications_dry
                 row["department"], row["status"],
             )
             continue
-        last_sent = _last_sent_at(conn, TURN_REMINDER_TYPE, row["department"], fiscal_year, approver_empcode)
-        if _turn_due(turn_start, last_sent, now):
-            due.append((row, turn_start, approver_empcode))
+        days_pending = (_naive(now) - _naive(turn_start)).days
+        by_approver.setdefault(approver_empcode, []).append((row["department"], days_pending))
+
+    # Per-person due gate: >=1 item aged >=7d AND the person's own 7-day
+    # cadence is clear. Content is always ALL their pending items (younger
+    # ones ride along — see module docstring).
+    due: list[tuple[str, list[tuple[str, int]]]] = []
+    for approver_empcode, items in by_approver.items():
+        if not any(days >= REMINDER_INTERVAL_DAYS for _, days in items):
+            continue
+        last_sent = _last_sent_at(conn, TURN_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, approver_empcode)
+        if _person_cadence_clear(last_sent, now):
+            due.append((approver_empcode, items))
 
     if not due:
         logger.info("fiscal_year=%s: 0 turn reminder(s) due", fiscal_year)
         return 0
 
-    if dry_run:
-        for row, turn_start, empcode in due:
-            logger.info(
-                "[DRY-RUN] would send turn reminder department=%r approver=%s turn_start=%s",
-                row["department"], empcode, turn_start,
-            )
-        return len(due)
+    to_send, capped = _apply_cap(due, max_sends, TURN_REMINDER_TYPE, fiscal_year)
 
-    sent = 0
-    for row, turn_start, approver_empcode in due:
-        department = row["department"]
+    if dry_run:
+        for approver_empcode, items in to_send:
+            logger.info(
+                "[DRY-RUN] would send turn reminder approver=%s departments=%s",
+                approver_empcode, [dept for dept, _ in items],
+            )
+        return len(to_send)
+
+    attempted = sent = failed = retried = 0
+    for i, (approver_empcode, items) in enumerate(to_send):
+        if i:
+            sleep(send_delay_seconds)  # §7.3.2 pacing: N sends -> N-1 sleeps
+        attempted += 1
         try:
-            result = notifications.notify_turn(
-                conn, department=department, fiscal_year=fiscal_year,
-                approver_empcode=approver_empcode, submitter_email=row["submitter_email"],
-                reminder=True, days_pending=(_naive(now) - _naive(turn_start)).days,
+            result = notifications.notify_turn_reminder(
+                conn, approver_empcode=approver_empcode,
+                items=[(dept, fiscal_year, days) for dept, days in items],
                 dry_run=notifications_dry_run,
             )
             if result is None or not result.sent:
                 # Email unresolvable — or suppressed by NOTIFICATIONS_DRY_RUN
-                # under a manual --execute BEFORE the go-live flip: nothing was
-                # REALLY sent, so nothing is logged. The row stays due, and the
+                # under a manual --execute BEFORE the go-live flip: nothing
+                # REALLY sent, so nothing logged; the person stays due and the
                 # first real send after the flip is never swallowed by a stale
                 # cadence row (gate finding 2026-07-31).
+                failed += 1
                 continue
-            _log_reminder(conn, TURN_REMINDER_TYPE, department, fiscal_year, approver_empcode, now)
+            _log_reminder(conn, TURN_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, approver_empcode, now)
             sent += 1
+            if result.retries:
+                retried += 1  # mails that needed >=1 retry attempt (§7.3.5)
         except Exception:
             conn.rollback()
-            logger.exception("turn reminder failed for department=%r — continuing with next row", department)
+            failed += 1
+            logger.exception("turn reminder failed for approver=%r — continuing with next person", approver_empcode)
 
-    logger.info("fiscal_year=%s: sent %d/%d turn reminder(s)", fiscal_year, sent, len(due))
+    logger.info(
+        "fiscal_year=%s phase=turn summary: attempted=%d sent=%d failed=%d retried=%d capped=%d",
+        fiscal_year, attempted, sent, failed, retried, capped,
+    )
     return sent
 
 
 # ---------------------------------------------------------------------------
-# Phase B — deadline reminders (DRAFT / REJECTED departments)
+# Phase B — deadline reminders, ONE grouped mail per filler (DRAFT / REJECTED)
 # ---------------------------------------------------------------------------
 
 def _deadline_window(conn, fiscal_year: int) -> tuple[date, date | None] | None:
@@ -197,7 +258,9 @@ def _deadline_window(conn, fiscal_year: int) -> tuple[date, date | None] | None:
     closing DATE lives in `deadline_date` — the column literally named
     `closing_date` is an INT day-of-month input (31) alongside closing_month/
     closing_year, NOT a date. Querying `closing_date` here made the window
-    compare a date against 31 and killed the whole job."""
+    compare a date against 31 and killed the whole job (caught in
+    cross-review, reverted once by accident, now guarded by
+    `test_deadline_window_queries_the_real_schema_columns`)."""
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -268,10 +331,11 @@ def _resolve_approver1_cc_email(conn, filler_email: str) -> str | None:
 
 def _run_deadline_reminders(
     conn, fiscal_year: int, dry_run: bool, notifications_dry_run: bool, today: date,
+    *, sleep: Callable[[float], None] = time.sleep, send_delay_seconds: float = 2.0, max_sends: int = 150,
     now: datetime | None = None,
 ) -> int:
-    # `now` stamps the reminder_log rows (injectable for deterministic tests,
-    # same clock Phase A uses); `today` drives the reminder/closing window.
+    # `now` stamps reminder_log rows (injectable for deterministic tests, same
+    # clock Phase A uses); `today` drives the reminder/closing window.
     now = now or datetime.now(timezone.utc)
     window = _deadline_window(conn, fiscal_year)
     if window is None:
@@ -293,24 +357,38 @@ def _run_deadline_reminders(
         logger.info("fiscal_year=%s: 0 still-not-submitted department(s) — nothing to remind", fiscal_year)
         return 0
 
-    due: list[tuple[str, str]] = []  # (department, filler_email)
+    # Group by filler: ONE mail per person listing ALL their pending
+    # departments (§7.1 — the per-ฝ่าย mail of the first revamp is gone).
+    by_filler: dict[str, list[str]] = {}
     for department in departments:
         for filler_email in _find_fillers(conn, department):
-            last_sent = _last_sent_at(conn, DEADLINE_REMINDER_TYPE, department, fiscal_year, filler_email)
-            if _deadline_due(last_sent, today):
-                due.append((department, filler_email))
+            by_filler.setdefault(filler_email, []).append(department)
+
+    # Per-person due gate: inside the reminder window (checked above) AND
+    # the person's own 7-day cadence is clear. Content is always ALL their
+    # pending departments.
+    due: list[tuple[str, list[str]]] = []
+    for filler_email, depts in by_filler.items():
+        last_sent = _last_sent_at(conn, DEADLINE_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, filler_email)
+        if _deadline_due(last_sent, today):
+            due.append((filler_email, sorted(depts)))
 
     if not due:
         logger.info("fiscal_year=%s: 0 deadline reminder(s) due", fiscal_year)
         return 0
 
-    if dry_run:
-        for department, filler_email in due:
-            logger.info("[DRY-RUN] would send deadline reminder department=%r filler=%s", department, filler_email)
-        return len(due)
+    to_send, capped = _apply_cap(due, max_sends, DEADLINE_REMINDER_TYPE, fiscal_year)
 
-    sent = 0
-    for department, filler_email in due:
+    if dry_run:
+        for filler_email, depts in to_send:
+            logger.info("[DRY-RUN] would send deadline reminder filler=%s departments=%s", filler_email, depts)
+        return len(to_send)
+
+    attempted = sent = failed = retried = 0
+    for i, (filler_email, depts) in enumerate(to_send):
+        if i:
+            sleep(send_delay_seconds)  # §7.3.2 pacing: N sends -> N-1 sleeps
+        attempted += 1
         try:
             cc_email = _resolve_approver1_cc_email(conn, filler_email)
             # Never cc the filler themselves (same rule as notify_reject /
@@ -320,24 +398,34 @@ def _run_deadline_reminders(
                 # The email's `closing_date` display arg is fed from the
                 # schema's `deadline_date` (the real closing DATE) — NOT from
                 # the int day-of-month column named `closing_date`.
-                filler_email, department, fiscal_year, deadline_date,
+                filler_email, depts, fiscal_year, deadline_date,
                 cc_emails=cc_emails, dry_run=notifications_dry_run,
             )
             if result is None or not result.sent:
-                continue  # nothing really sent -> nothing logged (retry next run; see Phase A note)
+                # Unresolvable — or suppressed by NOTIFICATIONS_DRY_RUN under
+                # a manual --execute BEFORE the go-live flip: nothing REALLY
+                # sent, so nothing logged (else a stale cadence row swallows
+                # the first real reminder after the flip — gate 2026-07-31).
+                failed += 1
+                continue
             _log_reminder(
-                conn, DEADLINE_REMINDER_TYPE, department, fiscal_year, filler_email,
+                conn, DEADLINE_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, filler_email,
                 now,
             )
             sent += 1
+            if result.retries:
+                retried += 1  # mails that needed >=1 retry attempt (§7.3.5)
         except Exception:
             conn.rollback()
+            failed += 1
             logger.exception(
-                "deadline reminder failed for department=%r filler=%r — continuing with next pair",
-                department, filler_email,
+                "deadline reminder failed for filler=%r — continuing with next person", filler_email,
             )
 
-    logger.info("fiscal_year=%s: sent %d/%d deadline reminder(s)", fiscal_year, sent, len(due))
+    logger.info(
+        "fiscal_year=%s phase=deadline summary: attempted=%d sent=%d failed=%d retried=%d capped=%d",
+        fiscal_year, attempted, sent, failed, retried, capped,
+    )
     return sent
 
 
@@ -345,13 +433,30 @@ def _run_deadline_reminders(
 # entry points
 # ---------------------------------------------------------------------------
 
-def run(fiscal_year: int, dry_run: bool, notifications_dry_run: bool, now: datetime | None = None) -> int:
+def run(
+    fiscal_year: int, dry_run: bool, notifications_dry_run: bool, now: datetime | None = None,
+    *, sleep: Callable[[float], None] = time.sleep,
+) -> int:
     """Runs both phases on ONE connection. Returns the total number of
-    reminders sent (dry-run: the number that WOULD be)."""
+    reminders sent (dry-run: the number that WOULD be). Pacing delay and the
+    per-phase cap come from Settings (§7.3); `sleep` is injectable so tests
+    never really wait."""
     now = now or datetime.now(timezone.utc)
+    settings = get_settings()
     with get_fabric_conn() as conn:
-        turn_sent = _run_turn_reminders(conn, fiscal_year, dry_run, notifications_dry_run, now)
-        deadline_sent = _run_deadline_reminders(conn, fiscal_year, dry_run, notifications_dry_run, bangkok_today(), now)
+        turn_sent = _run_turn_reminders(
+            conn, fiscal_year, dry_run, notifications_dry_run, now,
+            sleep=sleep,
+            send_delay_seconds=settings.reminder_send_delay_seconds,
+            max_sends=settings.reminder_max_sends_per_run,
+        )
+        deadline_sent = _run_deadline_reminders(
+            conn, fiscal_year, dry_run, notifications_dry_run, bangkok_today(),
+            sleep=sleep,
+            send_delay_seconds=settings.reminder_send_delay_seconds,
+            max_sends=settings.reminder_max_sends_per_run,
+            now=now,
+        )
         return turn_sent + deadline_sent
 
 
@@ -360,7 +465,7 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="A12 automation D: 7-day turn reminders (approvers) + per-department deadline reminders (fillers)"
+        description="A12 automation D: grouped 7-day turn reminders (1 mail/approver) + grouped deadline reminders (1 mail/filler)"
     )
     add_common_args(parser)
     args = parser.parse_args()

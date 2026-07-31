@@ -121,13 +121,17 @@ Repeat reminders are sent by `jobs/send_reminders.py` and tracked in `budget.rem
 
 | Event | To | Cc | Repeat |
 |-------|----|----|--------|
-| User submits | approver1 (managerempcode of last submitter — trace up to VP/AVP) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน |
-| approver อนุมัติ (chain ยังไม่ครบ) | approver ถัดไป (นิภาพร → วราพร) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน |
+| User submits | approver1 (managerempcode of last submitter — trace up to VP/AVP) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน — เมลเตือน**รวม 1 ฉบับ/คน** ลิสต์ทุกฝ่ายที่รออยู่ (§7) |
+| approver อนุมัติ (chain ยังไม่ครบ) | approver ถัดไป (นิภาพร → วราพร) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน — เมลเตือน**รวม 1 ฉบับ/คน** (§7) |
 | วราพร approves (final) | User (submitter) ✅ | approver1 | ครั้งเดียว |
 | reject (ทุก layer) | User (submitter) | approver1 | ครั้งเดียว |
-| deadline reminder (ฝ่ายยังไม่ submit / REJECTED) | filler (แยกเมลต่อฝ่าย) | approver1 ที่ derive จาก manager ของ filler (fallback นิภาพร) | ทุก 7 วัน ตั้งแต่ `reminder_date` ถึง `closing_date` |
+| deadline reminder (ฝ่ายยังไม่ submit / REJECTED) | filler — **เมลรวม 1 ฉบับ/คน** ลิสต์ทุกฝ่ายที่ค้าง แต่ละแถวมี deep link ของฝ่ายนั้น (§7) | approver1 ที่ derive จาก manager ของ filler (fallback นิภาพร) | ทุก 7 วัน ตั้งแต่ `reminder_date` ถึง `closing_date` |
 
 cc is skipped when it cannot be resolved or equals the To address; a cc failure never blocks
 the main send. Turn reminders reuse the same turn-start anchor as the 30-day auto-escalate.
+Reminder cadence is tracked per PERSON (sentinel `'*'` in `budget.reminder_log.department`,
+§7.2) — a ฝ่าย that goes pending mid-week rides the person's next 7-day round; event mails
+always fire instantly. Bulk sends are paced (`REMINDER_SEND_DELAY_SECONDS`), capped per phase
+(`REMINDER_MAX_SENDS_PER_RUN`), retried on 429/503/504, and use one cached Graph token per round.
 Special-case routing (นิภาพร/วราพร self-submit, C-Level) follows the same chain with the
 self-skip above.

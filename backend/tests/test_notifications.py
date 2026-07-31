@@ -16,6 +16,7 @@ from app.notifications import (
     notify_deadline_reminder,
     notify_reject,
     notify_turn,
+    notify_turn_reminder,
     send_mail,
 )
 
@@ -30,6 +31,18 @@ def _settings(**overrides) -> Settings:
     )
     defaults.update(overrides)
     return Settings(**defaults)
+
+
+@pytest.fixture(autouse=True)
+def _reset_graph_token_cache():
+    """The module-level Graph token cache (§7.3 bulk-send hardening) must
+    never leak between tests — a cached token from one test would silently
+    skip the token POST another test counts on."""
+    from app import notifications
+
+    notifications._reset_graph_token_cache()
+    yield
+    notifications._reset_graph_token_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +196,10 @@ def test_send_mail_omits_cc_recipients_key_when_no_cc(monkeypatch):
     send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
     send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=[], dry_run=False, settings=_settings())
 
-    # posts = [token1, sendMail1, token2, sendMail2]
+    # posts = [token1, sendMail1, sendMail2] — the token is cached (§7.3.1),
+    # so the second send has no token POST of its own.
     assert "ccRecipients" not in posts[1][1]["json"]["message"]
-    assert "ccRecipients" not in posts[3][1]["json"]["message"]
+    assert "ccRecipients" not in posts[2][1]["json"]["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -489,16 +503,40 @@ def test_notify_approved_still_sends_to_submitter_when_cc_lookup_fails(monkeypat
 
 
 # ---------------------------------------------------------------------------
-# notify_deadline_reminder — ONE email per (department, filler), 2026-07-31
-# revamp replacing the grouped per-filler notify_reminder
+# notify_deadline_reminder — §7 rework: ONE grouped email per FILLER, table
+# of every still-not-submitted department with its own deep link per row
 # ---------------------------------------------------------------------------
 
-def test_notify_deadline_reminder_single_department_with_cc_and_link(monkeypatch):
+def test_notify_deadline_reminder_grouped_46_departments_one_mail(monkeypatch):
+    """§7.4.1: a filler with 46 pending departments gets ONE mail whose body
+    carries 46 rows and 46 per-department deep links; cc = one address."""
+    departments = [f"Dept{i:02d}" for i in range(46)]
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     result = notify_deadline_reminder(
-        "filler@chememan.com", "Accounting", 2027, date(2026, 8, 31),
+        "filler@chememan.com", departments, 2027, date(2026, 8, 31),
+        cc_emails=["vp@chememan.com"], dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    assert len(calls) == 1
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["vp@chememan.com"]
+    for dept in departments:
+        assert dept in body  # 46 rows
+        assert build_deep_link(dept, 2027, settings=_settings()) in body  # 46 links
+
+
+def test_notify_deadline_reminder_single_department_same_template(monkeypatch):
+    """§7.4.2: a single-department filler gets the SAME grouped template —
+    no special single-department branch."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_deadline_reminder(
+        "filler@chememan.com", ["Accounting"], 2027, date(2026, 8, 31),
         cc_emails=["vp@chememan.com"], dry_run=True, settings=_settings(),
     )
 
@@ -506,9 +544,8 @@ def test_notify_deadline_reminder_single_department_with_cc_and_link(monkeypatch
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert kwargs["cc"] == ["vp@chememan.com"]
-    assert "Accounting" in subject
-    link = build_deep_link("Accounting", 2027, settings=_settings())
-    assert link in body  # deep link carries THIS department + label year (ADR-0016)
+    assert "Accounting" in body
+    assert build_deep_link("Accounting", 2027, settings=_settings()) in body
     assert "2027" in body and "Year 2026" in body
     assert "2026" in body  # closing date rendered
 
@@ -516,6 +553,180 @@ def test_notify_deadline_reminder_single_department_with_cc_and_link(monkeypatch
 def test_notify_deadline_reminder_no_filler_email_skips(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
     result = notify_deadline_reminder(
-        "", "Accounting", 2027, date(2026, 8, 31), cc_emails=[], dry_run=True, settings=_settings(),
+        "", ["Accounting"], 2027, date(2026, 8, 31), cc_emails=[], dry_run=True, settings=_settings(),
     )
     assert result is None
+
+
+def test_notify_deadline_reminder_empty_department_list_skips(monkeypatch):
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
+    result = notify_deadline_reminder(
+        "filler@chememan.com", [], 2027, date(2026, 8, 31), cc_emails=[], dry_run=True, settings=_settings(),
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# notify_turn_reminder — §7 rework: ONE grouped email per APPROVER, table of
+# every department waiting on them with per-row days-pending
+# ---------------------------------------------------------------------------
+
+def test_notify_turn_reminder_groups_departments_with_days_pending(monkeypatch):
+    """§7.4.3: an approver with N departments waiting gets ONE mail, N rows,
+    each row carrying that department's own days-pending."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_turn_reminder(
+        conn, approver_empcode="200",
+        items=[("Accounting", 2027, 9), ("IT", 2027, 3)],
+        dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    assert len(calls) == 1
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "manager@chememan.com"
+    assert subject.startswith("[เตือน]")
+    assert "Accounting" in body and "9 วัน" in body
+    assert "IT" in body and "3 วัน" in body
+    assert build_deep_link("Accounting", 2027, settings=_settings()) in body
+    assert build_deep_link("IT", 2027, settings=_settings()) in body
+
+
+def test_notify_turn_reminder_no_email_found_skips_without_error(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
+
+    result = notify_turn_reminder(
+        conn, approver_empcode="999-unknown", items=[("Accounting", 2027, 9)],
+        dry_run=True, settings=_settings(),
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# §7.3 bulk-send hardening — token cache, retry on 429/503/504
+# ---------------------------------------------------------------------------
+
+def test_send_mail_fetches_graph_token_once_for_n_sends(monkeypatch):
+    """§7.4.5: the module-level token cache means N sends in one round cost
+    ONE token request, not N."""
+    token_calls = []
+    monkeypatch.setattr(
+        "app.notifications._get_graph_token",
+        lambda settings: token_calls.append(1) or "tok-cached",
+    )
+    posts = []
+    monkeypatch.setattr("app.notifications._post_send_mail", lambda *a, **k: posts.append(a) or 0)
+
+    for i in range(3):
+        result = send_mail(f"u{i}@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings())
+        assert result.sent is True
+
+    assert len(token_calls) == 1
+    assert len(posts) == 3
+
+
+def test_send_mail_token_cache_refresh_after_expiry(monkeypatch):
+    """Cache honors expiry: a token with <60s left is refreshed, never used stale."""
+    token_calls = []
+    monkeypatch.setattr(
+        "app.notifications._get_graph_token",
+        lambda settings: token_calls.append(1) or f"tok-{len(token_calls)}",
+    )
+    monkeypatch.setattr("app.notifications._post_send_mail", lambda *a, **k: 0)
+
+    send_mail("u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings())
+    assert len(token_calls) == 1
+    # Force the cached token to be effectively expired (<60s remaining).
+    from app import notifications
+
+    notifications._token_cache["expires_at"] = 0.0
+    send_mail("u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings())
+    assert len(token_calls) == 2
+
+
+def _retrying_post(responses, posts):
+    """Build an httpx.post fake replaying `responses` (list of (status, headers)) in order."""
+    it = iter(responses)
+
+    def _fake_post(url, **kwargs):
+        posts.append(url)
+        status, headers = next(it)
+        resp = MagicMock()
+        resp.status_code = status
+        resp.headers = headers
+        resp.text = f"status {status}"
+        resp.json.return_value = {"access_token": "tok-1"}
+        return resp
+
+    return _fake_post
+
+
+def test_send_mail_retries_429_honoring_retry_after_header(monkeypatch):
+    """§7.4.6: 429 + Retry-After: 5 -> sleep(5) then a successful retry."""
+    monkeypatch.setattr("app.notifications._get_graph_token", lambda settings: "tok-1")
+    posts = []
+    monkeypatch.setattr(
+        "app.notifications.httpx.post", _retrying_post([(429, {"Retry-After": "5"}), (202, {})], posts)
+    )
+    sleeps = []
+
+    result = send_mail(
+        "u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings(), sleep=sleeps.append
+    )
+
+    assert result.sent is True
+    assert result.retries == 1
+    assert sleeps == [5.0]
+    assert len(posts) == 2  # one retry, no token refetch
+
+
+def test_send_mail_retries_503_with_backoff_when_no_retry_after(monkeypatch):
+    monkeypatch.setattr("app.notifications._get_graph_token", lambda settings: "tok-1")
+    posts = []
+    monkeypatch.setattr("app.notifications.httpx.post", _retrying_post([(503, {}), (202, {})], posts))
+    sleeps = []
+
+    result = send_mail(
+        "u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings(), sleep=sleeps.append
+    )
+
+    assert result.sent is True
+    assert sleeps == [2]  # first backoff step
+
+
+def test_send_mail_429_three_times_raises_and_reports_attempts(monkeypatch):
+    """§7.4.7: 429 on all 3 attempts (initial + 2 retries) -> NotificationError,
+    the caller's per-recipient isolation treats it as failed."""
+    monkeypatch.setattr("app.notifications._get_graph_token", lambda settings: "tok-1")
+    posts = []
+    monkeypatch.setattr(
+        "app.notifications.httpx.post",
+        _retrying_post([(429, {}), (429, {}), (429, {})], posts),
+    )
+    sleeps = []
+
+    with pytest.raises(NotificationError):
+        send_mail("u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings(), sleep=sleeps.append)
+
+    assert len(posts) == 3  # exactly 3 attempts, no more
+    assert sleeps == [2, 8]  # backoff steps between them
+
+
+def test_send_mail_non_retryable_status_fails_immediately(monkeypatch):
+    """A 400 is not transient — no retry, no sleep, fail at once."""
+    monkeypatch.setattr("app.notifications._get_graph_token", lambda settings: "tok-1")
+    posts = []
+    monkeypatch.setattr("app.notifications.httpx.post", _retrying_post([(400, {})], posts))
+    sleeps = []
+
+    with pytest.raises(NotificationError):
+        send_mail("u@chememan.com", "s", "<p>b</p>", dry_run=False, settings=_settings(), sleep=sleeps.append)
+
+    assert len(posts) == 1
+    assert sleeps == []

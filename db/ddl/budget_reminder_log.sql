@@ -22,6 +22,15 @@
        ever needs MAX(sent_at) per stream, so history is deliberately NOT
        kept here (the send itself is the audit; approval_log stays the
        business-action audit).
+     - department carries the SENTINEL '*' for both reminder types (§7.2,
+       2026-07-31): reminder mails are GROUPED PER PERSON (one mail per
+       approver / per filler listing all their pending ฝ่าย), so the cadence
+       key is per-person-per-year, not per-ฝ่าย. ACCEPTED TRADE-OFF: a ฝ่าย
+       that newly goes pending mid-week does NOT trigger a fresh reminder
+       immediately — it rides the person's next 7-day round (event mails at
+       submit/approve/reject still fire instantly, so nobody misses work).
+       The column stays NVARCHAR(200) so a real department name remains
+       representable if a per-ฝ่าย reminder type is ever reintroduced.
      - recipient is NVARCHAR(320) to hold EITHER an empcode (turn reminders:
        the current approver, so an approver change naturally starts a fresh
        cadence) OR an email (deadline reminders: the filler).
@@ -46,7 +55,7 @@ IF NOT EXISTS (
 BEGIN
     CREATE TABLE budget.reminder_log (
         reminder_type  varchar(20)   NOT NULL,  -- 'turn' | 'deadline'
-        department     nvarchar(200) NOT NULL,
+        department     nvarchar(200) NOT NULL,  -- sentinel '*' (§7.2: mails grouped per person)
         fiscal_year    int           NOT NULL,
         recipient      nvarchar(320) NOT NULL,  -- empcode (turn) / email (deadline)
         sent_at        datetime2     NOT NULL,

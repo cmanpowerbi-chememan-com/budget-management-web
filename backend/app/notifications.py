@@ -19,8 +19,10 @@ Sender / auth pattern proven in `setup/send_signoff_email.py` (CLAUDE.md
 new dependency is introduced for this module.
 """
 import logging
+import time
 from dataclasses import dataclass
 from datetime import date
+from typing import Callable
 from urllib.parse import quote
 
 import httpx
@@ -49,6 +51,9 @@ class NotificationResult:
     subject: str
     dry_run: bool
     detail: str | None = None
+    # §7.3: how many RETRY attempts this send needed (0 = first try). The
+    # reminder job aggregates this into its per-phase `retried=N` summary.
+    retries: int = 0
 
 
 def build_deep_link(department: str, fiscal_year: int, settings: Settings | None = None) -> str:
@@ -166,7 +171,50 @@ def _get_graph_token(settings: Settings) -> str:
     return resp.json()["access_token"]
 
 
-def _post_send_mail(token: str, to_email: str, subject: str, html_body: str, cc: list[str] | None = None) -> None:
+# §7.3.1 bulk-send hardening: client-credentials tokens live ~1h, but a
+# reminder round used to fetch one PER MAIL (99–367 token requests/round).
+# Cache the token module-level with its expiry, refreshing when <60s remain.
+_GRAPH_TOKEN_TTL_SECONDS = 3600
+_TOKEN_EXPIRY_MARGIN_SECONDS = 60
+_token_cache: dict = {"token": None, "expires_at": 0.0}
+
+
+def _reset_graph_token_cache() -> None:
+    """Test hook — module state must never leak between tests (a cached
+    token from one test would silently skip the token POST another counts)."""
+    _token_cache["token"] = None
+    _token_cache["expires_at"] = 0.0
+
+
+def _get_graph_token_cached(settings: Settings) -> str:
+    now = time.time()
+    cached = _token_cache["token"]
+    if cached is not None and now < _token_cache["expires_at"] - _TOKEN_EXPIRY_MARGIN_SECONDS:
+        return cached
+    token = _get_graph_token(settings)
+    _token_cache["token"] = token
+    _token_cache["expires_at"] = now + _GRAPH_TOKEN_TTL_SECONDS
+    return token
+
+
+# §7.3.3 retry policy: ONLY transient throttling statuses are retried;
+# anything else fails immediately (a 400 won't heal by waiting).
+_RETRYABLE_STATUSES = {429, 503, 504}
+_RETRY_BACKOFF_SECONDS = (2, 8, 30)  # per retry attempt; 3 attempts total = initial + 2 retries
+_MAX_SEND_ATTEMPTS = 3
+
+
+def _post_send_mail(
+    token: str, to_email: str, subject: str, html_body: str, cc: list[str] | None = None,
+    *, sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """POST sendMail, retrying transient throttling (429/503/504) up to
+    `_MAX_SEND_ATTEMPTS` total attempts — honoring the `Retry-After` header
+    when present, else the 2s/8s backoff ladder. Returns the number of
+    retries used (0 = first try). All-attempts-failed raises the same
+    NotificationError as any other failure, so the caller's per-recipient
+    isolation treats it as failed and never writes reminder_log (§7.3.3).
+    `sleep` is injectable so tests never really wait."""
     message = {
         "message": {
             "subject": subject,
@@ -180,26 +228,42 @@ def _post_send_mail(token: str, to_email: str, subject: str, html_body: str, cc:
         # revamp: reject/final-approve cc the frozen approver1, deadline
         # reminders cc the derived approver1; everything else stays To-only.
         message["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
-    resp = httpx.post(
-        f"{GRAPH_BASE}/users/{SENDER_EMAIL}/sendMail",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json=message,
-        timeout=30,
-    )
-    if resp.status_code != 202:
+    for attempt in range(_MAX_SEND_ATTEMPTS):
+        resp = httpx.post(
+            f"{GRAPH_BASE}/users/{SENDER_EMAIL}/sendMail",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=message,
+            timeout=30,
+        )
+        if resp.status_code == 202:
+            return attempt
+        if resp.status_code in _RETRYABLE_STATUSES and attempt < _MAX_SEND_ATTEMPTS - 1:
+            retry_after = resp.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after is not None else _RETRY_BACKOFF_SECONDS[attempt]
+            except (TypeError, ValueError):
+                delay = _RETRY_BACKOFF_SECONDS[attempt]
+            logger.warning(
+                "notifications: sendMail throttled status=%s to=%s (attempt %d/%d) — retrying in %ss",
+                resp.status_code, to_email, attempt + 1, _MAX_SEND_ATTEMPTS, delay,
+            )
+            sleep(delay)
+            continue
         raise NotificationError(f"Graph sendMail failed: {resp.status_code} {resp.text}")
+    raise NotificationError("Graph sendMail failed: exhausted attempts")  # unreachable, defensive
 
 
 def send_mail(
     to_email: str, subject: str, html_body: str, cc: list[str] | None = None,
-    *, dry_run: bool, settings: Settings | None = None,
+    *, dry_run: bool, settings: Settings | None = None, sleep: Callable[[float], None] = time.sleep,
 ) -> NotificationResult:
     """The ONE transport seam. `dry_run=True`: construct + log the payload,
-    ZERO HTTP calls. `dry_run=False`: fetch a Graph token then POST
-    sendMail — both calls go through `httpx.post` (the seam every test in
-    this module monkeypatches). `cc` is an optional list of cc addresses
-    (2026-07-31 revamp) — falsy/empty means the payload carries no
-    ccRecipients key at all."""
+    ZERO HTTP calls. `dry_run=False`: fetch a Graph token (module-level
+    cached, §7.3.1) then POST sendMail (with 429/503/504 retry, §7.3.3) —
+    both calls go through `httpx.post` (the seam every test in this module
+    monkeypatches). `cc` is an optional list of cc addresses (2026-07-31
+    revamp) — falsy/empty means the payload carries no ccRecipients key at
+    all. `sleep` is injectable so retry tests never really wait."""
     if not to_email:
         logger.warning("notifications: no recipient email resolved, subject=%r — skipping", subject)
         return NotificationResult(sent=False, to_email="", subject=subject, dry_run=dry_run, detail="no recipient")
@@ -211,10 +275,10 @@ def send_mail(
         return NotificationResult(sent=False, to_email=to_email, subject=subject, dry_run=True, detail="dry_run")
 
     settings = settings or get_settings()
-    token = _get_graph_token(settings)
-    _post_send_mail(token, to_email, subject, html_body, cc)
-    logger.info("notifications: sent to=%s cc=%s subject=%r", to_email, cc or [], subject)
-    return NotificationResult(sent=True, to_email=to_email, subject=subject, dry_run=False)
+    token = _get_graph_token_cached(settings)
+    retries = _post_send_mail(token, to_email, subject, html_body, cc, sleep=sleep)
+    logger.info("notifications: sent to=%s cc=%s subject=%r retries=%d", to_email, cc or [], subject, retries)
+    return NotificationResult(sent=True, to_email=to_email, subject=subject, dry_run=False, retries=retries)
 
 
 def lookup_email_by_empcode(conn: pyodbc.Connection, empcode: str | None) -> str | None:
@@ -363,32 +427,104 @@ def notify_approved(
 
 
 def notify_deadline_reminder(
-    filler_email: str, department: str, fiscal_year: int, closing_date: date | None,
+    filler_email: str, departments: list[str], fiscal_year: int, closing_date: date | None,
     cc_emails: list[str] | None = None, *, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult | None:
-    """Automation D, 2026-07-31 revamp: ONE email per (department, filler)
-    for a still-not-submitted department — replaces the old grouped
-    per-filler `notify_reminder` (one mail listing every department) so each
-    mail carries exactly one department's deep link and its own cc (the
-    derived approver1 of THAT department's filler), and each (department,
-    filler) pair gets its own 7-day cadence row in `budget.reminder_log`.
-    `cc_emails` arrives already resolved by the caller (manager rule,
-    fallback Nipaporn) — this function only renders and sends."""
-    if not filler_email:
+    """Automation D, §7 rework (2026-07-31): ONE GROUPED email per FILLER
+    listing every still-not-submitted department they owe — a 46-department
+    filler gets 1 mail, not 46. Each row keeps its own per-department deep
+    link (ADR-0016, the one thing worth keeping from the per-ฝ่าย design).
+    A single-department filler gets the SAME template — no special branch.
+    `cc_emails` arrives already resolved by the caller (the filler's
+    manager-derived approver1, ONE address) — this function only renders
+    and sends."""
+    if not filler_email or not departments:
         return None
-    link = build_deep_link(department, fiscal_year, settings)
-    subject = f"แจ้งเตือน: ฝ่าย {department} ยังไม่ได้ส่งงบประมาณ ปีงบประมาณ {fiscal_year}"
-    rows: list[tuple[str, str, str | None]] = [
-        ("ฝ่าย", _hl(department), None),
-        ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
-    ]
+    settings = settings or get_settings()
+    # Table layout (styled after the Contract Management sample's detail
+    # table): gray bold label header, zebra rows, one department per row.
+    header = (
+        '<tr style="background:#F5F7FA;">'
+        f'<td style="{_LABEL_TD}">ฝ่าย</td>'
+        f'<td style="{_LABEL_TD}">ปีงบประมาณ</td>'
+        f'<td style="{_TD}"></td>'
+        "</tr>"
+    )
+    rows = "".join(
+        f'<tr style="background:{"#FFFFFF" if i % 2 == 0 else "#F5F7FA"};">'
+        f'<td style="{_TD}">{_hl(dept)}</td>'
+        f'<td style="{_TD}">{_year_phrase(fiscal_year)}</td>'
+        f'<td style="{_TD}"><a href="{build_deep_link(dept, fiscal_year, settings)}">กรอกงบประมาณ</a></td>'
+        "</tr>"
+        for i, dept in enumerate(departments)
+    )
+    table = (
+        '<table style="border-collapse:collapse;width:100%;max-width:640px;'
+        'border:1px solid #E5E7EB;">'
+        f"{header}{rows}</table>"
+    )
+    closing_line = ""
     if closing_date is not None:
-        rows.append(("กำหนดปิดรับ", closing_date.strftime("%d/%m/%Y"), "red"))
+        closing_line = f"<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ {_hl_red(closing_date.strftime('%d/%m/%Y'))}</p>"
+    else:
+        closing_line = "<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ</p>"
+    subject = f"แจ้งเตือน: ยังไม่ได้ส่งงบประมาณ {len(departments)} ฝ่าย ปีงบประมาณ {fiscal_year}"
     body = _wrap(
         "<p>เรียน ผู้กรอกงบประมาณ</p>"
-        "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ รายละเอียดดังนี้:</p>"
-        + _label_value_table(rows)
-        + "<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ</p>"
-        + f'<p><a href="{link}">คลิกที่นี่เพื่อกรอกและส่งงบประมาณ</a></p>'
+        "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:</p>"
+        f"{table}{closing_line}"
     )
     return send_mail(filler_email, subject, body, cc=cc_emails or None, dry_run=dry_run, settings=settings)
+
+
+def notify_turn_reminder(
+    conn: pyodbc.Connection, *, approver_empcode: str | None,
+    items: list[tuple[str, int, int]], dry_run: bool, settings: Settings | None = None,
+) -> NotificationResult | None:
+    """§7 rework: the 7-day turn reminder, GROUPED — ONE email per approver
+    listing every department currently waiting on them. `items` is
+    `(department, fiscal_year, days_pending)` per row, each row carrying its
+    own days-pending so a long-stuck department stands out from one that
+    just landed. Returns None (no send attempted, no reminder_log row by
+    the caller) when the approver's email cannot be resolved — same posture
+    as `notify_turn`. No cc (turn mails stay To-only, §7.1)."""
+    if not items:
+        return None
+    to_email = lookup_email_by_empcode(conn, approver_empcode)
+    if not to_email:
+        logger.warning(
+            "notify_turn_reminder: no email resolved for empcode=%r (%d departments waiting) — skipped",
+            approver_empcode, len(items),
+        )
+        return None
+    settings = settings or get_settings()
+    header = (
+        '<tr style="background:#F5F7FA;">'
+        f'<td style="{_LABEL_TD}">ฝ่าย</td>'
+        f'<td style="{_LABEL_TD}">ปีงบประมาณ</td>'
+        f'<td style="{_LABEL_TD}">ค้างมา</td>'
+        f'<td style="{_TD}"></td>'
+        "</tr>"
+    )
+    rows = "".join(
+        f'<tr style="background:{"#FFFFFF" if i % 2 == 0 else "#F5F7FA"};">'
+        f'<td style="{_TD}">{_hl(dept)}</td>'
+        f'<td style="{_TD}">{_year_phrase(year)}</td>'
+        f'<td style="{_TD}">{_hl_red(f"{days} วัน") if days >= 7 else f"{days} วัน"}</td>'
+        f'<td style="{_TD}"><a href="{build_deep_link(dept, year, settings)}">ตรวจสอบและอนุมัติ</a></td>'
+        "</tr>"
+        for i, (dept, year, days) in enumerate(items)
+    )
+    table = (
+        '<table style="border-collapse:collapse;width:100%;max-width:640px;'
+        'border:1px solid #E5E7EB;">'
+        f"{header}{rows}</table>"
+    )
+    subject = f"[เตือน] มีงบประมาณ {len(items)} ฝ่ายรอการอนุมัติจากท่าน"
+    body = _wrap(
+        "<p>เรียน ผู้อนุมัติ</p>"
+        "<p>มีงบประมาณค้างรอการอนุมัติจากท่าน รายละเอียดดังนี้:</p>"
+        f"{table}"
+        "<p>กรุณาดำเนินการอนุมัติหรือตีกลับ เพื่อให้การจัดทำงบประมาณเป็นไปตามกำหนด</p>"
+    )
+    return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)

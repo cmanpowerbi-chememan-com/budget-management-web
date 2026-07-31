@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # never touched by this build or by any test.
     notifications_dry_run: bool = True
 
+    # §7.3 bulk-send hardening (jobs/send_reminders.py only — event mails
+    # from the router never sleep): pacing between reminder mails so one
+    # round can't ram the Exchange Online throttle (~30/min/mailbox), and a
+    # PER-PHASE cap on sends per run (0 = unlimited); over-cap recipients
+    # are skipped loudly ("capped N" log line) and simply re-reminded next
+    # run, since no reminder_log row is written for them.
+    reminder_send_delay_seconds: float = 2.0
+    reminder_max_sends_per_run: int = 150
+
     # Convenience-only deep-link base (ADR-0016) — placeholder default OK,
     # flagged: the React+FastAPI app is not deployed yet (CLAUDE.md), so this
     # is the intended production domain, not a live URL today.

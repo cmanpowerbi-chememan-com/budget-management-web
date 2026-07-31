@@ -97,3 +97,91 @@ CREATE TABLE budget.reminder_log (
 3. อัปเดต `docs/reference/approval-workflow.md` + `.claude/plan.md` ใน commit เดียวกัน.
 4. **ถามอนุมัติก่อน**: CREATE TABLE `budget.reminder_log` บน shared DB.
 5. Deploy: staging ก่อน (ต้อง build image ใหม่) — verify job ด้วย manual `workflow_dispatch` (dry-run) อ่าน log ว่า due-check ถูก → ค่อยถามอนุมัติ prd + go-live (cron + DRY_RUN=false).
+
+---
+
+# §7 Rework — grouped reminders + bulk-send hardening
+
+**สั่งโดย jakkaritw 2026-07-31** (หลัง cross-review commit `e51d38f` + fix `75a0759`)
+**Implementer:** Kimi Code · **Tracker:** `email-reminder-grouping`
+**Hold ยังอยู่:** ยัง**ไม่** CREATE TABLE / ยัง**ไม่**เปิด cron / ยัง**ไม่** flip `NOTIFICATIONS_DRY_RUN`
+
+> **Status: implemented 2026-07-31** — grouped 1-mail-per-person reminders (turn by approver,
+> deadline by filler), `'*'` sentinel cadence keys, token cache + 429/503/504 retry + pacing
+> (`reminder_send_delay_seconds` default 2.0) + per-phase cap (`reminder_max_sends_per_run`
+> default 150) + per-phase summary line. All §7.4 tests mocked + green (suite 752 passed;
+> 4 `tests_data_sync` failures pre-existing, other lane). Holds untouched. Real mails/round
+> after grouping ≈ ~99 deadline + ≤48 turn, worst case 1/person.
+
+## 7.1 Decision — กลับไปใช้เมลรวมต่อคน (option 1)
+
+Per-ฝ่าย ทำให้คนเดียวได้เมลทีละหลายสิบฉบับ วัดจากข้อมูลจริง 2026-07-31:
+
+| ชุดเมล | ก่อน (per-ฝ่าย) | worst case ต่อคน 1 รอบ | หลังรวม |
+|---|---|---|---|
+| deadline (filler) | 253 ฉบับ/รอบ | `khattariyas` 46 | ~99 ฉบับ (1/คน) |
+| turn (approver) | ≤114 ฉบับ/รอบ | `bunpotk` 46 · Nipaporn/Waraporn ได้ถึง 114 | ≤48 ฉบับ (1/คน) |
+
+- **Deadline reminder:** 1 เมล/filler — ตารางลิสต์ทุกฝ่ายที่ค้าง แต่ละแถวมี deep link ของฝ่ายนั้น
+  (คงข้อดีของ §3.1 ไว้) · cc = manager ของ filler คนนั้น (rule เดิม, 1 address, ไม่ใช่ per-ฝ่าย)
+  · filler ที่มีฝ่ายเดียวก็ได้ 1 ฉบับ template เดียวกัน (ไม่มี branch พิเศษ)
+- **Turn reminder:** ทำแบบเดียวกัน — 1 เมล/approver ตารางลิสต์ทุกฝ่ายที่รอเขาอยู่ + จำนวนวันที่ค้าง
+  ต่อแถว · ไม่มี cc (เหมือนเดิม)
+- เมล **ตอนเกิดเหตุ** (submit → approver1, approve → คนถัดไป, final, reject) ยังเป็น per-ฝ่าย
+  ทีละฉบับเหมือนเดิม — §7 แตะเฉพาะเมล**เตือนซ้ำ** ที่ job ยิงเป็นชุด
+
+## 7.2 Cadence key เปลี่ยน (`budget.reminder_log`)
+
+ตารางยังไม่ได้สร้างบน DB → แก้ DDL ได้อิสระใน commit เดียวกัน
+
+- deadline: key = (`deadline`, `'*'`, fiscal_year, filler_email) — `department` ถือ sentinel `'*'`
+  เพราะเมลไม่ผูกฝ่ายเดียวแล้ว
+- turn: key = (`turn`, `'*'`, fiscal_year, approver_empcode)
+- **ผลที่ต้องยอมรับและเขียน comment ไว้:** cadence เป็น per-คน-ต่อปี ไม่ใช่ per-ฝ่าย → ฝ่ายใหม่ที่
+  เพิ่งค้างกลางสัปดาห์จะไม่ยิงเมลใหม่ทันที แต่ไปรวมในรอบ 7 วันถัดไป (เมลตอนเกิดเหตุยังยิงทันทีอยู่
+  แล้ว จึงไม่มีใครพลาดงาน)
+- update `db/ddl/budget_reminder_log.sql` comment ให้ตรง (ยังห้ามรัน)
+
+## 7.3 Bulk-send hardening (jakkaritw: "เคยเจอส่งเมลเยอะๆ แล้วค้าง ส่งไม่ได้ในครั้งเดียว")
+
+ปัญหาที่มีอยู่ตอนนี้ใน `app/notifications.py`:
+
+- `send_mail` เรียก `_get_graph_token` **ทุกฉบับ** → 99–367 token request/รอบ
+- ไม่มี retry เลย: 429/503 ครั้งเดียว = เมลฉบับนั้นหาย (ยัง retry รอบหน้าได้ แต่ทั้งรอบอาจโดนพร้อมกัน)
+- ยิงติดกันไม่มีเว้นจังหวะ — Exchange Online throttle ประมาณ 30 ฉบับ/นาที/mailbox
+
+ต้องทำ:
+
+1. **token ครั้งเดียวต่อรอบ** — cache ใน module (พร้อม expiry) หรือ resolve ครั้งเดียวแล้วส่งต่อ
+   ลงไป; ห้ามเปลี่ยน public signature ของ `send_mail` แบบ breaking (ใช้ keyword default)
+2. **เว้นจังหวะ** `REMINDER_SEND_DELAY_SECONDS` (default `2.0`) ระหว่างฉบับ — inject `sleep`
+   ได้เพื่อให้เทสไม่หลับจริง
+3. **retry** เฉพาะ 429 / 503 / 504: เคารพ header `Retry-After` ถ้ามี ไม่มีก็ backoff 2s → 8s → 30s
+   สูงสุด 3 ครั้ง; ล้มครบ = ไม่เขียน `reminder_log` (รอบหน้าเตือนซ้ำ ตาม posture เดิม)
+4. **cap ต่อรอบ** `REMINDER_MAX_SENDS_PER_RUN` (default `150`, `0` = ไม่จำกัด) — ที่เกิน cap
+   ไม่เขียน log และ log บรรทัดว่า `capped N` (ห้าม cap เงียบ)
+5. **สรุปท้ายรอบ 1 บรรทัด**: attempted / sent / failed / retried / capped ต่อ phase
+6. per-recipient isolation เดิมคงไว้ (คนหนึ่งพังไม่กระทบคนอื่น)
+
+## 7.4 Tests (mocked, ห้ามยิงจริง)
+
+1. filler 46 ฝ่าย → **1 ฉบับ**, body มี 46 แถว + 46 deep link, cc = manager 1 address
+2. filler 1 ฝ่าย → 1 ฉบับ template เดียวกัน (ไม่ใช่ path พิเศษ)
+3. approver N ฝ่าย → 1 ฉบับ, N แถว, แต่ละแถวมีจำนวนวันค้างของฝ่ายนั้น
+4. cadence per-คน: รันซ้ำภายใน 7 วันไม่ส่ง / ครบ 7 วันส่งใหม่ / key ใช้ sentinel `'*'`
+5. token: ส่ง N ฉบับ → `_get_graph_token` ถูกเรียก **1 ครั้ง**
+6. 429 + `Retry-After: 5` → retry แล้วสำเร็จ, sleep ถูกเรียกด้วย 5
+7. 429 ครบ 3 ครั้ง → ไม่เขียน log, นับเป็น failed, ฉบับถัดไปยังถูกส่ง
+8. cap: due 200, cap 150 → ส่ง 150, เหลือ 50 ไม่มี log, log บอก capped 50
+9. pacing: N ฉบับ → sleep ถูกเรียก N-1 ครั้งด้วย delay ที่ตั้ง
+10. regression เดิมต้องไม่แตก: `deadline_date` (ไม่ใช่ `closing_date`), cc-skip 3 เคส,
+    log-only-after-real-send, DRY_RUN suppression
+
+## 7.5 Close-out
+
+1. เทสเขียวทั้ง suite (ตอนนี้ baseline = 742 passed; 4 fail ใน `tests_data_sync` เป็นของ lane อื่น)
+2. gate รวม 06+07+08 — 07 ดูเรื่อง recipient/cc ถูกคนและ log ไม่รั่ว PII
+3. commit เดียวรวม: job + notifications + DDL comment + `db/schema.sql` + plan §7 + docs/reference
+4. **ห้ามข้าม hold:** ไม่ CREATE TABLE, ไม่เปิด cron, ไม่ flip `NOTIFICATIONS_DRY_RUN`
+   — 3 อย่างนี้รออนุมัติ jakkaritw แยกทีละข้อ
+5. รายงาน: จำนวนเมลจริงต่อรอบหลังรวม (คาด ~99 + ≤48) + worst case ต่อคน = 1
