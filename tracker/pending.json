@@ -1,23 +1,31 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T10:22:53+0700",
+  "updated": "2026-07-31T11:15:01+0700",
   "tasks": [
     {
-      "id": "grid-fullscreen-toggle",
-      "state": "doing",
-      "created": "2026-07-31T10:22:53+0700",
-      "updated": "2026-07-31T10:22:53+0700",
-      "ai": "Implement grid fullscreen toggle per plan/grid-fullscreen-toggle.md: fs-toggle-btn in GridTable group-head th, isFullscreen state + Esc/body-lock in BudgetGrid, CSS overlay z300, 14 vitest cases, Playwright visual check",
+      "id": "sap-parity-3files-2026-07-31",
+      "state": "done",
+      "created": "2026-07-31T11:03:04+0700",
+      "updated": "2026-07-31T11:15:01+0700",
+      "ai": "LIVE parity run vs 3 SAP fixtures (236 cells, gold cman_dw_wh_gold, 2026-07-31 11:00): FY2025 0 real defects (3 DIFF all explained: CO doc 8100014664, FX cells 10FN011000/6211400040 m05+m07 where Excel col holds USD trans_amount vs DW THB, doc sets identical 211=211/181=181); FY2026 m01-m03 0 defects (Feb/Mar reload landed: doc counts m02 26901->35647, m03 8640->39600); FY2026 m04 = 9 real defects, all docs ABSENT, net -389,276.20 THB on 33-key union; FY2026 m05-m12 ZERO rows in gold. MAX(prcs_data_dt)=2026-04-30 unchanged. Found blocker: test_sap_actuals_parity.py hardcodes deleted 2026_1_4.xlsx (renamed to 'A 2026_1_4.xlsx', byte-identical data) -> 4/5 unit tests FileNotFoundError. Deliverable: plan/db-web-actuals-parity-check.md (verdict + fixture registry + artifact classifier + P1-P5) + cross-links added to plan/sap-actuals-dw-gap-fix.md. NEXT (awaiting jakkaritw): P1 rebuild harness multi-fixture (test-only, backend/tests/tests_data_sync); P3 Inteltion load entry-days 2026-04-30->today + enable PLD_SAP_T_GL_TRANS_D",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-313325e-staging",
+      "state": "done",
+      "created": "2026-07-31T10:56:19+0700",
+      "updated": "2026-07-31T11:09:58+0700",
+      "ai": "Staging deploy+verify done 2026-07-31: image cmanbudgetacr.azurecr.io/budget-web:313325e (ACR runs cme+cmf, built from clean worktree .build-ctx-313325e; local az crashed streaming logs on cp1252/UnicodeEncodeError but builds queued+Succeeded — verify via az acr task list-runs/show-tags, not CLI exit code) -> cman-budget-web-stg revision --0000013 (prev d0052ab = rollback line). verify-deploy-landed: curl unauth /health 401 PASS; smoke_prd.py --staging PASS=15 FAIL=0 DEFER=8 (same as 95dfd64 baseline; run via venv/Scripts/python.exe — system python lacks pydantic_settings). Feature check on staging via Playwright+cookie 14/14 PASS: overlay covers 1440x810 exactly, z300>nav100, table 430->550px, body lock+restore, month input editable, Esc-in-input stays, Esc-on-page exits, 0 console errors, 0 write requests (shared-prod-DB safe). Screenshot bin/stg-fullscreen-313325e.png for jakkaritw. LEFTOVERS: (1) origin/main still 1 behind — 313325e NOT pushed yet, needs jakkaritw ok; (2) PRD deploy needs explicit approval",
       "agent": "kimi"
     },
     {
-      "id": "log-d0052ab",
+      "id": "grid-fullscreen-toggle",
       "state": "done",
-      "created": "2026-07-31T10:13:57+0700",
-      "updated": "2026-07-31T10:13:57+0700",
-      "agent": "autolog",
-      "ai": "YearPicker: fixed floor 2020 — year filter reaches back to Year 2019 [commit d0052ab]"
+      "created": "2026-07-31T10:22:53+0700",
+      "updated": "2026-07-31T10:49:37+0700",
+      "ai": "Shipped per plan/grid-fullscreen-toggle.md, commit 313325e: fs-toggle-btn child of group-head th (GridTable.tsx), isFullscreen state + Esc/body-lock effect (BudgetGrid.tsx), .fs-toggle-btn + .is-fullscreen overlay z300 (global.css), 14 new vitest cases (204/204 green), tsc+oxlint clean, Playwright PASS + visual approved by jakkaritw, gate 06/07/08 Approve, plan.md synced in same commit, temp spec+PNG deleted. Leftover: deploy NOT done — needs jakkaritw approval (staging first)",
+      "agent": "kimi"
     },
     {
       "id": "log-b627d8d",
