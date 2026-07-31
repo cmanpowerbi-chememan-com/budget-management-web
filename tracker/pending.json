@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T10:11:07+0700",
+  "updated": "2026-07-31T10:22:53+0700",
   "tasks": [
+    {
+      "id": "grid-fullscreen-toggle",
+      "state": "doing",
+      "created": "2026-07-31T10:22:53+0700",
+      "updated": "2026-07-31T10:22:53+0700",
+      "ai": "Implement grid fullscreen toggle per plan/grid-fullscreen-toggle.md: fs-toggle-btn in GridTable group-head th, isFullscreen state + Esc/body-lock in BudgetGrid, CSS overlay z300, 14 vitest cases, Playwright visual check",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-d0052ab",
+      "state": "done",
+      "created": "2026-07-31T10:13:57+0700",
+      "updated": "2026-07-31T10:13:57+0700",
+      "agent": "autolog",
+      "ai": "YearPicker: fixed floor 2020 — year filter reaches back to Year 2019 [commit d0052ab]"
+    },
     {
       "id": "log-b627d8d",
       "state": "done",

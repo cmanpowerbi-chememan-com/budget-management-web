@@ -559,4 +559,105 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenCalled())
     expect(screen.queryByTestId('admin-zone')).not.toBeInTheDocument()
   })
+
+  describe('fullscreen mode (⤢ whole-grid overlay — jakkaritw-approved 2026-07-31)', () => {
+    beforeEach(() => {
+      // One COST row so exactly ONE side-table (and one toggle button) renders.
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+    })
+
+    afterEach(() => {
+      document.body.style.overflow = '' // safety net if a test fails mid-fullscreen
+    })
+
+    async function enterFullscreen() {
+      fireEvent.click(await screen.findByTestId('enter-fullscreen-btn'))
+      await waitFor(() => expect(screen.getByTestId('budget-grid')).toHaveClass('is-fullscreen'))
+    }
+
+    it('starts in normal mode: no is-fullscreen class on the root, body overflow untouched', async () => {
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await screen.findByTestId('enter-fullscreen-btn')
+      expect(screen.getByTestId('budget-grid')).not.toHaveClass('is-fullscreen')
+      expect(document.body.style.overflow).toBe('')
+    })
+
+    it('clicking ⤢ adds is-fullscreen to the root and locks body scroll', async () => {
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      expect(document.body.style.overflow).toBe('hidden')
+    })
+
+    it('clicking ⤡ exits: class removed and body overflow restored to its previous value', async () => {
+      document.body.style.overflow = 'auto' // sentinel "previous value"
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      fireEvent.click(screen.getByTestId('exit-fullscreen-btn'))
+      await waitFor(() => expect(screen.getByTestId('budget-grid')).not.toHaveClass('is-fullscreen'))
+      expect(document.body.style.overflow).toBe('auto')
+    })
+
+    it('Escape on the page exits fullscreen', async () => {
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      await waitFor(() => expect(screen.getByTestId('budget-grid')).not.toHaveClass('is-fullscreen'))
+    })
+
+    it('Escape fired from inside an input (a month cell) does NOT exit — the key belongs to the field', async () => {
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      fireEvent.keyDown(screen.getByTestId('pending-input-CC1-5211800030-m01'), { key: 'Escape' })
+      expect(screen.getByTestId('budget-grid')).toHaveClass('is-fullscreen')
+    })
+
+    it('Escape while a modal (.modal-backdrop) is open does NOT exit — the key belongs to the modal', async () => {
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      const backdrop = document.createElement('div')
+      backdrop.className = 'modal-backdrop'
+      document.body.appendChild(backdrop)
+      try {
+        fireEvent.keyDown(document.body, { key: 'Escape' })
+        expect(screen.getByTestId('budget-grid')).toHaveClass('is-fullscreen')
+      } finally {
+        backdrop.remove()
+      }
+    })
+
+    it('unmounting while fullscreen still restores body overflow (no stuck hidden page)', async () => {
+      const { unmount } = render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+      expect(document.body.style.overflow).toBe('hidden')
+      unmount()
+      expect(document.body.style.overflow).toBe('')
+    })
+
+    it('a month-cell edit still commits through the normal save path while fullscreen', async () => {
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({
+        cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 999, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 999, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: '2026-01-02T00:00:00Z',
+      })
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await enterFullscreen()
+
+      const input = screen.getByTestId('pending-input-CC1-5211800030-m01')
+      fireEvent.change(input, { target: { value: '999' } })
+      fireEvent.blur(input)
+
+      await waitFor(() =>
+        expect(budgetApi.saveRow).toHaveBeenCalledWith(
+          expect.objectContaining({ cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027, m01: 999 }),
+        ),
+      )
+    })
+  })
 })

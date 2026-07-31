@@ -74,6 +74,12 @@ export interface GridTableProps {
    * test renders can omit it; the delete button only renders when both this
    * handler is provided AND the row passes `isDeletableRow`. */
   onDeleteRow?: (row: BudgetRow) => void
+  /** Fullscreen presentation state — owned by BudgetGrid (the overlay must
+   * also contain the toolbar/legend/Submit, which live outside this
+   * component, so the state cannot stay local here like columnsCollapsed). */
+  isFullscreen?: boolean
+  /** Flip fullscreen. Undefined in isolated/unit renders → button is a no-op. */
+  onToggleFullscreen?: () => void
 }
 
 const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
@@ -84,6 +90,8 @@ const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
 const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
 const COLLAPSE_COLUMNS_LABEL = 'ซ่อนคอลัมน์ GL Group / Remark / Status'
 const EXPAND_COLUMNS_LABEL = 'แสดงคอลัมน์ GL Group / Remark / Status'
+const ENTER_FULLSCREEN_LABEL = 'ขยายตารางเต็มหน้าจอ'
+const EXIT_FULLSCREEN_LABEL = 'ย่อกลับขนาดปกติ (Esc)'
 
 function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
@@ -105,6 +113,24 @@ function ChevronsRightIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 17 11 12 6 7" />
       <polyline points="13 17 18 12 13 7" />
+    </svg>
+  )
+}
+
+/** Fullscreen toggle icons (⤢/⤡) — same stroke-only, fill-none language as
+ * the chevrons above and the Reset-columns button. */
+function MaximizeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+    </svg>
+  )
+}
+
+function MinimizeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 10h6V4" /><path d="M10 14H4v6" /><path d="M14 10l7-7" /><path d="M10 14l-7 7" />
     </svg>
   )
 }
@@ -547,6 +573,8 @@ export function GridTable({
   rowMessages = {},
   onOpenSpecial,
   onDeleteRow,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: GridTableProps) {
   // Shared per-column filter state (UI-parity point 8b) — held LOCALLY here
   // (not lifted to BudgetGrid) since both side-tables live inside this one
@@ -730,6 +758,29 @@ export function GridTable({
     (e: ChangeEvent<HTMLInputElement>) =>
       setColFilters((f) => ({ ...f, [key]: e.target.value }))
 
+  // Fullscreen toggle (⤢) — ONE shared node rendered into the group-head
+  // row's first frozen <th> of EACH side-table (same convention as
+  // collapse-columns-btn): either copy flips the ONE shared state, which
+  // lives in BudgetGrid because the overlay must also contain the toolbar /
+  // legend / Submit bar. The button is a CHILD of the existing <th> — never
+  // a new cell — so the frozen-column colSpan math (model.ts) is untouched.
+  // The <th> is already position:sticky, so no wrapper is needed for the
+  // absolutely-positioned button; no z-index on the button (it inherits the
+  // th's stacking context, same as .col-toggle-btn).
+  const fullscreenToggle = (
+    <button
+      type="button"
+      className="fs-toggle-btn"
+      title={isFullscreen ? EXIT_FULLSCREEN_LABEL : ENTER_FULLSCREEN_LABEL}
+      aria-label={isFullscreen ? EXIT_FULLSCREEN_LABEL : ENTER_FULLSCREEN_LABEL}
+      aria-pressed={isFullscreen}
+      data-testid={isFullscreen ? 'exit-fullscreen-btn' : 'enter-fullscreen-btn'}
+      onClick={() => onToggleFullscreen?.()}
+    >
+      {isFullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
+    </button>
+  )
+
   return (
     <>
       <ColumnWidthMeasurer containerRef={measureContainerRef} candidates={measureCandidates} />
@@ -804,10 +855,10 @@ export function GridTable({
                        legend, point 6, for the per-layer years). */}
                     <tr className="group-head-row">
                       {columnsCollapsed ? (
-                        <th colSpan={2} className="frz frz-1 frz-edge" />
+                        <th colSpan={2} className="frz frz-1 frz-edge">{fullscreenToggle}</th>
                       ) : (
                         <>
-                          <th colSpan={4} className="frz frz-1" />
+                          <th colSpan={4} className="frz frz-1">{fullscreenToggle}</th>
                           {/* Status is the 5th FROZEN column (frz-5) — without it,
                            * scrolling slid Status under the Remark pane and the
                            * colSpan=5 subtotal label covered the Jan/Feb cells. */}

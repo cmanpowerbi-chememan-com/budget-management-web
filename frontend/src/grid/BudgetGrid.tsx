@@ -65,6 +65,13 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string } | null>(null)
   const [tripManagerOpenFor, setTripManagerOpenFor] = useState<string | null>(null) // cost_center, or null
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
+  // Fullscreen overlay (⤢ toggle, jakkaritw-approved 2026-07-31) — lifts the
+  // WHOLE grid block (toolbar + legend + both side-tables + Submit bar) into
+  // a fixed layer above the nav. State lives HERE, not in GridTable (unlike
+  // columnsCollapsed), because the overlay must contain controls that are
+  // GridTable's siblings. Deliberately NOT persisted — same policy as
+  // compact mode: always starts normal on load.
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [pendingApprovalDepartments, setPendingApprovalDepartments] = useState<Set<string>>(new Set())
 
   // Pure admins (ADR-0014: no base actor role, so no toggle — always
@@ -315,6 +322,33 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  // Fullscreen side-effects: lock the page behind the overlay so a wheel
+  // scroll moves the grid, not the covered page; Esc as the convenience exit
+  // (the ⤡ button is the primary one). Cleanup restores everything,
+  // including on an unmount that happens WHILE fullscreen (scope switch,
+  // route change) — the same class of bug the drag-listener cleanup in
+  // GridTable guards against.
+  useEffect(() => {
+    if (!isFullscreen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const tag = (e.target as HTMLElement | null)?.tagName
+      // Esc inside a field belongs to that field/dropdown (AddTransactionForm's
+      // GL list closes on Esc, GridTable's filter inputs, month-cell inputs).
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      // Esc with a subform/trip modal open belongs to the modal, not the grid.
+      if (document.querySelector('.modal-backdrop')) return
+      setIsFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [isFullscreen])
+
   if (hasNoScope) {
     return (
       <div className="budget-grid">
@@ -331,7 +365,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   }
 
   return (
-    <div className="budget-grid">
+    <div className={`budget-grid${isFullscreen ? ' is-fullscreen' : ''}`} data-testid="budget-grid">
       <div className="grid-toolbar">
         <YearPicker year={year} onChange={setYear} />
         <DeptPicker rows={departments} selected={department} onSelect={setDepartment} pendingApprovalDepartments={pendingApprovalDepartments} />
@@ -430,6 +464,8 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           rowMessages={rowMessages}
           onOpenSpecial={handleOpenSpecial}
           onDeleteRow={handleDeleteRow}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={() => setIsFullscreen((v) => !v)}
         />
       )}
 

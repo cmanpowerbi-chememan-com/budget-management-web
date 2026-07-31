@@ -473,6 +473,32 @@ input:focus-visible {
   flex-direction: column;
   gap: 16px;
 }
+/* Fullscreen overlay — the WHOLE grid block (toolbar + legend + admin zone +
+   both side-tables + add-transaction form) lifted out of page flow so every
+   control stays usable, per the approved scope. z-index 300 is deliberate:
+   ABOVE the sticky .nav (z100) so the overlay really covers the page, BELOW
+   .modal-backdrop (z500) so a special-GL subform opened from fullscreen still
+   paints on top of it. No ancestor has transform/filter/backdrop-filter, so
+   position: fixed resolves against the viewport (verified 2026-07-31). */
+.budget-grid.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  overflow: auto;
+  padding: 14px 20px 28px;
+  margin: 0;
+  background: var(--paper);
+}
+/* Give the rows back the height the covered page chrome used to eat. The
+   normal rule is max-height: calc(100vh - 380px) (.table-wrap below). The
+   260px is a first estimate (toolbar + legend + heading) — tune against the
+   verification screenshot. */
+.budget-grid.is-fullscreen .table-wrap {
+  max-height: calc(100vh - 260px);
+}
+.budget-grid.is-fullscreen .side-section {
+  margin-bottom: 20px;
+}
 .grid-toolbar {
   display: flex;
   align-items: flex-start;
@@ -1049,6 +1075,33 @@ input:focus-visible {
   border-color: var(--ink-3);
 }
 .col-toggle-btn svg {
+  width: 11px;
+  height: 11px;
+}
+/* Fullscreen toggle (⤢) — top-LEFT corner of each side-table's group-head
+   band (mirror of .col-toggle-btn, which sits top-right on Status). Both
+   side-tables render one; either flips the ONE shared state, which lives in
+   BudgetGrid because the overlay must also contain the toolbar/Submit. */
+.fs-toggle-btn {
+  position: absolute;
+  top: 2px;
+  left: 8px;
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.fs-toggle-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+.fs-toggle-btn svg {
   width: 11px;
   height: 11px;
 }

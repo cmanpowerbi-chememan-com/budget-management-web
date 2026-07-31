@@ -806,4 +806,72 @@ describe('GridTable', () => {
       expect(screen.getAllByText(/รวม/).length).toBeGreaterThan(0)
     })
   })
+
+  describe('fullscreen toggle (⤢ top-left of the group-head band — jakkaritw-approved 2026-07-31)', () => {
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }), // COST, Office expenses
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }), // SGA, Office expenses
+    ]
+
+    function groupHeadRow(sectionTestId: string): HTMLTableRowElement {
+      return screen.getByTestId(sectionTestId).querySelector('tr.group-head-row') as HTMLTableRowElement
+    }
+
+    it('renders one enter-fullscreen-btn per side-table, inside the group-head row\'s first frozen th', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} onToggleFullscreen={vi.fn()} />)
+      // One per side-table, exactly like collapse-columns-btn — either copy
+      // flips the ONE shared state (owned by BudgetGrid).
+      expect(screen.getAllByTestId('enter-fullscreen-btn')).toHaveLength(2)
+      for (const section of ['side-section-COST', 'side-section-SGA']) {
+        const firstTh = groupHeadRow(section).querySelector('th.frz.frz-1') as HTMLElement
+        expect(within(firstTh).getByTestId('enter-fullscreen-btn')).toBeInTheDocument()
+      }
+    })
+
+    it('clicking it calls onToggleFullscreen exactly once', () => {
+      const onToggleFullscreen = vi.fn()
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} onToggleFullscreen={onToggleFullscreen} />)
+      fireEvent.click(screen.getAllByTestId('enter-fullscreen-btn')[0])
+      expect(onToggleFullscreen).toHaveBeenCalledTimes(1)
+    })
+
+    it('isFullscreen swaps to the exit button with pressed state and the Esc-hint label', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} isFullscreen onToggleFullscreen={vi.fn()} />)
+      expect(screen.queryAllByTestId('enter-fullscreen-btn')).toHaveLength(0)
+      const exitBtns = screen.getAllByTestId('exit-fullscreen-btn')
+      expect(exitBtns).toHaveLength(2)
+      expect(exitBtns[0]).toHaveAttribute('aria-pressed', 'true')
+      expect(exitBtns[0]).toHaveAttribute('aria-label', 'ย่อกลับขนาดปกติ (Esc)')
+    })
+
+    it('is still rendered in BOTH column modes — after collapsing it sits in the colSpan=2 band th', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} onToggleFullscreen={vi.fn()} />)
+      fireEvent.click(screen.getAllByTestId('collapse-columns-btn')[0])
+      expect(screen.getAllByTestId('enter-fullscreen-btn')).toHaveLength(2)
+      const firstTh = groupHeadRow('side-section-COST').querySelector('th.frz.frz-1') as HTMLElement
+      expect(firstTh).toHaveAttribute('colspan', '2')
+      expect(within(firstTh).getByTestId('enter-fullscreen-btn')).toBeInTheDocument()
+    })
+
+    it('structural guard: the button is a CHILD of the existing th — group-head cell counts and colSpans are unchanged', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} onToggleFullscreen={vi.fn()} />)
+      // Expanded: [identity colSpan=4][Status][รวมทั้งปี][months colSpan=12][action]
+      const expanded = groupHeadRow('side-section-COST')
+      expect(expanded.cells).toHaveLength(5)
+      expect(expanded.cells[0]).toHaveAttribute('colspan', '4')
+
+      fireEvent.click(screen.getAllByTestId('collapse-columns-btn')[0])
+      // Collapsed: [identity colSpan=2][รวมทั้งปี][months colSpan=12][action]
+      const collapsed = groupHeadRow('side-section-COST')
+      expect(collapsed.cells).toHaveLength(4)
+      expect(collapsed.cells[0]).toHaveAttribute('colspan', '2')
+    })
+
+    it('without the fullscreen props (existing call style) the button still renders and clicking it does not throw', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const btn = screen.getAllByTestId('enter-fullscreen-btn')[0]
+      expect(btn).toHaveAttribute('aria-pressed', 'false')
+      expect(() => fireEvent.click(btn)).not.toThrow()
+    })
+  })
 })
