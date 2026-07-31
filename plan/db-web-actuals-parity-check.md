@@ -89,6 +89,44 @@ not an app bug.
 
 ---
 
+## 2b. Which landing files hold the missing documents (scanned 2026-07-31)
+
+Scanned OneLake directly: workspace `cman-dw-ws` (`adeb7108-…`), lakehouse `modern_lh_cman_dw`
+(`7dd0c6a5-a36f-46c7-8953-0248841dcdc8`), path `Files/landing/transaction/`. The service principal
+CAN read this path (the 403 in the gap-fix doc was the *other* landing lakehouse, ws `302668d3`).
+
+**Landing inventory:** 212 files `SAP_T_GL_TRANS_1000_YYYYMMDD.TXT`, 2026-01-01 → 2026-07-31,
+763,398,960 bytes, **zero date gaps**. (Company 2000 files are not in this folder.)
+
+**File-date ↔ entry-date rule — measured, not assumed.** Each file is pipe-delimited with a header
+row (86 columns: `RLDNR|BELNR|RBUKRS|GJAHR|…|TIMESTAMP|…`). The `TIMESTAMP` column of every file
+spans **exactly one day = filedate − 1**. So `…_20260502.TXT` contains precisely the documents
+entered on 2026-05-01.
+
+**Result — all 78 documents missing from the DW were located, field-exact on `BELNR`:**
+
+| landing file | entry date | missing docs it holds |
+|---|---|---|
+| `SAP_T_GL_TRANS_1000_20260501.TXT` | 2026-04-30 | 12 |
+| `SAP_T_GL_TRANS_1000_20260502.TXT` | 2026-05-01 | **40** |
+| `SAP_T_GL_TRANS_1000_20260503.TXT` | 2026-05-02 | 23 |
+| `SAP_T_GL_TRANS_1000_20260504.TXT` | 2026-05-03 | 3 |
+| **total** | | **78 / 78 — none found in any other file** |
+
+**Posting month of all 78: 202604 — 100%.** Textbook April-close behaviour: posted into April,
+keyed 30 Apr–3 May. Example: document `1110001454` (the 347,747.67 THB cell) — 12 line items,
+posting date 2026-04-30, entered 2026-05-01, sitting in `…_20260502.TXT`.
+
+**Why the DW does not have them:** the April backfill was registered as the glob `*_202604*`, which
+matches file names `20260401`–`20260430` = entry days 31 Mar–29 Apr. The four files that carry these
+documents are named `202605xx`. A `*_202605*` glob **is** registered (`CNTL_CFG_FILE` id 9018) but
+has never been executed. The cut is exactly one day wide, and the data has been sitting in landing
+the whole time.
+
+Caveat on method: a plain text search for `|<docnumber>|` also matches reference fields
+(`AWREF_REV`, `AUGBL`), which put false hits in early-April files. Only the header-mapped `BELNR`
+column counts — the table above uses that.
+
 ## 3. Excel-side normalization rules (mandatory — otherwise the test lies)
 
 The fixtures are raw exports; the app is filtered (ADR-0020). Three classes of DIFF are **expected**
@@ -173,9 +211,11 @@ Unchanged from [sap-actuals-dw-gap-fix.md §4.A](sap-actuals-dw-gap-fix.md#4-fix
 by today's evidence to two items:
 
 1. Load entry-days **2026-04-30 → today** (company 1000 + 2000), bronze → silver → rebuild gold.
-   Source files exist and are complete — the 19.dw landing path holds
-   `SAP_T_GL_TRANS_1000_20260101..20260730.TXT` with zero gaps, so **no SAP re-extract is needed**.
-   This one load fixes the April column *and* makes May–July appear.
+   Source files exist and are complete — 212 files, 2026-01-01 → 2026-07-31, zero gaps (§2b), so
+   **no SAP re-extract is needed**. This one load fixes the April column *and* makes May–July appear.
+   **Minimum fix for the April column alone = 4 files** (`…_20260501` … `…_20260504.TXT`), which hold
+   all 78 missing documents; register the `*_202605*` glob (already configured, never run) and
+   continue with `*_202606*` / `*_202607*` for the empty months.
 2. Turn on the daily loader `PLD_SAP_T_GL_TRANS_D` (still **zero runs**, and no month glob is
    registered after `202606`). Without it the same hole reopens next month.
 

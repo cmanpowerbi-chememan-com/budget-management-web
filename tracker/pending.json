@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T11:15:01+0700",
+  "updated": "2026-07-31T11:56:38+0700",
   "tasks": [
+    {
+      "id": "sap-landing-file-locate",
+      "state": "done",
+      "created": "2026-07-31T11:56:38+0700",
+      "updated": "2026-07-31T11:56:38+0700",
+      "ai": "Located WHICH landing files hold the 78 docs missing from gold: OneLake ws adeb7108 / lh modern_lh_cman_dw 7dd0c6a5 / Files/landing/transaction (SP CAN read this one; the 403 was ws 302668d3). Inventory 212 files SAP_T_GL_TRANS_1000_20260101..20260731, 763,398,960 bytes, ZERO gaps. Header-mapped BELNR match (86 cols, header row; plain |doc| substring gives false hits on AWREF_REV/AUGBL): 78/78 located = 20260501(12) 20260502(40) 20260503(23) 20260504(3); posting month 202604 for 100% of them. TIMESTAMP col span per file = exactly filedate-1, so file D holds entry-day D-1 (measured). Root cause narrowed: April glob *_202604* covers filedates 0401-0430 = entry days 03-31..04-29; the 4 needed files are named 202605xx and the *_202605* glob (CNTL_CFG_FILE id 9018) exists but never ran. Min fix for April column = those 4 files. Recorded in plan/db-web-actuals-parity-check.md section 2b + P3.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-313325e-prd",
+      "state": "doing",
+      "created": "2026-07-31T11:37:39+0700",
+      "updated": "2026-07-31T11:37:39+0700",
+      "ai": "PRD deploy of budget-web:313325e approved by jakkaritw 2026-07-31. 07-security-checklist re-run on d0052ab..313325e: PASS 8/8, no critical (pure UI diff). Rollback line: --image cmanbudgetacr.azurecr.io/budget-web:d0052ab (current prod rev --0000007)",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-0caebd0",
+      "state": "done",
+      "created": "2026-07-31T11:15:27+0700",
+      "updated": "2026-07-31T11:15:27+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): DB->web actuals parity harness + 2026-07-31 verdict [commit 0caebd0]"
+    },
     {
       "id": "sap-parity-3files-2026-07-31",
       "state": "done",
