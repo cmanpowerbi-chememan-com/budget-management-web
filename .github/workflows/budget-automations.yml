@@ -7,6 +7,13 @@
 # NOTE (2026-07-28): the FX re-persist job was split into fx-repersist.yml
 # (Appendix E decision 3, P0-28) — `execute=true` here can no longer re-price
 # per-diem by accident.
+# GO-LIVE (2026-07-31 email-notify revamp, plan/email-notify-revamp.md §6):
+#   1. CREATE TABLE budget.reminder_log on the shared DB (db/ddl/budget_reminder_log.sql)
+#      — requires jakkaritw approval; send_reminders now reads/writes it.
+#   2. Deploy to staging, verify this workflow via manual workflow_dispatch
+#      (dry-run) and read the due-check logs.
+#   3. Only then: uncomment the cron below AND set NOTIFICATIONS_DRY_RUN=false
+#      on the Container App (both are separate deploy gates, not this commit).
 name: Budget Automations (auto-submit / auto-escalate / reminders)
 
 on:

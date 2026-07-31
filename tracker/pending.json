@@ -1,8 +1,48 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T11:56:38+0700",
+  "updated": "2026-07-31T17:21:24+0700",
   "tasks": [
+    {
+      "id": "gl-editby-flag-on-prd",
+      "state": "done",
+      "created": "2026-07-31T17:13:37+0700",
+      "updated": "2026-07-31T17:19:57+0700",
+      "ai": "PRD LEG DONE + VERIFIED (jakkaritw approved 2026-07-31). GL_EDIT_BY_ENABLED=true on cman-budget-web-prd -> revision cman-budget-web-prd--0000009, provisioningState Succeeded, runningState RunningAtMaxScale, 2 replicas, image unchanged cmanbudgetacr.azurecr.io/budget-web:313325e (config-only change, no rebuild). Env merge safe: 11 vars = 10 pre-existing + the flag, all 3 secretRefs intact (entra-client-id/secret/tenant-id); before/after snapshots in scratchpad prd_env_before.json / prd_env_after.json. Startup logs clean (2x 'Application startup complete', no config error); root returns 401 = Easy Auth active, app serving. Behaviour proven earlier against the same live DB both apps use: non-admin 134 GLs / admin 146 / 0 admin-GL leak / edit_by never exposed to non-admin; 261 unit tests pass. Rollback = az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --set-env-vars GL_EDIT_BY_ENABLED=false. Both environments now ON (stg rev 0000014, prd rev 0000009) - the 12 admin GLs (Insurance Premium x8, statutory severance x2, Depreciation-SG&A, 5210100070/5211300010/20/30/40/999/6210100070/6211300010/20/30/40/6410102430) are Budget-dept-only from now on and never reach a filler or a non-admin approver.",
+      "agent": "claude"
+    },
+    {
+      "id": "email-notify-revamp",
+      "state": "doing",
+      "created": "2026-07-31T15:44:48+0700",
+      "updated": "2026-07-31T15:44:48+0700",
+      "ai": "Rework email notification workflow per jakkaritw 2026-07-31: submit->approver1 (+7-day repeat reminders if no action), approve-chain->next approver (+7-day repeat), final->sender cc approver1, reject any layer->sender cc approver1, deadline reminder every 7 days before closing to filler cc approver1 per-ฝ่าย. Explore current notifications.py/jobs first, lock open questions (X days, reminder bookkeeping) before code",
+      "agent": "kimi"
+    },
+    {
+      "id": "gl-editby-flag-on-staging",
+      "state": "done",
+      "created": "2026-07-31T15:40:44+0700",
+      "updated": "2026-07-31T15:47:00+0700",
+      "ai": "STAGING LEG DONE + VERIFIED. Flipped GL_EDIT_BY_ENABLED=true on cman-budget-web-stg via 'az containerapp update --set-env-vars' -> new revision cman-budget-web-stg--0000014, provisioningState Succeeded, runningState Running, 1 replica, image unchanged cmanbudgetacr.azurecr.io/budget-web:313325e. Env merge safe: all 10 pre-existing vars intact incl. the 3 secretRefs (entra-client-id/secret/tenant-id); before-snapshot kept in scratchpad stg_env_before.json. Startup logs clean (uvicorn 'Application startup complete', no config error); root returns 401 = Easy Auth active, app serving. Pre-flip tests: pytest test_read_model+test_reference_router+test_subform_router+test_write_model+test_config = 261 passed. Live-master verification (scratchpad verify_gl_flag_live.py, calls the real app functions against the live consolidated DB, flag ON): master 146, admin-locked 12, non-admin sees 134, admin sees 146, flag-OFF path still 146, admin-GL leak to non-admin 0, edit_by never exposed to non-admin -> OVERALL PASS. The 12 locked GLs = 5210100070, 5211300010/20/30/40/999, 6210100070, 6211300010/20/30/40, 6410102430 (Insurance Premium x8, statutory severance x2, Depreciation-SG&A). PRD STILL OFF - separate jakkaritw approval required. Rollback = az containerapp update -n cman-budget-web-stg -g CMAN-BUDGET-MNGT-WEB-RG --set-env-vars GL_EDIT_BY_ENABLED=false. Left for jakkaritw: log in to staging and confirm admin still sees all 146 GLs; optional filler-eye check needs a real non-admin login (suchanyay@chememan.com, Solution Delivery) because Easy Auth is ON on stg+prd so header spoofing no longer works.",
+      "agent": "claude"
+    },
+    {
+      "id": "pending-audit-2026-07-31",
+      "state": "done",
+      "created": "2026-07-31T14:56:50+0700",
+      "updated": "2026-07-31T14:58:42+0700",
+      "ai": "Audit done, read-only, no code/config changed. VERDICTS: (1) approver-nonadmin-scope-risk = risk NOT live (positions 2/3 hardcoded to Nipaporn/Waraporn, both in ADMIN_EMAILS on stg+prd; 48 step-1 approvers all get See via _MANAGER_SEE_ADD_SQL; live DB: 99/99 fillers in view, 0 manager code/email mismatches; prd approval_status+pending_budget still 0 rows) -> downgraded to a hardening item, entry rewritten. (2) status-report-card-2026-08 = genuinely open, but only awaiting jakkaritw visual confirm of monthly_update/project_status_report_2026-08.png (534KB, built 2026-07-29 21:00, asserts 8/8); .py/.html/.png still untracked in git. (3) gl-editby-flag-rollout = genuinely open as a DECISION, its recorded blocker is stale (stg 0000013 + prd 0000008 both on image 313325e; GL_EDIT_BY_ENABLED unset -> default False). Also closed 2 stale ledger entries: sap-actuals-view (SP now reads gold.fact_gl_trans fine) and sap-parity-test (shipped in b627d8d). Probe scripts left in scratchpad only.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-00b9245",
+      "state": "done",
+      "created": "2026-07-31T11:57:24+0700",
+      "updated": "2026-07-31T11:57:24+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): locate the 78 missing documents in the landing folder [commit 00b9245]"
+    },
     {
       "id": "sap-landing-file-locate",
       "state": "done",
@@ -13,19 +53,11 @@
     },
     {
       "id": "deploy-313325e-prd",
-      "state": "doing",
-      "created": "2026-07-31T11:37:39+0700",
-      "updated": "2026-07-31T11:37:39+0700",
-      "ai": "PRD deploy of budget-web:313325e approved by jakkaritw 2026-07-31. 07-security-checklist re-run on d0052ab..313325e: PASS 8/8, no critical (pure UI diff). Rollback line: --image cmanbudgetacr.azurecr.io/budget-web:d0052ab (current prod rev --0000007)",
-      "agent": "kimi"
-    },
-    {
-      "id": "log-0caebd0",
       "state": "done",
-      "created": "2026-07-31T11:15:27+0700",
-      "updated": "2026-07-31T11:15:27+0700",
-      "agent": "autolog",
-      "ai": "docs(plan): DB->web actuals parity harness + 2026-07-31 verdict [commit 0caebd0]"
+      "created": "2026-07-31T11:37:39+0700",
+      "updated": "2026-07-31T13:16:31+0700",
+      "ai": "PRD deploy+verify done 2026-07-31: cman-budget-web-prd revision --0000008 image budget-web:313325e (rollback line = d0052ab). 07-security re-run pre-deploy on d0052ab..313325e: PASS 8/8 no critical. verify-deploy-landed with fresh PRD cookie from jakkaritw: smoke_prd.py PASS=15 FAIL=0 DEFER=8 (identical to staging baseline; first run with stale STG cookie failed 5 auth checks as expected — cookie is per-app-registration). Feature check on prod 14/14 PASS: overlay covers 1440x810, z300>nav100, table 430->550px, body lock/restore, month input editable, Esc-in-input stays, Esc-on-page exits, 0 console errors, 0 write requests. Screenshot bin/prd-fullscreen-313325e.png. origin/main pushed (now 0caebd0 incl 313325e). NOTHING left open for this feature",
+      "agent": "kimi"
     },
     {
       "id": "sap-parity-3files-2026-07-31",
@@ -52,14 +84,6 @@
       "agent": "kimi"
     },
     {
-      "id": "log-b627d8d",
-      "state": "done",
-      "created": "2026-07-31T10:11:07+0700",
-      "updated": "2026-07-31T10:11:07+0700",
-      "agent": "autolog",
-      "ai": "test(sap): Book2 data-parity test — web actuals vs SAP export (plan/sap-actuals-dw-gap-fix.md §5) [commit b627d8d]"
-    },
-    {
       "id": "log-a8f848f",
       "state": "done",
       "created": "2026-07-31T10:11:05+0700",
@@ -77,10 +101,10 @@
     },
     {
       "id": "sap-parity-test",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-07-30T12:01:51+0700",
-      "updated": "2026-07-30T12:01:51+0700",
-      "ai": "Kimi task: build backend/tests/tests_data_sync/test_sap_actuals_parity.py per plan/sap-actuals-dw-gap-fix.md section 5 — Book2 2.xlsx vs fetch_sap_actuals(2026) doc-level parity; expected to FAIL until DW reload lands; parser unit tests must pass",
+      "updated": "2026-07-31T14:58:24+0700",
+      "ai": "[CROSS-SESSION UPDATE 2026-07-31] Delivered - ledger was stale as willdo. backend/tests/tests_data_sync/test_sap_actuals_parity.py (305 lines) + conftest.py + parity_report.txt landed in commit b627d8d; 3-file parity verdict recorded in 0caebd0 and in task sap-parity-3files-2026-07-31 (done). Remaining SAP gap = DW entry-date hole 2026-04-30..today, not this test.",
       "agent": "kimi"
     },
     {
@@ -93,10 +117,10 @@
     },
     {
       "id": "deploy-95dfd64-handoff",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-30T11:38:43+0700",
-      "updated": "2026-07-30T11:38:43+0700",
-      "ai": "Following plan/kimi-handoff-deploy-and-remaining-work.md: deploy 95dfd64 (staging->prd with jakkaritw approval), post-deploy tests per plan/post-deploy-smoke-uat-plan.md, CSS polish no-scope, P0-22 decision. Step 1: verify Dockerfile build context + run az discovery (or hand to Cloud Shell if az missing locally).",
+      "updated": "2026-07-31T13:17:07+0700",
+      "ai": "Superseded 2026-07-31: prod now serves budget-web:313325e (rev --0000008) which INCLUDES 95dfd64 — staging+prd deploy goal of this handoff fulfilled via deploy-313325e-staging/deploy-313325e-prd (smoke 15/0/8 both envs). CSS polish no-scope landed earlier (4052730). Still-open items live in their own tasks: approver-nonadmin-scope-risk (P0-22 decision, willdo), sap-parity-test (willdo). Full Phase-2/3 UAT per plan/post-deploy-smoke-uat-plan.md still pending pilot",
       "agent": "kimi"
     },
     {
@@ -109,10 +133,10 @@
     },
     {
       "id": "kimi-handoff-deploy-95dfd64",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-07-30T11:37:18+0700",
-      "updated": "2026-07-30T12:19:50+0700",
-      "ai": "[VERIFIED AGAINST LIVE AZURE 2026-07-30, workflow wf_20fc93c2-de7, 7 agents read-only] Handoff doc plan/kimi-handoff-deploy-and-remaining-work.md now carries CONFIRMED values + a paste-ready corrected sequence. FOUR BLOCKERS in the circulated deploy sequence, all confirmed: (1) 'az acr build --image budget:95dfd64' - registry cmanbudgetacr has ONLY repo 'budget-web'; the wrong name SUCCEEDS at build (creates a 2nd repo) then both updates pull budget-web:95dfd64 which does not exist => image-pull failure AFTER the operator was told build passed; correct = --image budget-web:95dfd64 (matches runbook sec3 + Dockerfile header). (2) staging RG 'CMAN-BUDGETNGT-WEB-RG' DOES NOT EXIST; staging is in the SAME RG as prod = CMAN-BUDGET-MNGT-WEB-RG (both apps share env managedEnvironment-CMANBUDGETMNGTW-b33f). (3) prd line uses '--' instead of '--image'. (4) ROLLBACK METHOD UNUSABLE: prd is activeRevisionsMode=Single with exactly ONE revision (cman-budget-web-prd--0000005), so 'revision activate' + 'ingress traffic set --revision-weight' is rejected; working rollback = az containerapp update --image cmanbudgetacr.azurecr.io/budget-web:ace0f00. OTHER CONFIRMED FACTS: both apps currently run budget-web:ace0f00 (2026-07-28); tag 95dfd64 not built yet; registry auth = system-assigned MI with AcrPull verified on both principals (no secrets needed); jakkaritw is Owner+Contributor at subscription scope; env vars/secrets already set so this is an image-only update (do NOT re-run runbook sec5/6 secret blocks); backend/Dockerfile IS 2-stage and builds the frontend in-image (node:24-alpine npm ci + build:ci -> COPY --from=frontend-build /fe/out ./static, STATIC_DIR=/app/static) with host frontend/out dockerignored, so the deploy WILL contain today's frontend change and repo-root context is required; the old tsc-sweeps-tests trap is not a risk (root .dockerignore excludes docs/ and **/*.md); staging minReplicas=0 => cold start on first smoke request, prd minReplicas=2. NEW HARDENING ITEMS (non-blocking, jakkaritw's call): GitHub repo is PUBLIC; ACR adminUserEnabled=true while apps use managed identity.",
+      "updated": "2026-07-31T13:17:07+0700",
+      "ai": "Fulfilled 2026-07-31 via deploy-313325e-staging + deploy-313325e-prd: prod serves image containing 95dfd64; the 4 corrected deploy values in the handoff (budget-web repo, CMAN-BUDGET-MNGT-WEB-RG, --image flag, redeploy-tag rollback) were used successfully for the 313325e deploy",
       "agent": "claude"
     },
     {
@@ -161,10 +185,10 @@
     },
     {
       "id": "approver-nonadmin-scope-risk",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-07-30T10:13:33+0700",
-      "updated": "2026-07-30T10:13:33+0700",
-      "ai": "OPEN RISK confirmed by workflow wf_40087ffc-985 (2026-07-30, read-only): the 2026-07-22 'approver cannot reach own pending department in UI' defect is NOT fixed - Nipaporn only escapes it because she is in ADMIN_EMAILS on prd revision 0000005 (admin bypass: authorize_status_view returns early when scope.is_admin, and list_departments_pending_my_approval filters purely on frozen approver empcode with NO See-scope filter). Her own See scope is just 7 cost centers / 5 of 114 departments. => ANY NON-ADMIN step-2/step-3 approver (e.g. a department head who is not on the admin allowlist) will still see 'you have items pending' via /approval/pending-for-me yet be unable to open that department in the picker. Blocks plan item P0-22 for real rollout waves. Options to decide with jakkaritw: (a) widen those approvers' See scope in the scope model, (b) let the department picker include any department where the caller is a frozen approver regardless of See scope, (c) accept and put every step-2/3 approver on the admin allowlist (weakest). Also verified: prd transactional tables are EMPTY (approval_status 0 rows, pending_budget 0 rows) so nothing is broken for users today; dbo.cc_filler_map = 484 rows / 211 cost centers / 99 distinct filler emails, so any tenant user absent from that map lands on an empty app after login (role=none).",
+      "updated": "2026-07-31T15:41:51+0700",
+      "ai": "jakkaritw decision 2026-07-31: skip — assessed as no issue, not fixing. Recorded for the record: the verified defect remains (any non-admin step-2/3 approver sees pending-for-me but cannot open that ฝ่าย in the picker; admin-allowlisted approvers like Nipaporn unaffected). Reopen if a non-admin approver joins the pilot",
       "agent": "claude"
     },
     {
@@ -201,10 +225,10 @@
     },
     {
       "id": "status-report-card-2026-08",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-29T20:09:41+0700",
-      "updated": "2026-07-29T21:02:07+0700",
-      "ai": "REV3 (size): rebuilt for PowerPoint 16:9 slide — CSS 1920x1080, exported 3840x2160 @2x = exactly 13.333x7.5in at 288dpi, fills a slide edge-to-edge with no letterbox. Content refitted to 1080px (fonts/rows/paddings tightened, concern became a single-line strip); generator now FAILS LOUD if any text overflows or clips so future text edits cannot silently cut on the slide. Asserts PASS 8/8: 3840x2160, no v/h overflow, 0 clipped, 6+6 bullets, progress 0.60, today==Aug1 gridline (1242px), strip inside slide. AWAITING jakkaritw visual confirm",
+      "updated": "2026-07-31T15:41:52+0700",
+      "ai": "jakkaritw 2026-07-31: skip visual confirm — accepted as-is, no issue. Final artifact monthly_update/project_status_report_2026-08.png (3840x2160 @2x, PowerPoint 16:9, asserts 8/8 PASS incl zero text overflow/clipping guard in generator)",
       "agent": "claude"
     },
     {
@@ -529,10 +553,10 @@
     },
     {
       "id": "gl-editby-flag-rollout",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-07-25T20:45:00+0700",
-      "updated": "2026-07-25T20:45:00+0700",
-      "ai": "Rollout GL_EDIT_BY_ENABLED (created willdo 2026-07-25 per jakkaritw when closing gl-visibility-rules, so it never drops from memory). Scope when rollout decided: (1) flip GL_EDIT_BY_ENABLED=true in Container Apps config - staging first then PRD, deploy needs jakkaritw approval per DEPLOY gate; (2) verify on staging: non-admin sees 134/146 GLs (12 admin GLs stripped server-side), admin sees all 146; (3) carry gl-editby-column leftovers: submit-guard widening, DDL budget_app_tables.sql +edit_by column, dup-fix at source. BLOCKED-BY: staging deploy (az acr build) gate still pending - no staging running current code yet, so flag-ON staging test impossible until that lands. ON behavior already verified in dev.",
+      "updated": "2026-07-31T17:21:24+0700",
+      "ai": "ROLLOUT COMPLETE 2026-07-31 - both environments ON, nothing left in this task. staging: GL_EDIT_BY_ENABLED=true rev cman-budget-web-stg--0000014 (task gl-editby-flag-on-staging). production: rev cman-budget-web-prd--0000009 (task gl-editby-flag-on-prd), jakkaritw approved each leg separately. Config-only, image stayed 313325e on both. Verified: non-admin 134 / admin 146 / 0 leak against the live master (146 rows, 12 edit_by=admin), 261 unit tests pass, startup logs clean, secretRefs intact. Pre-flag-ON leftovers resolved/dropped: submit-guard settled by 9e57b77 (admin-GL rows approved-on-save, never enter approval_status); gl_group source dups already clean (146/146 distinct); budget_app_tables.sql +edit_by is doc-only in the DW repo (app never persists edit_by). UAT note: the 12 admin GLs are now Budget-dept-only data entry, invisible to fillers AND to non-admin approvers; visible marker for an admin = the '(เฉพาะแอดมิน)' suffix in the + เพิ่ม Transaction GL picker. Rollback per app = --set-env-vars GL_EDIT_BY_ENABLED=false.",
       "agent": "claude"
     },
     {
@@ -1646,11 +1670,11 @@
     },
     {
       "id": "sap-actuals-view",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-09T13:03:03+0700",
-      "updated": "2026-07-09T13:24:12+0700",
+      "updated": "2026-07-31T14:57:59+0700",
       "agent": "04-data-engineer",
-      "ai": "BLOCKED on permissions: SP cman-fabric-write (de4b353f, same SP in budget+DW .env) has no grant on workspace 302668d3 (cman_dw_wh_gold). REST 403, OneLake 403, SQL 18456; sanity connect to cman-dw-ws OK so recipe correct. Endpoint host derived offline (base32 trick, saved to memory). Probe script ready in scratchpad (probe_fact_gl_trans.py, 16 probes). Next: user grants Viewer/ReadData in portal -> rerun probe -> resume workflow wf_4a5c10c5-155 (author+verify phases)."
+      "ai": "[CROSS-SESSION UPDATE 2026-07-31] STALE BLOCKER CLEARED - closing. The 'SP cman-fabric-write has no grant on workspace 302668d3 (cman_dw_wh_gold): REST 403, OneLake 403, SQL 18456' note no longer holds: today a read-only SP pyodbc connect to v5o4qez3u4cupase7cogkwvyke-2nucmmcmvaiejgjtmxgk5gewea.datawarehouse.fabric.microsoft.com / cman_dw_wh_gold succeeded, and the table exists as gold.fact_gl_trans (also gold_bi.fact_gl_trans) - schema is 'gold', NOT dbo. App already reads it: backend/app/sap.py:59 'FROM gold.fact_gl_trans', GOLD_SQL_SERVER/GOLD_SQL_DATABASE wired on prd. Remaining SAP work is NOT this task - it is the fact_gl_trans entry-date hole (entry-days 2026-04-30..today never loaded, daily loader not running) tracked in plan/sap-actuals-dw-gap-fix.md."
     }
   ]
 }

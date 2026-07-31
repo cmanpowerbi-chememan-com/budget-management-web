@@ -20,6 +20,7 @@ new dependency is introduced for this module.
 """
 import logging
 from dataclasses import dataclass
+from datetime import date
 from urllib.parse import quote
 
 import httpx
@@ -102,8 +103,8 @@ def _hl_red(text: str) -> str:
 
 
 def _wrap(content_html: str) -> str:
-    """One shared envelope: font wrapper + signature, so all 4 mail types
-    look identical in structure (sample: 'Best Regards,' + bold team name)."""
+    """One shared envelope: font wrapper + signature, so every mail type
+    looks identical in structure (sample: 'Best Regards,' + bold team name)."""
     return (
         f'<div style="{_FONT_WRAP}">'
         f"{content_html}"
@@ -165,7 +166,7 @@ def _get_graph_token(settings: Settings) -> str:
     return resp.json()["access_token"]
 
 
-def _post_send_mail(token: str, to_email: str, subject: str, html_body: str) -> None:
+def _post_send_mail(token: str, to_email: str, subject: str, html_body: str, cc: list[str] | None = None) -> None:
     message = {
         "message": {
             "subject": subject,
@@ -174,6 +175,11 @@ def _post_send_mail(token: str, to_email: str, subject: str, html_body: str) -> 
         },
         "saveToSentItems": True,
     }
+    if cc:
+        # Key ABSENT (not an empty array) when there is no cc — 2026-07-31
+        # revamp: reject/final-approve cc the frozen approver1, deadline
+        # reminders cc the derived approver1; everything else stays To-only.
+        message["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
     resp = httpx.post(
         f"{GRAPH_BASE}/users/{SENDER_EMAIL}/sendMail",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -185,31 +191,38 @@ def _post_send_mail(token: str, to_email: str, subject: str, html_body: str) -> 
 
 
 def send_mail(
-    to_email: str, subject: str, html_body: str, *, dry_run: bool, settings: Settings | None = None
+    to_email: str, subject: str, html_body: str, cc: list[str] | None = None,
+    *, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult:
     """The ONE transport seam. `dry_run=True`: construct + log the payload,
     ZERO HTTP calls. `dry_run=False`: fetch a Graph token then POST
     sendMail — both calls go through `httpx.post` (the seam every test in
-    this module monkeypatches)."""
+    this module monkeypatches). `cc` is an optional list of cc addresses
+    (2026-07-31 revamp) — falsy/empty means the payload carries no
+    ccRecipients key at all."""
     if not to_email:
         logger.warning("notifications: no recipient email resolved, subject=%r — skipping", subject)
         return NotificationResult(sent=False, to_email="", subject=subject, dry_run=dry_run, detail="no recipient")
 
     if dry_run:
-        logger.info("notifications[DRY-RUN]: to=%s subject=%r body_len=%d", to_email, subject, len(html_body))
+        logger.info(
+            "notifications[DRY-RUN]: to=%s cc=%s subject=%r body_len=%d", to_email, cc or [], subject, len(html_body)
+        )
         return NotificationResult(sent=False, to_email=to_email, subject=subject, dry_run=True, detail="dry_run")
 
     settings = settings or get_settings()
     token = _get_graph_token(settings)
-    _post_send_mail(token, to_email, subject, html_body)
-    logger.info("notifications: sent to=%s subject=%r", to_email, subject)
+    _post_send_mail(token, to_email, subject, html_body, cc)
+    logger.info("notifications: sent to=%s cc=%s subject=%r", to_email, cc or [], subject)
     return NotificationResult(sent=True, to_email=to_email, subject=subject, dry_run=False)
 
 
-def _lookup_email_by_empcode(conn: pyodbc.Connection, empcode: str | None) -> str | None:
+def lookup_email_by_empcode(conn: pyodbc.Connection, empcode: str | None) -> str | None:
     """Reverse of `app.approval.resolve_submitter` (email -> empcode) — here
     empcode -> email, against the same confirmed source
-    `dbo.v_employee_budget_01` (spec §1b)."""
+    `dbo.v_employee_budget_01` (spec §1b). Public since the 2026-07-31
+    revamp: `jobs/send_reminders.py` also resolves empcode -> email for the
+    deadline-reminder cc (derived approver1)."""
     if not empcode:
         return None
     cursor = conn.cursor()
@@ -221,17 +234,45 @@ def _lookup_email_by_empcode(conn: pyodbc.Connection, empcode: str | None) -> st
     return row[0] if row else None
 
 
+def _resolve_approver1_cc(conn: pyodbc.Connection, to_email: str, approver1_empcode: str | None) -> list[str] | None:
+    """2026-07-31 revamp cc rule (plan §3.1): reject + final-approve mails
+    cc the FROZEN approver1. Returns None (no cc) when the empcode is blank,
+    the lookup finds no email, or the resolved cc IS the To address (a
+    duplicate mail to the same person). A lookup FAILURE is swallowed —
+    loudly logged — so a broken cc lookup can never block the main To send."""
+    if not approver1_empcode:
+        return None
+    try:
+        cc_email = lookup_email_by_empcode(conn, approver1_empcode)
+    except Exception:
+        logger.warning(
+            "notifications: cc lookup failed for approver1 empcode=%r — sending To=%s without cc",
+            approver1_empcode, to_email,
+        )
+        return None
+    if not cc_email or cc_email.lower() == to_email.lower():
+        return None
+    return [cc_email]
+
+
 def notify_turn(
     conn: pyodbc.Connection, *, department: str, fiscal_year: int, approver_empcode: str | None,
     submitter_email: str | None, dry_run: bool, settings: Settings | None = None,
+    reminder: bool = False, days_pending: int | None = None,
 ) -> NotificationResult | None:
     """Turn-notify: a department just landed on an approver's step (initial
     submit -> approver1's turn; each approve -> the next approver's turn;
     also used by the A11 auto_submit/auto_escalate jobs for the same
     "landed on a step" event). Returns None (no send attempted) when the
     approver's email cannot be resolved — logged, never raised, so a
-    missing employee-master row never blocks the caller."""
-    to_email = _lookup_email_by_empcode(conn, approver_empcode)
+    missing employee-master row never blocks the caller.
+
+    `reminder=True` (2026-07-31 revamp, jobs/send_reminders Phase A): the
+    7-day repeat nudge for a turn that has sat unactioned — same mail with
+    a "[เตือน]" subject prefix and an extra body line stating the turn has
+    been pending `days_pending` days, so the repeat is visibly a reminder,
+    not a confusing duplicate of the original turn mail."""
+    to_email = lookup_email_by_empcode(conn, approver_empcode)
     if not to_email:
         logger.warning(
             "notify_turn: no email resolved for empcode=%r, department=%r/%s — skipped",
@@ -240,6 +281,11 @@ def notify_turn(
         return None
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"รอการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
+    pending_line = ""
+    if reminder:
+        subject = f"[เตือน] {subject}"
+        if days_pending is not None:
+            pending_line = f"<p>งบประมาณนี้{_hl_red(f'ค้างการอนุมัติมาแล้ว {days_pending} วัน')} กรุณาดำเนินการ</p>"
     body = _wrap(
         "<p>เรียน ผู้อนุมัติ</p>"
         "<p>มีงบประมาณรอการอนุมัติจากท่าน รายละเอียดดังนี้:</p>"
@@ -249,22 +295,26 @@ def notify_turn(
             ("ผู้ส่ง", submitter_email or "-", None),
             ("สถานะ", "รอการอนุมัติจากท่าน", "red"),
         ])
+        + pending_line
         + f'<p><a href="{link}">คลิกที่นี่เพื่อตรวจสอบและอนุมัติ</a></p>'
     )
     return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)
 
 
 def notify_reject(
-    *, department: str, fiscal_year: int, submitter_email: str | None, reason: str,
-    dry_run: bool, settings: Settings | None = None,
+    conn: pyodbc.Connection, *, department: str, fiscal_year: int, submitter_email: str | None, reason: str,
+    approver1_empcode: str | None, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult | None:
-    """Reject-notify: the LAST SUBMITTER only (ADR-0008) — `submitter_email`
+    """Reject-notify: To the LAST SUBMITTER (ADR-0008) — `submitter_email`
     is the value already frozen on the `approval_status` row at submit time,
-    so this needs NO extra DB lookup and can never point at a stale/renamed
-    employee-master row."""
+    so the main recipient needs NO extra DB lookup and can never point at a
+    stale/renamed employee-master row. 2026-07-31 revamp: cc the frozen
+    `approver1_empcode` (every layer uses this one function) — resolution
+    failure only ever drops the cc, never the To send."""
     if not submitter_email:
         logger.warning("notify_reject: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
+    cc = _resolve_approver1_cc(conn, submitter_email, approver1_empcode)
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ถูกตีกลับ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(
@@ -278,23 +328,25 @@ def notify_reject(
         ])
         + f'<p><a href="{link}">คลิกที่นี่เพื่อแก้ไขและส่งใหม่</a></p>'
     )
-    return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
+    return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
 
 
 def notify_approved(
-    *, department: str, fiscal_year: int, submitter_email: str | None,
-    dry_run: bool, settings: Settings | None = None,
+    conn: pyodbc.Connection, *, department: str, fiscal_year: int, submitter_email: str | None,
+    approver1_empcode: str | None, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult | None:
     """Approved-notify: fires once, when the LAST step of the normal
     approval chain lands the department on APPROVED (there is no next
     approver left to `notify_turn`). Recipient is `submitter_email`, the
-    same frozen value `notify_reject` uses — no DB lookup needed. Never
-    fired for the admin-direct-approve branches (ADMIN_SUBMIT/
-    ADMIN_OVERRIDE_*) — those go through `submit_department`, not the
-    `approve` action this is gated on (router decision)."""
+    same frozen value `notify_reject` uses — no DB lookup needed. 2026-07-31
+    revamp: cc the frozen `approver1_empcode` so the first approver sees the
+    chain completed. Never fired for the admin-direct-approve branches
+    (ADMIN_SUBMIT/ADMIN_OVERRIDE_*) — those go through `submit_department`,
+    not the `approve` action this is gated on (router decision)."""
     if not submitter_email:
         logger.warning("notify_approved: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
+    cc = _resolve_approver1_cc(conn, submitter_email, approver1_empcode)
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ได้รับการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(
@@ -307,57 +359,36 @@ def notify_approved(
         ])
         + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
     )
-    return send_mail(submitter_email, subject, body, dry_run=dry_run, settings=settings)
+    return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
 
 
-def notify_reminder(
-    to_email: str, pending_departments: list[tuple[str, int]], *, dry_run: bool, settings: Settings | None = None,
+def notify_deadline_reminder(
+    filler_email: str, department: str, fiscal_year: int, closing_date: date | None,
+    cc_emails: list[str] | None = None, *, dry_run: bool, settings: Settings | None = None,
 ) -> NotificationResult | None:
-    """Automation D: ONE grouped email per Filler listing every still-not-
-    submitted `(department, fiscal_year)` they Fill — the caller's discovery
-    query already excludes anything submitted (spec: "submitted ones
-    excluded"). Each department gets its own deep-link (the URL scheme
-    carries exactly one department, ADR-0016 — a single combined link
-    covering many departments is not representable)."""
-    if not to_email or not pending_departments:
+    """Automation D, 2026-07-31 revamp: ONE email per (department, filler)
+    for a still-not-submitted department — replaces the old grouped
+    per-filler `notify_reminder` (one mail listing every department) so each
+    mail carries exactly one department's deep link and its own cc (the
+    derived approver1 of THAT department's filler), and each (department,
+    filler) pair gets its own 7-day cadence row in `budget.reminder_log`.
+    `cc_emails` arrives already resolved by the caller (manager rule,
+    fallback Nipaporn) — this function only renders and sends."""
+    if not filler_email:
         return None
-    settings = settings or get_settings()
-    # Table layout (styled after the Contract Management sample's detail
-    # table): gray bold label header, zebra rows, one department per row.
-    header = (
-        '<tr style="background:#F5F7FA;">'
-        f'<td style="{_LABEL_TD}">ฝ่าย</td>'
-        f'<td style="{_LABEL_TD}">ปีงบประมาณ</td>'
-        f'<td style="{_TD}"></td>'
-        "</tr>"
-    )
-    rows = "".join(
-        f'<tr style="background:{"#FFFFFF" if i % 2 == 0 else "#F5F7FA"};">'
-        f'<td style="{_TD}">{_hl(dept)}</td>'
-        f'<td style="{_TD}">{_year_phrase(year)}</td>'
-        f'<td style="{_TD}"><a href="{build_deep_link(dept, year, settings)}">กรอกงบประมาณ</a></td>'
-        "</tr>"
-        for i, (dept, year) in enumerate(pending_departments)
-    )
-    table = (
-        '<table style="border-collapse:collapse;width:100%;max-width:640px;'
-        'border:1px solid #E5E7EB;">'
-        f"{header}{rows}</table>"
-    )
-    # Red call-to-action row, mirroring the sample's highlighted "Expired Date" row.
-    cta = (
-        '<table style="border-collapse:collapse;width:100%;max-width:640px;margin-top:8px;">'
-        '<tr style="background:#FDECEA;">'
-        f'<td style="{_TD}border-bottom:none;">{_hl_red("กรุณาดำเนินการก่อนถึงกำหนดปิดรับ")}</td>'
-        "</tr></table>"
-    )
-    # Subject names the planning year(s) covered — normally one cycle, but a
-    # filler could owe two years at a cycle boundary; join distinct years.
-    years = ", ".join(str(y) for y in sorted({year for _, year in pending_departments}))
-    subject = f"แจ้งเตือน: ยังไม่ได้ส่งงบประมาณ ปีงบประมาณ {years}"
+    link = build_deep_link(department, fiscal_year, settings)
+    subject = f"แจ้งเตือน: ฝ่าย {department} ยังไม่ได้ส่งงบประมาณ ปีงบประมาณ {fiscal_year}"
+    rows: list[tuple[str, str, str | None]] = [
+        ("ฝ่าย", _hl(department), None),
+        ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
+    ]
+    if closing_date is not None:
+        rows.append(("กำหนดปิดรับ", closing_date.strftime("%d/%m/%Y"), "red"))
     body = _wrap(
         "<p>เรียน ผู้กรอกงบประมาณ</p>"
-        "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:</p>"
-        f"{table}{cta}"
+        "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ รายละเอียดดังนี้:</p>"
+        + _label_value_table(rows)
+        + "<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ</p>"
+        + f'<p><a href="{link}">คลิกที่นี่เพื่อกรอกและส่งงบประมาณ</a></p>'
     )
-    return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)
+    return send_mail(filler_email, subject, body, cc=cc_emails or None, dry_run=dry_run, settings=settings)

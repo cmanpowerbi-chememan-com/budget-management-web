@@ -804,6 +804,19 @@ def is_step_stale(row: dict, now: datetime, threshold_days: int = AUTO_ESCALATE_
     return (now_naive - started_naive).days >= threshold_days
 
 
+def current_turn_info(row: dict) -> tuple[datetime, str | None]:
+    """`(turn_start, current_approver_empcode)` for a PENDING_* row —
+    exposed for `jobs/send_reminders.py` Phase A (7-day turn reminders,
+    2026-07-31 email-notify revamp). `turn_start` is the SAME anchor
+    `is_step_stale` computes (`_current_step_started_at`) so the reminder
+    cadence can never drift from the 30-day auto-escalate clock (plan
+    invariant §5); the empcode is the frozen occupant of the current
+    position (None when position 1's `approver1_empcode` is NULL — the
+    caller skips such rows)."""
+    position = _STATUS_TO_POSITION[row["status"]]
+    return _current_step_started_at(row), _occupant_for_position(position, row["approver1_empcode"])
+
+
 def auto_escalate_step(
     conn: pyodbc.Connection, department: str, fiscal_year: int, row: dict, now: datetime | None = None,
 ) -> ApprovalStatusState:

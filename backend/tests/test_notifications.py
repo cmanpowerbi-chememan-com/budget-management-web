@@ -3,6 +3,7 @@
 monkeypatched at the module level, matching the never-cut safety rule (no
 test may send a real email). DB lookups are always a mocked pyodbc connection.
 """
+from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,8 +13,8 @@ from app.notifications import (
     NotificationError,
     build_deep_link,
     notify_approved,
+    notify_deadline_reminder,
     notify_reject,
-    notify_reminder,
     notify_turn,
     send_mail,
 )
@@ -135,6 +136,58 @@ def test_send_mail_sendmail_failure_raises_notification_error(monkeypatch):
         send_mail("someone@chememan.com", "subject", "<p>body</p>", dry_run=False, settings=_settings())
 
 
+def test_send_mail_includes_cc_recipients_when_cc_given(monkeypatch):
+    """2026-07-31 revamp: `cc` lands in the Graph payload as ccRecipients."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+
+    result = send_mail(
+        "someone@chememan.com", "subject", "<p>body</p>",
+        cc=["vp@chememan.com", "boss@chememan.com"], dry_run=False, settings=_settings(),
+    )
+
+    assert result.sent is True
+    message = posts[1][1]["json"]["message"]
+    cc_addresses = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
+    assert cc_addresses == ["vp@chememan.com", "boss@chememan.com"]
+
+
+def test_send_mail_omits_cc_recipients_key_when_no_cc(monkeypatch):
+    """No cc -> the key must be ABSENT entirely (Graph treats an empty
+    ccRecipients array differently from a missing one on some tenants)."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+
+    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
+    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=[], dry_run=False, settings=_settings())
+
+    # posts = [token1, sendMail1, token2, sendMail2]
+    assert "ccRecipients" not in posts[1][1]["json"]["message"]
+    assert "ccRecipients" not in posts[3][1]["json"]["message"]
+
+
 # ---------------------------------------------------------------------------
 # notify_turn — resolves an empcode to an email via dbo.v_employee_budget_01
 # ---------------------------------------------------------------------------
@@ -191,6 +244,43 @@ def test_notify_turn_no_email_found_skips_without_error(monkeypatch):
     assert result is None
 
 
+def test_notify_turn_reminder_mode_prefixes_subject_and_shows_days_pending(monkeypatch):
+    """2026-07-31 revamp: reminder=True is the 7-day repeat nudge — subject
+    prefixed '[เตือน]', body states how many days the turn has been pending."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_turn(
+        conn, department="Accounting", fiscal_year=2027, approver_empcode="200",
+        submitter_email="filler@chememan.com", reminder=True, days_pending=9,
+        dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "manager@chememan.com"
+    assert subject.startswith("[เตือน]")
+    assert "Accounting" in subject
+    assert "9 วัน" in body
+
+
+def test_notify_turn_default_mode_has_no_reminder_prefix(monkeypatch):
+    """The initial landed-on-your-step mail stays unchanged (no [เตือน])."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_turn(
+        conn, department="Accounting", fiscal_year=2027, approver_empcode="200",
+        submitter_email="filler@chememan.com", dry_run=True, settings=_settings(),
+    )
+
+    (_, subject, _), _ = calls[0]
+    assert not subject.startswith("[เตือน]")
+
+
 # ---------------------------------------------------------------------------
 # notify_reject — uses the frozen submitter_email directly, no DB lookup
 # ---------------------------------------------------------------------------
@@ -200,14 +290,15 @@ def test_notify_reject_sends_to_submitter(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     result = notify_reject(
-        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
-        reason="numbers look wrong", dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="numbers look wrong", approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
     assert result == "SENTINEL"
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert "numbers look wrong" in body
+    assert kwargs["cc"] is None  # no approver1 empcode -> no cc
 
 
 def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
@@ -215,8 +306,8 @@ def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     notify_reject(
-        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
-        reason="numbers look wrong", dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="numbers look wrong", approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
     (to_email, subject, body), kwargs = calls[0]
@@ -228,10 +319,63 @@ def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
 def test_notify_reject_no_submitter_email_skips(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
     result = notify_reject(
-        department="Accounting", fiscal_year=2027, submitter_email=None,
-        reason="bad", dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email=None,
+        reason="bad", approver1_empcode=None, dry_run=True, settings=_settings(),
     )
     assert result is None
+
+
+def test_notify_reject_ccs_approver1_email(monkeypatch):
+    """2026-07-31 revamp: reject (any layer) goes To the submitter, cc the
+    frozen approver1's email (resolved via dbo.v_employee_budget_01)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_reject(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="bad", approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["vp@chememan.com"]
+
+
+def test_notify_reject_skips_cc_when_same_as_submitter(monkeypatch):
+    """cc == To would duplicate the mail — skipped (plan §3.1)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("filler@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_reject(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="bad", approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] is None
+
+
+def test_notify_reject_still_sends_to_submitter_when_cc_lookup_fails(monkeypatch):
+    """A broken cc lookup must NEVER block the main To send (plan §3.1)."""
+    conn = MagicMock()
+    conn.cursor.return_value.execute.side_effect = RuntimeError("db down")
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_reject(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="bad", approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -244,8 +388,8 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     result = notify_approved(
-        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
-        dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
     assert result == "SENTINEL"
@@ -255,6 +399,7 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
     link = build_deep_link("Accounting", 2027, settings=_settings())
     assert link in body
     assert kwargs["dry_run"] is True
+    assert kwargs["cc"] is None
 
 
 def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
@@ -262,8 +407,8 @@ def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     notify_approved(
-        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
-        dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
     (to_email, subject, body), kwargs = calls[0]
@@ -274,7 +419,8 @@ def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
 def test_notify_approved_no_submitter_email_skips(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
     result = notify_approved(
-        department="Accounting", fiscal_year=2027, submitter_email=None, dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email=None,
+        approver1_empcode=None, dry_run=True, settings=_settings(),
     )
     assert result is None
 
@@ -284,46 +430,92 @@ def test_notify_approved_dry_run_makes_zero_http_calls(monkeypatch):
     monkeypatch.setattr("app.notifications.httpx.post", lambda *a, **k: calls.append((a, k)))
 
     notify_approved(
-        department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
-        dry_run=True, settings=_settings(),
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
     assert calls == []  # zero HTTP calls in dry-run — never-cut
 
 
-# ---------------------------------------------------------------------------
-# notify_reminder — grouped, one email per Filler, N department lines
-# ---------------------------------------------------------------------------
-
-def test_notify_reminder_lists_every_pending_department(monkeypatch):
+def test_notify_approved_ccs_approver1_email(monkeypatch):
+    """2026-07-31 revamp: final approve goes To the submitter, cc the frozen
+    approver1's email (resolved via dbo.v_employee_budget_01)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
-    result = notify_reminder(
-        "filler@chememan.com", [("Accounting", 2027), ("IT", 2027)], dry_run=True, settings=_settings(),
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["vp@chememan.com"]
+
+
+def test_notify_approved_skips_cc_when_same_as_submitter(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("Filler@chememan.com",)  # case-insensitive == To
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, subject, body), kwargs = calls[0]
+    assert kwargs["cc"] is None
+
+
+def test_notify_approved_still_sends_to_submitter_when_cc_lookup_fails(monkeypatch):
+    """A broken cc lookup must NEVER block the main To send (plan §3.1)."""
+    conn = MagicMock()
+    conn.cursor.return_value.execute.side_effect = RuntimeError("db down")
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
     )
 
     assert result == "SENTINEL"
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
-    assert "Accounting" in body and "IT" in body
+    assert kwargs["cc"] is None
 
 
-def test_notify_reminder_shows_both_planning_and_label_year_per_department(monkeypatch):
+# ---------------------------------------------------------------------------
+# notify_deadline_reminder — ONE email per (department, filler), 2026-07-31
+# revamp replacing the grouped per-filler notify_reminder
+# ---------------------------------------------------------------------------
+
+def test_notify_deadline_reminder_single_department_with_cc_and_link(monkeypatch):
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
-    notify_reminder(
-        "filler@chememan.com", [("Accounting", 2027), ("IT", 2028)], dry_run=True, settings=_settings(),
+    result = notify_deadline_reminder(
+        "filler@chememan.com", "Accounting", 2027, date(2026, 8, 31),
+        cc_emails=["vp@chememan.com"], dry_run=True, settings=_settings(),
     )
 
+    assert result == "SENTINEL"
     (to_email, subject, body), kwargs = calls[0]
-    # each department line carries its OWN planning year + matching label year
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["vp@chememan.com"]
+    assert "Accounting" in subject
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    assert link in body  # deep link carries THIS department + label year (ADR-0016)
     assert "2027" in body and "Year 2026" in body
-    assert "2028" in body and "Year 2027" in body
+    assert "2026" in body  # closing date rendered
 
 
-def test_notify_reminder_empty_list_skips(monkeypatch):
+def test_notify_deadline_reminder_no_filler_email_skips(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
-    result = notify_reminder("filler@chememan.com", [], dry_run=True, settings=_settings())
+    result = notify_deadline_reminder(
+        "", "Accounting", 2027, date(2026, 8, 31), cc_emails=[], dry_run=True, settings=_settings(),
+    )
     assert result is None

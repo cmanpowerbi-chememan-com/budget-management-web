@@ -113,19 +113,21 @@ See `docs/reference/budget-templates.md` for template structures.
 
 ## Email notification triggers
 
-Sent at **every step** of the chain. Mechanism, sender, and failure handling = decision; see
-`.claude/project-context.md` ("Email notifications") — FastAPI → Microsoft Graph `sendMail`
-direct, background task, approval is source of truth (email failure never rolls back).
+(Revamped 2026-07-31 — `plan/email-notify-revamp.md`.) Mechanism, sender, and failure
+handling = decision; see `.claude/project-context.md` ("Email notifications") — FastAPI →
+Microsoft Graph `sendMail` direct, approval is source of truth (email failure never rolls back).
+Repeat reminders are sent by `jobs/send_reminders.py` and tracked in `budget.reminder_log`
+(7-day cadence per stream).
 
-| Event | Notify |
-|-------|--------|
-| User submits | approver1 (managerempcode of last submitter — trace up to VP/AVP) |
-| approver1 (VP) approves | นิภาพร |
-| approver1 (VP) rejects | User |
-| นิภาพร approves | วราพร |
-| นิภาพร rejects | User + VP/AVP |
-| วราพร approves | User (final confirmation ✅) |
-| วราพร rejects | User + VP/AVP + นิภาพร |
+| Event | To | Cc | Repeat |
+|-------|----|----|--------|
+| User submits | approver1 (managerempcode of last submitter — trace up to VP/AVP) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน |
+| approver อนุมัติ (chain ยังไม่ครบ) | approver ถัดไป (นิภาพร → วราพร) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน |
+| วราพร approves (final) | User (submitter) ✅ | approver1 | ครั้งเดียว |
+| reject (ทุก layer) | User (submitter) | approver1 | ครั้งเดียว |
+| deadline reminder (ฝ่ายยังไม่ submit / REJECTED) | filler (แยกเมลต่อฝ่าย) | approver1 ที่ derive จาก manager ของ filler (fallback นิภาพร) | ทุก 7 วัน ตั้งแต่ `reminder_date` ถึง `closing_date` |
 
+cc is skipped when it cannot be resolved or equals the To address; a cc failure never blocks
+the main send. Turn reminders reuse the same turn-start anchor as the 30-day auto-escalate.
 Special-case routing (นิภาพร/วราพร self-submit, C-Level) follows the same chain with the
 self-skip above.

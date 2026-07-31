@@ -74,14 +74,17 @@ def _notify_after_transition(conn: pyodbc.Connection, action: str, state: Approv
     try:
         if action == "reject":
             notifications.notify_reject(
-                department=state.department, fiscal_year=state.fiscal_year,
+                conn, department=state.department, fiscal_year=state.fiscal_year,
                 submitter_email=state.submitter_email, reason=state.reject_reason,
+                approver1_empcode=state.approver1_empcode,  # 2026-07-31 revamp: cc the frozen approver1
                 dry_run=settings.notifications_dry_run,
             )
         elif action == "approve" and state.status == APPROVED:
             notifications.notify_approved(
-                department=state.department, fiscal_year=state.fiscal_year,
-                submitter_email=state.submitter_email, dry_run=settings.notifications_dry_run,
+                conn, department=state.department, fiscal_year=state.fiscal_year,
+                submitter_email=state.submitter_email,
+                approver1_empcode=state.approver1_empcode,  # 2026-07-31 revamp: cc the frozen approver1
+                dry_run=settings.notifications_dry_run,
             )
         elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
             notifications.notify_turn(

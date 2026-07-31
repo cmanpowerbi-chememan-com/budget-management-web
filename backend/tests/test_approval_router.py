@@ -311,6 +311,47 @@ def test_reject_notifies_the_last_submitter(client):
     assert mock_notify.call_args.kwargs["reason"] == "bad numbers"
 
 
+def test_reject_passes_frozen_approver1_empcode_for_cc(client):
+    """2026-07-31 revamp: reject mail cc's the frozen approver1 — the router
+    must hand `state.approver1_empcode` to notify_reject (any layer)."""
+    _override_auth("manager@chememan.com")
+    state = _fake_state(
+        status="REJECTED", reject_reason="bad numbers",
+        submitter_email="filler@chememan.com", approver1_empcode="200",
+    )
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.reject_department", return_value=state
+    ), patch("app.routers.approval.notifications.notify_reject") as mock_notify:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post(
+            "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
+        )
+
+    assert response.status_code == 200
+    mock_notify.assert_called_once()
+    assert mock_notify.call_args.kwargs["approver1_empcode"] == "200"
+
+
+def test_approve_final_passes_frozen_approver1_empcode_for_cc(client):
+    """2026-07-31 revamp: the final-approve confirmation cc's the frozen
+    approver1 — the router must hand `state.approver1_empcode` to
+    notify_approved."""
+    _override_auth("manager@chememan.com")
+    state = _fake_state(
+        status=APPROVED, current_position=None, current_approver_empcode=None,
+        submitter_email="filler@chememan.com", approver1_empcode="200",
+    )
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department", return_value=state
+    ), patch("app.routers.approval.notifications.notify_approved") as mock_approved:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+
+    assert response.status_code == 200
+    mock_approved.assert_called_once()
+    assert mock_approved.call_args.kwargs["approver1_empcode"] == "200"
+
+
 def test_pending_for_me_401_without_auth(client):
     response = client.get("/approval/pending-for-me", params={"fiscal_year": FY})
     assert response.status_code == 401

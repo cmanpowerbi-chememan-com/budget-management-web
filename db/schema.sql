@@ -100,6 +100,19 @@ CREATE TABLE submission_deadline (
     updated_at      DATETIME2       NOT NULL DEFAULT GETDATE()
 );
 
+-- 6. REMINDER LOG (live: budget.reminder_log — db/ddl/budget_reminder_log.sql)
+-- 7-day reminder cadence bookkeeping for jobs/send_reminders.py
+-- (2026-07-31 email-notification revamp). One row per reminder stream,
+-- updated in place after each successful send; dry-runs never write.
+CREATE TABLE budget.reminder_log (
+    reminder_type   VARCHAR(20)     NOT NULL,  -- 'turn' | 'deadline'
+    department      NVARCHAR(200)   NOT NULL,
+    fiscal_year     INT             NOT NULL,
+    recipient       NVARCHAR(320)   NOT NULL,  -- empcode (turn) / email (deadline)
+    sent_at         DATETIME2       NOT NULL,
+    CONSTRAINT pk_reminder_log PRIMARY KEY (reminder_type, department, fiscal_year, recipient)
+);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
