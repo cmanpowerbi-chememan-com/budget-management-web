@@ -20,6 +20,12 @@ describe('YearPicker', () => {
     expect(screen.getByRole('combobox')).toHaveValue('2099')
   })
 
+  it('starts the option list at the fixed floor (label Year 2019)', () => {
+    render(<YearPicker year={2027} onChange={vi.fn()} />)
+    expect(screen.getByRole('option', { name: 'Year 2019' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Year 2018' })).not.toBeInTheDocument()
+  })
+
   it('labels the option with the standing year (value stays the planning year)', () => {
     render(<YearPicker year={2027} onChange={vi.fn()} />)
     const option = screen.getByRole('option', { name: 'Year 2026' }) as HTMLOptionElement

@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-30T12:19:50+0700",
+  "updated": "2026-07-31T10:11:07+0700",
   "tasks": [
+    {
+      "id": "log-b627d8d",
+      "state": "done",
+      "created": "2026-07-31T10:11:07+0700",
+      "updated": "2026-07-31T10:11:07+0700",
+      "agent": "autolog",
+      "ai": "test(sap): Book2 data-parity test — web actuals vs SAP export (plan/sap-actuals-dw-gap-fix.md §5) [commit b627d8d]"
+    },
+    {
+      "id": "log-a8f848f",
+      "state": "done",
+      "created": "2026-07-31T10:11:05+0700",
+      "updated": "2026-07-31T10:11:05+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): handoff carries the verified deploy sequence - 4 blockers confirmed [commit a8f848f]"
+    },
     {
       "id": "staging-95dfd64-verified",
       "state": "done",

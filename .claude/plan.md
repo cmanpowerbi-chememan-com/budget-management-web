@@ -1,4 +1,7 @@
-# Current Phase (2026-07-30)
+# Current Phase (2026-07-31)
+
+## YearPicker fixed floor — dropdown reaches back to Year 2019 (2026-07-31, frontend only)
+- [x] **Replaced the sliding window (`currentYear ± {1,2}`) with a fixed lower bound `FIRST_PLANNING_YEAR = 2020`** (`frontend/src/grid/YearPicker.tsx`) — jakkaritw's choice: floor instead of widening `WINDOW_BEFORE`, so old years never drop off as time passes and the list grows by one entry per year via the unchanged `currentYear + 2` ceiling. Labels (value − 1) now run **Year 2019 – Year 2027**, matching the earliest SAP actuals in `fact_gl_trans` (2019). Selected-year-always-included (deep-link) behavior unchanged. New test asserts "Year 2019" present / "Year 2018" absent; suite 5/5 green.
 
 ## Grid totals rework: 3-layer grand total + รวมทั้งปี column (2026-07-30, frontend only, jakkaritw-reviewed)
 - [x] **Side grand total now renders 3 rows — one per layer — on BOTH sides (COST 5xxx + SGA 6xxx)** (`frontend/src/grid/GridTable.tsx`): "รวมทั้งหมด · SAP · ใช้จริง" / "รวมทั้งหมด · Approved · งบ" / "รวมทั้งหมด · Pending · รออนุมัติ", each summing every shown cc+gl row month-by-month (filter-aware, sides never combine — never-cut unchanged). `SubtotalRow` gained a `layer` prop (`totals[layer][m]` instead of hardcoded `.pending`). GL-group subtotals stay pending-only, now labeled "รวม {glGroup} · Pending" so the layer scope is explicit.
