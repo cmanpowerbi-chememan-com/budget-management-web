@@ -117,7 +117,7 @@ def _turn_due(turn_start: datetime, last_sent: datetime | None, now: datetime) -
 
 def _deadline_due(last_sent: datetime | None, today: date) -> bool:
     """7-day deadline cadence (plan §3.3): due when never sent, or the last
-    send was >= 7 days ago. (The window check — reminder_date..closing_date
+    send was >= 7 days ago. (The window check — reminder_date..deadline_date
     — happens once per run in `_run_deadline_reminders`, not here.)"""
     if last_sent is None:
         return True
@@ -187,15 +187,21 @@ def _run_turn_reminders(conn, fiscal_year: int, dry_run: bool, notifications_dry
 # ---------------------------------------------------------------------------
 
 def _deadline_window(conn, fiscal_year: int) -> tuple[date, date | None] | None:
-    """`(reminder_date, closing_date)` from `dbo.submission_deadline` — the
+    """`(reminder_date, deadline_date)` from `dbo.submission_deadline` — the
     existing, Nipaporn-maintained config row (plan §1: no new config). None
     when no row is configured or reminder_date is NULL — a missing config
     means "never remind", mirroring the old `_reminder_date_reached` posture.
-    `closing_date` may itself be NULL (window then has no stop date)."""
+    `deadline_date` may itself be NULL (window then has no stop date).
+
+    ⚠ Column-name trap (verified against the LIVE table 2026-07-31): the real
+    closing DATE lives in `deadline_date` — the column literally named
+    `closing_date` is an INT day-of-month input (31) alongside closing_month/
+    closing_year, NOT a date. Querying `closing_date` here made the window
+    compare a date against 31 and killed the whole job."""
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT reminder_date, closing_date FROM dbo.submission_deadline WHERE fiscal_year = ?",
+            "SELECT reminder_date, deadline_date FROM dbo.submission_deadline WHERE fiscal_year = ?",
             fiscal_year,
         )
         row = cursor.fetchone()
@@ -274,12 +280,12 @@ def _run_deadline_reminders(
             "— no deadline reminders", fiscal_year,
         )
         return 0
-    reminder_date, closing_date = window
+    reminder_date, deadline_date = window
     if today < reminder_date:
         logger.info("fiscal_year=%s: reminder_date %s not yet reached — no deadline reminders", fiscal_year, reminder_date)
         return 0
-    if closing_date is not None and today > closing_date:
-        logger.info("fiscal_year=%s: closing_date %s has passed — deadline reminders stopped", fiscal_year, closing_date)
+    if deadline_date is not None and today > deadline_date:
+        logger.info("fiscal_year=%s: deadline_date %s has passed — deadline reminders stopped", fiscal_year, deadline_date)
         return 0
 
     departments = _find_still_not_submitted_departments(conn, fiscal_year)
@@ -311,7 +317,10 @@ def _run_deadline_reminders(
             # notify_approved's cc == To skip, plan §3.1).
             cc_emails = [cc_email] if cc_email and cc_email.lower() != filler_email.lower() else []
             result = notifications.notify_deadline_reminder(
-                filler_email, department, fiscal_year, closing_date,
+                # The email's `closing_date` display arg is fed from the
+                # schema's `deadline_date` (the real closing DATE) — NOT from
+                # the int day-of-month column named `closing_date`.
+                filler_email, department, fiscal_year, deadline_date,
                 cc_emails=cc_emails, dry_run=notifications_dry_run,
             )
             if result is None or not result.sent:

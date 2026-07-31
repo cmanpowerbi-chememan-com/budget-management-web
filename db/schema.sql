@@ -89,15 +89,23 @@ CREATE TABLE approval_log (
 );
 
 -- 5. SUBMISSION DEADLINE
--- Admin sets deadline per fiscal year — system locks form when reached
+-- Admin sets deadline per fiscal year — system locks form when reached.
+-- Live shape verified 2026-07-31 (dbo.submission_deadline on Fabric SQL):
+-- the closing DAY/MONTH/YEAR + reminder_day are INT inputs; the REAL dates
+-- are the precomputed `deadline_date` / `reminder_date` columns — always
+-- read those two. ⚠ `closing_date` here is an INT day-of-month (31), NOT a
+-- date — reading it as one already caused one caught-before-deploy bug in
+-- jobs/send_reminders.py (2026-07-31).
 CREATE TABLE submission_deadline (
-    id              INT IDENTITY(1,1) PRIMARY KEY,
-    fiscal_year     INT             NOT NULL UNIQUE,
-    deadline_date   DATE            NOT NULL,
-    reminder_days   INT             NOT NULL DEFAULT 7,  -- send reminder N days before deadline
-    created_by      NVARCHAR(255)   NOT NULL,
-    created_at      DATETIME2       NOT NULL DEFAULT GETDATE(),
-    updated_at      DATETIME2       NOT NULL DEFAULT GETDATE()
+    fiscal_year     INT             NOT NULL,
+    closing_date    INT             NULL,   -- day-of-month INPUT (e.g. 31), not a date
+    closing_month   INT             NULL,
+    closing_year    INT             NULL,
+    reminder_day    INT             NULL,   -- day-of-month INPUT for the first reminder
+    deadline_date   DATE            NULL,   -- real closing date (precomputed) — read THIS
+    reminder_date   DATE            NULL,   -- real first-reminder date (precomputed)
+    _load_dt        DATE            NULL,
+    _load_dttm      DATETIME2       NULL
 );
 
 -- 6. REMINDER LOG (live: budget.reminder_log — db/ddl/budget_reminder_log.sql)

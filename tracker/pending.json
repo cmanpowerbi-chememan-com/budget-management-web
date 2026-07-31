@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T17:21:24+0700",
+  "updated": "2026-07-31T22:45:21+0700",
   "tasks": [
+    {
+      "id": "review-email-notify-e51d38f",
+      "state": "done",
+      "created": "2026-07-31T22:45:21+0700",
+      "updated": "2026-07-31T22:45:21+0700",
+      "ai": "Independent verification of Kimi's email-notify revamp (commit e51d38f) at jakkaritw's request. VERDICT: 1 HIGH defect found - do NOT push/CREATE TABLE/go-live until fixed. (1) HIGH wrong column: jobs/send_reminders.py _deadline_window does 'SELECT reminder_date, closing_date FROM dbo.submission_deadline', but live dbo.submission_deadline.closing_date is an INT day-of-month (=31), NOT a date; the real date column is deadline_date (date 2026-10-31). Live schema verified: fiscal_year int, closing_date int, closing_month int, closing_year int, reminder_day int, deadline_date date, reminder_date date (rows FY2024-2027 all reminder_date=2026-10-15 / deadline_date=2026-10-31). Failure chain fires exactly when reminders must start (today >= 2026-10-15): '_run_deadline_reminders: if closing_date is not None and today > closing_date' raises TypeError: '>' not supported between instances of 'datetime.date' and 'int', uncaught before the per-pair try -> whole job dies after Phase A already sent; and notify_deadline_reminder's closing_date.strftime() would AttributeError on an int. Fix = SELECT reminder_date, deadline_date. Why the suite missed it: every deadline test patches _deadline_window, and test_deadline_window_parses_reminder_and_closing_date feeds a mock cursor returning (date, date) - the fixture encodes the wrong assumption (same class as gotcha_live_columns_vs_spec_dbml). (2) MED volume: Phase B would send 253 (department,filler) mails on the first run, and khattariyas@chememan.com alone gets 46 separate mails every 7 days (old behavior was 1 grouped mail) - spec-compliant per jakkaritw's per-ฝ่าย decision but needs an explicit ok. (3) SEQ: budget.reminder_log does NOT exist on the live DB yet (verified) and _last_sent_at is called outside any try in the due-scan loop, so any run before the CREATE TABLE crashes the job - DDL must land before code is deployed/scheduled. PASSED: spec mapping of all 5 rules (cc approver1 on final/reject with skip-on-blank/lookup-fail/cc==To, notify_turn reminder mode, per-ฝ่าย deadline mail, turn anchor shared with is_step_stale via new approval.current_turn_info, log-only-after-real-send incl NOTIFICATIONS_DRY_RUN suppression), SQL fully parameterized, cron still commented, DRY_RUN untouched, backend suite 741 passed / 4 failed (the 4 = tests_data_sync/test_sap_actuals_parity.py FileNotFoundError on fixture 2026_1_4.xlsx renamed to 'A 2026_1_4.xlsx' by the SAP lane, unrelated to this commit).",
+      "agent": "claude"
+    },
     {
       "id": "gl-editby-flag-on-prd",
       "state": "done",
@@ -13,10 +21,10 @@
     },
     {
       "id": "email-notify-revamp",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-31T15:44:48+0700",
-      "updated": "2026-07-31T15:44:48+0700",
-      "ai": "Rework email notification workflow per jakkaritw 2026-07-31: submit->approver1 (+7-day repeat reminders if no action), approve-chain->next approver (+7-day repeat), final->sender cc approver1, reject any layer->sender cc approver1, deadline reminder every 7 days before closing to filler cc approver1 per-ฝ่าย. Explore current notifications.py/jobs first, lock open questions (X days, reminder bookkeeping) before code",
+      "updated": "2026-07-31T22:36:49+0700",
+      "ai": "Implemented per plan/email-notify-revamp.md: cc approver1 on final/reject (skip blank/lookup-fail/cc==To), notify_turn reminder mode, per-ฝ่าย notify_deadline_reminder; jobs/send_reminders.py reworked = Phase A 7-day turn reminders (anchor shared with is_step_stale) + Phase B per-(ฝ่าย,filler) deadline reminders DRAFT/REJECTED only within reminder_date..closing_date, cc = filler manager fallback Nipaporn; reminder_log written only after real send (gate finding fixed + 2 new tests); full mocked suite 740 passed/52 deselected; gate 06/07/08 Approve with 2 suggestions (both applied); docs/reference/approval-workflow.md trigger table + plan.md synced in same commit. PENDING APPROVALS: (1) CREATE TABLE budget.reminder_log on shared DB (DDL ready at db/ddl/budget_reminder_log.sql), (2) staging deploy + manual workflow_dispatch dry-run verify, (3) go-live: uncomment cron + NOTIFICATIONS_DRY_RUN=false",
       "agent": "kimi"
     },
     {

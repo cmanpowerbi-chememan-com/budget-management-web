@@ -11,12 +11,12 @@
 | approve (chain ไม่ครบ) | approver ถัดไป | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน |
 | approve final | sender (submitter) | approver1 | ครั้งเดียว |
 | reject (ทุก layer) | sender | approver1 | ครั้งเดียว |
-| deadline reminder | filler (แยกเมลต่อฝ่าย) | approver1 | ทุก 7 วัน ตั้งแต่ reminder_date ถึง closing_date |
+| deadline reminder | filler (แยกเมลต่อฝ่าย) | approver1 | ทุก 7 วัน ตั้งแต่ reminder_date ถึง deadline_date |
 
 Locked via AskUserQuestion / defaults (2026-07-31):
 - **cc approver1 สำหรับฝ่ายที่ยังไม่ submit** → derive ด้วย rule เดียวกับ submit: `manager_employee_code` ของ filler จาก `dbo.v_employee_budget_01`, fallback Nipaporn (101032) เหมือน `approval.resolve_chain`.
 - **ขอบเขต deadline reminder** → เฉพาะฝ่ายที่บอลอยู่กับ filler: ไม่มี row (DRAFT) หรือ `REJECTED`. ฝ่ายใน chain (PENDING_*) ปล่อยให้ turn reminder ทำงาน — เตือนซ้อนกันไม่ได้.
-- **X วันก่อนปิดงบ** → ใช้ `dbo.submission_deadline.reminder_date` / `closing_date` ที่มีอยู่แล้ว (Nipaporn maintain ผ่าน master) — ไม่สร้าง config ใหม่.
+- **X วันก่อนปิดงบ** → ใช้ `dbo.submission_deadline.reminder_date` / `deadline_date` ที่มีอยู่แล้ว (Nipaporn maintain ผ่าน master) — ไม่สร้าง config ใหม่. ⚠ **แก้ 2026-07-31 หลัง cross-review:** วันปิดจริงอยู่คอลัมน์ `deadline_date` (date) — คอลัมน์ชื่อ `closing_date` เป็น INT เลขวันที่ของเดือน (31) ไม่ใช่วันที่ (ยืนยันกับ live schema + sample row แล้ว); เวอร์ชันแรกของแผน/โค้ดดึงผิดคอลัมน์ จับได้ก่อน deploy.
 - **ยังไม่เปิด cron / ยังไม่ flip `NOTIFICATIONS_DRY_RUN`** — implement + test + verify ก่อน, การเปิดยิงเมลจริงเป็น deploy decision แยก (handoff rule: DRY_RUN stays true until Phase-2 verification).
 
 ## 2. As-is gap (from exploration, 2026-07-31)
@@ -53,7 +53,7 @@ CREATE TABLE budget.reminder_log (
 ```
 - DDL ไปที่ `db/ddl/` (+ sync `db/schema.sql` ซึ่ง stale อยู่แล้วให้ตรง live ในส่วนที่แตะ) — **การ CREATE บน Fabric SQL (shared staging/prod DB) ต้องขออนุมัติ jakkaritw แยกต่างหากก่อนรัน**.
 - Turn reminder due-check (ทำใน Python, ไม่เพิ่ม column บน approval_status): อ่าน `MAX(sent_at)` ของ (turn, dept, year, current_approver_empcode) — due เมื่อ `last_sent IS NULL AND turn_start <= now-7d` หรือ `last_sent <= now-7d AND last_sent >= turn_start`; ถ้า `last_sent < turn_start` (รอบ chain ก่อนหน้า) ให้ถือว่า NULL.
-- Deadline reminder due-check: `MAX(sent_at)` ของ (deadline, dept, year, filler_email) — due เมื่อไม่เคยส่ง (และ today >= reminder_date) หรือ `last_sent <= today-7d`; หยุดเมื่อ today > closing_date หรือฝ่ายหลุดจาก scope (submit แล้ว).
+- Deadline reminder due-check: `MAX(sent_at)` ของ (deadline, dept, year, filler_email) — due เมื่อไม่เคยส่ง (และ today >= reminder_date) หรือ `last_sent <= today-7d`; หยุดเมื่อ today > deadline_date หรือฝ่ายหลุดจาก scope (submit แล้ว).
 - บันทึก log **หลังส่งสำเร็จเท่านั้น** (dry-run ไม่เขียน log) — เมล fail ต้องถูกเตือนซ้ำในรอบถัดไป.
 
 ### 3.4 `backend/jobs/send_reminders.py` (ขยาย job เดิม ไม่สร้าง job ใหม่)
@@ -79,7 +79,7 @@ CREATE TABLE budget.reminder_log (
 
 `tests/test_jobs_send_reminders.py` (เขียนใหม่เกือบทั้งไฟล์ — พฤติกรรมเดิมเปลี่ยน):
 7. turn reminder: ครบ 7 วันส่ง / ยังไม่ครบไม่ส่ง / ส่งแล้ว <7 วันไม่ส่งซ้ำ / ส่งแล้ว >=7 วันส่งซ้ำ / last_sent < turn_start (รอบก่อน) นับเป็นไม่เคยส่ง / ไม่มี current approver ข้าม.
-8. deadline: แยกเมลต่อฝ่าย (filler คนเดียว 2 ฝ่าย = 2 เมล) / cc = manager ของ filler (fallback Nipaporn) / เฉพาะ DRAFT+REJECTED (PENDING_*/APPROVED ไม่โดน) / ก่อน reminder_date ไม่ส่ง / หลัง closing_date ไม่ส่ง / cadence 7 วัน / ฝ่ายละ failure isolation.
+8. deadline: แยกเมลต่อฝ่าย (filler คนเดียว 2 ฝ่าย = 2 เมล) / cc = manager ของ filler (fallback Nipaporn) / เฉพาะ DRAFT+REJECTED (PENDING_*/APPROVED ไม่โดน) / ก่อน reminder_date ไม่ส่ง / หลัง deadline_date ไม่ส่ง / cadence 7 วัน / ฝ่ายละ failure isolation + **เทสเทียบคอลัมน์จริง: query ต้องดึง `deadline_date` ห้ามดึง `closing_date`** (regression ของบั๊กที่ cross-review จับได้ 2026-07-31).
 9. dry-run: ไม่ส่ง ไม่เขียน reminder_log; execute: เขียน log เฉพาะที่ส่งสำเร็จ.
 
 ## 5. Invariants / never-cut

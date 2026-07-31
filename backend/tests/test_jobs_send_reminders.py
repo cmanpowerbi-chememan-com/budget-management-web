@@ -425,10 +425,25 @@ def test_find_fillers_parses_rows():
     assert _find_fillers(conn, "Accounting") == ["alice@chememan.com", "bob@chememan.com"]
 
 
-def test_deadline_window_parses_reminder_and_closing_date():
+def test_deadline_window_parses_reminder_and_deadline_date():
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = (date(2026, 7, 1), date(2026, 8, 31))
     assert _deadline_window(conn, 2027) == (date(2026, 7, 1), date(2026, 8, 31))
+
+
+def test_deadline_window_queries_the_real_schema_columns():
+    """Regression for the 2026-07-31 cross-review catch: the LIVE
+    dbo.submission_deadline stores the real closing DATE in `deadline_date`;
+    the column named `closing_date` is an INT day-of-month input (31). The
+    query must name `deadline_date` and must NOT name `closing_date` — a
+    mocked row can never catch this because every mock returned a date for
+    whichever column the code happened to ask for."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = (date(2026, 10, 15), date(2026, 10, 31))
+    _deadline_window(conn, 2027)
+    sql = conn.cursor.return_value.execute.call_args.args[0]
+    assert "deadline_date" in sql
+    assert "closing_date" not in sql
 
 
 def test_deadline_window_none_when_no_row_or_no_reminder_date():
