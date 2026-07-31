@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-31T23:51:16+0700",
+  "updated": "2026-08-01T01:10:07+0700",
   "tasks": [
+    {
+      "id": "push-email-notify-3commits",
+      "state": "done",
+      "created": "2026-08-01T01:10:07+0700",
+      "updated": "2026-08-01T01:10:07+0700",
+      "ai": "jakkaritw approved push 2026-08-01: pushed origin/main 0caebd0..a7d6177 = 4 commits (00b9245 docs, e51d38f email revamp, 75a0759 deadline_date fix, a7d6177 grouped+hardening). 0 unpushed left. No deploy triggered: master-tables-deploy.yml is paths-filtered to 03-edit-master-table/** which none of these touch; budget-automations.yml is workflow_dispatch-only with cron still commented. CI run 30653890879 = FAILURE but NOT from this work: 'ModuleNotFoundError: No module named openpyxl' collecting tests/tests_data_sync/test_sap_actuals_parity.py -> pytest exits 2 before running anything. Pre-existing red since the SAP lane landed that test (commit b627d8d); runs 30601074997 and 30604547820 failed the same way BEFORE these commits. Fix = add openpyxl to backend/requirements.txt (test-only dep, 1 line) - NOT done, belongs to the SAP lane / awaiting jakkaritw. Separately, locally those same 4 tests fail for a different reason: fixture backend/tests/tests_data_sync/2026_1_4.xlsx is deleted in the working tree (renamed to 'A 2026_1_4.xlsx', uncommitted) while still tracked at HEAD, so CI checkout has the file but the local run does not. Frontend + type-check jobs green. Remaining gates for the email lane: CREATE TABLE budget.reminder_log, deploy staging + dry-run verify, go-live (cron + DRY_RUN=false).",
+      "agent": "claude"
+    },
+    {
+      "id": "review-email-grouping-a7d6177",
+      "state": "done",
+      "created": "2026-08-01T00:58:19+0700",
+      "updated": "2026-08-01T00:58:19+0700",
+      "ai": "Independent check of Kimi's section-7 rework (commit a7d6177) at jakkaritw's request: APPROVE, no blocking defect. Verified in code, not from the report: grouping - _run_turn_reminders builds by_approver dict -> notify_turn_reminder(items=[(dept,fy,days)]) = 1 mail per approver with per-row days-pending, no cc; _run_deadline_reminders groups per filler -> notify_deadline_reminder(filler, departments[], ...) = 1 mail with a row+deep link per department, cc = single manager-derived address; event mails (submit/approve/final/reject) untouched. Cadence now per-person via PERSON_SENTINEL '*' (send_reminders.py:77) and the DDL documents the sentinel + the accepted trade-off. Hardening all 5 present: module token cache (TTL 3600 - 60s margin) so N sends fetch 1 token, pacing sleep(send_delay_seconds) between sends only (N-1 sleeps, skipped entirely on dry-run), retry only 429/503/504 honoring Retry-After else 2s/8s ladder max 3 attempts with non-retryable failing immediately, per-phase cap from Settings.reminder_max_sends_per_run with a loud 'capped N' line, summary line attempted/sent/failed/retried/capped; delay+cap wired from Settings in run(). REGRESSIONS THAT KIMI'S OWN GATE CAUGHT DID NOT SHIP: SQL still 'SELECT reminder_date, deadline_date' (send_reminders.py:267) with test_deadline_window_queries_the_real_schema_columns asserting deadline_date in / closing_date NOT in the executed SQL, and the 'result is None or not result.sent' guard is present in BOTH phases with tests for unresolvable-email and NOTIFICATIONS_DRY_RUN suppression. Tests: 79 passed in the 2 touched files, full backend suite 756 passed / 4 failed (unchanged tests_data_sync fixture from the SAP lane). Holds intact: 3 commits (e51d38f, 75a0759, a7d6177) still UNPUSHED, cron lines 20-21 still commented, Settings.notifications_dry_run default True, budget.reminder_log still not created. NON-BLOCKING nits reported to jakkaritw: (1) cap is per PHASE so a run can send up to 300 mails, not 150 - documented, fine but not what the brief said; (2) default pacing 2.0s = exactly the ~30 mails/min Exchange throttle boundary, suggest 2.5-3.0s (config-only, no code change); (3) token cache assumes a fixed 3600s TTL instead of reading expires_in from the token response - a shorter TTL would 401 (not retried) and be retried next run; (4) notify_turn(reminder=True) is now exercised only by a test, no production caller - dead-ish path; (5) a mail suppressed by NOTIFICATIONS_DRY_RUN is counted as 'failed' in the summary line, which reads misleadingly.",
+      "agent": "claude"
+    },
+    {
+      "id": "hide-incomplete-sap-months",
+      "state": "doing",
+      "created": "2026-08-01T00:41:49+0700",
+      "updated": "2026-08-01T00:41:49+0700",
+      "ai": "VERIFIED N=23 on 3 months (scan files 20260301..20260429 + 20260430..20260731, co1000, f[5]=fiscal_period): last entry-file carrying a period doc = p002->20260321, p003->20260423, p004->20260523; zero after. March curve: month-end 78.2%, 20260403 92.9%, 0405 98.8%, 0415 99.98%, 0423 100% (39,567 docs). RULE LOCKED w/ jakkaritw: hide SAP-actuals month M until contiguous-loaded entry-date watermark >= eom(M)+23d; watermark-driven NOT calendar-driven; contiguity required (no gap-jumping). Decided: total_year sums visible months only + label; hidden cell = muted dash + one freshness line; touches SAP layer only (Approved/Pending untouched, rows unaffected per ADR-0010). PENDING: jakkaritw final go-ahead -> then ADR-0026 + 05-software-developer. Scripts: scratchpad/apr_spill_scan.py, verify_n_march.py",
+      "agent": "claude"
+    },
     {
       "id": "apr-entrydate-spill",
       "state": "done",
@@ -13,10 +37,10 @@
     },
     {
       "id": "email-reminder-grouping",
-      "state": "doing",
+      "state": "done",
       "created": "2026-07-31T23:11:09+0700",
-      "updated": "2026-07-31T23:22:11+0700",
-      "ai": "KIMI TASK (jakkaritw ordered 2026-07-31, brief = plan/email-notify-revamp.md section 7). Rework the two REMINDER mail sets from per-department to ONE grouped mail per person + harden bulk sending. WHY: real data 2026-07-31 shows per-department floods one person - deadline reminders 253 mails/run with khattariyas@chememan.com alone getting 46; turn reminders up to 114/run with bunpotk@chememan.com at 46 and Nipaporn/Waraporn able to receive all 114. After grouping: ~99 deadline + <=48 turn, worst case 1 mail per person. SCOPE: (a) deadline reminder = 1 mail per filler, table of every pending department, per-row deep link, cc = that filler's manager (1 address, existing manager rule); single-department fillers use the SAME template. (b) turn reminder = 1 mail per approver, table of every department awaiting them + days-pending per row, no cc. (c) event mails (submit/approve/final/reject) stay per-department, untouched. (d) reminder_log cadence key becomes per-person: (deadline,'*',fiscal_year,filler_email) and (turn,'*',fiscal_year,approver_empcode) - table not created yet so update db/ddl/budget_reminder_log.sql comments freely; document that a department landing mid-week joins the next 7-day mail instead of firing immediately (event mails already cover urgency). (e) BULK-SEND HARDENING per jakkaritw's own experience of mass sends hanging: fetch the Graph token ONCE per run (today send_mail calls _get_graph_token per mail = 99-367 token requests), pace sends with REMINDER_SEND_DELAY_SECONDS default 2.0 (Exchange Online throttles ~30/min/mailbox), retry 429/503/504 honoring Retry-After else backoff 2s/8s/30s max 3 attempts, cap REMINDER_MAX_SENDS_PER_RUN default 150 with an explicit 'capped N' log (never silent), one summary line attempted/sent/failed/retried/capped, keep per-recipient isolation, injectable sleep so tests never really sleep. TESTS: 10 cases listed in plan section 7.4 incl token-fetched-once, 429+Retry-After retry, cap overflow left unlogged, and the existing regressions (deadline_date not closing_date, cc-skip 3 cases, log-only-after-real-send). HOLD UNCHANGED: no CREATE TABLE, no cron uncomment, no NOTIFICATIONS_DRY_RUN flip - each needs separate jakkaritw approval.",
+      "updated": "2026-08-01T00:08:23+0700",
+      "ai": "Done 2026-07-31 per plan §7: reminders regrouped ONE mail/person (deadline 253->~99/round, turn <=114-><=48, worst 1/person; event mails untouched per-ฝ่าย), cadence sentinel '*', person due-gate (>=1 item >=7d + cadence clear, content=all pending); hardening: token cached/round, retry 429/503/504 w/ Retry-After (3 attempts), 2s pacing job-only, per-phase cap 150 loud 'capped N', per-phase summary line. Gate 1st pass REQUEST CHANGES (rework silently reverted deadline_date query + not-result.sent guard + deleted their tests) — restored verbatim + 2 extra tests; gate re-check APPROVE. Suite 755 mocked green. Holds: no CREATE TABLE, cron commented, DRY_RUN true",
       "agent": "kimi"
     },
     {
@@ -65,14 +89,6 @@
       "updated": "2026-07-31T14:58:42+0700",
       "ai": "Audit done, read-only, no code/config changed. VERDICTS: (1) approver-nonadmin-scope-risk = risk NOT live (positions 2/3 hardcoded to Nipaporn/Waraporn, both in ADMIN_EMAILS on stg+prd; 48 step-1 approvers all get See via _MANAGER_SEE_ADD_SQL; live DB: 99/99 fillers in view, 0 manager code/email mismatches; prd approval_status+pending_budget still 0 rows) -> downgraded to a hardening item, entry rewritten. (2) status-report-card-2026-08 = genuinely open, but only awaiting jakkaritw visual confirm of monthly_update/project_status_report_2026-08.png (534KB, built 2026-07-29 21:00, asserts 8/8); .py/.html/.png still untracked in git. (3) gl-editby-flag-rollout = genuinely open as a DECISION, its recorded blocker is stale (stg 0000013 + prd 0000008 both on image 313325e; GL_EDIT_BY_ENABLED unset -> default False). Also closed 2 stale ledger entries: sap-actuals-view (SP now reads gold.fact_gl_trans fine) and sap-parity-test (shipped in b627d8d). Probe scripts left in scratchpad only.",
       "agent": "claude"
-    },
-    {
-      "id": "log-00b9245",
-      "state": "done",
-      "created": "2026-07-31T11:57:24+0700",
-      "updated": "2026-07-31T11:57:24+0700",
-      "agent": "autolog",
-      "ai": "docs(plan): locate the 78 missing documents in the landing folder [commit 00b9245]"
     },
     {
       "id": "sap-landing-file-locate",

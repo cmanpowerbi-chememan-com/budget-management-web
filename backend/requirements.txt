@@ -11,3 +11,7 @@ pydantic-settings==2.14.2
 pytest==9.0.2
 httpx==0.28.1
 python-multipart==0.0.32
+# openpyxl: TEST-only dep — tests/tests_data_sync/test_sap_actuals_parity.py
+# reads the SAP .xlsx export. Missing here made CI exit 2 on collection
+# ("No module named 'openpyxl'") from 2026-07-31, so no test ran at all.
+openpyxl==3.1.5
