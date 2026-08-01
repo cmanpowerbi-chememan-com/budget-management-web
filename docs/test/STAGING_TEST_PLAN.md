@@ -94,7 +94,7 @@ Read-only (no namespace needed — pure oracle comparison).
 - **O3 Deploy / rollback drill** — activate the previous revision and confirm the app serves, then restore; verify `/health?deep=1` gates on DB; confirm token auto-refresh over a >1h window (already spot-checked).
 - **O4 Notifications content (dry-run)** — trigger submit/approve/reject/reminder and assert the dry-run PREVIEW payloads (recipient, subject, body) are correct WITHOUT sending — the go-live flip only changes `dry_run`, so content must be right now.
 - **O5 Resilience / fault injection** — SAP gold unreachable → `/budget` 502 loud (never silent-empty actuals, ADR-0020); Fabric SQL blip → 502 not 500; Graph/SharePoint down → attachments 502, not a crash.
-- **O6 Auto-jobs (A11/A12)** — call `auto_submit_department` (deadline) and `auto_escalate_step` (30-day stale) functions directly against seeded rows; assert they mirror a human submit/escalate and log `AUTO_SUBMIT`/`AUTO_ESCALATE`. (cron stays disabled.)
+- **O6 Auto-jobs + admin step-override (A11/ADR-0027)** — call `auto_submit_department` (deadline) directly against a seeded row; assert it mirrors a human submit and logs `AUTO_SUBMIT`. Exercise the manual admin step-override via `POST /approval/override-step` (admin-only, position-1 only, no waiting period) against a seeded `PENDING_APPROVER1` row; assert it logs `ADMIN_STEP_OVERRIDE`. (cron stays disabled; the 30-day auto-escalate job no longer exists — ADR-0027.)
 - **O7 Idempotency / retry** — same POST/PUT retried (network retry) does not double-apply (per-key upsert).
 
 ---

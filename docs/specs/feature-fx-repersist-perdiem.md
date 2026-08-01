@@ -136,7 +136,7 @@ CLI + safety: reuse `jobs/common.py` (`--fiscal-year` required, `--execute` defa
 ## 5. Trigger — recommendation + alternatives (decision at GATE)
 
 **RECOMMENDED — (iii) a batch job in `backend/jobs/`, run after the FX sync.**
-- Reuses the exact proven pattern (`auto_submit`/`auto_escalate`/`send_reminders`): CLI, dry-run
+- Reuses the exact proven pattern (`auto_submit`/`send_reminders`): CLI, dry-run
   default, `get_fabric_conn`, GitHub Actions `workflow_dispatch` now / cron after go-live.
 - Idempotent (re-derive is deterministic) → safe to re-run.
 - No new UI, no cross-repo notebook coupling, no websocket.
@@ -179,9 +179,11 @@ shows the new FX immediately (recompute-on-read, unchanged).
   `per_diem.py:105-123`) and `_upsert_trip_detail_line`/`_recompute_parent_cell` set
   `total_year = SUM(m01..m12)` in one atomic statement (`write_model.py:807-833`). No new rounding
   path is introduced.
-- **Audit:** every write stamps `_user="system:fx_repersist"` + `_updated_at` (mirrors
-  `AUTO_ESCALATE_ACTOR_EMAIL="system:auto_escalate"`), so a post-hoc "why did this per-diem move"
-  is answerable = "the year's FX was re-persisted by the job on <date>". Structured stdout log lists
+- **Audit:** every write stamps `_user="system:fx_repersist"` + `_updated_at` — the same "stamp the
+  real actor on every write" precedent the approval engine already sets: `AUTO_SUBMIT` logs the job
+  itself as the actor for a system-triggered transition, while `ADMIN_STEP_OVERRIDE` (ADR-0027) logs
+  the real admin's email because a human clicked it. So a post-hoc "why did this per-diem move" is
+  answerable = "the year's FX was re-persisted by the job on <date>". Structured stdout log lists
   every trip re-priced (trip_id, cost_center, department, old→new total) and every skip + reason.
 
 ---

@@ -15,6 +15,7 @@ from app.notifications import (
     notify_approved,
     notify_deadline_reminder,
     notify_reject,
+    notify_step_overridden,
     notify_turn,
     notify_turn_reminder,
     send_mail,
@@ -500,6 +501,145 @@ def test_notify_approved_still_sends_to_submitter_when_cc_lookup_fails(monkeypat
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert kwargs["cc"] is None
+
+
+# ---------------------------------------------------------------------------
+# notify_step_overridden — 6th notification (ADR-0027): To the frozen
+# submitter, cc the SKIPPED position-1 approver (same skip rules as
+# _resolve_approver1_cc), fired by the admin step-override
+# ---------------------------------------------------------------------------
+
+def test_notify_step_overridden_sends_to_submitter_ccs_skipped_approver(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    (to_email, subject, _), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert subject == "ดำเนินการแทนผู้อนุมัติ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
+    assert kwargs["cc"] == ["vp@chememan.com"]
+    assert kwargs["dry_run"] is True
+
+
+def test_notify_step_overridden_drops_cc_when_unresolvable_same_as_to_or_blank(monkeypatch):
+    """Same cc skip rules as notify_reject/notify_approved: unresolvable,
+    cc == To, or a blank empcode all drop the cc — never the To send."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # lookup finds nothing
+    result = notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="999-unknown", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+    assert result == "SENTINEL"
+    assert calls[0][1]["cc"] is None
+
+    conn2 = MagicMock()
+    conn2.cursor.return_value.fetchone.return_value = ("Filler@chememan.com",)  # case-insensitive == To
+    notify_step_overridden(
+        conn2, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+    assert calls[1][1]["cc"] is None
+
+    notify_step_overridden(
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode=None, admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+    assert calls[2][1]["cc"] is None
+
+
+def test_notify_step_overridden_still_sends_to_submitter_when_cc_lookup_fails(monkeypatch):
+    """A broken cc lookup must NEVER block the main To send (same posture as
+    the 2026-07-31 revamp cc rules)."""
+    conn = MagicMock()
+    conn.cursor.return_value.execute.side_effect = RuntimeError("db down")
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    (to_email, _, _), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] is None
+
+
+def test_notify_step_overridden_body_carries_department_year_both_names_and_link(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(), new_current_approver_empcode="101032",
+    )
+
+    (_, _, body), _ = calls[0]
+    assert "Accounting" in body
+    assert "2027" in body and "Year 2026" in body  # planning + on-screen label year
+    assert "vp@chememan.com" in body  # ผู้อนุมัติที่ถูกข้าม
+    assert "jakkaritw@chememan.com" in body  # ผู้ดำเนินการแทน
+    assert build_deep_link("Accounting", 2027, settings=_settings()) in body
+
+
+def test_notify_step_overridden_still_sends_when_next_approver_lookup_fails(monkeypatch):
+    """Review fix: `lookup_email_by_empcode` for the NEXT approver (feeds
+    only the cosmetic สถานะปัจจุบัน body row) must NEVER prevent the To send
+    -- same posture as the cc lookup. Body degrades to the raw empcode."""
+    conn = MagicMock()
+
+    def _execute(sql, *args, **kwargs):
+        # First lookup (cc, via _resolve_approver1_cc) succeeds; the SECOND
+        # lookup (next approver, feeding สถานะปัจจุบัน only) fails.
+        if conn.cursor.return_value.execute.call_count > 1:
+            raise RuntimeError("db down")
+
+    conn.cursor.return_value.execute.side_effect = _execute
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(), new_current_approver_empcode="101032",
+    )
+
+    assert result == "SENTINEL"  # the To send still went out
+    (to_email, _, body), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["vp@chememan.com"]  # cc lookup (first call) was unaffected
+    assert "101032" in body  # degraded to the raw empcode, no crash
+
+
+def test_notify_step_overridden_no_submitter_email_skips(monkeypatch):
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
+    result = notify_step_overridden(
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email=None,
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

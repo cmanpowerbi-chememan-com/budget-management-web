@@ -477,6 +477,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           fiscalYear={year}
           isFillerOfDept={isFillerOfSelectedDept}
           adminViewEnabled={adminViewEnabled}
+          isAdmin={scope.isAdmin}
           rowCount={rows.length}
           costCenterCount={selectedDeptCostCenterCount}
           onChanged={loadPendingApprovals}

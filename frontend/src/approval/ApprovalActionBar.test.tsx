@@ -24,6 +24,7 @@ function state(overrides: Partial<ApprovalStatusState> = {}): ApprovalStatusStat
     updated_at: null,
     current_position: null,
     current_approver_empcode: null,
+    current_approver_name: null,
     can_act: false,
     notification_warning: null,
     ...overrides,
@@ -35,6 +36,7 @@ const BASE_PROPS = {
   fiscalYear: 2027,
   isFillerOfDept: true,
   adminViewEnabled: false,
+  isAdmin: false,
   rowCount: 5,
   costCenterCount: 2,
   onChanged: vi.fn(),
@@ -180,5 +182,64 @@ describe('ApprovalActionBar', () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'APPROVED' }))
     render(<ApprovalActionBar {...BASE_PROPS} adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+  })
+
+  it('hides อนุมัติ for a non-admin who is not the current approver', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: false }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} />)
+    await screen.findByTestId('approval-status-chip')
+    expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
+  })
+
+  it('admin on PENDING_APPROVER1 with can_act=false sees the same อนุมัติ button, and the override confirm names the skipped approver (ADR-0027)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({
+        status: 'PENDING_APPROVER1', current_position: 1, can_act: false,
+        current_approver_empcode: '200', current_approver_name: 'สมชาย ใจดี',
+      }),
+    )
+    vi.mocked(approvalApi.overrideStep).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER2', current_position: 2 }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('สมชาย ใจดี'))
+    await waitFor(() => expect(approvalApi.overrideStep).toHaveBeenCalledWith('Accounting', 2027))
+    expect(approvalApi.approveDepartment).not.toHaveBeenCalled()
+    expect(BASE_PROPS.onChanged).toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('ขั้น 2'))
+  })
+
+  it('hides อนุมัติ for an admin on PENDING_APPROVER2 (positions 2/3 are never overridable, D4)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER2', current_position: 2, can_act: false }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    await screen.findByTestId('approval-status-chip')
+    expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
+  })
+
+  it("on a 409 from override-step, shows the server's Thai detail as-is", async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: false }),
+    )
+    vi.mocked(approvalApi.overrideStep).mockRejectedValue(
+      new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น', 'ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ'),
+    )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent(
+        'ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ',
+      ),
+    )
   })
 })

@@ -59,15 +59,10 @@ ACTION_RESUBMIT = "RESUBMIT"
 ACTION_APPROVE = "APPROVE"
 ACTION_REJECT = "REJECT"
 ACTION_ADMIN_SUBMIT = "ADMIN_SUBMIT"
-# A11 scheduled jobs (jobs/auto_submit.py, jobs/auto_escalate.py) — written by
-# auto_submit_department / auto_escalate_step below, never by a human action.
+# A11 scheduled job (jobs/auto_submit.py) — written by auto_submit_department
+# below, never by a human action.
 ACTION_AUTO_SUBMIT = "AUTO_SUBMIT"
-ACTION_AUTO_ESCALATE = "AUTO_ESCALATE"
 
-# ADR-0006: a stuck PENDING_* step auto-escalates once it has sat unactioned
-# for this many days (jobs/auto_escalate.py runs this check, never a live
-# trigger inside a request).
-AUTO_ESCALATE_THRESHOLD_DAYS = 30
 # S4 gate fix: split the old single ACTION_ADMIN_OVERRIDE value into two, so
 # the audit log can tell apart "department is structurally orphan" from "the
 # submission deadline has passed" — both used to log the same indistinguishable
@@ -75,6 +70,12 @@ AUTO_ESCALATE_THRESHOLD_DAYS = 30
 # both values fit with room to spare.
 ACTION_ADMIN_OVERRIDE_ORPHAN = "ADMIN_OVERRIDE_ORPHAN"
 ACTION_ADMIN_OVERRIDE_DEADLINE = "ADMIN_OVERRIDE_DEADLINE"
+# ADR-0027: a human ADMIN advancing a stuck position-1 step by exactly one
+# step (admin_override_step below). Deliberately distinct from APPROVE (the
+# frozen occupant acting) and from the submit-side ADMIN_* actions above —
+# the audit trail must always be able to answer "was this step actually
+# reviewed by its owner?".
+ACTION_ADMIN_STEP_OVERRIDE = "ADMIN_STEP_OVERRIDE"
 
 _STATUS_COLUMNS: tuple[str, ...] = (
     "department", "fiscal_year", "status", "submitter_empcode", "submitter_email",
@@ -153,6 +154,15 @@ class ConcurrentApprovalError(RuntimeError):
     UPDATE matched zero rows, so nothing double-advanced (never-cut)."""
 
 
+class StepNotOverridableError(ValueError):
+    """Admin step-override refused (ADR-0027): either the record is sitting
+    on position 2/3 — the budget-dept review itself (Nipaporn/Waraporn),
+    never overridable by anyone (D4) — or position 1 is the ONLY active
+    position, so the override would land APPROVED, which an override may
+    never do. The message is Thai on purpose: the router maps this error to
+    a 409 whose detail the UI shows directly."""
+
+
 ERROR_HTTP_STATUS: dict[str, int] = {
     "not_filler_of_department": 403,
     "admin_cannot_submit_in_cycle": 403,
@@ -164,6 +174,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "not_authorized_to_view_department": 403,
     "missing_reject_reason": 400,
     "concurrent_approval": 409,
+    "step_not_overridable": 409,
 }
 
 ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
@@ -177,6 +188,7 @@ ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     NotAuthorizedToViewDepartmentError: "not_authorized_to_view_department",
     MissingReasonError: "missing_reject_reason",
     ConcurrentApprovalError: "concurrent_approval",
+    StepNotOverridableError: "step_not_overridable",
 }
 
 
@@ -209,6 +221,12 @@ class ApprovalStatusState(BaseModel):
     updated_at: datetime | None = None
     current_position: int | None = None  # 1/2/3 while PENDING_*, else None
     current_approver_empcode: str | None = None  # who may act right now, if PENDING_*
+    # Thai display name of the current approver, resolved server-side from
+    # dbo.v_employee_budget_01 (the same source the mail cc lookup reads) —
+    # the admin step-override confirm dialog must NAME who is being skipped
+    # (ADR-0027) without a second client fetch. Populated by the router's
+    # GET /approval/status only (never by this module's state builders).
+    current_approver_name: str | None = None
     can_act: bool = False  # True when the caller's own empcode IS current_approver_empcode
     # A12: set by the router (never by this module) ONLY when the post-commit
     # notify attempt raised — a non-fatal warning, never a reason to fail the
@@ -265,6 +283,24 @@ def resolve_submitter(conn: pyodbc.Connection, email: str) -> tuple[str | None, 
     finally:
         cursor.close()
     return (row[0], row[1]) if row else (None, None)
+
+
+def lookup_employee_name(conn: pyodbc.Connection, empcode: str | None) -> str | None:
+    """Thai display name for an empcode, from the same
+    `dbo.v_employee_budget_01` the mail cc resolution
+    (`app.notifications.lookup_email_by_empcode`) reads — lets the status
+    payload NAME the current approver (the admin step-override confirm
+    dialog must name who is being skipped, ADR-0027) without a second
+    client fetch. None when the empcode is blank or unknown."""
+    if not empcode:
+        return None
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT full_name_th FROM dbo.v_employee_budget_01 WHERE employee_code = ?", empcode)
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return row[0] if row else None
 
 
 def _department_cost_centers(conn: pyodbc.Connection, department: str) -> set[str]:
@@ -724,10 +760,10 @@ def _advance_one_step(
     fiscal_year)` off its CURRENT PENDING_* status to `new_status`, stamping
     the current position's `_actioned_at` column. Used by both a real
     approver's `approve_department` step (`ACTION_APPROVE`, `new_status` may
-    be the next PENDING_* or the final `APPROVED`) and the auto_escalate job
-    (`ACTION_AUTO_ESCALATE`, `new_status` is always the next PENDING_* —
-    never `APPROVED`, see `auto_escalate_step`) so the two can never drift
-    on the conditional-UPDATE race guard or the log shape."""
+    be the next PENDING_* or the final `APPROVED`) and the admin
+    step-override (`ACTION_ADMIN_STEP_OVERRIDE`, `new_status` is always the
+    next PENDING_* — never `APPROVED`, see `admin_override_step`) so the two
+    can never drift on the conditional-UPDATE race guard or the log shape."""
     actioned_col = f"approver{current_position}_actioned_at"
     cursor = conn.cursor()
     try:
@@ -773,7 +809,72 @@ def approve_department(
     return _to_state(new_row, department, fiscal_year, caller_empcode=approver_empcode)
 
 
-AUTO_ESCALATE_ACTOR_EMAIL = "system:auto_escalate"
+def admin_override_step(
+    conn: pyodbc.Connection, department: str, fiscal_year: int, admin_email: str
+) -> ApprovalStatusState:
+    """ADR-0027 manual admin step-override: a human ADMIN advances a stuck
+    position-1 step by EXACTLY ONE step, following the same active-position
+    walk a real approve uses. Replaces the retired 30-day auto-escalation —
+    a person now makes the call, on the record, with their real email in the
+    log (never a `system:` literal).
+
+    Hard locks (ADR-0027): position 1 ONLY (positions 2/3 are the budget-dept
+    review itself — `StepNotOverridableError`), and the override may NEVER
+    land `APPROVED` (refused when position 1 is the only active position).
+    No stale-time gate, no reason field (D3). Authorization (admin-only)
+    lives in the router, mirroring how `submit_department` takes `scope` —
+    this function assumes the caller was already verified as admin.
+
+    Hardening (review fix, not yet reachable on live data): checking the
+    POSITION NUMBER alone is not enough. ADR-0006 dedup/self-skip can
+    resolve `approver1_empcode` directly to Nipaporn or Waraporn (their
+    manager IS one of them, or no manager resolves and the invalid-approver1
+    fallback lands on Nipaporn) — position 2 then dedups away and the
+    budget-dept reviewer sits AT position 1. A pure `status ==
+    PENDING_APPROVER1` check would let an override skip exactly the review
+    D4 exists to protect, the moment one HR reassignment makes this live. So
+    the OCCUPANT of position 1 is checked too, not just its slot number."""
+    row = _fetch_row(conn, department, fiscal_year)
+    if row is None:
+        raise ApprovalRecordNotFoundError(f"no approval record for {department}/{fiscal_year}")
+    if row["status"] != PENDING_APPROVER1:
+        if row["status"] in PENDING_STATUSES:
+            raise StepNotOverridableError(
+                "ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ ซึ่งไม่สามารถข้ามได้"
+            )
+        raise InvalidApprovalStateError(f"cannot override {department}/{fiscal_year} from status {row['status']}")
+    if row["approver1_empcode"] in (NIPAPORN_EMPCODE, WARAPORN_EMPCODE):
+        # Same hard lock as positions 2/3 above, just reached via position 1:
+        # dedup/self-skip put the budget-dept reviewer in the position-1 slot
+        # itself, so the slot number alone cannot tell "a real manager" apart
+        # from "the budget dept, coincidentally occupying slot 1".
+        raise StepNotOverridableError(
+            "ไม่สามารถอนุมัติแทนได้ — ผู้อนุมัติขั้นที่ 1 ของงบประมาณนี้คือฝ่ายงบประมาณเอง "
+            "(แม้จะอยู่ในลำดับขั้นที่ 1) จึงไม่สามารถข้ามได้"
+        )
+
+    active = _active_positions(row["submitter_empcode"], row["approver1_empcode"])
+    idx = active.index(1)
+    if idx == len(active) - 1:
+        raise StepNotOverridableError(
+            "ไม่สามารถอนุมัติแทนได้ — เหลือผู้อนุมัติเพียงขั้นเดียว การอนุมัติแทนจะทำให้งบประมาณผ่านโดยไม่มีผู้พิจารณาจริง"
+        )
+    new_status = _POSITION_TO_STATUS[active[idx + 1]]
+    now = _now()
+    # May be None — an admin with no v_employee_budget_01 row (e.g.
+    # jakkaritw) still overrides; the log then carries by_empcode=NULL and
+    # the real admin email (ADR-0027: expected, not an error).
+    admin_empcode, _ = resolve_submitter(conn, admin_email)
+
+    _advance_one_step(conn, department, fiscal_year, row, 1, new_status,
+                      ACTION_ADMIN_STEP_OVERRIDE, admin_empcode, admin_email,
+                      "admin step override (ADR-0027)", now)
+
+    new_row = dict(row)
+    new_row["status"] = new_status
+    new_row["approver1_actioned_at"] = now
+    new_row["_updated_at"] = now
+    return _to_state(new_row, department, fiscal_year, caller_empcode=admin_empcode)
 
 
 def _current_step_started_at(row: dict) -> datetime:
@@ -793,70 +894,24 @@ def _current_step_started_at(row: dict) -> datetime:
     return row["submitted_at"]
 
 
-def is_step_stale(row: dict, now: datetime, threshold_days: int = AUTO_ESCALATE_THRESHOLD_DAYS) -> bool:
-    """True once the CURRENT PENDING_* step has sat unactioned for
-    `threshold_days` (ADR-0006, 30 days) or more. Timestamps are compared as
-    naive UTC regardless of whether pyodbc returned them tz-aware or naive
-    (SQL Server DATETIME2 carries no offset) — never crashes on a tz mismatch."""
-    started = _current_step_started_at(row)
-    started_naive = started.replace(tzinfo=None) if started.tzinfo is not None else started
-    now_naive = now.replace(tzinfo=None) if now.tzinfo is not None else now
-    return (now_naive - started_naive).days >= threshold_days
-
-
 def current_turn_info(row: dict) -> tuple[datetime, str | None]:
     """`(turn_start, current_approver_empcode)` for a PENDING_* row —
     exposed for `jobs/send_reminders.py` Phase A (7-day turn reminders,
-    2026-07-31 email-notify revamp). `turn_start` is the SAME anchor
-    `is_step_stale` computes (`_current_step_started_at`) so the reminder
-    cadence can never drift from the 30-day auto-escalate clock (plan
-    invariant §5); the empcode is the frozen occupant of the current
-    position (None when position 1's `approver1_empcode` is NULL — the
-    caller skips such rows)."""
+    2026-07-31 email-notify revamp). `turn_start` is derived by
+    `_current_step_started_at` above; the 7-day reminder cadence anchors on
+    it and repeats forever until the approver acts (ADR-0027: no end date,
+    no cap — the reminder clock is now its only consumer). The empcode is
+    the frozen occupant of the current position (None when position 1's
+    `approver1_empcode` is NULL — the caller skips such rows)."""
     position = _STATUS_TO_POSITION[row["status"]]
     return _current_step_started_at(row), _occupant_for_position(position, row["approver1_empcode"])
 
 
-def auto_escalate_step(
-    conn: pyodbc.Connection, department: str, fiscal_year: int, row: dict, now: datetime | None = None,
-) -> ApprovalStatusState:
-    """A11 (`jobs/auto_escalate.py`): system-triggered one-step advance for
-    a `(department, fiscal_year)` row whose CURRENT PENDING_* step has gone
-    stale (`is_step_stale`, ADR-0006). Only ever advances to the NEXT
-    active position — NEVER straight to `APPROVED` even when the current
-    step happens to be the last active one, because ADR-0006 explicitly
-    forbids a silent jump to final approval "just because someone was
-    slow": `budget-dept must still review`. The caller (the job) is
-    expected to have already confirmed `is_step_stale`; this function's own
-    "already the final active position" guard is defense-in-depth, not the
-    only check."""
-    now = now or _now()
-    current_position = _STATUS_TO_POSITION[row["status"]]
-    active = _active_positions(row["submitter_empcode"], row["approver1_empcode"])
-    idx = active.index(current_position)
-    if idx == len(active) - 1:
-        raise InvalidApprovalStateError(
-            f"{department}/{fiscal_year} current step is already the final active position — "
-            "auto-escalate never jumps straight to APPROVED (ADR-0006)"
-        )
-    new_status = _POSITION_TO_STATUS[active[idx + 1]]
-
-    _advance_one_step(conn, department, fiscal_year, row, current_position, new_status,
-                       ACTION_AUTO_ESCALATE, by_empcode=None, by_email=AUTO_ESCALATE_ACTOR_EMAIL,
-                       comment="30-day auto-escalate (ADR-0006)", now=now)
-
-    new_row = dict(row)
-    new_row["status"] = new_status
-    new_row[f"approver{current_position}_actioned_at"] = now
-    new_row["_updated_at"] = now
-    return _to_state(new_row, department, fiscal_year, caller_empcode=None)
-
-
 def fetch_pending_rows(conn: pyodbc.Connection, fiscal_year: int) -> list[dict]:
-    """A11 (`jobs/auto_escalate.py`'s discovery pass): every `(department,
-    fiscal_year)` row currently in a PENDING_* status for `fiscal_year`,
-    keyed the same shape as `_fetch_row`. Read-only — the job filters via
-    `is_step_stale` and acts via `auto_escalate_step`, both above."""
+    """Every `(department, fiscal_year)` row currently in a PENDING_* status
+    for `fiscal_year`, keyed the same shape as `_fetch_row`. Read-only —
+    `jobs/send_reminders.py` Phase A (turn reminders) is the consumer,
+    filtering via `current_turn_info`."""
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -875,12 +930,12 @@ def list_departments_pending_my_approval(
 ) -> list[str]:
     """A10 รออนุมัติ badge data source (`GET /approval/pending-for-me`):
     every department whose CURRENT PENDING_* step, for `fiscal_year`, is
-    frozen to `caller_email`. Reuses `fetch_pending_rows` (already built for
-    `jobs/auto_escalate.py`'s discovery pass) + `_to_state`'s `can_act`
-    computation — one extra `resolve_submitter` lookup for the caller's own
-    empcode, no new SQL shape. A caller not found in the employee view (no
-    empcode) can never be a frozen approver, so it short-circuits to an
-    empty list without even querying `approval_status`."""
+    frozen to `caller_email`. Reuses `fetch_pending_rows` + `_to_state`'s
+    `can_act` computation — one extra `resolve_submitter` lookup for the
+    caller's own empcode, no new SQL shape. A caller not found in the
+    employee view (no empcode) can never be a frozen approver, so it
+    short-circuits to an empty list without even querying
+    `approval_status`."""
     caller_empcode, _ = resolve_submitter(conn, caller_email)
     if caller_empcode is None:
         return []

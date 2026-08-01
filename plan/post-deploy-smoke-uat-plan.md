@@ -7,8 +7,10 @@ verifier + evidence** (Appendix D).
 
 System under test: Container App (FastAPI serving `frontend/out` same-origin)
 + Entra Easy Auth + Fabric SQL DB (`budget.*` / `dbo.*`) + gold warehouse (SAP,
-read-only) + Graph sendMail + SharePoint attachments + 4 scheduled jobs
-(`auto_submit`, `auto_escalate`, `send_reminders`, `repersist_perdiem_fx`).
+read-only) + Graph sendMail + SharePoint attachments + 3 scheduled jobs
+(`auto_submit`, `send_reminders`, `repersist_perdiem_fx` — `auto_escalate` was
+deleted 2026-08-01, ADR-0027: a stuck step is now released by an admin
+step-override, `POST /approval/override-step`).
 
 Related docs — this plan does NOT duplicate them, it points at them:
 - `docs/deploy/A14_RUNBOOK.md` §7 verify-deploy-landed · §8 control-number
@@ -263,7 +265,7 @@ Everything here is "the app will fail loud or look empty without it".
       **commented out** until the jobs pass P2-H. Manual `workflow_dispatch`
       only.
 - [ ] **P0-28** 🔴 Understand the **DRY_RUN asymmetry** before clicking that
-      workflow (verified in code 2026-07-28): `auto_submit`, `auto_escalate`,
+      workflow (verified in code 2026-07-28): `auto_submit` and
       `send_reminders` need `--execute` **and** `DRY_RUN=false` (workflow sets
       `DRY_RUN: 'true'`, so `execute=true` alone still previews). But
       `repersist_perdiem_fx` ignores `DRY_RUN` entirely — the same
@@ -652,9 +654,14 @@ before every click.
 - [ ] **P2-H2** `auto_submit` (at/after the deadline): touches only true-DRAFT
       ฝ่าย (pending rows exist, no `approval_status` row); never REJECTED;
       running it twice submits nothing twice (idempotent) → verify in `SQL`.
-- [ ] **P2-H3** `auto_escalate`: escalates only steps stale >30 days; running
-      it again the next day does not double-escalate; a stuck **final** step is
-      skipped (never auto-APPROVED) — skip is logged, not a failure.
+- [ ] **P2-H3** **admin step-override** (replaces the deleted `auto_escalate`,
+      ADR-0027): as an `ADMIN_EMAILS` admin, `POST /approval/override-step` on a
+      ฝ่าย sitting at `PENDING_APPROVER1` advances it exactly one step and logs
+      `ADMIN_STEP_OVERRIDE` with the admin's real email; a non-admin gets 403;
+      positions 2/3 — and a position 1 occupied by Nipaporn/Waraporn — get 409;
+      a chain whose only active position is 1 gets 409 (an override must never
+      land `APPROVED`). Two mails fire: the submitter (cc the skipped approver)
+      and the next approver's normal turn mail.
 - [ ] **P2-H4** 🔴 `repersist_perdiem_fx`: dry-run first and read
       `total_delta_thb`; then `--run` on a controlled year and confirm stored
       per-diem + parent grid cell match the new FX, **including APPROVED
@@ -954,10 +961,12 @@ az containerapp ingress traffic set --name $APP_NAME --resource-group $RG \
 # Jobs — dry-run first, ALWAYS (from backend/)
 python -m jobs.send_reminders      --fiscal-year <Y>              # preview
 python -m jobs.auto_submit         --fiscal-year <Y>              # preview
-python -m jobs.auto_escalate       --fiscal-year <Y>              # preview
 python -m jobs.repersist_perdiem_fx --fiscal-year <Y>             # preview (--run = real)
-# real send/write also needs DRY_RUN=false for the first three (jobs/common.py);
+# real send/write also needs DRY_RUN=false for the first two (jobs/common.py);
 # repersist_perdiem_fx ignores DRY_RUN — `--run` alone writes.
+# Stuck PENDING_APPROVER1 step (the 30-day auto-escalate job is RETIRED,
+# ADR-0027): no CLI job — admin-only POST /approval/override-step
+# {department, fiscal_year}, no dry-run, logs ADMIN_STEP_OVERRIDE.
 
 # Mail path probe (default dry-run; --send delivers, recipient hardcoded jakkaritw)
 python setup/probe_notifications_live.py

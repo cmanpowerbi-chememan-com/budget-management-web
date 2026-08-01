@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approveDepartment, fetchApprovalStatus, fetchPendingForMe, rejectDepartment, submitDepartment } from './approval'
+import { approveDepartment, fetchApprovalStatus, fetchPendingForMe, overrideStep, rejectDepartment, submitDepartment } from './approval'
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -82,6 +82,23 @@ describe('rejectDepartment', () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       department: 'Accounting', fiscal_year: 2027, reason: 'ตัวเลขไม่ถูกต้อง',
     })
+  })
+})
+
+describe('overrideStep', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('POSTs to /approval/override-step with department + fiscal_year (ADR-0027)', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(200, { status: 'PENDING_APPROVER2' }))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await overrideStep('Accounting', 2027)
+
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(String(url)).toContain('/approval/override-step')
+    expect((init as RequestInit).method).toBe('POST')
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ department: 'Accounting', fiscal_year: 2027 })
+    expect(result.status).toBe('PENDING_APPROVER2')
   })
 })
 

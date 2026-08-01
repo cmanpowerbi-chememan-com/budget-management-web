@@ -10,6 +10,9 @@
 # NOTE (2026-07-28): the FX re-persist job was split into fx-repersist.yml
 # (Appendix E decision 3, P0-28) — `execute=true` here can no longer re-price
 # per-diem by accident.
+# NOTE (2026-08-01, ADR-0027): the 30-day auto-escalate step was REMOVED —
+# a stuck step is now advanced only by a human admin step-override
+# (POST /approval/override-step); the 7-day turn reminders below never stop.
 # GO-LIVE (2026-07-31 email-notify revamp, plan/email-notify-revamp.md §6):
 #   1. [DONE 2026-08-01] budget.reminder_log created on the shared DB.
 #   2. [DONE 2026-08-01] staging on budget-web:80b0e1c; manual dry-run run
@@ -21,7 +24,7 @@
 #      Going truly live = a separate jakkaritw decision: set DRY_RUN below to
 #      'false' + add `--execute` for scheduled runs, and set
 #      NOTIFICATIONS_DRY_RUN=false on the Container App.
-name: Budget Automations (auto-submit / auto-escalate / reminders)
+name: Budget Automations (auto-submit / reminders)
 
 on:
   schedule:
@@ -95,19 +98,6 @@ jobs:
           ARGS="--fiscal-year $FISCAL_YEAR"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
           python -m jobs.auto_submit $ARGS
-
-      - name: Auto-escalate stale approvals, 30-day SLA (A11)
-        working-directory: backend
-        env:
-          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
-          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
-          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
-          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
-          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
-        run: |
-          ARGS="--fiscal-year $FISCAL_YEAR"
-          if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
-          python -m jobs.auto_escalate $ARGS
 
       - name: Send pre-deadline reminders to Fillers (A12 automation D)
         working-directory: backend

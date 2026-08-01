@@ -21,9 +21,10 @@ new dependency is introduced for this module.
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Callable
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import httpx
 import pyodbc
@@ -326,10 +327,10 @@ def notify_turn(
 ) -> NotificationResult | None:
     """Turn-notify: a department just landed on an approver's step (initial
     submit -> approver1's turn; each approve -> the next approver's turn;
-    also used by the A11 auto_submit/auto_escalate jobs for the same
-    "landed on a step" event). Returns None (no send attempted) when the
-    approver's email cannot be resolved — logged, never raised, so a
-    missing employee-master row never blocks the caller.
+    also used by the A11 auto_submit job for the same "landed on a step"
+    event). Returns None (no send attempted) when the approver's email
+    cannot be resolved — logged, never raised, so a missing employee-master
+    row never blocks the caller.
 
     `reminder=True` (2026-07-31 revamp, jobs/send_reminders Phase A): the
     7-day repeat nudge for a turn that has sat unactioned — same mail with
@@ -420,6 +421,65 @@ def notify_approved(
             ("ฝ่าย", _hl(department), None),
             ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
             ("สถานะ", "อนุมัติครบทุกขั้นแล้ว", "green"),
+        ])
+        + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
+    )
+    return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
+
+
+def notify_step_overridden(
+    conn: pyodbc.Connection, *, department: str, fiscal_year: int, submitter_email: str | None,
+    skipped_approver_empcode: str | None, admin_email: str, dry_run: bool,
+    settings: Settings | None = None, new_current_approver_empcode: str | None = None,
+) -> NotificationResult | None:
+    """6th notification (ADR-0027): fires the moment an admin step-override
+    advances a stuck position-1 step — To the ฝ่าย's frozen `submitter_email`
+    (same source `notify_approved` uses, no extra lookup), cc the SKIPPED
+    approver, resolved from `skipped_approver_empcode` via
+    `lookup_email_by_empcode` with `_resolve_approver1_cc`'s skip rules (no
+    cc when the empcode is blank, the lookup finds nothing, or cc == To; a
+    cc lookup failure is swallowed and only ever drops the cc, never the To
+    send). `new_current_approver_empcode` (the approver the step just landed
+    on, from the router's post-transition state) only feeds the body's
+    สถานะปัจจุบัน row. No monthly digest — this immediate mail is the one
+    and only override notification; the next approver ALSO still gets their
+    normal `notify_turn` mail (router wiring), so an override sends exactly
+    two mails."""
+    if not submitter_email:
+        logger.warning(
+            "notify_step_overridden: no submitter_email for department=%r/%s — skipped", department, fiscal_year
+        )
+        return None
+    cc = _resolve_approver1_cc(conn, submitter_email, skipped_approver_empcode)
+    skipped_display = cc[0] if cc else (skipped_approver_empcode or "-")
+    waiting_display = "-"
+    if new_current_approver_empcode:
+        # Review fix: this lookup feeds ONLY the cosmetic สถานะปัจจุบัน row —
+        # same posture as `_resolve_approver1_cc` just above, a display-only
+        # query must never abort the functional To send. Guarded the same
+        # way: log a warning and fall back to the raw empcode.
+        try:
+            next_email = lookup_email_by_empcode(conn, new_current_approver_empcode)
+        except Exception:
+            logger.warning(
+                "notify_step_overridden: next-approver email lookup failed for empcode=%r — "
+                "falling back to the empcode in the body", new_current_approver_empcode,
+            )
+            next_email = None
+        waiting_display = f"รอการอนุมัติจาก {next_email or new_current_approver_empcode}"
+    now_str = datetime.now(ZoneInfo("Asia/Bangkok")).strftime("%d/%m/%Y %H:%M")
+    link = build_deep_link(department, fiscal_year, settings)
+    subject = f"ดำเนินการแทนผู้อนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
+    body = _wrap(
+        "<p>เรียน ผู้ส่งงบประมาณ</p>"
+        "<p>ผู้ดูแลระบบได้ดำเนินการอนุมัติแทนผู้อนุมัติขั้นที่ 1 ให้งบประมาณของท่านแล้ว รายละเอียดดังนี้:</p>"
+        + _label_value_table([
+            ("ฝ่าย", _hl(department), None),
+            ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
+            ("ผู้อนุมัติที่ถูกข้าม", skipped_display, None),
+            ("ผู้ดำเนินการแทน", admin_email, None),
+            ("วันเวลา", now_str, None),
+            ("สถานะปัจจุบัน", waiting_display, None),
         ])
         + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
     )

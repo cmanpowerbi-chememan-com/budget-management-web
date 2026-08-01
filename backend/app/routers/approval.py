@@ -19,10 +19,12 @@ from app.approval import (
     ERROR_CODE_BY_EXCEPTION,
     ERROR_HTTP_STATUS,
     ApprovalStatusState,
+    admin_override_step,
     approve_department,
     authorize_status_view,
     get_approval_status,
     list_departments_pending_my_approval,
+    lookup_employee_name,
     reject_department,
     resolve_submitter,
     submit_department,
@@ -39,13 +41,15 @@ _DB_UNAVAILABLE_DETAIL = "Database unavailable, please try again later"
 _T = TypeVar("_T")
 
 
-def _notify_after_transition(conn: pyodbc.Connection, action: str, state: ApprovalStatusState) -> None:
+def _notify_after_transition(
+    conn: pyodbc.Connection, action: str, state: ApprovalStatusState, admin_email: str | None = None
+) -> None:
     """A12: fire the relevant email AFTER the transition already committed
-    (`submit_department`/`approve_department`/`reject_department` all
-    commit internally before returning). Wrapped so a notification failure
-    NEVER fails the request (never-cut) — caught, logged loudly, and
-    surfaced only as a non-fatal `notification_warning` on the response,
-    never a 5xx.
+    (`submit_department`/`approve_department`/`reject_department`/
+    `admin_override_step` all commit internally before returning). Wrapped
+    so a notification failure NEVER fails the request (never-cut) — caught,
+    logged loudly, and surfaced only as a non-fatal `notification_warning`
+    on the response, never a 5xx.
 
     Placement note: wired HERE (the router) rather than inside
     `app.approval`'s pure state-machine functions — those are unit-tested
@@ -67,9 +71,21 @@ def _notify_after_transition(conn: pyodbc.Connection, action: str, state: Approv
     `notify_approved` (4th notification, added 2026-07-16) fires only when
     an "approve" action is the one that lands the department on `APPROVED`
     — the LAST step of the normal chain, where there is no next approver
-    left to `notify_turn`. Auto-escalate can never land `APPROVED` directly
-    (ADR-0006, asserted in `app.approval.auto_escalate_step`), so that path
-    never needs this branch either."""
+    left to `notify_turn`. The admin step-override (ADR-0027) can never land
+    `APPROVED` either (refused by `app.approval.admin_override_step`), so
+    that path never needs this branch.
+
+    `notify_step_overridden` (6th notification, ADR-0027) fires on action ==
+    "override_step": To the submitter, cc the skipped position-1 approver
+    (`state.approver1_empcode` — unchanged by the override, so it still
+    names who was skipped). The NEXT approver also still gets their normal
+    `notify_turn` mail — an override sends exactly two mails, to two
+    DIFFERENT recipients, so each send is wrapped in its OWN try/except
+    (review fix): a failure in one must never suppress the other, or the
+    department the override just unblocked goes silent again until the
+    7-day reminder — exactly the stuck window ADR-0027 exists to clear.
+    `admin_email` is the acting admin's real email (the route's
+    authenticated caller)."""
     settings = get_settings()
     try:
         if action == "reject":
@@ -86,6 +102,38 @@ def _notify_after_transition(conn: pyodbc.Connection, action: str, state: Approv
                 approver1_empcode=state.approver1_empcode,  # 2026-07-31 revamp: cc the frozen approver1
                 dry_run=settings.notifications_dry_run,
             )
+        elif action == "override_step":
+            override_send_failed = False
+            try:
+                notifications.notify_step_overridden(
+                    conn, department=state.department, fiscal_year=state.fiscal_year,
+                    submitter_email=state.submitter_email,
+                    skipped_approver_empcode=state.approver1_empcode,
+                    admin_email=admin_email or "",
+                    dry_run=settings.notifications_dry_run,
+                    new_current_approver_empcode=state.current_approver_empcode,
+                )
+            except Exception as exc:  # noqa: BLE001 -- must never block the next approver's turn mail below
+                logger.error(
+                    "notification failed after override_step (notify_step_overridden) for %s/%s: %s",
+                    state.department, state.fiscal_year, exc,
+                )
+                override_send_failed = True
+            if state.current_position is not None:  # the next approver's normal "ถึงตาคุณ" mail
+                try:
+                    notifications.notify_turn(
+                        conn, department=state.department, fiscal_year=state.fiscal_year,
+                        approver_empcode=state.current_approver_empcode, submitter_email=state.submitter_email,
+                        dry_run=settings.notifications_dry_run,
+                    )
+                except Exception as exc:  # noqa: BLE001 -- must never undo the override notice sent above
+                    logger.error(
+                        "notification failed after override_step (notify_turn) for %s/%s: %s",
+                        state.department, state.fiscal_year, exc,
+                    )
+                    override_send_failed = True
+            if override_send_failed:
+                state.notification_warning = "การแจ้งเตือนอีเมลล้มเหลว แต่การทำรายการสำเร็จแล้ว"
         elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
             notifications.notify_turn(
                 conn, department=state.department, fiscal_year=state.fiscal_year,
@@ -163,6 +211,30 @@ def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
     return _run(_action)
 
 
+@router.post("/override-step", response_model=ApprovalStatusState)
+def override_step(body: DepartmentYearBody, email: str = Depends(get_current_user_email)):
+    """ADR-0027 manual admin step-override: advance a stuck POSITION-1 step
+    by exactly one step (never APPROVED, never positions 2/3 — those map to
+    a 409 with a Thai detail the UI shows as-is). The ONLY gate is
+    `scope.is_admin` (D3: no waiting period, no reason field) — the frontend
+    reuses the normal อนุมัติ button for this; the approve/override split is
+    server-side only, with its own endpoint and its own
+    `ADMIN_STEP_OVERRIDE` log action so the audit trail can always tell a
+    real review from an override."""
+    def _action():
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            if not scope.is_admin:
+                raise HTTPException(
+                    status_code=403, detail="เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถอนุมัติแทนผู้อนุมัติได้"
+                )
+            state = admin_override_step(conn, body.department, body.fiscal_year, email)
+            _notify_after_transition(conn, "override_step", state, admin_email=email)
+            return state
+
+    return _run(_action)
+
+
 @router.get("/pending-for-me", response_model=PendingForMeResponse)
 def pending_for_me(fiscal_year: int = Query(...), email: str = Depends(get_current_user_email)):
     """A10 ฝ่าย-picker รออนุมัติ badge: every department whose current
@@ -190,6 +262,11 @@ def status(
             scope = resolve_scope(email, conn)
             authorize_status_view(conn, department, scope)  # B1 gate fix — was unauthorized-by-department
             caller_empcode, _ = resolve_submitter(conn, email)
-            return get_approval_status(conn, department, fiscal_year, caller_empcode=caller_empcode)
+            state = get_approval_status(conn, department, fiscal_year, caller_empcode=caller_empcode)
+            # ADR-0027: the override confirm dialog must NAME the approver
+            # being skipped — resolved here from the same source as the mail
+            # cc lookup, so the UI needs no second fetch.
+            state.current_approver_name = lookup_employee_name(conn, state.current_approver_empcode)
+            return state
 
     return _run(_action)

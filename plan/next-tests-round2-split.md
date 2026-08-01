@@ -53,7 +53,8 @@ Never run the scheduled automations live before; dry-run them against REAL
 FY2027 data and report what each WOULD do (candidates it finds, actions it
 would take, emails it would send — notifications are dry_run=True by default,
 confirm that flag before any run):
-`auto_submit`, `auto_escalate`, `send_reminders` (check `backend/jobs/` for the
+`auto_submit`, `send_reminders` (`auto_escalate` was deleted 2026-08-01,
+ADR-0027 — check `backend/jobs/` for the
 exact CLIs; use each job's dry-run default — never pass its execute flag).
 Report per job: what it scanned, what it would act on, anything surprising
 (e.g. a dept unexpectedly eligible for auto-submit).

@@ -190,7 +190,9 @@ GO
 /* -- 5. budget.approval_log ------------------------------------------------
    Append-only history of every approval action (ADR-0006). INSERT only;
    never UPDATE/DELETE. action covers SUBMIT/APPROVE/REJECT/RESUBMIT plus the
-   automated/admin actions AUTO_SUBMIT/AUTO_ESCALATE/ADMIN_SUBMIT/ADMIN_OVERRIDE. */
+   automated/admin actions AUTO_SUBMIT/ADMIN_SUBMIT/ADMIN_OVERRIDE_ORPHAN/
+   ADMIN_OVERRIDE_DEADLINE/ADMIN_STEP_OVERRIDE (ADR-0027 — the 30-day
+   AUTO_ESCALATE is retired). */
 CREATE TABLE budget.approval_log (
     [log_id]             BIGINT         NOT NULL IDENTITY(1,1),
     [department]         NVARCHAR(150)  NOT NULL,   -- ฝ่าย — matches the approval unit (ADR-0008)

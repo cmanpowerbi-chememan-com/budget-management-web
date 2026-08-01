@@ -1,6 +1,5 @@
-"""Live-DB integration tests for the A11 scheduled jobs (`jobs.auto_submit`,
-`jobs.auto_escalate`) against the REAL, consolidated Fabric SQL Database
-(ADR-0023).
+"""Live-DB integration tests for the A11 scheduled job (`jobs.auto_submit`)
+against the REAL, consolidated Fabric SQL Database (ADR-0023).
 
 Kept in its OWN file — `test_integration_live.py` is being edited by a
 parallel A8 agent (per this task's instructions); this file never touches
@@ -23,14 +22,13 @@ SAFETY (never-cut):
 Skipped by default (`pytest.ini`: `addopts = -m "not integration"`). Run:
     pytest -m integration tests/test_integration_live_jobs.py -v
 """
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import pyodbc
 import pytest
 
 from app.approval import PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3
 from app.db import get_fabric_conn
-from jobs.auto_escalate import run as run_auto_escalate
 from jobs.auto_submit import run as run_auto_submit
 
 FISCAL_YEAR = 2096  # sentinel — distinct from 2097 (A5 deadline) / 2099 (A4/A5/A6)
@@ -83,29 +81,6 @@ def _insert_sentinel_pending_row(conn: pyodbc.Connection, editor_email: str, upd
             VALUES (?, ?, ?, 0,0,0,0,0,0,0,0,0,0,0,0, 0, 'USER', ?, ?, ?)
             """,
             SENTINEL_CC, SENTINEL_GL, FISCAL_YEAR, FAKE_DEPARTMENT, editor_email, updated_at,
-        )
-        conn.commit()
-    finally:
-        cursor.close()
-
-
-def _insert_sentinel_approval_status_row(
-    conn: pyodbc.Connection, status: str, submitted_at: datetime, approver1_empcode: str,
-) -> None:
-    """A raw INSERT (not via `submit_department`, which always stamps
-    `submitted_at = now()`) — the only way to create a row whose current
-    step is already >=30 days old without waiting 30 real days."""
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            INSERT INTO budget.approval_status
-                (department, fiscal_year, status, submitter_empcode, submitter_email, submitted_at,
-                 approver1_empcode, _updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            FAKE_DEPARTMENT, FISCAL_YEAR, status, "999999", "sentinel-submitter@chememan.com", submitted_at,
-            approver1_empcode, submitted_at,
         )
         conn.commit()
     finally:
@@ -212,49 +187,6 @@ def test_auto_submit_dry_run_then_execute_then_idempotent_live() -> None:
 
         second_run_count = run_auto_submit(FISCAL_YEAR, dry_run=False, notifications_dry_run=True)
         assert second_run_count == 0, "idempotent: a 2nd real run must not double-submit the same department"
-    finally:
-        with get_fabric_conn() as cleanup_conn:
-            _cleanup_sentinel(cleanup_conn)
-
-
-@pytest.mark.integration
-def test_auto_escalate_advances_a_stale_sentinel_row_live() -> None:
-    """A `budget.approval_status` row whose PENDING_APPROVER1 step has sat
-    unactioned for 31 days (raw-inserted -- `submit_department` always
-    stamps `submitted_at = now()`, so a real 30-day-old row can only be
-    built this way in a test) advances to PENDING_APPROVER2 via the real
-    job, against the real database."""
-    stale_submitted_at = datetime.now(timezone.utc) - timedelta(days=31)
-
-    try:
-        with get_fabric_conn() as conn:
-            _insert_sentinel_approval_status_row(
-                conn, status=PENDING_APPROVER1, submitted_at=stale_submitted_at, approver1_empcode="999999-unknown",
-            )
-
-        escalated_count = run_auto_escalate(FISCAL_YEAR, dry_run=False, notifications_dry_run=True)
-        assert escalated_count == 1, "expected exactly 1 stale row to be escalated"
-
-        with get_fabric_conn() as verify_conn:
-            cursor = verify_conn.cursor()
-            try:
-                cursor.execute(
-                    "SELECT status, approver1_actioned_at FROM budget.approval_status "
-                    "WHERE department = ? AND fiscal_year = ?",
-                    FAKE_DEPARTMENT, FISCAL_YEAR,
-                )
-                row = cursor.fetchone()
-            finally:
-                cursor.close()
-        assert row is not None
-        assert row[0] == PENDING_APPROVER2, f"expected PENDING_APPROVER2 after escalation, got {row[0]}"
-        assert row[1] is not None, "approver1_actioned_at should be stamped by the escalation"
-
-        # Idempotent per 30-day window: the just-escalated row's new step
-        # started "now" (0 days old) -- a 2nd run right after must not
-        # escalate it again.
-        second_run_count = run_auto_escalate(FISCAL_YEAR, dry_run=False, notifications_dry_run=True)
-        assert second_run_count == 0, "the freshly-escalated row must not be re-escalated immediately"
     finally:
         with get_fabric_conn() as cleanup_conn:
             _cleanup_sentinel(cleanup_conn)

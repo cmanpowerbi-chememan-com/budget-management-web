@@ -466,8 +466,11 @@ az containerapp update --name $APP_NAME --resource-group $RG --min-replicas 0 --
   change.
 - `.github/workflows/budget-automations.yml` — cron stays commented out
   (`workflow_dispatch` manual-only). This container app deploy does **not**
-  touch that file; auto-submit/auto-escalate/reminders only go live per the
-  separate A11/A12 go-live decision.
+  touch that file; auto-submit/reminders only go live per the separate
+  A11/A12 go-live decision. (The 30-day auto-escalate job is retired,
+  ADR-0027 — its replacement, the manual admin step-override, is an
+  on-demand endpoint, not a scheduled job, so there is nothing here for it
+  to go live.)
 - Custom domain `budget.chememan.com` — **not configured in this deploy**.
   `APP_BASE_URL` points at the Container App's auto-generated FQDN for now.
   Follow-up when ready: `az containerapp hostname add` + DNS CNAME/TXT

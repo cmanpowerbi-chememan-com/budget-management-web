@@ -313,6 +313,9 @@ export interface ApprovalStatusState {
   updated_at: string | null
   current_position: 1 | 2 | 3 | null
   current_approver_empcode: string | null
+  /** Thai display name of the current approver (server-side lookup, ADR-0027)
+   * — the override confirm dialog must NAME the approver being skipped. */
+  current_approver_name: string | null
   can_act: boolean
   notification_warning: string | null
 }

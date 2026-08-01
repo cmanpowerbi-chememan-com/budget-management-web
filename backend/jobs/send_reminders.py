@@ -6,9 +6,10 @@ Phase A — TURN reminders: ONE mail per APPROVER listing every department
 currently waiting on them (`notify_turn_reminder`), each row with that
 department's days-pending. Due gate is per PERSON: they are due when ≥1 of
 their pending items is ≥7 days old (turn_start from
-`app.approval.current_turn_info` — the SAME anchor the 30-day auto-escalate
-uses) AND their person-level cadence is clear (never reminded, or last
-reminder ≥7 days ago). The mail CONTENT is always ALL departments waiting
+`app.approval.current_turn_info`) AND their person-level cadence is clear
+(never reminded, or last reminder ≥7 days ago). Reminders repeat every 7
+days FOREVER until the approver acts (ADR-0027: no end date, no cap, no cc
+escalation). The mail CONTENT is always ALL departments waiting
 on them, including ones younger than 7 days (spec §7.1: "ลิสต์ทุกฝ่ายที่รอ
 เขาอยู่") — the 7-day gate throttles the person, not the row.
 
@@ -123,8 +124,8 @@ def _log_reminder(conn, reminder_type: str, department: str, fiscal_year: int, r
 
 
 def _naive(dt: datetime) -> datetime:
-    """Naive-UTC comparison, same posture as `app.approval.is_step_stale`
-    (SQL Server DATETIME2 carries no offset; never crash on a tz mismatch)."""
+    """Naive-UTC comparison (SQL Server DATETIME2 carries no offset; never
+    crash on a tz mismatch, whether pyodbc returned tz-aware or naive)."""
     return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 

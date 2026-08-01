@@ -76,3 +76,14 @@ export function buildSubmitConfirmText(department: string, fiscalYear: number, r
     `จำนวน ${rowCount} รายการ ใน ${costCenterCount} cost center — ส่งครั้งนี้จะส่งทั้งฝ่าย ไม่สามารถแก้ไขได้จนกว่าจะถูกตีกลับ`
   )
 }
+
+/** Thai confirm-dialog text for the admin step-override (ADR-0027). MUST
+ * name the approver being skipped — this dialog is the ONLY guard against
+ * an accidental override (D3 removed the stale-gate and the reason field),
+ * so a generic "ยืนยันการอนุมัติ" is never acceptable here. */
+export function buildOverrideConfirmText(department: string, fiscalYear: number, skippedApproverName: string): string {
+  return (
+    `⚠️ คุณกำลังอนุมัติแทน ${skippedApproverName} (ผู้อนุมัติขั้นที่ 1) ของฝ่าย "${department}" ปี ${fiscalYear}\n` +
+    `ระบบจะบันทึกว่าคุณกดแทน และส่งอีเมลแจ้งผู้กรอกงบ พร้อมสำเนาถึง ${skippedApproverName} · ยืนยันหรือไม่?`
+  )
+}

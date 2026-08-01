@@ -42,6 +42,20 @@ export function rejectDepartment(department: string, fiscalYear: number, reason:
   })
 }
 
+/** `POST /approval/override-step` — admin-only (ADR-0027): advances a stuck
+ * POSITION-1 step by exactly one step (never APPROVED, never positions 2/3).
+ * The admin reuses the normal อนุมัติ button in the UI — the approve/override
+ * split is server-side only (two endpoints, two log actions), so this is a
+ * separate client function but NOT a separate button. A 409 here carries the
+ * server's Thai `StepNotOverridableError` detail, shown as-is. */
+export function overrideStep(department: string, fiscalYear: number): Promise<ApprovalStatusState> {
+  return apiFetch<ApprovalStatusState>('/approval/override-step', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ department, fiscal_year: fiscalYear }),
+  })
+}
+
 /** `GET /approval/pending-for-me` — departments waiting on the caller's own
  * approval step, for the รออนุมัติ ฝ่าย-picker badge. */
 export function fetchPendingForMe(fiscalYear: number): Promise<PendingForMeResponse> {

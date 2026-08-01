@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
-import { approveDepartment, fetchApprovalStatus, rejectDepartment, submitDepartment } from '../api/approval'
+import { approveDepartment, fetchApprovalStatus, overrideStep, rejectDepartment, submitDepartment } from '../api/approval'
 import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
-import { buildSubmitConfirmText, canSubmit, isPendingLocked, statusChipLabel } from './model'
+import { approverLabel, buildOverrideConfirmText, buildSubmitConfirmText, canSubmit, isPendingLocked, statusChipLabel } from './model'
 
 export interface ApprovalActionBarProps {
   department: string | null
   fiscalYear: number
   isFillerOfDept: boolean
   adminViewEnabled: boolean
+  /** Raw `scope.isAdmin` (NOT the admin-view toggle) — gates the ADR-0027
+   * step-override visibility: an admin sees the อนุมัติ button on
+   * PENDING_APPROVER1 even when they are not the frozen approver. */
+  isAdmin: boolean
   rowCount: number
   costCenterCount: number
   /** Called after ANY successful submit/approve/reject — the parent
@@ -31,7 +35,7 @@ function statusToneClass(status: string): string {
  * the server — this component only shows/hides controls and surfaces the
  * server's own error messages. */
 export function ApprovalActionBar({
-  department, fiscalYear, isFillerOfDept, adminViewEnabled, rowCount, costCenterCount, onChanged,
+  department, fiscalYear, isFillerOfDept, adminViewEnabled, isAdmin, rowCount, costCenterCount, onChanged,
 }: ApprovalActionBarProps) {
   const [status, setStatus] = useState<ApprovalStatusState | null>(null)
   const [loading, setLoading] = useState(false)
@@ -72,7 +76,22 @@ export function ApprovalActionBar({
     return fallback
   }
 
-  async function runAction(action: () => Promise<ApprovalStatusState>, fallbackError: string) {
+  /** Override errors (ADR-0027): a 409 carries the server's own Thai
+   * `StepNotOverridableError` detail — show it AS-IS (it explains WHY the
+   * step cannot be overridden), never the generic concurrent-change text. */
+  function describeOverrideError(err: unknown, fallback: string): string {
+    if (err instanceof ApiError) {
+      if (err.status === 409) return err.detail ?? err.message
+      return `${err.message}${err.detail ? ` (${err.detail})` : ''}`
+    }
+    return fallback
+  }
+
+  async function runAction(
+    action: () => Promise<ApprovalStatusState>,
+    fallbackError: string,
+    describeError: (err: unknown, fallback: string) => string = describeApiError,
+  ) {
     setActionBusy(true)
     setActionMessage(null)
     try {
@@ -81,7 +100,7 @@ export function ApprovalActionBar({
       if (result.notification_warning) setActionMessage(result.notification_warning)
       onChanged()
     } catch (err) {
-      setActionMessage(describeApiError(err, fallbackError))
+      setActionMessage(describeError(err, fallbackError))
       if (err instanceof ApiError && err.status === 409) await load()
     } finally {
       setActionBusy(false)
@@ -96,9 +115,20 @@ export function ApprovalActionBar({
   }
 
   function handleApprove() {
-    if (!department) return
-    if (!window.confirm(`ยืนยันอนุมัติทั้งฝ่าย "${department}" ปี ${fiscalYear}?`)) return
-    runAction(() => approveDepartment(department, fiscalYear), 'อนุมัติไม่สำเร็จ')
+    if (!department || !status) return
+    if (status.can_act) {
+      // Normal approve — the caller IS the frozen current approver.
+      if (!window.confirm(`ยืนยันอนุมัติทั้งฝ่าย "${department}" ปี ${fiscalYear}?`)) return
+      runAction(() => approveDepartment(department, fiscalYear), 'อนุมัติไม่สำเร็จ')
+      return
+    }
+    // Admin step-override (ADR-0027): SAME อนุมัติ button, but the confirm
+    // dialog must NAME the approver being skipped — it is the only guard
+    // against an accidental override (no stale-gate, no reason field).
+    const skippedName =
+      status.current_approver_name ?? approverLabel(status.current_position, status.current_approver_empcode)
+    if (!window.confirm(buildOverrideConfirmText(department, fiscalYear, skippedName))) return
+    runAction(() => overrideStep(department, fiscalYear), 'อนุมัติแทนไม่สำเร็จ', describeOverrideError)
   }
 
   async function handleConfirmReject() {
@@ -133,6 +163,12 @@ export function ApprovalActionBar({
 
   const showSubmit = canSubmit({ isFillerOfDept, adminViewEnabled, status: status.status })
   const showApproveReject = status.can_act && !adminViewEnabled
+  // ADR-0027: ONE อนุมัติ button — visible to the frozen approver (normal
+  // approve) OR to an admin while the department sits on PENDING_APPROVER1
+  // (step-override; positions 2/3 stay unapproachable here, the server 409s
+  // them anyway). Reject stays approver-only — an override never rejects.
+  const showApprove =
+    showApproveReject || (isAdmin && status.status === 'PENDING_APPROVER1' && !status.can_act)
   const locked = isPendingLocked(status.status) && isFillerOfDept && !adminViewEnabled
 
   return (
@@ -167,7 +203,7 @@ export function ApprovalActionBar({
           ตีกลับทั้งฝ่าย
         </button>
       )}
-      {showApproveReject && (
+      {showApprove && (
         <button
           type="button"
           className="btn-approve"

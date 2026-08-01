@@ -162,6 +162,25 @@ def test_turn_person_cadence_resends_after_7_days():
     m_log.assert_called_once()
 
 
+def test_turn_reminder_still_due_at_day_120_no_upper_bound_no_cc():
+    """D6 (ADR-0027): turn reminders repeat every 7 days FOREVER — no end
+    date, no cap, no cc escalation after N rounds. A step stuck 120 days is
+    still due once the person's 7-day cadence clears, its days-pending is
+    shown as-is, and the mail stays To-only. Guards against anyone
+    reintroducing a stop condition after the auto-escalation was retired."""
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with p_rows as m_rows, p_last as m_last, p_log as m_log, p_notify as m_notify:
+        m_rows.return_value = [_pending_row(submitted_at=NOW - timedelta(days=120))]
+        m_last.return_value = NOW - timedelta(days=7)  # last round went out 7 days ago
+        sent = _run_turn_reminders(MagicMock(), 2027, dry_run=False, notifications_dry_run=True, now=NOW)
+
+    assert sent == 1
+    m_notify.assert_called_once()
+    assert m_notify.call_args.kwargs["items"] == [("Accounting", 2027, 120)]
+    assert "cc" not in m_notify.call_args.kwargs  # turn mails stay To-only, forever
+    m_log.assert_called_once()
+
+
 def test_turn_reminder_skipped_when_no_current_approver():
     p_rows, p_last, p_log, p_notify = _patch_turn_phase()
     with p_rows as m_rows, p_last as m_last, p_log as m_log, p_notify as m_notify:

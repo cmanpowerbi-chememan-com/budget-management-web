@@ -1,8 +1,96 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-01T21:05:06+0700",
+  "updated": "2026-08-02T06:43:33+0700",
   "tasks": [
+    {
+      "id": "graphify-removal",
+      "state": "doing",
+      "created": "2026-08-02T06:43:33+0700",
+      "updated": "2026-08-02T06:43:33+0700",
+      "ai": "remove graphify entirely per jakkaritw (all projects): repo graphify-out/ + .github/workflows/graphify-nightly.yml + .graphifyignore, 2 scheduled tasks (graphify-nightly-sync, CMAN-DW-Graph-Logon), pip graphifyy 0.8.39, ~/.claude/skills/graphify, refs in CLAUDE.md/.gitignore/.dockerignore/global CLAUDE.md, memory project_graphify_setup. root motive: nightly 16MB graph.json commits caused the 1GB .git bloat. NOT touching files in c:/19.dw_jakkaritw",
+      "agent": "claude"
+    },
+    {
+      "id": "machine-slowdown-fix",
+      "state": "done",
+      "created": "2026-08-02T04:33:57+0700",
+      "updated": "2026-08-02T04:44:26+0700",
+      "ai": "FIXED. root causes 4: (1) .git 1017MB/4397 loose/0 packs -> git gc = 68.9MB/2 packs/32s, git status 0.47s; auto-gc never fired (gc.auto default 6700 > 4397 but objects huge = nightly graph.json 16MB + graph.html 3MB). (2) 3x .build-ctx-* az-acr-build repo copies 138MB/1440 files -> deleted + .gitignore '.build-ctx-*/'; had also polluted local graph.json with 27008 build-ctx lines. (3) RAM 85pct/2.3GB free -> 62pct/5.9GB: killed PhoneExperienceHost 288MB, VSCode 19proc 2.6GB + 3 CC 1.2GB + EPSecurityService 0.9GB are the real load; ZERO orphan MCP procs (all parented to live claude). (4) SCM 7000/7009 30s service-start timeouts (AppXSVC/ClipSVC/wlidsvc/IntelPLM) = SYMPTOM of starvation, stopped after RAM freed. PREVENTION: git maintenance start (hourly/daily/weekly tasks registered, maintenance.repo=C:/04.budget_management_web) + .vscode/settings.json watcherExclude/searchExclude/git.autofetch=false/tsserver 3GB cap + .gitignore build-ctx. OPEN: GoogleUpdaterService152.* StartType=Automatic failing every ~1min, Set-Service DENIED needs admin; jusched.exe crash 0xc0000409 once (not in HKCU/HKLM Run); local graphify-out/*.json|html still modified w/ build-ctx pollution - regenerated nightly by CI from clean checkout, user to decide on discarding. NOT COMMITTED.",
+      "agent": "claude"
+    },
+    {
+      "id": "fix-override-review-findings",
+      "state": "done",
+      "created": "2026-08-02T04:30:15+0700",
+      "updated": "2026-08-02T04:50:57+0700",
+      "ai": "DONE 2026-08-02 by Claude (jakkaritw said \"แก้ไขเอง\"; implemented inline by 05-software-developer, then verified by me against the actual diff — not from the agent report). FIX 1 (the confirmed defect): routers/approval.py override_step branch now wraps EACH send in its own try/except — notify_step_overridden failing can no longer suppress the next approver notify_turn and vice versa; either failure alone still sets the same Thai notification_warning and the action still returns 200; the reject/approve/submit branches were left untouched. FIX 2: notifications.py notify_step_overridden now guards the next-approver lookup_email_by_empcode (was the ONLY unguarded lookup in that function) and falls back to the raw empcode in the display row, so a cosmetic query can no longer abort a functional mail. FIX 3 (hardening): admin_override_step now also raises StepNotOverridableError when row[approver1_empcode] is NIPAPORN_EMPCODE or WARAPORN_EMPCODE, placed BEFORE the active-positions walk, with its own Thai detail — closes the identity gap where ADR-0006 dedup/self-skip puts a budget-dept reviewer into slot 1 and the slot-number-only lock waved them through. NEW TESTS (6): position-1-occupant-is-Nipaporn refused, is-Waraporn refused, ordinary manager still allowed (test_approval.py); override mail raises -> notify_turn STILL fires, and the mirror case notify_turn raises -> override mail still sent (test_approval_router.py); next-approver lookup raises -> override mail still sent with a degraded body (test_notifications.py). DOCS: STAGING_TEST_PLAN O6, BUILD_PLAN :30+:61, A14_RUNBOOK :469, fx-repersist spec :139+:183 repointed by the subagent; I then closed the 4 it left behind — post-deploy-smoke-uat-plan.md :11 (job count 4->3), :266 (DRY_RUN asymmetry list) and :655 (P2-H3 rewritten as an admin-step-override checklist incl. the 403/409 cases), plus next-tests-round2-split.md :56. Repo-wide grep now shows zero operator-facing references to the deleted job (only ADRs/history that describe its removal). VERIFIED BY ME: touched-file suites 166-206 passed; full backend suite 832 passed / 2 failed, and both failures are test_budget.py::test_sap_coverage_* from the PARALLEL SAP-cache lane (their own uncommitted app/sap.py +64 lines and routers/budget.py rename resolve_sap_coverage -> resolve_sap_coverage_cached), NOT this work. Frontend untouched in this pass (Kimi 534 still green). NOT COMMITTED — the whole ADR-0027 change set is still one uncommitted working tree awaiting jakkaritw.",
+      "agent": "kimi"
+    },
+    {
+      "id": "review-admin-step-override",
+      "state": "done",
+      "created": "2026-08-02T04:29:48+0700",
+      "updated": "2026-08-02T04:29:48+0700",
+      "ai": "Independent review of Kimi admin step-override (uncommitted working tree, 24 files) via workflow wf_8a525c21-169 (5 finder dimensions + 2-lens adversarial verify, 37 agents) PLUS my own live probes. VERDICT: 1 real code defect + 1 latent identity-gap + stale operator docs; everything else refuted. CONFIRMED (3 independent verifiers, none refuted): routers/approval.py:101 and :110 - notify_step_overridden and notify_turn sit in ONE try opened at :85, so if mail 1 raises, mail 2 (the next approver \"ถึงตาคุณ\") never fires and the ฝ่าย goes silent until the 7-day reminder, which is exactly the stuck window ADR-0027 exists to clear. Mail 1 can raise independently of mail 2: notifications.py:457 lookup_email_by_empcode is UNGUARDED and feeds only the cosmetic สถานะปัจจุบัน row, while its sibling at :453 goes through _resolve_approver1_cc which deliberately swallows lookup failures; also Graph non-retryable status raises NotificationError. Existing test test_override_step_notification_failure_never_fails_the_request only asserts 200+warning, never that notify_turn still fired. LATENT (my own check, finder called it HIGH, verifiers refuted on reachability - both are half right): the D4 lock tests the POSITION number, not the occupant identity, so when ADR-0006 dedup collapses a budget-dept reviewer into position 1 the override skips THEM. Proved with the real _active_positions: manager=Nipaporn -> active [1,3], override lands PENDING_APPROVER3 = Nipaporn skipped; manager=Waraporn -> active [1,2], Waraporn skipped. NOT reachable on live data today: 0 fillers have Nipaporn as manager, and the only filler under Waraporn is Nipaporn herself (5 depts) where self-skip leaves active=[1] so the override is correctly REFUSED. One HR reassignment makes it live -> fix = compare the position-1 occupant empcode against NIPAPORN_EMPCODE/WARAPORN_EMPCODE, not just the slot. MY OWN LIVE CHECKS ALL PASS (things mocked tests cannot catch): budget.approval_log.action is nvarchar(40) so ADMIN_STEP_OVERRIDE (19 chars) fits and action_by_empcode is NULLable for jakkaritw; lookup_employee_name returns real Thai names off the live view (บรรพต กังวานนครชัย / นิภาพร ทองกิ่ง) and None for blank/unknown; ZoneInfo(\"Asia/Bangkok\") - new dependency in notify_step_overridden - RESOLVES INSIDE THE REAL IMAGE (built a throwaway probe FROM budget-web:80b0e1c on ACR, printed TZPROBE_OK, image deleted after) even though tzdata is not pinned in requirements.txt; db/ddl/budget_transactional_tables.sql change is COMMENT-ONLY, no schema migration hides in this diff; auto-escalate is gone from all code (only the removal-regression test + a DDL comment remain); backend 811 passed, frontend 534 passed. STALE OPERATOR DOCS still telling people to run the deleted job: docs/test/STAGING_TEST_PLAN.md:97 (O6 calls auto_escalate_step), plan/post-deploy-smoke-uat-plan.md:957, docs/BUILD_PLAN.md:30+61 (A11 still cites the 30-day escalate as the reason the admin override was deferred - now self-contradictory), docs/deploy/A14_RUNBOOK.md:469, docs/specs/feature-fx-repersist-perdiem.md:139+183. REVIEW GAP TO DISCLOSE: the test-quality finder and 5 verifier agents died on a session limit, so nobody audited test QUALITY (I only confirmed the suites pass); re-run that dimension if it matters.",
+      "agent": "claude"
+    },
+    {
+      "id": "diag-prd-first-load-slow",
+      "state": "done",
+      "created": "2026-08-01T22:19:27+0700",
+      "updated": "2026-08-01T22:19:27+0700",
+      "ai": "MEASURED, not container cold start: minReplicas=2 (no scale-to-zero), edge 401 in 230ms. Root cause = no caching + cold ODBC pool. Per GET /budget (admin,dept=Accounting,y2027): fabric open 2.86s cold/0.70s warm + gold open 2.01s/1.45s + grid 2.4s = 10.2s cold, 7.5s warm from local; PRD log 15:06:37.97->48.89 = ~10.9s for same call returning 8 rows. Per-request uncached costs: resolve_sap_coverage(SAP_ENTRY_DAYS_SQL)=1.22s EVERY call, fetch_sap_actuals=0.60s, board_pending=0.40s. First load fires 5 endpoints, each opens its own conns (pyodbc pooling warms after ~4 opens: 2.74s->0.14s). Frontend bundle 760KB raw/~230KB gz = ~1s. Proposed fixes (NOT implemented, awaiting jakkaritw): (1) in-process TTL cache resolve_sap_coverage per year -1.2s/req, (2) TTL cache fetch_sap_actuals per year -0.6s/req, (3) FastAPI startup warmup opening+closing 1 fabric + 1 gold conn to prime pool, kills 2-5s first-hit. Scratch timing scripts in session scratchpad.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-67cc492",
+      "state": "done",
+      "created": "2026-08-01T22:06:35+0700",
+      "updated": "2026-08-01T22:06:35+0700",
+      "agent": "autolog",
+      "ai": "fix(probe): notification probe covers all 6 types and actually pins the recipient [commit 67cc492]"
+    },
+    {
+      "id": "notify-button-flow-test",
+      "state": "willdo",
+      "created": "2026-08-01T22:04:35+0700",
+      "updated": "2026-08-01T22:04:35+0700",
+      "ai": "SKIPPED BY JAKKARITW ('pass', 2026-08-01) - not 'not done yet', a deliberate decision. Scope was: click each approval button on the live web (submit/approve/reject) and read the container log to prove the right notify_* fires with the right recipient. Blocked on the fact it mutates REAL approval state - stg and prd share the SAME Fabric SQL DB (fabric_sql_database-a42ef9f3), so there is no sandbox; needed jakkaritw to nominate a throwaway department+year. What IS proven instead: the transport half (payload -> real inbox) via probe_notifications_live.py --send, 6/6 delivered to jakkaritw only. What remains UNPROVEN: that pressing a button on the web actually reaches the notify layer with the correct DB-resolved recipient. Pick this up if a sandbox dept/year is ever nominated.",
+      "agent": "claude"
+    },
+    {
+      "id": "probe-notifications-6types",
+      "state": "done",
+      "created": "2026-08-01T21:58:45+0700",
+      "updated": "2026-08-01T21:59:41+0700",
+      "ai": "setup/probe_notifications_live.py rewritten (script-only, backend/app/** untouched): covers all 6 notify_* types (notify_turn/notify_reject/notify_approved/notify_step_overridden/notify_deadline_reminder/notify_turn_reminder) w/ current signatures incl 'conn' first-positional fix that was the reported TypeError. Recipient/cc safety: lookup_email_by_empcode (the ONE choke point every notify_* uses for To+cc resolution) stubbed to jakkaritw; notify_deadline_reminder's cc_emails hardcoded to [jakkaritw] directly (that fn takes no conn, no DB lookup). Added send_mail spy (calls through, doesn't alter dry_run/--send behavior) so script can print actual cc per type. Verified: dry-run run exit=0, no traceback, all 6 lines show to=jakkaritw@chememan.com; cc=None on turn/reject/approved/step_overridden/turn_reminder (turn+turn_reminder have no cc param; reject/approved/step_overridden dedup cc==to since both stub to same address); cc=['jakkaritw@chememan.com'] on deadline_reminder (only type where script hardcodes cc independent of the dedup). No --send run (per instructions, jakkaritw sends). NOTE: backend/app/notifications.py has a PRE-EXISTING uncommitted diff (54 ins/5 del, not from this task, not touched here) already containing the 2026-07-31 cc-revamp code the task described.",
+      "agent": "claude"
+    },
+    {
+      "id": "fix-notify-probe-allcases",
+      "state": "done",
+      "created": "2026-08-01T21:49:30+0700",
+      "updated": "2026-08-01T22:03:11+0700",
+      "ai": "SENT 6/6 to jakkaritw@chememan.com ONLY, real Graph sendMail, 2026-08-01. Probe rewritten by 05 to cover all 6 notify_* types with current signatures (was 4, of which 3 called with stale signatures -> TypeError on notify_reject). SAFETY BUG FOUND in the OLD probe: it stubbed notifications._lookup_email_by_empcode but the revamp renamed it to lookup_email_by_empcode (public), so the stub was a DEAD attribute and the real DB lookup ran unstubbed - contained only because sentinel empcode 'TESTPROBE' resolves to nobody (log: 'no email resolved ... skipped'), so no real person was ever mailed; fixed to stub the correct name. notify_deadline_reminder takes cc_emails directly (no conn/DB) -> hardcoded to jakkaritw. ADMIN_EMAILS confirmed unused inside notifications.py. All 6 sent lines show to=jakkaritw; cc=None on 5 by design (self-cc dedup), cc=[jakkaritw] on deadline_reminder. DEPLOY/CODE MISMATCH FOUND: prod image f947fed contains only FIVE notify types - notify_step_overridden and POST /approval/override-step (ADR-0027) are NOT deployed; they live in UNCOMMITTED working-tree edits (backend/app/notifications.py 54+/5-, approval.py, routers/approval.py) from a PARALLEL SESSION. So the 6th probe mail previews code that is not live, and my earlier button->email matrix wrongly listed the admin step-override row as live on prod. Files modified but NOT committed: setup/probe_notifications_live.py (mine), plus the parallel session's 3 backend files + setup/phase2_harness_dkl.py.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-prd-adr0026",
+      "state": "done",
+      "created": "2026-08-01T21:42:13+0700",
+      "updated": "2026-08-01T21:42:13+0700",
+      "ai": "PRODUCTION DEPLOY LANDED + VERIFIED 2026-08-01. jakkaritw ran the az command themselves (my 'az containerapp update' on prd was blocked by the Claude Code permission classifier, NOT by Azure; PowerShell also rejected the backslash line-continuation -> gave a one-liner). cman-budget-web-prd rev 0000010 = cmanbudgetacr.azurecr.io/budget-web:f947fed, traffic 100, Healthy, RunningAtMaxScale, created 14:39:41Z. Startup logs clean (uvicorn, 2 workers, 'Application startup complete', zero errors). Prior rev 0000009 (313325e) replaced. SAME image already proven on stg rev 0000016. Unauthenticated smoke = 401 on /health and /budget/sap-coverage (Easy Auth at the platform edge, same as stg; expected, not a regression) -> functional proof remains the pre-deploy local run (coverage year=2027 visible[1,2,3] hidden[4..12] watermark 2026-04-29; grid DOM Jan-Mar values, Apr-Dec en-dash, total 1,506,806.25 labelled Jan-Mar). BLAST RADIUS: prod jumped 11 commits 313325e->f947fed, incl. the email-notify revamp (cc approver1 on final/reject, ONE grouped mail per person, 7-day + per-fai deadline reminders), APP_BASE_URL wiring, ADR-0026, ADR-0027 docs. ROLLBACK: az containerapp update --name cman-budget-web-prd --resource-group CMAN-BUDGET-MNGT-WEB-RG --image cmanbudgetacr.azurecr.io/budget-web:313325e. OPEN/UNVERIFIED: prod NOTIFICATIONS_DRY_RUN value never checked (env query was rejected mid-turn); config.py:64 default is dry_run=True and a deploy does not change env vars, so email behaviour is unchanged by this deploy either way - but whether prod actually sends is still UNKNOWN. Also still unanswered: jakkaritw's question 'email notify test on stg, all cases'.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-stg-adr0026",
+      "state": "done",
+      "created": "2026-08-01T21:15:52+0700",
+      "updated": "2026-08-01T21:22:59+0700",
+      "ai": "STAGING DEPLOY LANDED + VERIFIED. Image budget-web:f947fed built on ACR (run cmh, Succeeded 1m33s) — NOTE the local 'az acr build' exited with UnicodeEncodeError cp1252 on the log STREAM only (the \\u26a0 char); the cloud build itself succeeded, confirmed by show-tags + task list-runs, so do NOT re-run on that error (set PYTHONIOENCODING=utf-8 for az). cman-budget-web-stg rev 0000016 = f947fed, traffic 100, Healthy/Running; prior rev 0000015 (80b0e1c) drained to 0 and Deprovisioning. Startup logs clean: uvicorn up, 2 workers, 'Application startup complete', zero errors/tracebacks. Unauthenticated smoke test NOT possible — Easy Auth is ON at staging now, /health and /budget/sap-coverage both return 401 at the platform edge (expected, not a regression; image swap cannot change platform auth). Functional proof of ADR-0026 was taken pre-deploy on local :3000 against the same code: /budget/sap-coverage year=2027 -> visible [1,2,3] hidden [4..12] watermark 2026-04-29, year=2026 -> all 12 visible; grid DOM asserted Jan-Mar real values + Apr-Dec en-dash + total 1,506,806.25 labelled Jan-Mar. PROD NOT TOUCHED, still 313325e (11 commits behind) - awaits a second jakkaritw approval.",
+      "agent": "claude"
+    },
     {
       "id": "diag-cfo-empty-grid",
       "state": "done",
@@ -15,16 +103,16 @@
       "id": "grill-remove-auto-escalate",
       "state": "done",
       "created": "2026-08-01T16:52:44+0700",
-      "updated": "2026-08-01T16:52:44+0700",
-      "ai": "Ran /grill-with-docs with jakkaritw 2026-08-01 on \"cancel the 30-day auto-escalation, keep only 7-day reminders\". Five questions, all resolved; the grilling surfaced a blocker the request did not account for: approve/reject authorize strictly against the frozen step occupant with NO admin bypass (approval.py _authorize_current_step), so a bare deletion would have made any silent approver a permanently stuck department against a hard 31 Oct cycle close - fixed by pairing the deletion with a manual admin step-override. Outcomes: Q1 remedy = option (a) delete + admin button; Q2 override advances one step only, never straight to APPROVED (keeps ADR-0006 invariant, trigger moves clock->human); Q3 no stale-gate, no mandatory reason (Claude recommended requiring a reason, jakkaritw declined - accepted risk recorded in ADR-0027); Q4 immediate event mail to submitter cc the skipped approver, NOT a monthly digest; Q5 turn reminders repeat forever with no cc escalation (Claude recommended cc-ing budget dept after 4 rounds as a replacement safety net, jakkaritw declined - also recorded). Claude-proposed hard lock to position 1 only was not objected to but not explicitly confirmed - flagged for veto at close-out. DOCS WRITTEN THIS SESSION: docs/adr/0027-manual-step-override-replaces-auto-escalation.md (new, supersedes ADR-0006 escalation clause only); ADR-0006 header + clause + consequences amended in place with strike-through and pointers; CONTEXT.md gained four glossary entries (Turn, Turn reminder, Step override, Auto-escalation-RETIRED with an avoid-note so the term is not reused); docs/reference/approval-workflow.md rules list, email trigger table (6th mail row) and turn-anchor sentence updated; plan/admin-step-override.md written as the implementation brief. Implementation handed to Kimi as task admin-step-override (willdo). NOT committed yet.",
+      "updated": "2026-08-01T21:10:35+0700",
+      "ai": "Ran /grill-with-docs with jakkaritw 2026-08-01 on \"cancel the 30-day auto-escalation, keep only 7-day reminders\". COMMITTED f947fed, pushed to origin/main (landed on top of another lane a096e39; CI run 30703198706 kicked off). Five questions, all resolved; the grilling surfaced a blocker the request did not account for: approve/reject authorize strictly against the frozen step occupant with NO admin bypass (approval.py _authorize_current_step), so a bare deletion would have made any silent approver a permanently stuck department against a hard 31 Oct cycle close - fixed by pairing the deletion with a manual admin step-override. Outcomes: Q1 remedy = delete + admin button; Q2 override advances one step only, never straight to APPROVED; Q3 no stale-gate and no mandatory reason (Claude recommended requiring a reason, declined - risk recorded in ADR-0027); Q4 immediate event mail to submitter cc the skipped approver, not a monthly digest; Q5 turn reminders repeat forever, no cc escalation (Claude proposed cc-ing budget dept after 4 rounds as a replacement safety net, declined - recorded). Two Claude proposals resolved AFTER the first write-up: position-1-only hard lock (proposed, not objected to, still open for veto at close-out) and D7 ONE BUTTON in the UI (jakkaritw corrected Claude first draft which had added a second button - admin now reuses the normal อนุมัติ button, only the confirm dialog differs and must name the person being skipped; server keeps two endpoints + two log actions for the audit trail). Shipped in f947fed: docs/adr/0027 (new), ADR-0006 amended in place, CONTEXT.md +4 glossary entries, docs/reference/approval-workflow.md trigger table + anchor note, plan/admin-step-override.md (D1-D7 brief). Implementation is Kimi task admin-step-override (willdo) - nothing in the code changed yet, auto_escalate still runs nightly in dry-run until Kimi lands the removal.",
       "agent": "claude"
     },
     {
       "id": "admin-step-override",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-01T16:52:11+0700",
-      "updated": "2026-08-01T21:05:06+0700",
-      "ai": "[REVISED D7, jakkaritw 2026-08-01 - ONE BUTTON] UI change from the first brief: NO separate override button. Admin reuses the normal อนุมัติ button; ApprovalActionBar branches on status.can_act at click time - can_act true -> existing approveDepartment path unchanged; can_act false (admin, PENDING_APPROVER1) -> override confirm dialog then overrideStep(). The dialog MUST name the person being skipped and state both consequences (log as override + mail to filler cc skipped approver) - it is the only guard since D3 removed stale-gate and reason field. ApprovalStatusState currently exposes current_approver_empcode but NO display name (verified approval.py:191-212) -> add the current approver display name server-side to the status payload (same lookup source as the mail cc resolution), never a second client fetch. Backend still keeps TWO endpoints + TWO log actions (APPROVE vs ADMIN_STEP_OVERRIDE) - do not merge; audit must forever distinguish owner-reviewed from admin-skipped. Everything else in the brief unchanged. Full brief: plan/admin-step-override.md (D1-D7).",
+      "updated": "2026-08-01T21:54:06+0700",
+      "ai": "Done per plan/admin-step-override.md (uncommitted, main session commits): deleted jobs/auto_escalate.py + test_jobs_auto_escalate.py + AUTO_ESCALATE symbols + workflow step; added admin_override_step/StepNotOverridableError/ACTION_ADMIN_STEP_OVERRIDE + POST /approval/override-step (403 non-admin, 409 Thai); notify_step_overridden (To submitter, cc skipped approver) wired as override_step branch; frontend ONE อนุมัติ button branching on can_act, overrideStep() client fn, current_approver_name in status payload; tests 1-13 added. Backend 811 passed/48 deselected; frontend vitest 534/534, tsc+oxlint clean. D4 hard lock (positions 2/3 never overridable) flagged for jakkaritw veto. Leftovers: none — no NOTIFICATIONS_DRY_RUN flip, no deploy.",
       "agent": "kimi"
     },
     {

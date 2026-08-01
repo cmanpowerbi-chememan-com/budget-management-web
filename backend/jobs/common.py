@@ -1,6 +1,5 @@
-"""Shared scaffolding for the A11 scheduled jobs (`auto_submit`,
-`auto_escalate`) and the A12 `send_reminders` job — logging setup + the
-never-cut dry-run safety gate.
+"""Shared scaffolding for the A11 scheduled job (`auto_submit`) and the A12
+`send_reminders` job — logging setup + the never-cut dry-run safety gate.
 
 Safety (never-cut #1, BUILD_PLAN A11/A12): every job defaults to a preview.
 `--execute` is the ONLY CLI way to actually write/send; nothing in this

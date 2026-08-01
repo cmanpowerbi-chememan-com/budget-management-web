@@ -133,8 +133,8 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
     in both modes).
 
     Uses ONE connection for the whole run; each trip's write commits on its
-    own (per-trip isolation, same idiom as `auto_submit`/`auto_escalate` —
-    one trip's failure never aborts the batch)."""
+    own (per-trip isolation, same idiom as `auto_submit` — one trip's
+    failure never aborts the batch)."""
     with get_fabric_conn() as conn:
         fx = _lookup_fx(conn, fiscal_year)
         if fx is None:

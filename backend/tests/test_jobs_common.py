@@ -1,5 +1,5 @@
 """Unit tests for jobs.common — shared CLI/safety scaffolding for the A11
-scheduled jobs (auto_submit, auto_escalate) and the A12 reminder job.
+scheduled job (auto_submit) and the A12 reminder job.
 """
 import argparse
 

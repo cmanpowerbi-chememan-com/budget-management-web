@@ -7,17 +7,16 @@ ADR-0006), submit branch selection (normal chain vs admin direct-approve,
 ADR-0012), step-gated approve/reject, reject-then-resubmit restarts the
 whole chain, concurrent-approve race protection, and append-only logging.
 """
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import MagicMock
 
 import pyodbc
 import pytest
 
 from app.approval import (
-    ACTION_AUTO_ESCALATE,
+    ACTION_ADMIN_STEP_OVERRIDE,
     ACTION_AUTO_SUBMIT,
     APPROVED,
-    AUTO_ESCALATE_THRESHOLD_DAYS,
     NIPAPORN_EMPCODE,
     PENDING_APPROVER1,
     PENDING_APPROVER2,
@@ -34,17 +33,17 @@ from app.approval import (
     NotCurrentApproverError,
     NotFillerOfDepartmentError,
     PastDeadlineError,
+    StepNotOverridableError,
     _active_positions,
     _bangkok_today,
     _current_step_started_at,
     _is_post_deadline,
+    admin_override_step,
     approve_department,
     authorize_status_view,
-    auto_escalate_step,
     auto_submit_department,
     fetch_pending_rows,
     get_approval_status,
-    is_step_stale,
     list_departments_pending_my_approval,
     reject_department,
     resolve_chain,
@@ -900,60 +899,195 @@ def test_auto_submit_department_raises_when_deadline_not_passed():
 
 
 # ---------------------------------------------------------------------------
-# A11 — auto_escalate_step (jobs/auto_escalate.py's entry point)
+# ADR-0027 — admin_override_step (POST /approval/override-step)
 # ---------------------------------------------------------------------------
 
-def test_auto_escalate_step_advances_to_next_position_and_logs():
+def test_override_step_advances_one_step_stamps_and_logs_admin():
+    """Override on PENDING_APPROVER1 with an active position 2 -> lands on
+    PENDING_APPROVER2, stamps approver1_actioned_at, and writes exactly ONE
+    ADMIN_STEP_OVERRIDE log row carrying the acting admin's real email."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999"),
+        ("500", None),  # resolve_submitter(admin)
+    ]
     cursor.rowcount = 1
-    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999")
 
-    result = auto_escalate_step(conn, DEPT, FY, row)
+    result = admin_override_step(conn, DEPT, FY, "admin@chememan.com")
 
     assert result.status == PENDING_APPROVER2
+    assert result.approver1_actioned_at is not None
     conn.commit.assert_called_once()
-    log_call = cursor.execute.call_args_list[-1]
-    assert "budget.approval_log" in log_call.args[0]
-    assert ACTION_AUTO_ESCALATE in log_call.args
+    log_calls = [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
+    assert len(log_calls) == 1
+    assert ACTION_ADMIN_STEP_OVERRIDE in log_calls[0].args
+    assert "admin@chememan.com" in log_calls[0].args
 
 
-def test_auto_escalate_step_final_active_position_raises_invalid_state():
-    """ADR-0006: never a silent jump to APPROVED just because someone was
-    slow -- a stuck FINAL step is simply not escalated by this job."""
+def test_override_step_refused_when_position_1_is_the_only_active_position():
+    """ADR-0027: an override may NEVER land APPROVED — a ฝ่าย whose chain
+    collapsed to position 1 only (here: approver1 == Nipaporn dedups
+    position 2, submitter == Waraporn self-skips position 3) is refused,
+    status unchanged, no log row."""
     conn = MagicMock()
-    row = _row_dict(status=PENDING_APPROVER3, approver1_empcode="200", submitter_empcode="999")
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE,
+                    submitter_empcode=WARAPORN_EMPCODE),
+    ]
 
-    with pytest.raises(InvalidApprovalStateError):
-        auto_escalate_step(conn, DEPT, FY, row)
+    with pytest.raises(StepNotOverridableError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    conn.commit.assert_not_called()
+    assert not [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
+    assert not [c for c in cursor.execute.call_args_list if "UPDATE budget.approval_status" in c.args[0]]
+
+
+@pytest.mark.parametrize("status", [PENDING_APPROVER2, PENDING_APPROVER3])
+def test_override_step_refused_on_budget_dept_positions_2_and_3(status):
+    """ADR-0027 D4: positions 2/3 (Nipaporn/Waraporn = the budget-dept review
+    itself) can never be overridden by anyone — an error, not a no-op."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_status_row(status=status)]
+
+    with pytest.raises(StepNotOverridableError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
     conn.commit.assert_not_called()
 
 
-def test_auto_escalate_step_skips_a_dropped_middle_position():
-    """active=[1,3] (invalid-approver1 fallback) -- escalating position 1
-    must land on PENDING_APPROVER3 directly, same as a real approve would."""
+@pytest.mark.parametrize("status", ["DRAFT", APPROVED, REJECTED])
+def test_override_step_on_non_pending_status_raises_invalid_state(status):
     conn = MagicMock()
-    conn.cursor.return_value.rowcount = 1
-    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE, submitter_empcode="999")
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_status_row(status=status)]
 
-    result = auto_escalate_step(conn, DEPT, FY, row)
-    assert result.status == PENDING_APPROVER3
+    with pytest.raises(InvalidApprovalStateError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    conn.commit.assert_not_called()
 
 
-def test_auto_escalate_step_concurrent_race_raises_conflict():
+def test_override_step_no_record_raises_not_found():
     conn = MagicMock()
-    conn.cursor.return_value.rowcount = 0
-    row = _row_dict(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999")
+    conn.cursor.return_value.fetchone.return_value = None
+    with pytest.raises(ApprovalRecordNotFoundError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+
+
+def test_override_step_concurrent_race_raises_conflict_no_log_row():
+    """Same conditional-UPDATE race guard as a real approve: the record's
+    status moved between read and write -> ConcurrentApprovalError, and the
+    log insert is never reached."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999"),
+        ("500", None),  # resolve_submitter(admin)
+    ]
+    cursor.rowcount = 0  # someone else already actioned this step first
 
     with pytest.raises(ConcurrentApprovalError):
-        auto_escalate_step(conn, DEPT, FY, row)
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    conn.commit.assert_not_called()
+    assert not [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
+
+
+def test_override_step_admin_without_employee_row_logs_none_empcode_real_email():
+    """ADR-0027: an admin with no v_employee_budget_01 row (e.g. jakkaritw)
+    still overrides — the log carries by_empcode=NULL and the real email,
+    never a `system:` literal."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999"),
+        None,  # resolve_submitter(admin) -> not found
+    ]
+    cursor.rowcount = 1
+
+    result = admin_override_step(conn, DEPT, FY, "jakkaritw@chememan.com")
+
+    assert result.status == PENDING_APPROVER2
+    log_call = [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]][0]
+    # args: (sql, department, fiscal_year, action, by_empcode, by_email, now, prev, new, comment)
+    assert log_call.args[3] == ACTION_ADMIN_STEP_OVERRIDE
+    assert log_call.args[4] is None
+    assert log_call.args[5] == "jakkaritw@chememan.com"
+
+
+def test_override_step_refused_when_position_1_occupant_is_nipaporn():
+    """Review hardening: dedup can place Nipaporn (budget dept) directly in
+    the position-1 SLOT (her manager IS Nipaporn -> position 2 dedups away),
+    status still reads PENDING_APPROVER1. The slot number alone must not be
+    enough -- this is D4's protected review, just reached via position 1.
+    active = [1, 3] here (verified against real _active_positions), so
+    without the occupant check the override would succeed and land
+    PENDING_APPROVER3, silently skipping Nipaporn's review."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE, submitter_empcode="999"),
+    ]
+
+    with pytest.raises(StepNotOverridableError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    conn.commit.assert_not_called()
+    assert not [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
+    assert not [c for c in cursor.execute.call_args_list if "UPDATE budget.approval_status" in c.args[0]]
+
+
+def test_override_step_refused_when_position_1_occupant_is_waraporn():
+    """Same hardening, Waraporn: active = [1, 2] (verified against real
+    _active_positions) -- without the occupant check the override would
+    succeed and land PENDING_APPROVER2, silently skipping Waraporn's review."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode=WARAPORN_EMPCODE, submitter_empcode="999"),
+    ]
+
+    with pytest.raises(StepNotOverridableError):
+        admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    conn.commit.assert_not_called()
+    assert not [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
+    assert not [c for c in cursor.execute.call_args_list if "UPDATE budget.approval_status" in c.args[0]]
+
+
+def test_override_step_still_allowed_for_an_ordinary_manager():
+    """Guard against over-tightening: an ordinary manager (not Nipaporn/
+    Waraporn) occupying position 1 must still be overridable -- the new
+    occupant check must not lock out the normal, intended case."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200", submitter_empcode="999"),
+        ("500", None),  # resolve_submitter(admin)
+    ]
+    cursor.rowcount = 1
+
+    result = admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+
+    assert result.status == PENDING_APPROVER2
+    conn.commit.assert_called_once()
+
+
+def test_auto_escalate_symbols_removed_from_approval_module():
+    """ADR-0027 D1: the 30-day auto-escalation is DELETED outright — none of
+    its symbols may remain importable from app.approval."""
+    import app.approval as approval_module
+
+    for name in (
+        "auto_escalate_step", "is_step_stale", "ACTION_AUTO_ESCALATE",
+        "AUTO_ESCALATE_THRESHOLD_DAYS", "AUTO_ESCALATE_ACTOR_EMAIL",
+    ):
+        assert not hasattr(approval_module, name), f"{name} must be deleted (ADR-0027)"
 
 
 # ---------------------------------------------------------------------------
-# _current_step_started_at / is_step_stale — the derived "turn start" signal
-# (no dedicated per-step timestamp column exists on budget.approval_status;
-# flagged in the final report, this is the safest derivation from existing
-# columns, never a schema change).
+# _current_step_started_at — the derived "turn start" signal (no dedicated
+# per-step timestamp column exists on budget.approval_status; flagged in the
+# final report, this is the safest derivation from existing columns, never a
+# schema change). The 7-day turn-reminder cadence anchors on it (ADR-0027).
 # ---------------------------------------------------------------------------
 
 def test_current_step_started_at_position1_is_submitted_at():
@@ -984,22 +1118,8 @@ def test_current_step_started_at_position3_walks_back_through_skipped_positions(
     assert _current_step_started_at(row) == p1_actioned
 
 
-def test_is_step_stale_true_past_threshold():
-    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
-    row = _row_dict(status=PENDING_APPROVER1, submitted_at=submitted)
-    now = submitted + timedelta(days=AUTO_ESCALATE_THRESHOLD_DAYS)
-    assert is_step_stale(row, now) is True
-
-
-def test_is_step_stale_false_before_threshold():
-    submitted = datetime(2027, 1, 1, tzinfo=timezone.utc)
-    row = _row_dict(status=PENDING_APPROVER1, submitted_at=submitted)
-    now = submitted + timedelta(days=AUTO_ESCALATE_THRESHOLD_DAYS - 1)
-    assert is_step_stale(row, now) is False
-
-
 # ---------------------------------------------------------------------------
-# fetch_pending_rows — read helper for the auto_escalate job's discovery pass
+# fetch_pending_rows — read helper for the send_reminders job's discovery pass
 # ---------------------------------------------------------------------------
 
 def test_fetch_pending_rows_returns_keyed_dicts_for_the_given_year():
