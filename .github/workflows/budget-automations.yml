@@ -1,29 +1,36 @@
-# enable cron at go-live after jakkaritw approval (A14) — see docs/BUILD_PLAN.md A11/A12.
-# Until then: workflow_dispatch (manual) ONLY. The cron schedule below is
-# intentionally commented out, and DRY_RUN defaults 'true' as a second,
-# independent safety layer (jobs/common.py: --execute alone is not enough —
-# DRY_RUN must ALSO be explicitly 'false'). Real email sends are additionally
-# gated by Settings.notifications_dry_run (backend/app/config.py, default True).
+# Cron ENABLED 2026-08-01 (jakkaritw) — see docs/BUILD_PLAN.md A11/A12.
+# THREE INDEPENDENT GATES still stand between this schedule and a real write or
+# a real email, and the daily run currently trips the first two:
+#   1. `--execute` — a scheduled run carries no inputs, so the flag is never added.
+#   2. `DRY_RUN: 'true'` below — jobs/common.py forces preview mode unless this
+#      is explicitly 'false', so even a manual run with --execute stays dry.
+#   3. Settings.notifications_dry_run (backend/app/config.py, default True) —
+#      send_mail constructs and logs the payload but makes zero HTTP calls.
+# So: the schedule exercises the queries nightly and writes/sends NOTHING.
 # NOTE (2026-07-28): the FX re-persist job was split into fx-repersist.yml
 # (Appendix E decision 3, P0-28) — `execute=true` here can no longer re-price
 # per-diem by accident.
 # GO-LIVE (2026-07-31 email-notify revamp, plan/email-notify-revamp.md §6):
-#   1. CREATE TABLE budget.reminder_log on the shared DB (db/ddl/budget_reminder_log.sql)
-#      — requires jakkaritw approval; send_reminders now reads/writes it.
-#   2. Deploy to staging, verify this workflow via manual workflow_dispatch
-#      (dry-run) and read the due-check logs.
-#   3. Only then: uncomment the cron below AND set NOTIFICATIONS_DRY_RUN=false
-#      on the Container App (both are separate deploy gates, not this commit).
+#   1. [DONE 2026-08-01] budget.reminder_log created on the shared DB.
+#   2. [DONE 2026-08-01] staging on budget-web:80b0e1c; manual dry-run run
+#      30679138743 green on all three steps.
+#   3. [DONE 2026-08-01, jakkaritw] cron ENABLED below — but the daily run is a
+#      DRY-RUN PREVIEW ONLY. Nothing is written and no mail is sent, because
+#      the schedule passes no `--execute` AND `DRY_RUN` stays 'true' AND
+#      Settings.notifications_dry_run is still True on the Container App.
+#      Going truly live = a separate jakkaritw decision: set DRY_RUN below to
+#      'false' + add `--execute` for scheduled runs, and set
+#      NOTIFICATIONS_DRY_RUN=false on the Container App.
 name: Budget Automations (auto-submit / auto-escalate / reminders)
 
 on:
-  # schedule:
-  #   - cron: "0 20 * * *"  # 03:00 Bangkok (UTC+7) daily — COMMENTED OUT until go-live approval
+  schedule:
+    - cron: "0 20 * * *"  # 03:00 Bangkok (UTC+7) daily — dry-run preview until the flips above
   workflow_dispatch:
     inputs:
       fiscal_year:
-        description: "Planning fiscal year to act on (no auto-detect — always explicit)"
-        required: true
+        description: "Planning fiscal year to act on (blank on a scheduled run -> falls back to the AUTOMATION_FISCAL_YEAR repo variable; never auto-detected from the clock)"
+        required: false
         type: string
       execute:
         description: "Actually write/send (unchecked = dry-run preview only)"
@@ -42,10 +49,24 @@ jobs:
       # APP_BASE_URL (not a secret) so the staging -> production switch at
       # go-live is a variable edit, not a commit. Currently: staging FQDN.
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      # A scheduled run carries NO inputs, so `inputs.fiscal_year` is empty and
+      # the old `--fiscal-year ${{ inputs.fiscal_year }}` would have died with
+      # an argparse error every night. The year comes from the repo VARIABLE
+      # AUTOMATION_FISCAL_YEAR instead — still explicit and human-set (never
+      # derived from the clock), and a manual run's input overrides it.
+      FISCAL_YEAR: ${{ inputs.fiscal_year || vars.AUTOMATION_FISCAL_YEAR }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Resolve fiscal year (fail loudly rather than act on the wrong year)
+        run: |
+          if [ -z "$FISCAL_YEAR" ]; then
+            echo "::error::No planning fiscal year. Pass the workflow_dispatch input, or set the AUTOMATION_FISCAL_YEAR repo variable for scheduled runs."
+            exit 1
+          fi
+          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=${{ inputs.execute }}, DRY_RUN=$DRY_RUN)"
 
       - name: Install ODBC Driver 17 for SQL Server
         run: |
@@ -71,7 +92,7 @@ jobs:
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
         run: |
-          ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
+          ARGS="--fiscal-year $FISCAL_YEAR"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
           python -m jobs.auto_submit $ARGS
 
@@ -84,7 +105,7 @@ jobs:
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
         run: |
-          ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
+          ARGS="--fiscal-year $FISCAL_YEAR"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
           python -m jobs.auto_escalate $ARGS
 
@@ -97,6 +118,6 @@ jobs:
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
         run: |
-          ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
+          ARGS="--fiscal-year $FISCAL_YEAR"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
           python -m jobs.send_reminders $ARGS
