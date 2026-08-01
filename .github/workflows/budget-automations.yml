@@ -36,6 +36,12 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       DRY_RUN: 'true' # belt-and-braces default — jobs ALSO require --execute (jobs/common.py)
+      # Deep links in every mail (ADR-0016). Without this the jobs fall back to
+      # the placeholder https://budget.chememan.com, which does not resolve —
+      # every link in a reminder would be dead. Held in the repo VARIABLE
+      # APP_BASE_URL (not a secret) so the staging -> production switch at
+      # go-live is a variable edit, not a commit. Currently: staging FQDN.
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
 
     steps:
       - name: Checkout code
