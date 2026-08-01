@@ -1,7 +1,8 @@
 # 6. Approval routing, snapshot chain, and escalation
 
 Date: 2026-06-07
-Status: Accepted
+Status: Accepted — **escalation clause superseded by ADR-0027 (2026-08-01)**; routing,
+snapshot, fallback, self-skip/dedup, reject and state-machine rules all still current
 Builds on: `requirement_spec/3_approval_workflow/approval_workflow_spec.md` (the chain + special cases)
 
 ## Context
@@ -41,11 +42,15 @@ what happens when an approver is invalid, and what happens when one just sits on
   Surfaced in an **admin "overdue / stuck approvals" view**.
 - **Approver departed mid-flight** (snapshot approver becomes inactive after submit) →
   admin reassign/override from that view, logged as `ADMIN_OVERRIDE` in `approval_log`.
-- **Approver valid but silent > 30 days** → **auto-escalate the stuck STEP only**: mark
-  that one step approved, advance to the NEXT approver, and log `AUTO_ESCALATE`. The
-  remaining real approvers (incl. budget dept Nipaporn/Waraporn) STILL review. This is
-  explicitly **not** a jump to final APPROVED — a budget must never reach final without
-  budget-dept review just because someone was slow.
+- ~~**Approver valid but silent > 30 days** → **auto-escalate the stuck STEP only**: mark
+  that one step approved, advance to the NEXT approver, and log `AUTO_ESCALATE`.~~
+  **SUPERSEDED 2026-08-01 by ADR-0027**: the automatic 30-day escalation is deleted. A stuck
+  step is now advanced only by a human — an admin clicking a manual step-override, position 1
+  only, logged under its own action with the admin's real email. The invariant this clause
+  protected is unchanged and restated in ADR-0027: the override advances ONE step and can
+  never land final `APPROVED`; the remaining approvers (incl. budget dept Nipaporn/Waraporn)
+  still review. What changed is only the trigger — clock → human — plus a 7-day reminder that
+  now repeats indefinitely instead of ending in an automatic skip.
 - **Status enum = neutral** `DRAFT / PENDING_APPROVER1 / PENDING_APPROVER2 /
   PENDING_APPROVER3 / APPROVED / REJECTED` (the spec's `PENDING_L1/2/3` are the same
   states — use the neutral names consistently; ADR-0003). Who each approver is + skip
@@ -94,10 +99,12 @@ what happens when an approver is invalid, and what happens when one just sits on
 
 - In-flight approvals are stable against HR churn; the trade-off is a snapshot can go
   stale (the departed-approver case), which the sync cross-check + admin override cover.
-- The 30-day step auto-escalation keeps budgets moving without ever bypassing budget-dept
-  sign-off — slowness is bounded, control is preserved. Every automatic move is logged
-  (`AUTO_ESCALATE`) and auditable.
+- ~~The 30-day step auto-escalation keeps budgets moving without ever bypassing budget-dept
+  sign-off — slowness is bounded, control is preserved.~~ **Superseded by ADR-0027**: slowness
+  is no longer bounded by anything automatic. A stuck step waits until an admin overrides it,
+  and the only automatic signal is the 7-day reminder to the (already silent) approver.
 - `approval_status` must store the snapshot approver empcodes (not only the current state),
   so the data model gains approver1/2/3 columns on that table.
-- Open: the exact "overdue" age threshold for the admin view (the 30-day auto-escalate is
-  fixed; the *flag-to-admin* age can be shorter, e.g. 7–14 days) — confirm with budget dept.
+- Open: the "overdue / stuck approvals" admin view is still unbuilt. It mattered less while
+  the 30-day escalation existed; under ADR-0027 it is the natural home for the manual
+  step-override and the main mitigation for "nobody notices a stuck ฝ่าย".

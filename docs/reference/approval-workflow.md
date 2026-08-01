@@ -31,8 +31,12 @@ L3/L4 Submit → approver1 (managerempcode ตรงๆ) → นิภาพร 
 - Approval unit = `(ฝ่าย/department, fiscal_year)`, one record per dept per year covering all
   its CCs — **ADR-0008** (supersedes the earlier per-CC unit).
 - See-scope vs Fill-scope (broad union see; ฝ่าย-gated fill) — **ADR-0007**.
-- Routing, snapshot-at-submit, invalid-approver fallback to Nipaporn, 30-day step
-  auto-escalate, reject → back to `PENDING_APPROVER1` — **ADR-0006**.
+- Routing, snapshot-at-submit, invalid-approver fallback to Nipaporn, reject → back to
+  `PENDING_APPROVER1` — **ADR-0006**.
+- A stuck step is released by an **admin step-override** (position 1 only, one step at a time,
+  never straight to `APPROVED`, notifies the submitter + cc's the skipped approver); the old
+  30-day auto-escalate is **deleted** and turn reminders now repeat forever — **ADR-0027**
+  (supersedes ADR-0006's escalation clause).
 - Editing a number never changes status (in-flight PENDING locked; APPROVED admin-editable) —
   **ADR-0013**.
 - Approval happens **inline on the main budget page** (`รออนุมัติ` badge + step-gated inline
@@ -127,8 +131,12 @@ Repeat reminders are sent by `jobs/send_reminders.py` and tracked in `budget.rem
 | reject (ทุก layer) | User (submitter) | approver1 | ครั้งเดียว |
 | deadline reminder (ฝ่ายยังไม่ submit / REJECTED) | filler — **เมลรวม 1 ฉบับ/คน** ลิสต์ทุกฝ่ายที่ค้าง แต่ละแถวมี deep link ของฝ่ายนั้น (§7) | approver1 ที่ derive จาก manager ของ filler (fallback นิภาพร) | ทุก 7 วัน ตั้งแต่ `reminder_date` ถึง `closing_date` |
 
+| admin step-override (ADR-0027) | User (submitter) | the approver who was skipped | ครั้งเดียว ทันทีที่กด |
+
 cc is skipped when it cannot be resolved or equals the To address; a cc failure never blocks
-the main send. Turn reminders reuse the same turn-start anchor as the 30-day auto-escalate.
+the main send. Turn reminders anchor on the turn-start timestamp (`_current_step_started_at`)
+and repeat every 7 days **with no end** until the approver acts (ADR-0027 — the 30-day
+auto-escalate that used to share this anchor is deleted).
 Reminder cadence is tracked per PERSON (sentinel `'*'` in `budget.reminder_log.department`,
 §7.2) — a ฝ่าย that goes pending mid-week rides the person's next 7-day round; event mails
 always fire instantly. Bulk sends are paced (`REMINDER_SEND_DELAY_SECONDS`), capped per phase

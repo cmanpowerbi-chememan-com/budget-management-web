@@ -89,6 +89,33 @@ production admin** — MAY Submit→APPROVED like the budget authorities (decide
 internal tool, trusted; no separate system-vs-budget admin tier). In the mockup jakkaritw is a
 `superTest` persona that can Submit any ฝ่าย.
 
+### Turn
+The period during which one ฝ่าย's approval sits with one approver — from the moment the
+step opens (submit, or the previous step being actioned) until that approver approves or
+rejects. "Whose turn is it" is always exactly one person: the frozen occupant of the current
+`PENDING_APPROVER1/2/3` step. A turn has no deadline of its own.
+
+### Turn reminder
+The repeat nudge sent to the approver whose Turn has gone unactioned — every 7 days, one
+mail per person listing every ฝ่าย waiting on them, **repeating indefinitely** until they act
+(ADR-0027). Distinct from the **Deadline reminder**, which goes to Fillers who have not
+submitted yet and stops when the cycle closes.
+_Avoid_: calling either one "escalation" — a reminder never moves a budget.
+
+### Step override
+An Admin advancing a stuck approval **one step** without being its frozen approver
+(ADR-0027). Position 1 only, available immediately, no reason required, logged with the
+acting admin's real email, and it can never land final `APPROVED`. Replaced the retired
+auto-escalation below.
+_Avoid_: "approve on behalf" — the admin is not approving the budget, only releasing the
+step so the chain continues to the real reviewers.
+
+### Auto-escalation — RETIRED 2026-08-01
+The former rule where a step untouched for 30 days was advanced by a scheduled job and
+logged `AUTO_ESCALATE`. Deleted with ADR-0027; nothing in the system now moves an approval
+without a human action. Kept here only so the term is recognised in old documents — do not
+reintroduce it as a synonym for Step override or Turn reminder.
+
 ### SAP / Actuals
 Read-only realised spend, read live (read-through) from the central DW gold warehouse
 `cman_dw_wh_gold.gold.fact_gl_trans` (workspace `cman-dw-prod-ws`), pre-aggregated

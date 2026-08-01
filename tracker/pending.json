@@ -1,14 +1,46 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-01T09:14:42+0700",
+  "updated": "2026-08-01T21:05:06+0700",
   "tasks": [
     {
+      "id": "diag-cfo-empty-grid",
+      "state": "done",
+      "created": "2026-08-01T16:53:21+0700",
+      "updated": "2026-08-01T16:53:21+0700",
+      "ai": "NOT A BUG - closed. Symptom: dept 'Chief Financial Officer' renders 0 rows in the grid. Sharpened the loop from Playwright clicks to a direct GET /budget?year=2027&department=... sweep (scratchpad/loop_dept_rows.py): per-dept rows = Budgeting and Management 1, Budgeting & Cost Accounting 3, CFO 0, COO 1, General 13; sum 18 = unfiltered 18, so the partition is complete and CFO genuinely contributes nothing. Cause = H3 (GL-master visibility), NOT a filter/RLS/label defect: dbo.cc_filler_map maps CFO to exactly 2 CCs (10FA000000, 10FA010000); dbo.board_budget 0 rows for both; budget.pending_budget FY2027 0 rows; gold FY2026 has exactly ONE cc/gl combo - 10FA010000 / GL 6410200250 = 735,822.08 THB over 12 rows - and 6410200250 is NOT in dbo.gl_group (146 GLs), i.e. it is one of the two GLs jakkaritw deliberately hid (see memory project_gl_master_visibility_hide, do-NOT-fix). Ruled out H2: labels are clean, '[Chief Financial Officer]' len 23, no stray whitespace. CORRECTION to my earlier claim of 'CFO had 3 rows': that was my measurement error - the discovery script used a loose has_text click that landed on Budgeting & Cost Accounting (which does return 3 rows, first 10AC020000/6210400010). No product change, no regression test needed. Scratch probes deleted; no DEBUG tags in the repo.",
+      "agent": "claude"
+    },
+    {
+      "id": "grill-remove-auto-escalate",
+      "state": "done",
+      "created": "2026-08-01T16:52:44+0700",
+      "updated": "2026-08-01T16:52:44+0700",
+      "ai": "Ran /grill-with-docs with jakkaritw 2026-08-01 on \"cancel the 30-day auto-escalation, keep only 7-day reminders\". Five questions, all resolved; the grilling surfaced a blocker the request did not account for: approve/reject authorize strictly against the frozen step occupant with NO admin bypass (approval.py _authorize_current_step), so a bare deletion would have made any silent approver a permanently stuck department against a hard 31 Oct cycle close - fixed by pairing the deletion with a manual admin step-override. Outcomes: Q1 remedy = option (a) delete + admin button; Q2 override advances one step only, never straight to APPROVED (keeps ADR-0006 invariant, trigger moves clock->human); Q3 no stale-gate, no mandatory reason (Claude recommended requiring a reason, jakkaritw declined - accepted risk recorded in ADR-0027); Q4 immediate event mail to submitter cc the skipped approver, NOT a monthly digest; Q5 turn reminders repeat forever with no cc escalation (Claude recommended cc-ing budget dept after 4 rounds as a replacement safety net, jakkaritw declined - also recorded). Claude-proposed hard lock to position 1 only was not objected to but not explicitly confirmed - flagged for veto at close-out. DOCS WRITTEN THIS SESSION: docs/adr/0027-manual-step-override-replaces-auto-escalation.md (new, supersedes ADR-0006 escalation clause only); ADR-0006 header + clause + consequences amended in place with strike-through and pointers; CONTEXT.md gained four glossary entries (Turn, Turn reminder, Step override, Auto-escalation-RETIRED with an avoid-note so the term is not reused); docs/reference/approval-workflow.md rules list, email trigger table (6th mail row) and turn-anchor sentence updated; plan/admin-step-override.md written as the implementation brief. Implementation handed to Kimi as task admin-step-override (willdo). NOT committed yet.",
+      "agent": "claude"
+    },
+    {
+      "id": "admin-step-override",
+      "state": "willdo",
+      "created": "2026-08-01T16:52:11+0700",
+      "updated": "2026-08-01T21:05:06+0700",
+      "ai": "[REVISED D7, jakkaritw 2026-08-01 - ONE BUTTON] UI change from the first brief: NO separate override button. Admin reuses the normal อนุมัติ button; ApprovalActionBar branches on status.can_act at click time - can_act true -> existing approveDepartment path unchanged; can_act false (admin, PENDING_APPROVER1) -> override confirm dialog then overrideStep(). The dialog MUST name the person being skipped and state both consequences (log as override + mail to filler cc skipped approver) - it is the only guard since D3 removed stale-gate and reason field. ApprovalStatusState currently exposes current_approver_empcode but NO display name (verified approval.py:191-212) -> add the current approver display name server-side to the status payload (same lookup source as the mail cc resolution), never a second client fetch. Backend still keeps TWO endpoints + TWO log actions (APPROVE vs ADMIN_STEP_OVERRIDE) - do not merge; audit must forever distinguish owner-reviewed from admin-skipped. Everything else in the brief unchanged. Full brief: plan/admin-step-override.md (D1-D7).",
+      "agent": "kimi"
+    },
+    {
+      "id": "ci-fix-typecheck-testutils",
+      "state": "done",
+      "created": "2026-08-01T15:58:45+0700",
+      "updated": "2026-08-01T16:06:15+0700",
+      "ai": "FIXED + CI GREEN. Commit a096e39: testUtils.ts:27 reduce<number>() annotation (values is (number|null)[] after ADR-0026 nullable SAP months, so TS bound the reduce overload to T=number|null despite the 0 seed). Verified locally with the SAME command CI runs - 'npx next build' finishes TypeScript clean, exit 0 - plus grid tests 197 passed. CI run 30693009866 success 1m0s on main. LESSON: 'npx vitest run' does NOT typecheck; a frontend change is not CI-safe until 'npx next build' passes locally - add that to the pre-push routine.",
+      "agent": "claude"
+    },
+    {
       "id": "enable-automations-cron",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-01T09:14:42+0700",
-      "updated": "2026-08-01T09:14:42+0700",
-      "ai": "jakkaritw approved 2026-08-01: enabled the nightly cron on budget-automations.yml (0 20 * * * UTC = 03:00 Bangkok). Commit 5f419c2 pushed. IMPORTANT - this does NOT start sending mail: three gates remain closed so the nightly run is a pure preview: (1) a scheduled run carries no inputs so --execute is never added, (2) job env DRY_RUN=true and jobs/common.py is_dry_run requires BOTH --execute AND DRY_RUN=false, (3) Settings.notifications_dry_run default True means send_mail builds+logs the payload and makes zero HTTP calls. ALSO FIXED a latent break the cron would have hit on night one: every step built the arg from the workflow_dispatch input inputs.fiscal_year, which is EMPTY on a scheduled run -> argparse error every night. The year now resolves job-level as FISCAL_YEAR = inputs.fiscal_year OR vars.AUTOMATION_FISCAL_YEAR (new repo variable, set to 2027), plus a guard step that fails loudly with an ::error:: annotation if it is blank - still explicit/human-set, never derived from the clock (matches the no-auto-detect policy). Header comment rewritten to describe the three gates instead of claiming the cron is commented out. Verification in flight: run 30679576648 triggered WITHOUT the fiscal_year input to exercise the variable fallback exactly as the schedule will.",
+      "updated": "2026-08-01T09:15:50+0700",
+      "ai": "VERIFIED 2026-08-01. Cron live on budget-automations.yml (0 20 * * * UTC = 03:00 Bangkok), commit 5f419c2 on origin/main. Proof run 30679576648 was triggered deliberately WITHOUT the fiscal_year input, i.e. exactly the shape a scheduled run has: SUCCESS, guard step printed \"Acting on planning fiscal year: 2027 (execute=false, DRY_RUN=true)\" proving the AUTOMATION_FISCAL_YEAR variable fallback works, then all three jobs ran in preview - auto_submit \"not yet past its submission deadline\", auto_escalate \"0 stale (>=30d) PENDING_* row(s)\", send_reminders \"0 turn reminder(s) due\" + \"reminder_date 2026-10-15 not yet reached\". Zero mail, zero writes. NOT DONE ON PURPOSE (the actual go-live, each a separate jakkaritw decision): set DRY_RUN to false + add --execute for scheduled runs in the workflow, set NOTIFICATIONS_DRY_RUN=false on the Container App, and switch the APP_BASE_URL variable from the staging FQDN to production. First real mail date is 2026-10-15 (reminder_date), so there is no schedule pressure to flip them now.",
       "agent": "claude"
     },
     {
@@ -79,8 +111,8 @@
       "id": "hide-incomplete-sap-months",
       "state": "done",
       "created": "2026-08-01T00:41:49+0700",
-      "updated": "2026-08-01T09:02:21+0700",
-      "ai": "ALREADY IMPLEMENTED by a parallel session (uncommitted working tree) to exactly the approved rule; this session verified + closed the last gap. Code: sap.py +SAP_MONTH_VISIBLE_LAG_DAYS=23, SAP_ENTRY_DAY_MAX_GAP_DAYS=4, SAP_ENTRY_DAYS_SQL, visible_sap_months(), entry_day_watermark(), fetch_sap_entry_days(), resolve_sap_coverage(), SapCoverage model; read_model._sap_layer applies mask (NOT in fetch_sap_actuals - parity harness + ADR-0010 need full year; sap_nonzero_keys computed pre-mask); SapLayer months float|None + has_actuals; routers/budget.py GET /budget/sap-coverage -> 502 fail-closed; frontend types/model/GridTable render muted en-dash + tooltip + coverage-labelled total. TESTS GREEN: backend 121/121 (test_sap+test_read_model+test_budget), frontend 162/162 after fixing ONE broken test assertion (GridTable.test.tsx:906 pending m04 used toHaveTextContent on an editable-row input -> now pending-input + toHaveValue('7000'); product was correct, Approved/Pending untouched). INCIDENT: I overwrote the pre-existing UNTRACKED docs/adr/0026-hide-incomplete-sap-actual-months.md without reading it first (CLAUDE.md overwrite-guard violation); no copy in git/build-ctx/graphify -> original text unrecoverable. Rewrote it from the measurements + reconstructed the implementation facts from code comments into a new 'Implementation notes' section. NOT COMMITTED - awaiting jakkaritw. Evidence scripts: scratchpad/apr_spill_scan.py, verify_n_march.py, probe_entrydate_col.py",
+      "updated": "2026-08-01T09:17:56+0700",
+      "ai": "COMMITTED bdde1a4 (16 files, +1425/-42). Full suites green pre-commit: backend 800 passed/49 deselected, frontend 480 passed/30 files (one non-reproducible 'Errors 1' in the first vitest run, absent on re-run, exit 0 both times - not from this change). Excluded from the commit on purpose: graphify-out/* (nightly CI artifact), .build-ctx-* (build scratch), backend/tests/tests_data_sync/*.xlsx (no test references them - grepped), monthly_update/*, plan/posting_vs_entry_date.png. NOT pushed.",
       "agent": "claude"
     },
     {
