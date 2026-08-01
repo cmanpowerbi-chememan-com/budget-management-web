@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { COLUMN_WIDTH_MIN, COLUMN_WIDTHS_STORAGE_KEY } from './model'
 import { GridTable } from './GridTable'
-import { blankLayer, makeRow } from './testUtils'
+import { blankLayer, makeRow, sapLayer } from './testUtils'
 
 const GL_REF: GlAccount[] = [
   { gl_code: '5211800030', gl_group: 'Office expenses', gl_name: 'Office COST', is_special: false },
@@ -872,6 +872,57 @@ describe('GridTable', () => {
       const btn = screen.getAllByTestId('enter-fullscreen-btn')[0]
       expect(btn).toHaveAttribute('aria-pressed', 'false')
       expect(() => fireEvent.click(btn)).not.toThrow()
+    })
+  })
+  describe('ADR-0026 hidden SAP months', () => {
+    const HIDDEN_TOOLTIP = 'ข้อมูล SAP เดือนนี้ยังไม่ครบ จึงยังไม่แสดง'
+    const janToMarRow = makeRow({
+      cost_center: 'CC1', gl_account: '5211800030', editable: true,
+      sap: sapLayer({
+        m01: 157832827, m02: 153166038, m03: 129700892,
+        m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null,
+      }),
+      board: { ...blankLayer({ m04: 4000, total_year: 4000 }), gl_name: null, gl_group: null, c_level: null, division: null, department: null } as BudgetRow['board'],
+      pending: { ...blankLayer({ m04: 7000, total_year: 7000 }), template: null, remark: null, gl_name: null, gl_group: null, c_level: null, division: null, department: null, updated_at: null } as BudgetRow['pending'],
+    })
+
+    it('renders a hidden SAP month as a muted en-dash with a Thai explanation, not a number', () => {
+      render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const cell = screen.getByTestId('sap-value-CC1-5211800030-m04')
+      const pill = cell.querySelector('.month-value') as HTMLElement
+      expect(pill).toHaveTextContent('–')
+      expect(pill.className).toContain('month-hidden')
+      expect(pill).toHaveAttribute('title', HIDDEN_TOOLTIP)
+    })
+
+    it('keeps the complete months showing their real numbers', () => {
+      render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getByTestId('sap-value-CC1-5211800030-m03')).toHaveTextContent('129,700,892')
+    })
+
+    it('never touches the Approved or Pending cell of the same month', () => {
+      render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getByTestId('board-value-CC1-5211800030-m04')).toHaveTextContent('4,000')
+      expect(screen.getByTestId('pending-input-CC1-5211800030-m04')).toHaveValue('7000')
+    })
+
+    it('labels the SAP grand total with the months it covers', () => {
+      render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      expect(screen.getByTestId('side-section-COST')).toHaveTextContent('รวมทั้งหมด · SAP · ใช้จริง (Jan–Mar)')
+    })
+
+    it('keeps the SAP grand total unlabelled when every month is shown', () => {
+      const allVisible = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true, sap: sapLayer({ m01: 100 }) })
+      render(<GridTable rows={[allVisible]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const section = screen.getByTestId('side-section-COST')
+      expect(section).toHaveTextContent('รวมทั้งหมด · SAP · ใช้จริง')
+      expect(section).not.toHaveTextContent('(Jan–')
+    })
+
+    it('explains on the row year-total that it covers the complete months only', () => {
+      render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const yearCell = screen.getByTestId('sap-value-CC1-5211800030-year')
+      expect(yearCell.querySelector('.month-value')).toHaveAttribute('title', 'รวมเฉพาะเดือนที่ข้อมูลครบ: Jan–Mar')
     })
   })
 })

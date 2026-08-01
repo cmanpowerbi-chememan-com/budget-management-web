@@ -1,14 +1,26 @@
-"""Unit tests for app.sap — SAP actuals read-through (ADR-0020, A4).
+"""Unit tests for app.sap — SAP actuals read-through (ADR-0020, A4) and the
+entry-day watermark that hides incomplete months (ADR-0026).
 
 Fully mocked cursor/connection — no live DB. The query text itself is the
 never-cut financial contract: verbatim, no sign flip, no doc_status filter,
 excluded-CC list WITHOUT 10SC012000, and any failure must raise (never a
 silent-empty actuals layer).
 """
+from datetime import date
+
 import pyodbc
 import pytest
 
-from app.sap import SAP_ACTUALS_SQL, SapActualsFetchError, fetch_sap_actuals
+from app.sap import (
+    SAP_ACTUALS_SQL,
+    SAP_ENTRY_DAYS_SQL,
+    SapActualsFetchError,
+    entry_day_watermark,
+    fetch_sap_actuals,
+    fetch_sap_entry_days,
+    resolve_sap_coverage,
+    visible_sap_months,
+)
 
 
 def _make_conn(rows: list[tuple]) -> "pyodbc.Connection":
@@ -159,3 +171,194 @@ def test_fetch_sap_actuals_wraps_a_connection_level_failure_too():
     conn.cursor.side_effect = pyodbc.Error("08S01", "Attempt to use a closed connection.")
     with pytest.raises(SapActualsFetchError):
         fetch_sap_actuals(conn, fiscal_year=2026)
+
+
+def test_fetch_sap_actuals_never_masks_months_itself():
+    """ADR-0026 is a DISPLAY rule applied by `read_model._sap_layer`, not by
+    this fetch: the raw mirror of the DW must stay complete (the DB->web
+    parity harness compares it month by month, including months the grid
+    hides). A None here would silently break that harness."""
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "04", 22_008_580.0)])
+    months = fetch_sap_actuals(conn, fiscal_year=2026)[("CC1", "GL1")]
+    assert months["m04"] == 22_008_580.0
+    assert months["total_year"] == 22_008_580.0
+
+
+# ---------------------------------------------------------------------------
+# ADR-0026 — visible_sap_months (pure, no DB)
+# ---------------------------------------------------------------------------
+
+def test_visible_months_today_fy2026_watermark_20260429_shows_jan_to_mar_only():
+    """The live case the ADR was measured on: entry-days loaded through
+    2026-04-29, so March (31 Mar + 23d = 23 Apr) is complete but April
+    (30 Apr + 23d = 23 May) is not."""
+    assert visible_sap_months(date(2026, 4, 29), 2026) == (1, 2, 3)
+
+
+def test_visible_months_hidden_set_is_the_complement():
+    visible = visible_sap_months(date(2026, 4, 29), 2026)
+    assert [m for m in range(1, 13) if m not in visible] == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+
+def test_visible_months_boundary_march_appears_exactly_on_watermark_day_23():
+    assert 3 in visible_sap_months(date(2026, 4, 23), 2026)
+
+
+def test_visible_months_boundary_march_still_hidden_one_day_before():
+    assert 3 not in visible_sap_months(date(2026, 4, 22), 2026)
+
+
+def test_visible_months_prior_fiscal_year_is_fully_visible():
+    """FY2025's last cut-off (31 Dec 2025 + 23d = 23 Jan 2026) is long past,
+    so the reference year a planner compares against stays complete."""
+    assert visible_sap_months(date(2026, 4, 29), 2025) == tuple(range(1, 13))
+
+
+def test_visible_months_december_needs_a_watermark_in_the_next_calendar_year():
+    assert 12 not in visible_sap_months(date(2027, 1, 22), 2026)
+    assert 12 in visible_sap_months(date(2027, 1, 23), 2026)
+
+
+def test_visible_months_february_uses_the_real_month_length_in_a_leap_year():
+    """2028 is a leap year: 29 Feb + 23d = 23 Mar, not 22 Mar."""
+    assert 2 not in visible_sap_months(date(2028, 3, 22), 2028)
+    assert 2 in visible_sap_months(date(2028, 3, 23), 2028)
+
+
+def test_visible_months_watermark_before_the_year_hides_everything():
+    assert visible_sap_months(date(2025, 6, 30), 2026) == ()
+
+
+# ---------------------------------------------------------------------------
+# ADR-0026 — entry_day_watermark (pure, no DB)
+# ---------------------------------------------------------------------------
+
+def _days(*iso: str) -> list[date]:
+    return [date.fromisoformat(d) for d in iso]
+
+
+def test_entry_day_watermark_is_the_newest_day_of_a_contiguous_run():
+    days = _days("2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29")
+    assert entry_day_watermark(days) == date(2026, 4, 29)
+
+
+def test_entry_day_watermark_ignores_an_island_load_above_a_long_gap():
+    """The pathology contiguity exists for: a loader that lands 2026-05-23
+    while skipping 2026-05-01..22 must NOT reveal April (April needs
+    23 May) — the watermark truncates back to the run below the gap."""
+    days = _days("2026-04-27", "2026-04-28", "2026-04-29", "2026-05-23")
+    watermark = entry_day_watermark(days)
+    assert watermark == date(2026, 4, 29)
+    assert 4 not in visible_sap_months(watermark, 2026)
+
+
+def test_entry_day_watermark_tolerates_a_one_or_two_day_hole():
+    """Threshold is 4 consecutive missing days — a short hole (a day with no
+    postings at all) must never truncate. Live check 2026-08-01: zero holes
+    in 850 entry-days, so any hole at all is already unexpected."""
+    assert entry_day_watermark(_days("2026-04-20", "2026-04-22", "2026-04-23")) == date(2026, 4, 23)
+    assert entry_day_watermark(_days("2026-04-20", "2026-04-23", "2026-04-24")) == date(2026, 4, 24)
+
+
+def test_entry_day_watermark_tolerates_a_three_day_hole_but_not_a_four_day_one():
+    assert entry_day_watermark(_days("2026-04-20", "2026-04-24", "2026-04-25")) == date(2026, 4, 25)
+    assert entry_day_watermark(_days("2026-04-20", "2026-04-25", "2026-04-26")) == date(2026, 4, 20)
+
+
+def test_entry_day_watermark_truncates_at_every_gap_not_just_the_newest():
+    """Two islands above the real run: both are untrustworthy, so the
+    watermark falls back to the oldest contiguous run (hide is the safe
+    direction)."""
+    days = _days("2026-04-28", "2026-04-29", "2026-05-23", "2026-05-24", "2026-06-20")
+    assert entry_day_watermark(days) == date(2026, 4, 29)
+
+
+def test_entry_day_watermark_dedups_and_sorts_its_input():
+    days = _days("2026-04-29", "2026-04-27", "2026-04-29", "2026-04-28")
+    assert entry_day_watermark(days) == date(2026, 4, 29)
+
+
+def test_entry_day_watermark_is_none_when_nothing_is_loaded():
+    assert entry_day_watermark([]) is None
+
+
+# ---------------------------------------------------------------------------
+# ADR-0026 — fetch_sap_entry_days / resolve_sap_coverage (mocked cursor)
+# ---------------------------------------------------------------------------
+
+def test_entry_days_sql_reads_the_entry_timestamp_not_posting_or_doc_date():
+    """`utc_timestamp` (varchar(14) YYYYMMDDHHMMSS) is the SAP entry stamp.
+    `doc_date` is garbage in live data (MAX = 2206-03-25), `posting_date`
+    answers a different question, and `prcs_data_dt` holds ONE value for the
+    whole table."""
+    assert "LEFT(utc_timestamp, 8)" in SAP_ENTRY_DAYS_SQL
+    assert "DISTINCT" in SAP_ENTRY_DAYS_SQL
+    assert "company_code='1000'" in SAP_ENTRY_DAYS_SQL
+    assert "doc_date" not in SAP_ENTRY_DAYS_SQL
+    assert "posting_date" not in SAP_ENTRY_DAYS_SQL
+    assert "prcs_data_dt" not in SAP_ENTRY_DAYS_SQL
+
+
+def test_entry_days_sql_is_windowed_so_it_never_scans_the_whole_table():
+    """Both bounds are parameterized: `fiscal_year >=` (the pruning predicate
+    that took the live query from 3.0s to 1.2s) and a `utc_timestamp >=`
+    window start."""
+    assert "fiscal_year >= ?" in SAP_ENTRY_DAYS_SQL
+    assert "utc_timestamp >= ?" in SAP_ENTRY_DAYS_SQL
+
+
+def test_fetch_sap_entry_days_windows_from_january_of_the_previous_fiscal_year():
+    conn = _make_conn(rows=[("20260429",)])
+    fetch_sap_entry_days(conn, fiscal_year=2026)
+    args = conn.cursor.return_value.execute.call_args.args
+    assert args[0] == SAP_ENTRY_DAYS_SQL
+    assert args[1] == 2025
+    assert args[2] == "20250101000000"
+
+
+def test_fetch_sap_entry_days_parses_the_yyyymmdd_prefix_into_dates():
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    assert fetch_sap_entry_days(conn, fiscal_year=2026) == [
+        date(2026, 4, 27),
+        date(2026, 4, 28),
+        date(2026, 4, 29),
+    ]
+
+
+def test_fetch_sap_entry_days_raises_loud_error_on_query_failure():
+    conn = _make_conn(rows=[])
+    conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_entry_days(conn, fiscal_year=2026)
+
+
+def test_fetch_sap_entry_days_closes_cursor_even_on_failure():
+    conn = _make_conn(rows=[])
+    conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_entry_days(conn, fiscal_year=2026)
+    conn.cursor.return_value.close.assert_called_once()
+
+
+def test_fetch_sap_entry_days_raises_on_an_unparsable_entry_day():
+    conn = _make_conn(rows=[("notadate",)])
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_entry_days(conn, fiscal_year=2026)
+
+
+def test_resolve_sap_coverage_reports_watermark_and_both_month_lists():
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026)
+    assert coverage.fiscal_year == 2026
+    assert coverage.watermark_date == date(2026, 4, 29)
+    assert coverage.visible_months == [1, 2, 3]
+    assert coverage.hidden_months == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+
+def test_resolve_sap_coverage_fails_closed_and_loud_when_no_entry_days_exist():
+    """Never-cut: an undeterminable watermark must NOT degrade into
+    "everything visible" — it raises, the router turns it into a 502, and no
+    possibly-incomplete number ever reaches the grid."""
+    conn = _make_conn(rows=[])
+    with pytest.raises(SapActualsFetchError):
+        resolve_sap_coverage(conn, fiscal_year=2026)

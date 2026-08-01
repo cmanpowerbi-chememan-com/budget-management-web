@@ -12,8 +12,11 @@ import {
   DEFAULT_COLUMN_WIDTHS,
   filterRows,
   fitColumnWidth,
+  formatSapMonth,
+  formatThaiShortDate,
   formatThb,
   freezeOffsets,
+  HIDDEN_SAP_MONTH_MARK,
   fullRowColSpan,
   glMetaFor,
   groupAndSortBySide,
@@ -27,13 +30,16 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
+  sapCoverageLabel,
+  sapFreshnessLine,
   sectionTotals,
   selectMeasureCandidates,
   sideOfGl,
   subtotalLabelColSpan,
   validateNewTransaction,
+  visibleSapMonths,
 } from './model'
-import { makeRow as row } from './testUtils'
+import { blankLayer, makeRow as row, sapLayer } from './testUtils'
 
 const GL_REF: GlAccount[] = [
   { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
@@ -623,5 +629,129 @@ describe('selectMeasureCandidates (UI-parity point 8d)', () => {
     // never the literal "null" — rows whose GL has no name are skipped
     expect(candidates.glName).not.toContain('null')
     expect(candidates.glName).not.toContain(null)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ADR-0026 — incomplete SAP months (hidden = null from the server)
+// ---------------------------------------------------------------------------
+
+describe('ADR-0026 hidden SAP months', () => {
+  const JAN_TO_MAR_ROW = row({
+    cost_center: 'CC1',
+    gl_account: '5211800030',
+    sap: sapLayer({ m01: 100, m02: 50, m03: 25, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
+  })
+
+  it('formats a hidden month as a muted en-dash, never as a zero', () => {
+    expect(formatSapMonth(null)).toBe(HIDDEN_SAP_MONTH_MARK)
+    expect(formatSapMonth(null)).not.toBe(formatThb(0))
+    expect(formatSapMonth(0)).toBe(formatThb(0))
+    expect(formatSapMonth(1234.5)).toBe('1,234.50')
+  })
+
+  it('reads the visible months off the payload (a hidden month is null for every row)', () => {
+    expect(visibleSapMonths([JAN_TO_MAR_ROW])).toEqual(['m01', 'm02', 'm03'])
+  })
+
+  it('treats an empty grid as nothing-hidden (no coverage caveat to show)', () => {
+    expect(visibleSapMonths([])).toHaveLength(12)
+    expect(sapCoverageLabel([])).toBeNull()
+  })
+
+  it('labels the SAP total with its coverage, using the grid header month names', () => {
+    expect(sapCoverageLabel([JAN_TO_MAR_ROW])).toBe('Jan–Mar')
+  })
+
+  it('labels a single visible month without a range dash', () => {
+    const janOnly = row({
+      cost_center: 'CC1', gl_account: '5211800030',
+      sap: sapLayer({ m01: 5, m02: null, m03: null, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
+    })
+    expect(sapCoverageLabel([janOnly])).toBe('Jan')
+  })
+
+  it('adds no coverage caveat when all 12 months are shown', () => {
+    expect(sapCoverageLabel([row({ cost_center: 'CC1', gl_account: '5211800030', sap: sapLayer({ m01: 1 }) })])).toBeNull()
+  })
+
+  it('keeps a hidden month null in the SAP subtotal instead of summing it as zero', () => {
+    const totals = sectionTotals([JAN_TO_MAR_ROW, JAN_TO_MAR_ROW])
+    expect(totals.sap.m01).toBe(200)
+    expect(totals.sap.m04).toBeNull()
+    expect(totals.sap.total_year).toBe(350)
+  })
+
+  it('never nulls the Approved or Pending subtotals (SAP-layer rule only)', () => {
+    const r = row({
+      cost_center: 'CC1', gl_account: '5211800030',
+      sap: sapLayer({ m04: null }),
+      board: { ...blankLayer({ m04: 400, total_year: 400 }), gl_name: null, gl_group: null, c_level: null, division: null, department: null },
+      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, m04: 700, total_year: 700 },
+    })
+    const totals = sectionTotals([r])
+    expect(totals.board.m04).toBe(400)
+    expect(totals.pending.m04).toBe(700)
+  })
+
+  it('blocks delete for a row whose only SAP history sits in a hidden month', () => {
+    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
+    const aprilOnly = row({
+      cost_center: 'CC1', gl_account: '5211800030', editable: true,
+      sap: sapLayer({ m01: 0, m02: 0, m03: 0, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null, has_actuals: true }),
+      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
+    })
+    expect(isDeletableRow(aprilOnly, meta)).toBe(false)
+  })
+
+  it('still allows delete for a web-added row with no SAP history at all', () => {
+    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
+    const webAdded = row({
+      cost_center: 'CC1', gl_account: '5211800030', editable: true,
+      sap: sapLayer({ m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
+      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
+    })
+    expect(webAdded.sap.has_actuals).toBe(false)
+    expect(isDeletableRow(webAdded, meta)).toBe(true)
+  })
+
+  it('formats the watermark as a Thai short date with a Buddhist-era year', () => {
+    expect(formatThaiShortDate('2026-04-29')).toBe('29 เม.ย. 69')
+    expect(formatThaiShortDate('2026-12-31')).toBe('31 ธ.ค. 69')
+    expect(formatThaiShortDate('2027-01-23')).toBe('23 ม.ค. 70')
+  })
+
+  it('writes one freshness line naming the last complete month and the keyed-through date', () => {
+    const line = sapFreshnessLine({
+      fiscal_year: 2026,
+      watermark_date: '2026-04-29',
+      visible_months: [1, 2, 3],
+      hidden_months: [4, 5, 6, 7, 8, 9, 10, 11, 12],
+    })
+    expect(line).toContain('ครบถึงเดือน 3/2026')
+    expect(line).toContain('29 เม.ย. 69')
+    expect(line).toContain('4–12/2026')
+  })
+
+  it('says so plainly when the year is complete', () => {
+    const line = sapFreshnessLine({
+      fiscal_year: 2025,
+      watermark_date: '2026-04-29',
+      visible_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      hidden_months: [],
+    })
+    expect(line).toContain('ครบทั้ง 12 เดือน')
+    expect(line).not.toContain('ยังไม่แสดง')
+  })
+
+  it('says so plainly when not one month is complete yet', () => {
+    const line = sapFreshnessLine({
+      fiscal_year: 2026,
+      watermark_date: '2026-01-05',
+      visible_months: [],
+      hidden_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    })
+    expect(line).toContain('ยังไม่มีเดือน')
+    expect(line).toContain('5 ม.ค. 69')
   })
 })

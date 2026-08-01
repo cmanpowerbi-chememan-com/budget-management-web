@@ -1,4 +1,6 @@
-"""Unit tests for GET /budget — DB always mocked, no live connection."""
+"""Unit tests for GET /budget and GET /budget/sap-coverage — DB always
+mocked, no live connection."""
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pyodbc
@@ -7,7 +9,7 @@ from app.auth import get_current_user_email
 from app.main import app
 from app.read_model import BudgetRow
 from app.rls import Scope
-from app.sap import SapActualsFetchError
+from app.sap import SapActualsFetchError, SapCoverage
 
 _GENERIC_502_DETAIL = "SAP actuals unavailable, please try again later"
 
@@ -150,3 +152,74 @@ def test_budget_raw_pyodbc_error_also_returns_502_generic_detail(client):
     body = response.json()
     assert body["detail"] == _GENERIC_502_DETAIL
     assert "connection reset by peer" not in response.text
+
+
+# ---------------------------------------------------------------------------
+# GET /budget/sap-coverage — ADR-0026 freshness metadata for the SAP layer
+# ---------------------------------------------------------------------------
+
+def _fake_coverage() -> SapCoverage:
+    return SapCoverage(
+        fiscal_year=2026,
+        watermark_date=date(2026, 4, 29),
+        visible_months=[1, 2, 3],
+        hidden_months=[4, 5, 6, 7, 8, 9, 10, 11, 12],
+    )
+
+
+def test_sap_coverage_401_without_auth_header(client):
+    response = client.get("/budget/sap-coverage?year=2027")
+    assert response.status_code == 401
+
+
+def test_sap_coverage_422_when_year_missing(client):
+    _override_auth("user@chememan.com")
+    assert client.get("/budget/sap-coverage").status_code == 422
+
+
+def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
+    """`year` is the PLANNING year everywhere in this API (same as
+    `GET /budget`), and the SAP layer shows `year - 1` — so the endpoint must
+    never be handed the planning year as the fiscal year."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
+        "app.routers.budget.resolve_sap_coverage", return_value=_fake_coverage()
+    ) as mock_resolve:
+        mock_gold.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/sap-coverage?year=2027")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fiscal_year"] == 2026
+    assert body["watermark_date"] == "2026-04-29"
+    assert body["visible_months"] == [1, 2, 3]
+    assert body["hidden_months"] == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    _, kwargs = mock_resolve.call_args
+    assert kwargs["fiscal_year"] == 2026
+
+
+def test_sap_coverage_failure_returns_502_with_the_same_generic_detail(client):
+    """Fail closed + no leak: an undeterminable watermark is a loud 502, never
+    a 200 that implies "all 12 months are fine"."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
+        "app.routers.budget.resolve_sap_coverage",
+        side_effect=SapActualsFetchError("watermark undeterminable, grant revoked"),
+    ):
+        mock_gold.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/sap-coverage?year=2027")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == _GENERIC_502_DETAIL
+    assert "grant revoked" not in response.text
+
+
+def test_sap_coverage_connection_failure_also_returns_502(client):
+    _override_auth("filler@chememan.com")
+    with patch(
+        "app.routers.budget.get_gold_conn", side_effect=pyodbc.Error("HYT00", "login timeout expired")
+    ):
+        response = client.get("/budget/sap-coverage?year=2027")
+
+    assert response.status_code == 502
+    assert "login timeout" not in response.text

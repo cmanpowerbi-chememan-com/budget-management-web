@@ -10,6 +10,9 @@ m01–m03 **0**, FY2026 m04 **9**, FY2026 m05–m12 **zero rows in gold** — de
 [db-web-actuals-parity-check.md](db-web-actuals-parity-check.md). Still open:
 load Apr-30+ (§4.A.1) + enable the never-run daily schedule (§4.A.2) — `PLD_SAP_T_GL_TRANS_D`
 has 0 runs, no month glob after `202606` registered.
+**2026-07-31 measured (§4.A.1a):** April's 8,907 missing docs are physically inside
+`202605xx` files — the April glob is complete and can never fix April. Load
+`SAP_T_GL_TRANS_1000_202605{01..05}.TXT` → 94% of April back; through `20260523` → 100%.
 
 ## 1. Symptom
 
@@ -157,6 +160,38 @@ while the DHL 1,123.88 + invoice 8,864 (entered mid-March = hole) are missing.
    (`company_code='1000'` filter). Inteltion can backfill from this path or their own SAP drop.
 1. Re-extract / re-drop the missing daily files: entry-days 2026-02-26→2026-03-30 and
    2026-04-30→today (both companies 1000 + 2000), load through bronze→silver.
+
+   **1a. "Load April properly" is IMPOSSIBLE via the April glob — April lives in MAY files.**
+   (measured 2026-07-31, task `#apr-entrydate-spill`, script `apr_spill_scan.py`, company 1000,
+   landing `modern_lh_cman_dw › Files/landing/transaction`, all 93 files 20260430..20260731,
+   fiscal period = raw field `f[5]`, doc = `f[1]`.)
+   The `*_202604*` glob ran to completion (30/30 files, 223,146 rows) yet covers entry-days only
+   31 Mar–29 Apr, because **file dated D carries docs ENTERED on D-1**. Every April-posted document
+   entered from 30 Apr onward therefore sits in a `202605xx`+ file that no glob has ever read:
+
+   | entry-date file | distinct period-004 docs | cumulative April recovery |
+   |---|---|---|
+   | `..._20260430.TXT` | 1,114 | already loaded (inside the April glob) |
+   | `..._20260501.TXT` | 899 | 10% |
+   | `..._20260502.TXT` | 1,517 | 27% |
+   | `..._20260503.TXT` | 3,123 | 62% |
+   | `..._20260504.TXT` | 1,641 | 81% |
+   | `..._20260505.TXT` | 1,203 | **94%** |
+   | 0506–0509, 0512, 0521, 0523 | 524 | **100%** |
+
+   → **8,907 distinct April documents are unreachable by any April-named file.** Against the
+   27,654 April docs currently in gold, April is short **~24%** of its documents. Loading just
+   the five files `SAP_T_GL_TRANS_1000_202605{01..05}.TXT` recovers 94% of them; through
+   `20260523` recovers 100%. Cross-check on the 32-key fixture: **all 78** April missing docs
+   resolve to `20260501` (12) / `20260502` (40) / `20260503` (23) / `20260504` (3) — **zero** in
+   the 20260430 file, i.e. the April glob could never have contained them.
+   Same-shape spill for later months (distinct docs waiting in the unloaded window):
+   period 005 = **34,159** · period 006 = **32,643** · period 007 = **24,678** (through 31 Jul)
+   · period 008 = 22. Company 2000 not scanned (budget web filters `company_code='1000'`) —
+   assume the same shape.
+   **Operational rule this establishes:** a posting month is only ~94% complete 5 days after
+   month-end and 100% complete ~3 weeks after, so a month-glob backfill can never close a month —
+   only the daily loader (§4.A.4) can, and it must keep running to absorb late entries.
 2. De-dup guard: silver append must not double-insert already-loaded docs
    (key = company, fiscal_year, doc, line item).
 3. Rebuild `gold.fact_gl_trans`, verify `prcs_data_dt` advances.

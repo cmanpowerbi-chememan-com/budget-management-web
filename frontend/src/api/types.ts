@@ -36,8 +36,46 @@ export interface LayerAmounts {
   total_year: number
 }
 
-/** 🟢 SAP · ใช้จริง — read-only, standing year Y. */
-export type SapLayer = LayerAmounts
+/** 🟢 SAP · ใช้จริง — read-only, standing year Y.
+ *
+ * ADR-0026: a month whose SAP postings are not complete yet arrives as
+ * `null`, nulled server-side — the grid renders it as a muted en-dash, never
+ * as 0 (a month is still gaining month-close entries for ~23 days after it
+ * ends, so an early figure reads several times too low). `total_year` covers
+ * the VISIBLE months only, so it always reconciles with the cells on screen.
+ *
+ * `has_actuals` = this (cost_center, gl_account) has at least one non-zero
+ * month in the full year, hidden months included. It is the ONLY thing the
+ * client learns about a hidden month (never the amount) and exists so
+ * delete-eligibility ("a row with SAP history was not added on the web")
+ * keeps working while months are nulled. */
+export interface SapLayer {
+  m01: number | null
+  m02: number | null
+  m03: number | null
+  m04: number | null
+  m05: number | null
+  m06: number | null
+  m07: number | null
+  m08: number | null
+  m09: number | null
+  m10: number | null
+  m11: number | null
+  m12: number | null
+  total_year: number
+  has_actuals: boolean
+}
+
+/** `GET /budget/sap-coverage?year=` (`app.sap.SapCoverage`) — how fresh the
+ * SAP layer is (ADR-0026). `fiscal_year` is the SAP layer's own year
+ * (planning year - 1); `watermark_date` is the newest SAP *entry* date
+ * loaded in the warehouse, i.e. "ข้อมูลคีย์ถึง". Month numbers are 1..12. */
+export interface SapCoverage {
+  fiscal_year: number
+  watermark_date: string
+  visible_months: number[]
+  hidden_months: number[]
+}
 
 /** 🔵 Approved · งบอนุมัติ — read-only reference, standing year Y. */
 export interface BoardLayer extends LayerAmounts {

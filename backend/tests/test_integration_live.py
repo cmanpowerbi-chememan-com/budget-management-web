@@ -41,8 +41,9 @@ Real cc/filler pair and Entertainment GL code are DISCOVERED from the live
 DB at fixture setup, never hardcoded — the SharePoint-synced masters can
 change on their own sync cadence.
 """
+import calendar
 import threading
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pyodbc
 import pytest
@@ -69,7 +70,16 @@ from app.db import get_fabric_conn, get_gold_conn
 from app.main import app as fastapi_app
 from app.read_model import fetch_board_pending_rows, fetch_cc_dims, get_budget_grid
 from app.rls import resolve_scope
-from app.sap import MONTH_COLUMNS, SapActualsFetchError, fetch_sap_actuals
+from app.sap import (
+    MONTH_COLUMNS,
+    SAP_ENTRY_DAY_MAX_GAP_DAYS,
+    SAP_MONTH_VISIBLE_LAG_DAYS,
+    SapActualsFetchError,
+    entry_day_watermark,
+    fetch_sap_actuals,
+    fetch_sap_entry_days,
+    resolve_sap_coverage,
+)
 from app.special_gl import SPECIAL_GL_GROUPS
 from app.write_model import (
     EXCLUDED_COST_CENTERS,
@@ -902,6 +912,66 @@ def test_sap_actuals_query_runs_live_and_matches_an_independent_sum() -> None:
         assert pivot_sum == months["total_year"], (
             f"{sample_key}: sum(m01..m12)={pivot_sum} != total_year={months['total_year']}"
         )
+
+
+@pytest.mark.integration
+def test_sap_entry_day_query_runs_live_and_the_loaded_run_is_contiguous() -> None:
+    """ADR-0026, proven live. Two things this can only learn from the real
+    warehouse: (1) the columns exist and `LEFT(utc_timestamp, 8)` really does
+    yield YYYYMMDD entry-days (the "live columns != spec" class of defect),
+    and (2) the contiguity assumption the rule rests on — "every calendar day
+    has postings, so no legitimate multi-day gap exists". Measured 2026-08-01:
+    850 consecutive entry-days 2024-01-01..2026-04-29, zero holes.
+
+    If this ever fails, the ADR's gap constant needs re-measuring — do NOT
+    weaken it silently."""
+    with get_gold_conn() as conn:
+        days = fetch_sap_entry_days(conn, fiscal_year=2026)
+
+    assert days, "gold.fact_gl_trans returned no entry-days at all for the FY2026 window"
+    assert all(isinstance(d, date) for d in days)
+
+    holes = [
+        (older, newer, (newer - older).days - 1)
+        for older, newer in zip(days, days[1:])
+        if (newer - older).days - 1 >= SAP_ENTRY_DAY_MAX_GAP_DAYS
+    ]
+    assert not holes, (
+        f"entry-day gaps of >= {SAP_ENTRY_DAY_MAX_GAP_DAYS} days found in the loaded run: {holes} — "
+        "the watermark is truncated to the day below the oldest gap, which HIDES months; "
+        "re-measure the ADR-0026 constants before changing anything"
+    )
+    assert entry_day_watermark(days) == days[-1]
+
+
+@pytest.mark.integration
+def test_sap_coverage_live_hides_only_a_trailing_run_of_months() -> None:
+    """The shape of the rule on live data: visible months are always a
+    PREFIX of the year (Jan..k) and hidden months the trailing rest, because
+    the watermark advances monotonically. Also re-derives the 23-day cut-off
+    for the last visible month and the first hidden one, so a wrong constant
+    or an off-by-one in `visible_sap_months` fails here too."""
+    with get_gold_conn() as conn:
+        coverage = resolve_sap_coverage(conn, fiscal_year=2026)
+
+    assert coverage.visible_months == sorted(coverage.visible_months)
+    assert coverage.visible_months + coverage.hidden_months == sorted(
+        coverage.visible_months + coverage.hidden_months
+    ), f"visible {coverage.visible_months} / hidden {coverage.hidden_months} interleave — not a trailing run"
+    assert len(coverage.visible_months) + len(coverage.hidden_months) == 12
+
+    if coverage.visible_months:
+        last_visible = coverage.visible_months[-1]
+        cut_off = date(2026, last_visible, calendar.monthrange(2026, last_visible)[1]) + timedelta(
+            days=SAP_MONTH_VISIBLE_LAG_DAYS
+        )
+        assert coverage.watermark_date >= cut_off
+    if coverage.hidden_months:
+        first_hidden = coverage.hidden_months[0]
+        cut_off = date(2026, first_hidden, calendar.monthrange(2026, first_hidden)[1]) + timedelta(
+            days=SAP_MONTH_VISIBLE_LAG_DAYS
+        )
+        assert coverage.watermark_date < cut_off
 
 
 @pytest.mark.integration
