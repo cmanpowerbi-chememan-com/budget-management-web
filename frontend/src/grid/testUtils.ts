@@ -24,7 +24,7 @@ export function sapLayer(
   const values = MONTH_KEYS.map(valueOf)
   return {
     ...months,
-    total_year: overrides.total_year ?? values.reduce((sum, v) => sum + (v ?? 0), 0),
+    total_year: overrides.total_year ?? values.reduce<number>((sum, v) => sum + (v ?? 0), 0),
     has_actuals: overrides.has_actuals ?? values.some((v) => v !== null && v !== 0),
   } as SapLayer
 }
