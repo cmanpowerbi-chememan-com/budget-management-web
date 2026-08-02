@@ -840,7 +840,9 @@ def admin_override_step(
     if row["status"] != PENDING_APPROVER1:
         if row["status"] in PENDING_STATUSES:
             raise StepNotOverridableError(
-                "ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ ซึ่งไม่สามารถข้ามได้"
+                "อนุมัติแทนไม่ได้ — ตอนนี้งบประมาณอยู่ในขั้นการพิจารณาของฝ่ายงบประมาณแล้ว "
+                "ต้องให้ฝ่ายงบประมาณกดอนุมัติเอง "
+                "(ปุ่มอนุมัติแทนใช้ได้เฉพาะตอนที่งบยังค้างอยู่ที่หัวหน้าของผู้กรอก คือขั้นที่ 1)"
             )
         raise InvalidApprovalStateError(f"cannot override {department}/{fiscal_year} from status {row['status']}")
     if row["approver1_empcode"] in (NIPAPORN_EMPCODE, WARAPORN_EMPCODE):
@@ -848,16 +850,22 @@ def admin_override_step(
         # dedup/self-skip put the budget-dept reviewer in the position-1 slot
         # itself, so the slot number alone cannot tell "a real manager" apart
         # from "the budget dept, coincidentally occupying slot 1".
+        # Names the actual person (2026-08-02, jakkaritw: the old wording read
+        # as a riddle on staging) — falls back to the role when the empcode has
+        # no employee row.
+        who = lookup_employee_name(conn, row["approver1_empcode"]) or "ฝ่ายงบประมาณ"
         raise StepNotOverridableError(
-            "ไม่สามารถอนุมัติแทนได้ — ผู้อนุมัติขั้นที่ 1 ของงบประมาณนี้คือฝ่ายงบประมาณเอง "
-            "(แม้จะอยู่ในลำดับขั้นที่ 1) จึงไม่สามารถข้ามได้"
+            f"อนุมัติแทนไม่ได้ — ฝ่ายนี้ไม่มีขั้นหัวหน้า ผู้อนุมัติขั้นที่ 1 คือ {who} ซึ่งเป็นฝ่ายงบประมาณ "
+            "ปุ่มอนุมัติแทนใช้ข้ามได้เฉพาะขั้นของหัวหน้าผู้กรอกเท่านั้น "
+            "ต้องให้ฝ่ายงบประมาณกดอนุมัติเอง"
         )
 
     active = _active_positions(row["submitter_empcode"], row["approver1_empcode"])
     idx = active.index(1)
     if idx == len(active) - 1:
         raise StepNotOverridableError(
-            "ไม่สามารถอนุมัติแทนได้ — เหลือผู้อนุมัติเพียงขั้นเดียว การอนุมัติแทนจะทำให้งบประมาณผ่านโดยไม่มีผู้พิจารณาจริง"
+            "อนุมัติแทนไม่ได้ — ฝ่ายนี้เหลือผู้อนุมัติเพียงขั้นเดียว ถ้ากดแทน งบประมาณจะผ่านทันที "
+            "โดยไม่มีใครพิจารณาจริงสักคน ต้องให้ผู้อนุมัติกดเอง"
         )
     new_status = _POSITION_TO_STATUS[active[idx + 1]]
     now = _now()

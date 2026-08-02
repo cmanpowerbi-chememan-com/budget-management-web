@@ -929,12 +929,18 @@ def test_override_step_refused_when_position_1_is_the_only_active_position():
     """ADR-0027: an override may NEVER land APPROVED — a ฝ่าย whose chain
     collapsed to position 1 only (here: approver1 == Nipaporn dedups
     position 2, submitter == Waraporn self-skips position 3) is refused,
-    status unchanged, no log row."""
+    status unchanged, no log row.
+
+    Flagged (2026-08-02): collapsing to `active == [1]` REQUIRES approver1 to
+    be Nipaporn or Waraporn, so the occupant check above always fires first —
+    this test therefore pins the refusal, not which of the two guards produced
+    it. The `idx == len(active) - 1` branch is unreachable defense-in-depth."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE,
                     submitter_empcode=WARAPORN_EMPCODE),
+        ("นิภาพร ทองกิ่ง",),  # lookup_employee_name for the refusal message
     ]
 
     with pytest.raises(StepNotOverridableError):
@@ -1027,10 +1033,13 @@ def test_override_step_refused_when_position_1_occupant_is_nipaporn():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=PENDING_APPROVER1, approver1_empcode=NIPAPORN_EMPCODE, submitter_empcode="999"),
+        ("นิภาพร ทองกิ่ง",),  # lookup_employee_name for the refusal message
     ]
 
-    with pytest.raises(StepNotOverridableError):
+    with pytest.raises(StepNotOverridableError) as exc:
         admin_override_step(conn, DEPT, FY, "admin@chememan.com")
+    # The message must NAME the blocking approver, not just describe the rule.
+    assert "นิภาพร ทองกิ่ง" in str(exc.value)
     conn.commit.assert_not_called()
     assert not [c for c in cursor.execute.call_args_list if "budget.approval_log" in c.args[0]]
     assert not [c for c in cursor.execute.call_args_list if "UPDATE budget.approval_status" in c.args[0]]
@@ -1044,6 +1053,7 @@ def test_override_step_refused_when_position_1_occupant_is_waraporn():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=PENDING_APPROVER1, approver1_empcode=WARAPORN_EMPCODE, submitter_empcode="999"),
+        ("วราภรณ์",),  # lookup_employee_name for the refusal message
     ]
 
     with pytest.raises(StepNotOverridableError):
