@@ -11,14 +11,17 @@ from datetime import date
 import pyodbc
 import pytest
 
+from app.config import Settings
 from app.sap import (
     SAP_ACTUALS_SQL,
     SAP_ENTRY_DAYS_SQL,
     SapActualsFetchError,
     entry_day_watermark,
     fetch_sap_actuals,
+    fetch_sap_actuals_cached,
     fetch_sap_entry_days,
     resolve_sap_coverage,
+    resolve_sap_coverage_cached,
     visible_sap_months,
 )
 
@@ -362,3 +365,161 @@ def test_resolve_sap_coverage_fails_closed_and_loud_when_no_entry_days_exist():
     conn = _make_conn(rows=[])
     with pytest.raises(SapActualsFetchError):
         resolve_sap_coverage(conn, fiscal_year=2026)
+
+
+# ---------------------------------------------------------------------------
+# TTL-cached wrappers — fetch_sap_actuals_cached / resolve_sap_coverage_cached
+# (perf fix: prod first-load 10-11s -> 2-3s). `clear_sap_caches()` runs
+# before/after EVERY test via conftest's autouse `_clear_sap_caches_every_test`
+# fixture, so a mocked result from one test here can never leak into another.
+# ---------------------------------------------------------------------------
+
+def _cached_settings(ttl: int) -> Settings:
+    return Settings(_env_file=None, sap_cache_ttl_seconds=ttl)
+
+
+def test_fetch_sap_actuals_cached_second_call_within_ttl_does_not_requery():
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    settings = _cached_settings(ttl=600)
+
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 1
+
+
+def test_resolve_sap_coverage_cached_second_call_within_ttl_does_not_requery():
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    settings = _cached_settings(ttl=600)
+
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 1
+
+
+def test_fetch_sap_actuals_cached_reloads_after_ttl_expiry(monkeypatch):
+    fake_now = {"t": 0.0}
+    monkeypatch.setattr("app.cache.time.monotonic", lambda: fake_now["t"])
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    settings = _cached_settings(ttl=10)
+
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fake_now["t"] += 20  # past TTL
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 2
+
+
+def test_resolve_sap_coverage_cached_reloads_after_ttl_expiry(monkeypatch):
+    fake_now = {"t": 0.0}
+    monkeypatch.setattr("app.cache.time.monotonic", lambda: fake_now["t"])
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    settings = _cached_settings(ttl=10)
+
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+    fake_now["t"] += 20  # past TTL
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 2
+
+
+def test_fetch_sap_actuals_cached_ttl_zero_always_queries():
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    settings = _cached_settings(ttl=0)
+
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 3
+
+
+def test_resolve_sap_coverage_cached_ttl_zero_always_queries():
+    conn = _make_conn(rows=[("20260427",)])
+    settings = _cached_settings(ttl=0)
+
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+    resolve_sap_coverage_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 2
+
+
+def test_fetch_sap_actuals_cached_different_fiscal_years_do_not_collide():
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    settings = _cached_settings(ttl=600)
+
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, 2027, settings=settings)
+    fetch_sap_actuals_cached(conn, 2026, settings=settings)  # still cached
+    fetch_sap_actuals_cached(conn, 2027, settings=settings)  # still cached
+
+    assert conn.cursor.return_value.execute.call_count == 2
+
+
+def test_fetch_sap_actuals_cached_exception_is_not_cached_next_call_requeries():
+    conn = _make_conn(rows=[])
+    conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    settings = _cached_settings(ttl=600)
+
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    # A revoked-grant style failure must never poison the cache — the very
+    # next call must actually re-query (never a stale/empty green result).
+    conn.cursor.return_value.execute.side_effect = None
+    conn.cursor.return_value.fetchall.return_value = [("CC1", "GL1", 2026, "01", 100.0)]
+    result = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    assert conn.cursor.return_value.execute.call_count == 2
+    assert result[("CC1", "GL1")]["m01"] == 100.0
+
+
+def test_resolve_sap_coverage_cached_success_then_failure_after_expiry_raises_not_stale(monkeypatch):
+    """Never-cut: once expired, a failed reload must raise straight through —
+    never silently serve the earlier (now stale) coverage."""
+    fake_now = {"t": 0.0}
+    monkeypatch.setattr("app.cache.time.monotonic", lambda: fake_now["t"])
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    settings = _cached_settings(ttl=10)
+
+    first = resolve_sap_coverage_cached(conn, 2026, settings=settings)
+    assert first.watermark_date == date(2026, 4, 29)
+
+    fake_now["t"] += 20  # past TTL
+    conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "grant revoked")
+
+    with pytest.raises(SapActualsFetchError):
+        resolve_sap_coverage_cached(conn, 2026, settings=settings)
+
+
+def test_fetch_sap_actuals_cached_returns_a_defensive_copy():
+    """A caller mutating the returned dict must never corrupt the next
+    request's cached figures."""
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    settings = _cached_settings(ttl=600)
+
+    first = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    first[("CC1", "GL1")]["m01"] = 999_999.0
+    first[("HACKED", "GL9")] = {"m01": 1.0}
+
+    second = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+
+    assert second[("CC1", "GL1")]["m01"] == 100.0
+    assert ("HACKED", "GL9") not in second
+    assert conn.cursor.return_value.execute.call_count == 1  # still one query
+
+
+def test_resolve_sap_coverage_cached_returns_a_defensive_copy():
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    settings = _cached_settings(ttl=600)
+
+    first = resolve_sap_coverage_cached(conn, 2026, settings=settings)
+    first.visible_months.append(999)
+    first.hidden_months.clear()
+
+    second = resolve_sap_coverage_cached(conn, 2026, settings=settings)
+
+    assert 999 not in second.visible_months
+    assert second.hidden_months == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert conn.cursor.return_value.execute.call_count == 1  # still one query

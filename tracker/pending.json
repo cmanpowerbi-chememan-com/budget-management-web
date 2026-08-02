@@ -1,14 +1,62 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-02T06:43:33+0700",
+  "updated": "2026-08-02T10:10:51+0700",
   "tasks": [
     {
+      "id": "log-a4beac1",
+      "state": "done",
+      "created": "2026-08-02T10:10:51+0700",
+      "updated": "2026-08-02T10:10:51+0700",
+      "agent": "autolog",
+      "ai": "fix(obs): route app.* logger output to stdout so container logs show it [commit a4beac1]"
+    },
+    {
+      "id": "machine-guard-autoprotect",
+      "state": "done",
+      "created": "2026-08-02T10:05:12+0700",
+      "updated": "2026-08-02T10:05:12+0700",
+      "ai": "built automated dev-box protection per jakkaritw 'auto protect system'. NEW: ~/.claude/scripts/machine_guard.ps1 + scheduled task 'machine-guard' daily 12:30 (user ctx, no admin, StartWhenAvailable, verified LastTaskResult=0 twice) + guard/guardlog shortcuts in Documents/WindowsPowerShell/profile.ps1 (CurrentUserAllHosts - the only profile that exists) + logs to ~/.claude/logs/machine_guard{.log,_last.md}. AUTO-FIXES: prune .build-ctx-* >6h; gc.auto=1000 on all 12 repos (were ALL default 6700 - root reason bloat went unnoticed, failure mode is few-but-huge objects not many-small); git gc if >1000 loose or (0 packs and >200MB) - packed 19.dw_jakkaritw 52.2->42.6MB; kill allowlist PhoneExperienceHost/jusched (reclaimed 187MB). REPORTS ONLY: tracked files >5MB (found 07.open design/docs/assets/github-metrics.svg 16MB GENERATED+rewritten = next graphify-style incident, +3 mp4), free RAM <3GB, >3 CC sessions, WMI timeout. 2 gotchas fixed during build: PS5.1 reads .ps1 as cp1252 so UTF-8 em-dash breaks string parsing (script is ASCII-only on purpose); git ls-files quotes non-ASCII paths -> Test-Path 'Illegal characters', replaced with 'git -c core.quotepath=false ls-tree -r -l HEAD' + Console.OutputEncoding=UTF8. STILL NEEDS ADMIN: GoogleUpdater services Automatic+failing every ~1min, Set-Service Manual denied.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-09ce34d-staging",
+      "state": "willdo",
+      "created": "2026-08-02T10:01:30+0700",
+      "updated": "2026-08-02T10:01:30+0700",
+      "ai": "PAUSED by jakkaritw decision 2026-08-02 (he picked \"wait for the other lane to push, then ship ONE combined image\"). STATE: image cmanbudgetacr.azurecr.io/budget-web:09ce34d is BUILT and verified (ACR run cmm Succeeded, digest sha256:b80e13cebae820655970533ed56062f16e4282873d4ad7bbd4c7d2d5543248c2, built from a clean detached worktree at 09ce34d) but deliberately NOT deployed. WHY: a parallel session deployed cman-budget-web-stg--0000017 running budget-web:08dc645 (\"perf(backend): TTL-cache the two SAP gold reads + warm the pool at startup\") minutes earlier; 09ce34d is NOT an ancestor of 08dc645 and vice versa, so deploying mine would silently wipe their staging perf test. Their commit 08dc645 exists LOCALLY ONLY - origin/main head is 09ce34d and does not contain it. MERGE CHECK ALREADY DONE: merging 08dc645 into 09ce34d conflicts ONLY in .claude/plan.md and tracker/pending.json (bookkeeping); zero code conflicts, so a combined image is straightforward once they push. NEXT STEPS when 08dc645 (or its successor) lands on origin/main: build budget-web:<merge-sha> from a clean worktree of the merge, resolve the two bookkeeping conflicts by keeping BOTH lanes entries, run the CI command in that worktree before pushing the image, then ask jakkaritw for the deploy approval (deploy itself still needs a fresh OK). A watcher is polling origin/main for that commit. Rollback line for staging stays cman-budget-web-stg--0000015 (budget-web:80b0e1c).",
+      "agent": "claude"
+    },
+    {
+      "id": "perf-first-load-fix",
+      "state": "done",
+      "created": "2026-08-02T07:05:48+0700",
+      "updated": "2026-08-02T07:05:48+0700",
+      "ai": "DONE, NOT COMMITTED, NOT DEPLOYED. 3 fixes for PRD first-load 10-11s: (1)+(2) TTL cache both gold SAP reads - NEW backend/app/cache.py TTLCache (threading.Lock, time.monotonic, ttl<=0 disables, loader outside lock, exceptions never cached) + sap.py wrappers fetch_sap_actuals_cached/resolve_sap_coverage_cached/clear_sap_caches returning deepcopy+model_copy(deep=True); Settings.sap_cache_ttl_seconds=600; call sites read_model.get_budget_grid + routers/budget.py sap-coverage. (3) main.py FastAPI lifespan daemon-thread warmup: opens+closes fabric+gold conn then primes both SAP caches for date.today().year, all exceptions->logger.warning, gated Settings.warmup_enabled=True. conftest forces SAP_CACHE_TTL_SECONDS=0 + WARMUP_ENABLED=false + autouse clear_sap_caches (also for integration tests). Also fixed 2 stale mock targets in test_budget.py (resolve_sap_coverage->_cached). LIVE-MEASURED vs prod DB: actuals miss 4.93s->hit 0.006s, coverage miss 1.40s->hit 0.000s, full get_budget_grid 10.24s cold/7.50s warm BEFORE -> 4.67s cold/2.26-2.37s warm AFTER (rows=8 identical). Mutation-safety SAFE both; fail-closed verified (cold failure raises RuntimeError, failure not cached, next good call 1827 keys). GATE (combined 06+07+08, agent a0a11e3d76f4579e4): APPROVE WITH SUGGESTIONS, security PASS, suite re-run independently 839 passed/48 deselected/0 fail. Cache key=fiscal_year only is correct - gold SQL takes no RLS/scope/admin param, RLS applied downstream in merge_budget_rows, no cross-user leak. 4 LOW polish items non-blocking (gold conn still opened per request even on cache hit; pytest.raises style; cache.py NOTE for future call sites). NEXT: needs jakkaritw approval to commit+deploy; working tree also holds unrelated uncommitted work from earlier sessions (approval.py, notifications.py, jobs/*, db/ddl, frontend/*) so commit must be path-scoped.",
+      "agent": "claude"
+    },
+    {
+      "id": "perf-fix3-startup-warmup",
+      "state": "done",
+      "created": "2026-08-02T06:52:26+0700",
+      "updated": "2026-08-02T06:54:07+0700",
+      "ai": "Fix 3 done: backend/app/main.py lifespan handler + daemon-thread _run_warmup (fabric conn warm, gold conn warm, 3rd gold conn primes both SAP TTL caches for fiscal_year=date.today().year), gated on Settings.warmup_enabled, never crashes startup. New backend/tests/test_warmup.py (5 tests, TDD RED-first confirmed). Also fixed 2 stale mock.patch targets in test_budget.py (resolve_sap_coverage -> resolve_sap_coverage_cached, left dangling by the prior session's Fix1/2 SAP-cache switch, flagged in admin-step-override plan.md entry). Full suite: 839 passed / 48 deselected (was 837 passed/2 failed). mount_frontend still last statement, all 9 routers still included. Not committed (per instructions).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-6182083",
+      "state": "done",
+      "created": "2026-08-02T06:45:52+0700",
+      "updated": "2026-08-02T06:45:52+0700",
+      "agent": "autolog",
+      "ai": "feat(approval): admin step-override replaces the 30-day auto-escalation (ADR-0027) [commit 6182083]"
+    },
+    {
       "id": "graphify-removal",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-02T06:43:33+0700",
-      "updated": "2026-08-02T06:43:33+0700",
-      "ai": "remove graphify entirely per jakkaritw (all projects): repo graphify-out/ + .github/workflows/graphify-nightly.yml + .graphifyignore, 2 scheduled tasks (graphify-nightly-sync, CMAN-DW-Graph-Logon), pip graphifyy 0.8.39, ~/.claude/skills/graphify, refs in CLAUDE.md/.gitignore/.dockerignore/global CLAUDE.md, memory project_graphify_setup. root motive: nightly 16MB graph.json commits caused the 1GB .git bloat. NOT touching files in c:/19.dw_jakkaritw",
+      "updated": "2026-08-02T06:50:07+0700",
+      "ai": "DONE, all projects. removed: repo graphify-out/ (8 files incl 16MB graph.json + 3MB graph.html) + .github/workflows/graphify-nightly.yml + .graphifyignore; scheduled tasks graphify-nightly-sync AND CMAN-DW-Graph-Logon (logon-triggered, ran .bat in c:/19.dw_jakkaritw) both unregistered, 0 graph tasks left; pip graphifyy 0.8.39 uninstalled (project venv never had it - that nightly task was already broken); ~/.claude/skills/graphify deleted; refs stripped from CLAUDE.md (+ added do-not-reintroduce note), .gitignore, .dockerignore x2, global ~/.claude/CLAUDE.md skills quick-ref; memory project_graphify_setup.md deleted + MEMORY.md line removed. LEFT ON PURPOSE: historical records (tracker/pending.json, monthly_update/monthly_report_2026-07.html, tasks/repo-cleanup/*.md), files inside c:/19.dw_jakkaritw (out of scope - that repo keeps a dead graphify-out/ on disk), ~/.claude/audit/backup-2026-06-28/skills/graphify (audit snapshot). backup of skill+configs in scratchpad graphify-backup/ 13 files. git: 33 changed files, NOT COMMITTED. CC restart needed to drop /graphify from the skill list.",
       "agent": "claude"
     },
     {
@@ -111,8 +159,8 @@
       "id": "admin-step-override",
       "state": "done",
       "created": "2026-08-01T16:52:11+0700",
-      "updated": "2026-08-01T21:54:06+0700",
-      "ai": "Done per plan/admin-step-override.md (uncommitted, main session commits): deleted jobs/auto_escalate.py + test_jobs_auto_escalate.py + AUTO_ESCALATE symbols + workflow step; added admin_override_step/StepNotOverridableError/ACTION_ADMIN_STEP_OVERRIDE + POST /approval/override-step (403 non-admin, 409 Thai); notify_step_overridden (To submitter, cc skipped approver) wired as override_step branch; frontend ONE อนุมัติ button branching on can_act, overrideStep() client fn, current_approver_name in status payload; tests 1-13 added. Backend 811 passed/48 deselected; frontend vitest 534/534, tsc+oxlint clean. D4 hard lock (positions 2/3 never overridable) flagged for jakkaritw veto. Leftovers: none — no NOTIFICATIONS_DRY_RUN flip, no deploy.",
+      "updated": "2026-08-02T09:51:21+0700",
+      "ai": "SHIPPED 2026-08-02: commit 09ce34d on origin/main, CI run 30729517700 SUCCESS on all 4 jobs (backend pytest, frontend vitest, backend type-check, summary) in 1m02s. Contents: 30-day auto-escalation deleted outright (job + ACTION_AUTO_ESCALATE + is_step_stale + workflow step + tests; safe because budget.approval_log had 0 rows live), replaced by the manual admin step-override POST /approval/override-step behind the SAME อนุมัติ button (server routes on can_act). All of D1-D7 implemented, plus the two review findings fixed before commit: each of the two override mails now has its own try/except so one failing cannot suppress the other, and the D4 lock now also refuses when the position-1 OCCUPANT is Nipaporn/Waraporn (ADR-0006 dedup can seat the budget-dept reviewer in slot 1, which the slot-number-only check waved through). Pre-push proof that the commit stands alone: a clean detached worktree at the commit ran the exact CI command -> 816 passed / 0 failed, and `npx next build` (the only thing that type-checks the frontend) was clean; the main tree showed 2 extra failures which belong to the parallel SAP-cache lane, whose 25 files were deliberately excluded from the commit and left untouched. Push needed the worktree cherry-pick route again (remote had moved to the nightly graphify commit and the local tree carries another lane work), plus one extra step: the post-commit hook rewrites tracker/pending.json between cherry-picks, so `git checkout -- tracker/pending.json` is required between them or the second pick aborts. LEFT OPEN ON PURPOSE: no deploy - staging still runs budget-web:80b0e1c which does NOT contain this feature; deploying it needs a new image build + jakkaritw approval. Also still unflipped: NOTIFICATIONS_DRY_RUN (so no mail leaves any environment) and the automations cron stays dry-run-only.",
       "agent": "kimi"
     },
     {

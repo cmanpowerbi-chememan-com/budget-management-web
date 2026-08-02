@@ -49,12 +49,16 @@ masking itself is applied where the display layer is built
 parity harness depends on that fetch staying a complete mirror of gold.
 """
 import calendar
+import copy
 import logging
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
 import pyodbc
 from pydantic import BaseModel
+
+from app.cache import TTLCache
+from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -267,3 +271,63 @@ def resolve_sap_coverage(conn: pyodbc.Connection, fiscal_year: int) -> SapCovera
         visible_months=list(visible),
         hidden_months=[month for month in range(1, 13) if month not in visible],
     )
+
+
+# ---------------------------------------------------------------------------
+# TTL-cached wrappers (perf fix — prod first-load 10-11s -> 2-3s): both gold
+# reads above cost real time on EVERY grid/coverage request (fetch_sap_actuals
+# ~0.60s, resolve_sap_coverage's SAP_ENTRY_DAYS_SQL ~1.22s, live-measured)
+# even though the answer only changes when new SAP data lands. Cached here
+# (not in read_model.py / routers/budget.py) because this module owns the
+# SAP gold-read concern end to end. The two pure functions above are left
+# completely untouched — these wrappers call them unmodified, so test_sap.py
+# and the DB->web parity harness (which exercise `fetch_sap_actuals`/
+# `resolve_sap_coverage` directly) are unaffected.
+#
+# FAIL CLOSED (ADR-0020 + ADR-0026, non-negotiable — see TTLCache docstring):
+# only a SUCCESSFUL result is ever cached; an exception always propagates,
+# never gets cached, and a later failure after expiry never falls back to a
+# stale entry. A revoked grant must still produce a loud 502 on every call.
+#
+# Keyed by fiscal_year alone (both caches) — correct because neither query
+# takes any other parameter that could change the answer (no caller/RLS
+# scope, no admin flag). `Settings.sap_cache_ttl_seconds` is read fresh on
+# every call (not baked into the cache), so a settings change — including
+# the hermetic test override to `0`, which disables caching outright — takes
+# effect immediately.
+_sap_actuals_cache: TTLCache[dict[tuple[str, str], dict[str, float]]] = TTLCache()
+_sap_coverage_cache: TTLCache[SapCoverage] = TTLCache()
+
+
+def fetch_sap_actuals_cached(
+    conn: pyodbc.Connection, fiscal_year: int, settings: Settings | None = None
+) -> dict[tuple[str, str], dict[str, float]]:
+    """TTL-cached `fetch_sap_actuals`. Always returns a deep copy — the
+    dict stored in the cache is never handed to a caller directly, so one
+    caller mutating its result can never corrupt the next request's
+    figures (or the next cache read within the same TTL window)."""
+    settings = settings or get_settings()
+    result = _sap_actuals_cache.get_or_load(
+        fiscal_year, settings.sap_cache_ttl_seconds, lambda: fetch_sap_actuals(conn, fiscal_year)
+    )
+    return copy.deepcopy(result)
+
+
+def resolve_sap_coverage_cached(
+    conn: pyodbc.Connection, fiscal_year: int, settings: Settings | None = None
+) -> SapCoverage:
+    """TTL-cached `resolve_sap_coverage`. Always returns `model_copy(deep=True)`
+    — same defensive-copy contract as `fetch_sap_actuals_cached`."""
+    settings = settings or get_settings()
+    result = _sap_coverage_cache.get_or_load(
+        fiscal_year, settings.sap_cache_ttl_seconds, lambda: resolve_sap_coverage(conn, fiscal_year)
+    )
+    return result.model_copy(deep=True)
+
+
+def clear_sap_caches() -> None:
+    """Test-only reset hook — a module-level cache keyed only by
+    `fiscal_year` WOULD leak between tests otherwise (see conftest.py's
+    autouse fixture, which calls this before/after every test)."""
+    _sap_actuals_cache.clear()
+    _sap_coverage_cache.clear()

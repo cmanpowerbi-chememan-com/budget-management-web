@@ -183,7 +183,7 @@ def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
     never be handed the planning year as the fiscal year."""
     _override_auth("filler@chememan.com")
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
-        "app.routers.budget.resolve_sap_coverage", return_value=_fake_coverage()
+        "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage()
     ) as mock_resolve:
         mock_gold.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/sap-coverage?year=2027")
@@ -203,7 +203,7 @@ def test_sap_coverage_failure_returns_502_with_the_same_generic_detail(client):
     a 200 that implies "all 12 months are fine"."""
     _override_auth("filler@chememan.com")
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
-        "app.routers.budget.resolve_sap_coverage",
+        "app.routers.budget.resolve_sap_coverage_cached",
         side_effect=SapActualsFetchError("watermark undeterminable, grant revoked"),
     ):
         mock_gold.return_value.__enter__.return_value = MagicMock()

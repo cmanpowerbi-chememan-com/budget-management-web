@@ -36,7 +36,7 @@ import pyodbc
 from app.config import Settings, get_settings
 from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
 from app.rls import Scope
-from app.sap import MONTH_COLUMNS, fetch_sap_actuals, resolve_sap_coverage
+from app.sap import MONTH_COLUMNS, fetch_sap_actuals_cached, resolve_sap_coverage_cached
 
 _BOARD_COLUMNS = ("gl_name", "gl_group", "c_level", "division", "department")
 # NOTE: no "status" here — `budget.pending_budget` has no status column
@@ -486,11 +486,14 @@ def get_budget_grid(
     join_rows = fetch_board_pending_rows(
         fabric_conn, board_year=board_year, pending_year=planning_year, cost_centers=see_cost_centers_filter
     )
-    sap_actuals = fetch_sap_actuals(gold_conn, fiscal_year=board_year)
-    # ADR-0026: one extra gold read (~1.2s live) resolves which months of the
-    # SAP layer are complete enough to show. Any failure raises
-    # SapActualsFetchError -> 502: fail closed, never "show everything".
-    sap_coverage = resolve_sap_coverage(gold_conn, fiscal_year=board_year)
+    # Both gold reads below are TTL-cached (perf fix — prod first-load
+    # 10-11s -> 2-3s, `Settings.sap_cache_ttl_seconds`): the answer only
+    # changes when new SAP data lands, not on every grid request.
+    sap_actuals = fetch_sap_actuals_cached(gold_conn, fiscal_year=board_year)
+    # ADR-0026: one extra gold read (~1.2s live, uncached) resolves which
+    # months of the SAP layer are complete enough to show. Any failure
+    # raises SapActualsFetchError -> 502: fail closed, never "show everything".
+    sap_coverage = resolve_sap_coverage_cached(gold_conn, fiscal_year=board_year)
 
     # D10: only fetch cc_dims when the department filter is actually in use —
     # avoids an extra round-trip on every plain (unfiltered) grid load.

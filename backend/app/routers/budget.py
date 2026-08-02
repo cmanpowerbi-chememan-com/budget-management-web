@@ -10,7 +10,7 @@ from app.auth import get_current_user_email
 from app.db import get_fabric_conn, get_gold_conn
 from app.read_model import BudgetRow, get_budget_grid
 from app.rls import resolve_scope
-from app.sap import SapActualsFetchError, SapCoverage, resolve_sap_coverage
+from app.sap import SapActualsFetchError, SapCoverage, resolve_sap_coverage_cached
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -67,7 +67,9 @@ def sap_coverage(
     per-user data, so it needs auth but no RLS."""
     try:
         with get_gold_conn() as gold_conn:
-            return resolve_sap_coverage(gold_conn, fiscal_year=year - 1)
+            # TTL-cached (perf fix — Settings.sap_cache_ttl_seconds): the
+            # entry-day watermark only changes when new SAP data lands.
+            return resolve_sap_coverage_cached(gold_conn, fiscal_year=year - 1)
     except (SapActualsFetchError, pyodbc.Error) as exc:
         logger.exception("SAP coverage resolution failed for year=%s, email=%s", year, email)
         raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc
