@@ -90,6 +90,19 @@ def test_gl_edit_by_enabled_defaults_false():
     assert settings.gl_edit_by_enabled is False
 
 
+def test_log_level_defaults_to_info():
+    settings = Settings(_env_file=None)
+    assert settings.log_level == "INFO"
+
+
+def test_log_level_reads_from_env(monkeypatch):
+    """LOG_LEVEL override (see app/logging_config.py) — e.g. WARNING to
+    quiet a deploy down, or DEBUG for a live debug session."""
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    settings = Settings(_env_file=None)
+    assert settings.log_level == "WARNING"
+
+
 def test_get_settings_reads_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("FABRIC_SQL_SERVER", "example.database.fabric.microsoft.com")

@@ -100,6 +100,27 @@ class Settings(BaseSettings):
     # 6211300999 to user, so 12 is the intended number, not 13).
     gl_edit_by_enabled: bool = False
 
+    # SAP gold-read TTL cache (perf fix — prod first-load 10-11s -> 2-3s,
+    # see app.cache + app.sap's `*_cached` wrappers): both gold reads
+    # (`fetch_sap_actuals` ~0.60s, `resolve_sap_coverage`'s entry-day query
+    # ~1.22s, live-measured) cost real time on EVERY grid/coverage request
+    # even though the answer only changes when new SAP data lands. `0`
+    # disables caching entirely (always hits the DB) — the test/kill-switch
+    # path; the hermetic test fixture sets this to 0 for every unit test.
+    sap_cache_ttl_seconds: int = 600
+
+    # Connection-pool + SAP-cache warmup at startup (perf fix, see
+    # app.main's lifespan handler): runs in a daemon thread so it never
+    # blocks app startup / the Container Apps probe. Gate so tests (which
+    # run the app's lifespan via TestClient) never hit a live DB.
+    warmup_enabled: bool = True
+
+    # Root logger level (see `app/logging_config.py`) — every `app.*` logger
+    # writes at this level and above to the container's stdout. Overridable
+    # so a live debug session can bump to DEBUG, or a noisy deploy can be
+    # dialed down to WARNING, without a code change.
+    log_level: str = "INFO"
+
     # A14 — built frontend location (`frontend/out`, Next.js static export;
     # previously `frontend/dist` under Vite). ONE Container App serves both
     # API + frontend. In the container this will be an absolute path (e.g.
