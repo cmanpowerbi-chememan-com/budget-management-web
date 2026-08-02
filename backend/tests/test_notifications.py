@@ -116,8 +116,37 @@ def test_send_mail_real_send_posts_token_then_sendmail(monkeypatch):
     assert token_kwargs["data"]["client_id"] == "client-1"
     send_url, send_kwargs = posts[1]
     assert "/sendMail" in send_url
+    # The FROM mailbox is the settings value, not a hardcoded personal inbox
+    # (2026-08-02: jakkaritw@ -> cmanpowerbi@, the shared reporting mailbox).
+    assert "/users/cmanpowerbi@chememan.com/sendMail" in send_url
     assert send_kwargs["headers"]["Authorization"] == "Bearer tok-123"
     assert send_kwargs["json"]["message"]["toRecipients"][0]["emailAddress"]["address"] == "someone@chememan.com"
+
+
+def test_send_mail_sender_mailbox_comes_from_settings(monkeypatch):
+    """`notifications_sender_email` drives the sendMail URL, so the FROM
+    mailbox can be re-pointed by env alone (no code change, no redeploy of
+    a hardcoded constant)."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append(url)
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+
+    send_mail(
+        "someone@chememan.com", "subject", "<p>body</p>", dry_run=False,
+        settings=_settings(notifications_sender_email="budget-noreply@chememan.com"),
+    )
+
+    assert "/users/budget-noreply@chememan.com/sendMail" in posts[1]
 
 
 def test_send_mail_token_failure_raises_notification_error(monkeypatch):

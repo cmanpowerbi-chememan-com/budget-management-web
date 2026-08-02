@@ -92,7 +92,7 @@ Send company email + attachments programmatically — **no MCP Outlook send exis
 - Auth = service principal **`cman-fabric-write`** (`ENTRA_CLIENT_ID` / `ENTRA_TENANT_ID` / `ENTRA_CLIENT_SECRET` in `.env`), client-credentials, scope `https://graph.microsoft.com/.default`.
 - App roles granted (verified 2026-06-05): **`Sites.ReadWrite.All`, `Mail.Send`** → `POST /users/{sender}/sendMail` works tenant-wide.
 - App has **NO** `User.Read.All` → `GET /users/{x}` returns **403** (can't pre-verify a mailbox). Expected, NOT a blocker — just call `sendMail`; **202 Accepted** = sent OK. To check perms without sending, decode the access-token JWT `roles` claim.
-- **Sender** = `jakkaritw@chememan.com`. Company email pattern = firstname + last-initial (warapornt, nipapornt, laddawan**k**).
+- **Sender** = `jakkaritw@chememan.com` for one-off ops scripts (sign-off docs, monthly mail). The **app's own notifications** (`backend/app/notifications.py`) send as **`cmanpowerbi@chememan.com`** instead — shared mailbox, displays as "CMAN_PowerBI", replies do not land in a personal inbox (jakkaritw, 2026-08-02; `Settings.notifications_sender_email`, re-pointable by env). `Mail.Send` is an application role, so any mailbox works without a per-mailbox grant. Company email pattern = firstname + last-initial (warapornt, nipapornt, laddawan**k**).
 - **Attachments** = base64 `#microsoft.graph.fileAttachment`; docx MIME `application/vnd.openxmlformats-officedocument.wordprocessingml.document`; `saveToSentItems: true`.
 - To send a different email: copy the script, edit `RECIPIENT` / `SUBJECT` / `BODY_HTML` / `FILES`, run `--send`. Always confirm recipient + sender before `--send` (outward-facing, not reversible).
 

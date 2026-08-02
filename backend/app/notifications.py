@@ -34,9 +34,13 @@ from app.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-# Proven sender (CLAUDE.md "Send Outlook Email from Scripts") — the SP has
-# Mail.Send tenant-wide via this mailbox, verified 2026-06-05.
-SENDER_EMAIL = "jakkaritw@chememan.com"
+# Fallback sender only — the real value is `Settings.notifications_sender_email`
+# (default `cmanpowerbi@chememan.com`, the shared Power-BI/reporting mailbox
+# jakkaritw picked 2026-08-02 so app mail is not "from Jakkaritw" and replies
+# do not land in a personal inbox). Mail.Send is an APPLICATION role, so the
+# SP can send as any mailbox; sending as cmanpowerbi verified 202 on
+# 2026-08-02. Kept as a module constant for the no-settings call path.
+SENDER_EMAIL = "cmanpowerbi@chememan.com"
 
 
 class NotificationError(RuntimeError):
@@ -207,7 +211,7 @@ _MAX_SEND_ATTEMPTS = 3
 
 def _post_send_mail(
     token: str, to_email: str, subject: str, html_body: str, cc: list[str] | None = None,
-    *, sleep: Callable[[float], None] = time.sleep,
+    *, sleep: Callable[[float], None] = time.sleep, sender: str = SENDER_EMAIL,
 ) -> int:
     """POST sendMail, retrying transient throttling (429/503/504) up to
     `_MAX_SEND_ATTEMPTS` total attempts — honoring the `Retry-After` header
@@ -231,7 +235,7 @@ def _post_send_mail(
         message["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
     for attempt in range(_MAX_SEND_ATTEMPTS):
         resp = httpx.post(
-            f"{GRAPH_BASE}/users/{SENDER_EMAIL}/sendMail",
+            f"{GRAPH_BASE}/users/{sender}/sendMail",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             json=message,
             timeout=30,
@@ -277,7 +281,10 @@ def send_mail(
 
     settings = settings or get_settings()
     token = _get_graph_token_cached(settings)
-    retries = _post_send_mail(token, to_email, subject, html_body, cc, sleep=sleep)
+    retries = _post_send_mail(
+        token, to_email, subject, html_body, cc, sleep=sleep,
+        sender=settings.notifications_sender_email,
+    )
     logger.info("notifications: sent to=%s cc=%s subject=%r retries=%d", to_email, cc or [], subject, retries)
     return NotificationResult(sent=True, to_email=to_email, subject=subject, dry_run=False, retries=retries)
 

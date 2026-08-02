@@ -1,38 +1,54 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-02T10:13:22+0700",
+  "updated": "2026-08-02T15:16:33+0700",
   "tasks": [
     {
-      "id": "log-c2bd552",
-      "state": "done",
-      "created": "2026-08-02T10:13:22+0700",
-      "updated": "2026-08-02T10:13:22+0700",
-      "agent": "autolog",
-      "ai": "perf(backend): restore the SAP TTL cache lost to a git reset [commit c2bd552]"
+      "id": "notif-sender-cmanpowerbi",
+      "state": "doing",
+      "created": "2026-08-02T15:16:33+0700",
+      "updated": "2026-08-02T15:16:33+0700",
+      "ai": "switch app notification sender jakkaritw@ -> cmanpowerbi@chememan.com (shared CMAN_PowerBI mailbox) per jakkaritw 2026-08-02; Settings.notifications_sender_email + _post_send_mail(sender=); verified Graph 202 sending as cmanpowerbi; 845 backend tests pass; 6 probe mails re-sent from new sender",
+      "agent": "claude"
     },
     {
-      "id": "log-a4beac1",
+      "id": "notif-probe-6types-send",
       "state": "done",
-      "created": "2026-08-02T10:10:51+0700",
-      "updated": "2026-08-02T10:10:51+0700",
-      "agent": "autolog",
-      "ai": "fix(obs): route app.* logger output to stdout so container logs show it [commit a4beac1]"
+      "created": "2026-08-02T14:52:53+0700",
+      "updated": "2026-08-02T14:55:17+0700",
+      "ai": "SENT: all 6 notification types delivered live via setup/probe_notifications_live.py --send (Graph 202), To=jakkaritw only for every type, cc deduped to None where cc==To (correct per _resolve_approver1_cc). app_base_url=staging URL, dept=TEST-PROBE year=2099 sentinel. No DB writes. Awaiting jakkaritw eye-check of the 6 mails. Next: item2 GL edit_by filler-eye check (needs non-admin login), item3 override refusal paths 409/403",
+      "agent": "claude"
+    },
+    {
+      "id": "override-staging-manual-test",
+      "state": "done",
+      "created": "2026-08-02T12:20:18+0700",
+      "updated": "2026-08-02T12:29:38+0700",
+      "ai": "PASS — end-to-end manual test on staging by jakkaritw 2026-08-02 05:28 UTC, then cleaned up. What he saw: the single อนุมัติทั้งฝ่าย button (no second button), confirm dialog reading \"⚠️ คุณกำลังอนุมัติแทน อาทิตย์ สาหร่าย (ผู้อนุมัติขั้นที่ 1) ของฝ่าย Solution Delivery ปี 2028 · ระบบจะบันทึกว่าคุณกดแทน และส่งอีเมลแจ้งผู้กรอกงบ พร้อมสำเนาถึง อาทิตย์ สาหร่าย\" — the skipped approver NAMED, not a generic role label, proving the server-side lookup_employee_name lookup works on live data; after OK the chip changed to \"รออนุมัติ · ขั้น 2 (นิภาพร ทองกิ่ง (ฝ่ายงบประมาณ))\". DB verification (not just the UI): approval_status.status = PENDING_APPROVER2 with approver1_actioned_at stamped 2026-08-02 05:28:25.766; exactly ONE approval_log row, action=ADMIN_STEP_OVERRIDE (NOT APPROVE), action_by_email=jakkaritw@chememan.com, action_by_empcode=NULL (correct — he has no v_employee_budget_01 row, the ADR-0027 design explicitly allows this), PENDING_APPROVER1 -> PENDING_APPROVER2, comment=\"admin step override (ADR-0027)\". So the audit trail can distinguish a real review from an override, which was the whole point of the separate action. Empty grid during the test was expected (no pending_budget rows were seeded — approval_status carries no amounts). CLEANUP DONE the same minute: deleted 1 status row + 1 log row for (Solution Delivery, 2028); both tables verified back to 0 rows, i.e. exactly the pre-test state. No mail left any environment (NOTIFICATIONS_DRY_RUN still true). ADR-0027 is now proven on a real deployment, not only in mocked tests.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-perf-c2bd552",
+      "state": "done",
+      "created": "2026-08-02T11:58:42+0700",
+      "updated": "2026-08-02T12:18:34+0700",
+      "ai": "[CONFIRMED 2026-08-02] jakkaritw tested PRD in browser after deploy: PASS. Perf fix closed end-to-end.",
+      "agent": "claude"
     },
     {
       "id": "machine-guard-autoprotect",
       "state": "done",
       "created": "2026-08-02T10:05:12+0700",
-      "updated": "2026-08-02T10:05:12+0700",
-      "ai": "built automated dev-box protection per jakkaritw 'auto protect system'. NEW: ~/.claude/scripts/machine_guard.ps1 + scheduled task 'machine-guard' daily 12:30 (user ctx, no admin, StartWhenAvailable, verified LastTaskResult=0 twice) + guard/guardlog shortcuts in Documents/WindowsPowerShell/profile.ps1 (CurrentUserAllHosts - the only profile that exists) + logs to ~/.claude/logs/machine_guard{.log,_last.md}. AUTO-FIXES: prune .build-ctx-* >6h; gc.auto=1000 on all 12 repos (were ALL default 6700 - root reason bloat went unnoticed, failure mode is few-but-huge objects not many-small); git gc if >1000 loose or (0 packs and >200MB) - packed 19.dw_jakkaritw 52.2->42.6MB; kill allowlist PhoneExperienceHost/jusched (reclaimed 187MB). REPORTS ONLY: tracked files >5MB (found 07.open design/docs/assets/github-metrics.svg 16MB GENERATED+rewritten = next graphify-style incident, +3 mp4), free RAM <3GB, >3 CC sessions, WMI timeout. 2 gotchas fixed during build: PS5.1 reads .ps1 as cp1252 so UTF-8 em-dash breaks string parsing (script is ASCII-only on purpose); git ls-files quotes non-ASCII paths -> Test-Path 'Illegal characters', replaced with 'git -c core.quotepath=false ls-tree -r -l HEAD' + Console.OutputEncoding=UTF8. STILL NEEDS ADMIN: GoogleUpdater services Automatic+failing every ~1min, Set-Service Manual denied.",
+      "updated": "2026-08-02T10:27:49+0700",
+      "ai": "[UPDATE] investigated 07.open design per jakkaritw: it is a READ-ONLY CLONE of github.com/nexu-io/open-design - 636 commits, ZERO by jakkaritw, last commit 3mo ago by a stranger, 446.8MB, 4 packs (healthy). The 16MB docs/assets/github-metrics.svg has 14 revisions = 122.1MB of blob versions, but it is generated by THEIR metrics.yml on THEIR repo. NOTHING TO FIX - editing it locally would only create divergence. Instead hardened machine_guard against the false positive: (a) skip per-file advice for repos where 'git rev-list --count --author=<user.email>' is 0, emit one info line naming the origin + size + 'delete if unused'; (b) big-file warning now requires size >5MB AND >=3 revisions ('git rev-list --count HEAD -- <path>'), since a 5.1MB spec PDF committed ONCE is harmless while graphify's nightly 16MB rewrite was not - this silenced the 5.1MB laddawan Spec B PDF false positive too. Result: warnings 5 -> 0, run is now '1 fixed, 0 needing attention'. Task re-verified LastTaskResult=0, next 12:30. Script still ASCII-only.",
       "agent": "claude"
     },
     {
       "id": "deploy-09ce34d-staging",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-02T10:01:30+0700",
-      "updated": "2026-08-02T10:01:30+0700",
-      "ai": "PAUSED by jakkaritw decision 2026-08-02 (he picked \"wait for the other lane to push, then ship ONE combined image\"). STATE: image cmanbudgetacr.azurecr.io/budget-web:09ce34d is BUILT and verified (ACR run cmm Succeeded, digest sha256:b80e13cebae820655970533ed56062f16e4282873d4ad7bbd4c7d2d5543248c2, built from a clean detached worktree at 09ce34d) but deliberately NOT deployed. WHY: a parallel session deployed cman-budget-web-stg--0000017 running budget-web:08dc645 (\"perf(backend): TTL-cache the two SAP gold reads + warm the pool at startup\") minutes earlier; 09ce34d is NOT an ancestor of 08dc645 and vice versa, so deploying mine would silently wipe their staging perf test. Their commit 08dc645 exists LOCALLY ONLY - origin/main head is 09ce34d and does not contain it. MERGE CHECK ALREADY DONE: merging 08dc645 into 09ce34d conflicts ONLY in .claude/plan.md and tracker/pending.json (bookkeeping); zero code conflicts, so a combined image is straightforward once they push. NEXT STEPS when 08dc645 (or its successor) lands on origin/main: build budget-web:<merge-sha> from a clean worktree of the merge, resolve the two bookkeeping conflicts by keeping BOTH lanes entries, run the CI command in that worktree before pushing the image, then ask jakkaritw for the deploy approval (deploy itself still needs a fresh OK). A watcher is polling origin/main for that commit. Rollback line for staging stays cman-budget-web-stg--0000015 (budget-web:80b0e1c).",
+      "updated": "2026-08-02T10:25:58+0700",
+      "ai": "CLOSED 2026-08-02 as SUPERSEDED - no deploy needed from this lane. The parallel SAP-cache session built and deployed budget-web:c2bd552 to cman-budget-web-stg--0000018, and c2bd552 CONTAINS 09ce34d, so the ADR-0027 admin step-override is already live on staging without me deploying anything. Verified the merge did not quietly drop my work (their commit message says \"restore the SAP TTL cache lost to a git reset\", so I checked the tree at c2bd552 rather than trusting ancestry): POST /approval/override-step present in routers/approval.py, 4 hits for ADMIN_STEP_OVERRIDE / the NIPAPORN+WARAPORN identity lock in approval.py, buildOverrideConfirmText present in frontend model.ts, and backend/jobs/auto_escalate.py correctly absent. My image budget-web:09ce34d stays in the registry unused (harmless). Watcher for 08dc645 on origin/main stopped. OPEN ITEM OWNED BY THE OTHER SESSION, flagged to jakkaritw: c2bd552 and a4beac1 are NOT pushed to origin/main (head is still 09ce34d), so a prod deploy of c2bd552 would run code that exists only on the local machine and that CI has never seen - advised push first, wait for CI, then deploy. Prod risk of shipping ADR-0027 assessed as near-zero: budget.approval_status and budget.approval_log are both 0 rows on the live DB, so the new button is unreachable until someone submits, and the deleted auto-escalate job never ran on prod. Prod rollback line = cman-budget-web-prd--0000010 (budget-web:f947fed).",
       "agent": "claude"
     },
     {
@@ -71,8 +87,8 @@
       "id": "machine-slowdown-fix",
       "state": "done",
       "created": "2026-08-02T04:33:57+0700",
-      "updated": "2026-08-02T04:44:26+0700",
-      "ai": "FIXED. root causes 4: (1) .git 1017MB/4397 loose/0 packs -> git gc = 68.9MB/2 packs/32s, git status 0.47s; auto-gc never fired (gc.auto default 6700 > 4397 but objects huge = nightly graph.json 16MB + graph.html 3MB). (2) 3x .build-ctx-* az-acr-build repo copies 138MB/1440 files -> deleted + .gitignore '.build-ctx-*/'; had also polluted local graph.json with 27008 build-ctx lines. (3) RAM 85pct/2.3GB free -> 62pct/5.9GB: killed PhoneExperienceHost 288MB, VSCode 19proc 2.6GB + 3 CC 1.2GB + EPSecurityService 0.9GB are the real load; ZERO orphan MCP procs (all parented to live claude). (4) SCM 7000/7009 30s service-start timeouts (AppXSVC/ClipSVC/wlidsvc/IntelPLM) = SYMPTOM of starvation, stopped after RAM freed. PREVENTION: git maintenance start (hourly/daily/weekly tasks registered, maintenance.repo=C:/04.budget_management_web) + .vscode/settings.json watcherExclude/searchExclude/git.autofetch=false/tsserver 3GB cap + .gitignore build-ctx. OPEN: GoogleUpdaterService152.* StartType=Automatic failing every ~1min, Set-Service DENIED needs admin; jusched.exe crash 0xc0000409 once (not in HKCU/HKLM Run); local graphify-out/*.json|html still modified w/ build-ctx pollution - regenerated nightly by CI from clean checkout, user to decide on discarding. NOT COMMITTED.",
+      "updated": "2026-08-02T10:17:24+0700",
+      "ai": "[UPDATE] committed 78026ab in 04 (graphify removal + .gitignore build-ctx + .dockerignore + CLAUDE.md do-not-reintroduce note + tracker) and f8bd212 in 19.dw_jakkaritw (graphify-out 14 tracked files + .graphifyignore). Both commits SCOPED - verified 78026ab touched zero backend/frontend/setup files; a parallel session committed the backend SAP-cache work as c2bd552 independently. 04 has 10 files still uncommitted (other sessions WIP), 19 has 108 (that project's own WIP) - both left untouched on purpose. NOT PUSHED. Prevention now live: scheduled task machine-guard daily 12:30 + gc.auto=1000 on all 12 repos + git maintenance on 04.",
       "agent": "claude"
     },
     {

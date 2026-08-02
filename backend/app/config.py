@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     # never touched by this build or by any test.
     notifications_dry_run: bool = True
 
+    # Mailbox every app notification is sent AS (`POST /users/{sender}/sendMail`).
+    # jakkaritw picked the shared reporting mailbox on 2026-08-02 so recipients
+    # see "CMAN_PowerBI", not a personal name, and Reply lands in a shared inbox
+    # instead of his own (the old value was jakkaritw@chememan.com). Mail.Send is
+    # an APPLICATION role, so no per-mailbox grant is needed — sending as
+    # cmanpowerbi verified live (Graph 202) the same day.
+    notifications_sender_email: str = "cmanpowerbi@chememan.com"
+
     # §7.3 bulk-send hardening (jobs/send_reminders.py only — event mails
     # from the router never sleep): pacing between reminder mails so one
     # round can't ram the Exchange Online throttle (~30/min/mailbox), and a
