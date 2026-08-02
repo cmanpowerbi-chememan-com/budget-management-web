@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-02T10:10:51+0700",
+  "updated": "2026-08-02T10:13:22+0700",
   "tasks": [
+    {
+      "id": "log-c2bd552",
+      "state": "done",
+      "created": "2026-08-02T10:13:22+0700",
+      "updated": "2026-08-02T10:13:22+0700",
+      "agent": "autolog",
+      "ai": "perf(backend): restore the SAP TTL cache lost to a git reset [commit c2bd552]"
+    },
     {
       "id": "log-a4beac1",
       "state": "done",

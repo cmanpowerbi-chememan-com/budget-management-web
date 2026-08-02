@@ -121,9 +121,12 @@ db/
   schema.sql                           ← canonical table defs (Azure SQL era — retiring; connection.py archived to bin/azure-sql-legacy/)
 setup/                                 ← ops scripts: sync_employees, create_weekly_update, send_signoff/monthly_email, seed_*
 fabric/                                ← PySpark scripts — copy into Fabric Notebook UI only (do not run locally)
-.github/workflows/                     ← CI: sync_employees (daily 06:00 BKK), master-tables-deploy, graphify-nightly (03:00 BKK)
-graphify-out/                          ← knowledge-graph; graph.json/GRAPH_REPORT.md/graph.html tracked in git, rebuilt nightly via GitHub Actions (graphify-nightly.yml); cache/ and converted/ gitignored
+.github/workflows/                     ← CI: sync_employees (daily 06:00 BKK), master-tables-deploy
 ```
+
+> **graphify removed 2026-08-02** — the knowledge-graph tool, its `graphify-out/` output, the
+> nightly workflow and both Task Scheduler jobs are gone for good. It committed a ~16 MB
+> `graph.json` every night, which is what inflated `.git` to 1 GB. Do not reintroduce it.
 
 > **React + FastAPI main app** — `frontend/` (React + Next.js, static export, ADR-0025) + `backend/`
 > (FastAPI) are in active build; the original mockup `0002.3budget-export.html` (gridgeist redesign

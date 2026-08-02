@@ -10,7 +10,6 @@
 .mcp.json
 .playwright_auth.json
 .pytest_cache
-.graphifyignore
 
 # --- Secrets — must never enter the build context ---
 .env
@@ -26,7 +25,6 @@ db
 design
 docs
 fabric
-graphify-out
 monthly_update
 requirement_spec
 setup
