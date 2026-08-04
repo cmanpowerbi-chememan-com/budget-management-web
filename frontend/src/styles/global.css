@@ -848,26 +848,28 @@ input:focus-visible {
   font-size: 13.5px;
 }
 
-/* "Reset columns" control row (UI-parity point 8c) — sits above both
-   side-tables since colWidths state is shared/local to GridTable, not the
-   BudgetGrid toolbar. Small + right-aligned so it reads as a grid control,
-   not a primary action. */
-.grid-column-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
 /* ─── Grid table (3-layer transactions, COST/SGA sections) ─── */
 .side-section {
   margin-bottom: 28px;
+}
+/* Heading + "Reset columns" button share this row (UI-parity point 8c,
+   revised) — the button used to live in its own right-aligned row above
+   both tables; it now sits beside each side's heading instead, so the
+   margin that used to separate the heading from the table below moves
+   here (onto the row), not the heading itself. */
+.side-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 .side-heading {
   font-family: var(--serif);
   font-size: 20px;
   font-weight: 500;
   color: var(--ink);
-  margin-bottom: 8px;
+  margin: 0;
 }
 /* Bordered frame per side-table — border/radius live here, not on
    .data-table, so border-radius + overflow:hidden never clip the sticky

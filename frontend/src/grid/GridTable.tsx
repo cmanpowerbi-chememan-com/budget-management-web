@@ -821,32 +821,39 @@ export function GridTable({
   return (
     <>
       <ColumnWidthMeasurer containerRef={measureContainerRef} candidates={measureCandidates} />
-      {/* Small right-aligned control row (UI-parity point 8c) — kept OUTSIDE
-         .grid-sides since it applies to both side-tables at once; state
-         (colWidths) is local to this component, so the button lives here
-         rather than in BudgetGrid's toolbar. */}
-      <div className="grid-column-controls">
-        <button
-          type="button"
-          className="btn btn-sm btn-ghost"
-          onClick={handleResetColumns}
-          title="รีเซ็ตความกว้างคอลัมน์ให้พอดีเนื้อหา"
-          data-testid="reset-columns-btn"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
-          Reset columns
-        </button>
-      </div>
       <div className="grid-sides">
         {(['COST', 'SGA'] as const).map((side) => {
         if (sidesWithData[side].length === 0) return null
         const groups = sections[side]
         return (
           <div key={side} className="side-section" data-testid={`side-section-${side}`}>
-            <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
+            {/* Heading + "Reset columns" share one row (jakkaritw feedback —
+               the button used to float in its own right-aligned row above
+               both tables and read as detached). colWidths is still ONE
+               state shared by both side-tables, so both buttons call the
+               same handler; each side needs its own data-testid since the
+               button now renders twice. */}
+            <div className="side-heading-row">
+              <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={handleResetColumns}
+                title="รีเซ็ตความกว้างคอลัมน์ให้พอดีเนื้อหา"
+                /* Both buttons carry the same visible label, so a screen-reader
+                   button list would otherwise show two identical entries — the
+                   section name (free for sighted users from the adjacent h2)
+                   goes into the accessible name instead. */
+                aria-label={`Reset columns · ${SIDE_LABEL[side]}`}
+                data-testid={`reset-columns-btn-${side}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+                Reset columns
+              </button>
+            </div>
             {/* .table-panel = bordered frame (border/radius live here, not on
                .data-table, so the sticky header isn't clipped); .table-wrap =
                the actual vertical+horizontal scroll container. */}

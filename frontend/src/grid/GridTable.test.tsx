@@ -545,7 +545,11 @@ describe('GridTable', () => {
       expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe(`${startCc + 300}px`)
       expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).not.toBeNull() // drag persisted an override
 
-      fireEvent.click(screen.getByTestId('reset-columns-btn'))
+      // The button renders once per side-section now (beside each heading,
+      // not in a standalone row) — but colWidths is still ONE shared state,
+      // so either button must reset both tables.
+      expect(screen.getByTestId('reset-columns-btn-SGA')).toBeInTheDocument()
+      fireEvent.click(screen.getByTestId('reset-columns-btn-COST'))
 
       const costTable = getTable('side-section-COST')
       // Re-measured fit-to-content — in jsdom (no real text layout) that is
@@ -554,6 +558,21 @@ describe('GridTable', () => {
       expect(getIdentityCols(costTable)[0].style.width).toBe(`${startCc}px`)
       expect(costTable.style.getPropertyValue('--frz2')).toBe(`${startCc}px`)
       expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).toBeNull() // override cleared, not re-saved
+    })
+
+    it('the SGA reset button also clears the shared colWidths override (same state as COST)', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const handle = screen.getAllByTestId('col-resize-cc')[0]
+      const startCc = parseInt(getIdentityCols(getTable('side-section-COST'))[0].style.width, 10)
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      fireEvent(window, new MouseEvent('mousemove', { clientX: 300, bubbles: true }))
+      fireEvent(window, new MouseEvent('mouseup', { clientX: 300, bubbles: true }))
+
+      fireEvent.click(screen.getByTestId('reset-columns-btn-SGA'))
+
+      const sgaTable = getTable('side-section-SGA')
+      expect(getIdentityCols(sgaTable)[0].style.width).toBe(`${startCc}px`)
+      expect(window.localStorage.getItem(COLUMN_WIDTHS_STORAGE_KEY)).toBeNull()
     })
 
     it('adds is-dragging to ONLY the handle being dragged (mockup accent-hairline parity)', () => {
