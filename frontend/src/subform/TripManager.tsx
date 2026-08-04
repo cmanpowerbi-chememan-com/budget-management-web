@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import { fetchCountries, fetchTravelers } from '../api/reference'
 import { createTrip, deleteTrip, fetchDetailLines, fetchTrips, saveDetailLine, updateTrip } from '../api/subform'
@@ -112,7 +112,9 @@ function cardFromServerTrip(
     localId: `existing-${trip.trip_id}`,
     draft: draftFromTripListItem(trip),
     dirty: false,
-    serverTraveler: { empcode: trip.traveler_empcode, name: trip.traveler_name, position: trip.position },
+    // TripListItem carries no email — the fallback display never had one to
+    // show, only name/position (see resolveTravelerDisplay's edge case).
+    serverTraveler: { empcode: trip.traveler_empcode, name: trip.traveler_name, position: trip.position, email: '' },
     perDiemMonths: trip.per_diem_months,
     perDiemError: trip.per_diem_error,
     status: 'idle',
@@ -134,7 +136,8 @@ function buildSavedTripCardPatch(card: TripCardState, saved: TripState): Partial
     localId: `existing-${saved.trip_id}`,
     draft: { ...card.draft, trip_id: saved.trip_id, side: saved.side, expected_updated_at: saved.updated_at },
     dirty: false,
-    serverTraveler: { empcode: saved.traveler_empcode, name: saved.traveler_name, position: saved.position },
+    // TripState carries no email either — same as cardFromServerTrip above.
+    serverTraveler: { empcode: saved.traveler_empcode, name: saved.traveler_name, position: saved.position, email: '' },
     perDiemMonths: saved.per_diem_months,
     perDiemError: null,
     status: 'idle',
@@ -163,6 +166,131 @@ async function fetchAllManualLines(costCenter: string, fiscalYear: number): Prom
   )
   const results = await Promise.all(requests)
   return results.flat()
+}
+
+interface TravelerFieldProps {
+  ariaLabel: string
+  /** The cost center's traveler roster (`/reference/travelers`, already
+   * dept + manager-chain scoped server-side). */
+  travelers: readonly TravelerOption[]
+  /** Selected empcode, `''` = none picked yet. */
+  value: string
+  onChange: (empcode: string) => void
+  /** A trip's own stored traveler when it has fallen out of `travelers`
+   * (left the company, CC moved) — unioned in as a pickable/displayable
+   * option so an existing trip never appears to lose its traveler. */
+  fallback: TravelerOption | null
+}
+
+/** Searchable traveler picker — replaces a `<select>` that used to list
+ * hundreds of names (jakkaritw, 2026-08-04). Same interaction shape as the
+ * "+ เพิ่ม transaction" GL combobox (`grid/AddTransactionForm.tsx`'s
+ * `.gl-combo`: type to filter, `onBlur` + option `onMouseDown`
+ * preventDefault to close on outside-click without losing the click),
+ * plus real combobox semantics (`role="combobox"`/`listbox`/`option`,
+ * `aria-activedescendant`) so ↑/↓/Enter/Esc all work — no new dependency,
+ * built from the same primitives already in this codebase. Typing filters
+ * name + email + position case-insensitively; a value is only ever set by
+ * picking an option, never by the raw typed text (no free-typed empcode). */
+function TravelerField({ ariaLabel, travelers, value, onChange, fallback }: TravelerFieldProps) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const listId = useId()
+
+  const options =
+    fallback && !travelers.some((t) => t.empcode === fallback.empcode) ? [fallback, ...travelers] : travelers
+  const selected = options.find((t) => t.empcode === value) ?? null
+
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? options.filter((t) => `${t.name} ${t.email} ${t.position}`.toLowerCase().includes(query))
+    : options
+
+  function pick(t: TravelerOption) {
+    onChange(t.empcode)
+    setSearch('')
+    setOpen(false)
+  }
+
+  function optionId(empcode: string) {
+    return `${listId}-${empcode}`
+  }
+
+  return (
+    <div className="traveler-combo">
+      <input
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && filtered[activeIndex] ? optionId(filtered[activeIndex].empcode) : undefined}
+        className="traveler-combo-input"
+        placeholder="— เลือกผู้เดินทาง — พิมพ์เพื่อค้นหาชื่อหรืออีเมล —"
+        value={open ? search : (selected?.name ?? '')}
+        onFocus={() => {
+          setOpen(true)
+          setSearch('')
+          setActiveIndex(0)
+        }}
+        onChange={(e) => {
+          // Reopen on every keystroke: after Escape the list is closed but the
+          // input keeps focus, and the value shown is the SELECTION, not the
+          // draft search — typing without this looked like the field had gone
+          // dead (keystrokes landed in hidden state, no list, old name still
+          // displayed) until you pressed ArrowDown or re-focused.
+          setOpen(true)
+          setSearch(e.target.value)
+          setActiveIndex(0)
+        }}
+        // preventDefault on the option's onMouseDown (below) keeps this
+        // input focused through the click, so onBlur only fires for a
+        // genuine outside click/tab-away — that IS "click outside closes".
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setOpen(true)
+            // max(0, …) matters when the filter matches nothing: length-1 is
+            // -1 there, and a -1 active index drops aria-activedescendant.
+            setActiveIndex((i) => Math.max(0, Math.min(i + 1, filtered.length - 1)))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActiveIndex((i) => Math.max(i - 1, 0))
+          } else if (e.key === 'Enter') {
+            if (open && filtered[activeIndex]) {
+              e.preventDefault()
+              pick(filtered[activeIndex])
+            }
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+      />
+      {open && (
+        <ul id={listId} role="listbox" className="traveler-combo-list" aria-label="ตัวเลือกผู้เดินทาง">
+          {filtered.length === 0 && <li className="traveler-combo-empty">ไม่พบผู้เดินทางที่ค้นหา</li>}
+          {filtered.map((t, idx) => (
+            <li
+              key={t.empcode}
+              id={optionId(t.empcode)}
+              role="option"
+              aria-selected={t.empcode === value}
+              className={`traveler-combo-option${idx === activeIndex ? ' active' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(t)}
+            >
+              <span className="traveler-combo-option-name">
+                {t.name} · {t.position}
+              </span>
+              <span className="traveler-combo-option-email">{t.email}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 /** Trip Manager (A9) — "1 ทริป = กรอกครั้งเดียว": one trip header (traveler,
@@ -587,23 +715,13 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                   <div className="trip-field-grid">
                     <label>
                       TRAVELER NAME · SAP
-                      <select
-                        aria-label={`traveler_empcode ${card.localId}`}
+                      <TravelerField
+                        ariaLabel={`traveler_empcode ${card.localId}`}
+                        travelers={travelers}
                         value={card.draft.traveler_empcode}
-                        onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, traveler_empcode: e.target.value }))}
-                      >
-                        {card.draft.traveler_empcode === '' && (
-                          <option value="" disabled>
-                            — เลือกผู้เดินทาง —
-                          </option>
-                        )}
-                        {travelerFallback && <option value={travelerFallback.empcode}>{travelerFallback.name}</option>}
-                        {travelers.map((t) => (
-                          <option key={t.empcode} value={t.empcode}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
+                        fallback={travelerFallback}
+                        onChange={(empcode) => updateTripField(card.localId, (d) => ({ ...d, traveler_empcode: empcode }))}
+                      />
                     </label>
                     <label>
                       POSITION

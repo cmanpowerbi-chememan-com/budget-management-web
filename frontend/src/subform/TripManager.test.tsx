@@ -19,9 +19,9 @@ const BOTH_SIDES: TravelSideHistory = { sides: ['COST', 'SGA'], defaultSide: 'SG
 /** Default reference masters — every test needs these resolved (the modal
  * loads them alongside the trips). E1 matches `tripItem()`'s traveler. */
 const TRAVELERS = [
-  { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor' },
-  { empcode: 'E7', name: 'สมปอง ขยัน', position: 'Officer' },
-  { empcode: 'E9', name: 'ใหม่ ทดสอบ', position: 'Manager' },
+  { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor', email: 'somchai.j@chememan.com' },
+  { empcode: 'E7', name: 'สมปอง ขยัน', position: 'Officer', email: 'sompong.k@chememan.com' },
+  { empcode: 'E9', name: 'ใหม่ ทดสอบ', position: 'Manager', email: 'mai.t@chememan.com' },
 ]
 const COUNTRIES: { country: string; country_group: 1 | 2 }[] = [
   { country: 'ประเทศไทย', country_group: 1 },
@@ -62,11 +62,27 @@ function tripItem(overrides: Partial<TripListItem> = {}): TripListItem {
   }
 }
 
+/** Picks a traveler through the searchable combobox (replaced the old
+ * `<select>`, 2026-08-04): type a query, then click the matching option.
+ * `query` defaults to the TRAVELERS fixture's own name for `empcode` — pass
+ * an explicit query to exercise search-by-email/position or a partial
+ * match. Mirrors what a real user does; sets the SAME `traveler_empcode`
+ * state the old `fireEvent.change(select, ...)` set. */
+function pickTraveler(localId: string, empcode: string, query?: string) {
+  const fixture = TRAVELERS.find((t) => t.empcode === empcode)
+  const typed = query ?? fixture?.name ?? empcode
+  const input = screen.getByLabelText(`traveler_empcode ${localId}`)
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: typed } })
+  const optionName = fixture ? new RegExp(fixture.name) : new RegExp(typed)
+  fireEvent.click(screen.getByRole('option', { name: optionName }))
+}
+
 /** New-trip happy-path prerequisites: traveler + days + a month + destination
  * (ประเทศไทย → group 1). Tests asserting a specific field override after.
  * `monthButtonIndex` = which card's m05 toggle (multi-card tests). */
 function fillNewTripBasics(localId = 'new-0', monthButtonIndex = 0) {
-  fireEvent.change(screen.getByLabelText(`traveler_empcode ${localId}`), { target: { value: 'E9' } })
+  pickTraveler(localId, 'E9')
   fireEvent.change(screen.getByLabelText(`days ${localId}`), { target: { value: '3' } })
   fireEvent.click(screen.getAllByRole('button', { name: 'May' })[monthButtonIndex])
   fireEvent.change(screen.getByLabelText(`destination ${localId}`), { target: { value: 'ประเทศไทย' } })
@@ -262,7 +278,7 @@ describe('TripManager', () => {
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(1))
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-    fireEvent.change(screen.getByLabelText('traveler_empcode new-1'), { target: { value: 'E7' } })
+    pickTraveler('new-1', 'E7')
     fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '4' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
     fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ญี่ปุ่น' } })
@@ -387,7 +403,7 @@ describe('TripManager', () => {
     expect(onSaved).toHaveBeenCalled()
   })
 
-  describe('traveler + destination dropdowns (2026-07-17)', () => {
+  describe('traveler + destination dropdowns (2026-07-17; traveler → searchable combobox 2026-08-04)', () => {
     function mockCreateOk() {
       vi.mocked(subformApi.createTrip).mockResolvedValue(tripState())
     }
@@ -399,17 +415,115 @@ describe('TripManager', () => {
       await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
     }
 
-    it('traveler is a dropdown of names from /reference/travelers with the placeholder — no free-typed empcode', async () => {
+    it('traveler is a searchable combobox fed by /reference/travelers scoped to the cost_center — no free-typed empcode', async () => {
       await renderEmpty()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
 
-      const select = screen.getByLabelText('traveler_empcode new-0') as HTMLSelectElement
-      expect(select.tagName).toBe('SELECT')
+      const input = screen.getByLabelText('traveler_empcode new-0') as HTMLInputElement
+      expect(input.tagName).toBe('INPUT')
+      expect(input).toHaveAttribute('role', 'combobox')
+      // fetchTravelers is scoped by the cost_center being edited (the
+      // grid's ฝ่าย/CC selection) — never the caller's own department.
       expect(referenceApi.fetchTravelers).toHaveBeenCalledWith('CC1')
-      expect(screen.getByRole('option', { name: '— เลือกผู้เดินทาง —' })).toBeInTheDocument()
-      // label = ชื่อ, value = empcode
-      const somchai = screen.getByRole('option', { name: 'สมชาย ใจดี' }) as HTMLOptionElement
-      expect(somchai.value).toBe('E1')
+
+      fireEvent.focus(input)
+      const listbox = screen.getByRole('listbox')
+      // destination/side <select>s also render native role="option" — scope
+      // to THIS combobox's listbox so it can't accidentally count them.
+      expect(within(listbox).getAllByRole('option')).toHaveLength(TRAVELERS.length)
+
+      // Typing free text alone never sets a traveler — only picking an
+      // option does. Blurring away with unmatched text leaves it unset.
+      fireEvent.change(input, { target: { value: 'ไม่มีคนนี้แน่นอน' } })
+      expect(screen.getByText('ไม่พบผู้เดินทางที่ค้นหา')).toBeInTheDocument()
+      fireEvent.blur(input)
+      fireEvent.click(saveAllButton())
+      await waitFor(() => expect(screen.getByText('กรุณาระบุผู้เดินทาง')).toBeInTheDocument())
+      expect(subformApi.createTrip).not.toHaveBeenCalled()
+    })
+
+    it('typing filters the option list by name, matching only the typed substring', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+
+      fireEvent.focus(input)
+      expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(3)
+      fireEvent.change(input, { target: { value: 'ใหม่' } }) // substring of 'ใหม่ ทดสอบ' only
+      const options = within(screen.getByRole('listbox')).getAllByRole('option')
+      expect(options).toHaveLength(1)
+      expect(options[0]).toHaveTextContent('ใหม่ ทดสอบ')
+    })
+
+    it('typing filters the option list by email, case-insensitively', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+
+      fireEvent.focus(input)
+      // uppercase, only substring of E7's email (sompong.k@chememan.com)
+      fireEvent.change(input, { target: { value: 'SOMPONG.K@CHEMEMAN' } })
+      const options = within(screen.getByRole('listbox')).getAllByRole('option')
+      expect(options).toHaveLength(1)
+      expect(options[0]).toHaveTextContent('สมปอง ขยัน')
+      expect(options[0]).toHaveTextContent('sompong.k@chememan.com') // email visible as secondary text
+
+      fireEvent.click(options[0])
+      expect((screen.getByLabelText('traveler_empcode new-0') as HTMLInputElement).value).toBe('สมปอง ขยัน')
+      expect(screen.getByTestId('position-new-0')).toHaveTextContent('Officer')
+    })
+
+    it('ArrowDown moves the active option and Enter picks it (keyboard-only selection)', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+
+      fireEvent.focus(input) // options in fetch order: E1, E7, E9 — active starts at 0 (E1)
+      fireEvent.keyDown(input, { key: 'ArrowDown' }) // -> index 1 (E7)
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect((screen.getByLabelText('traveler_empcode new-0') as HTMLInputElement).value).toBe('สมปอง ขยัน')
+      expect(screen.getByTestId('position-new-0')).toHaveTextContent('Officer')
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument() // picking closes it
+    })
+
+    it('Escape closes the list without picking anything', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'สมชาย' } })
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      fireEvent.keyDown(input, { key: 'Escape' })
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(screen.getByTestId('position-new-0')).toHaveTextContent('—') // nothing picked
+    })
+
+    it('typing after Escape reopens the list and shows the new query (the field must never go dead)', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0') as HTMLInputElement
+
+      fireEvent.focus(input)
+      fireEvent.keyDown(input, { key: 'Escape' })
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+      // Focus never left the input, so this is the very next thing a user does.
+      fireEvent.change(input, { target: { value: 'สมชาย' } })
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(input).toHaveValue('สมชาย')
+    })
+
+    it('blurring the input (click outside) closes the list', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+
+      fireEvent.focus(input)
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      fireEvent.blur(input)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
 
     it('selecting a traveler auto-displays the read-only position (no position input exists)', async () => {
@@ -417,12 +531,12 @@ describe('TripManager', () => {
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
 
       expect(screen.getByTestId('position-new-0')).toHaveTextContent('—')
-      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+      pickTraveler('new-0', 'E9')
       expect(screen.getByTestId('position-new-0')).toHaveTextContent('Manager')
       expect(screen.queryByLabelText('position new-0')).not.toBeInTheDocument()
     })
 
-    it('an existing trip shows its response traveler name + position even when absent from the current list', async () => {
+    it('an existing trip shows its response traveler name + position even when absent from the current list, and can still be reselected', async () => {
       vi.mocked(subformApi.fetchTrips).mockResolvedValue([
         tripItem({ traveler_empcode: 'EGONE', traveler_name: 'อดีต พนักงาน', position: 'Director' }),
       ])
@@ -431,10 +545,38 @@ describe('TripManager', () => {
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       expect(screen.getByTestId('position-existing-10')).toHaveTextContent('Director')
-      // the select still displays the stored traveler via a fallback option
-      const fallback = screen.getByRole('option', { name: 'อดีต พนักงาน' }) as HTMLOptionElement
-      expect(fallback.value).toBe('EGONE')
-      expect((screen.getByLabelText('traveler_empcode existing-10') as HTMLSelectElement).value).toBe('EGONE')
+      // the combobox still displays the stored traveler's name — never
+      // silently cleared just because the CC/dept-scoped roster moved on.
+      const input = screen.getByLabelText('traveler_empcode existing-10') as HTMLInputElement
+      expect(input.value).toBe('อดีต พนักงาน')
+
+      // it is also still offered as a pickable option (union of the current
+      // roster + the trip's own stored traveler).
+      fireEvent.focus(input)
+      expect(screen.getByRole('option', { name: /อดีต พนักงาน/ })).toBeInTheDocument()
+    })
+
+    it('switching costCenter (the grid\'s ฝ่าย/CC filter) refetches the traveler list — no stale roster from the previous CC', async () => {
+      const CC1_TRAVELERS = TRAVELERS
+      const CC2_TRAVELERS = [{ empcode: 'Z1', name: 'บอลไม่มีชื่อ CC2', position: 'Staff', email: 'z1@chememan.com' }]
+      vi.mocked(referenceApi.fetchTravelers).mockImplementation(async (cc) => (cc === 'CC2' ? CC2_TRAVELERS : CC1_TRAVELERS))
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      const { rerender } = render(
+        <TripManager costCenter="CC1" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(referenceApi.fetchTravelers).toHaveBeenCalledWith('CC1'))
+
+      rerender(
+        <TripManager costCenter="CC2" fiscalYear={2027} sideHistory={BOTH_SIDES} isAdmin={false} onClose={vi.fn()} onSaved={vi.fn()} />,
+      )
+      await waitFor(() => expect(referenceApi.fetchTravelers).toHaveBeenCalledWith('CC2'))
+
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+      const input = screen.getByLabelText('traveler_empcode new-0')
+      fireEvent.focus(input)
+      expect(screen.getByRole('option', { name: /บอลไม่มีชื่อ CC2/ })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /สมชาย ใจดี/ })).not.toBeInTheDocument() // CC1's roster is gone
     })
 
     it('the manual กลุ่มปลายทาง select is GONE; picking ญี่ปุ่น auto-sets country_group 2', async () => {
@@ -489,7 +631,7 @@ describe('TripManager', () => {
       await renderEmpty()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
 
-      fireEvent.change(screen.getByLabelText('traveler_empcode new-0'), { target: { value: 'E9' } })
+      pickTraveler('new-0', 'E9')
       fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
       fireEvent.click(screen.getByRole('button', { name: 'May' }))
       fireEvent.click(saveAllButton())
@@ -840,7 +982,7 @@ describe('TripManager', () => {
       fireEvent.change(screen.getByLabelText('transport m05 new-0'), { target: { value: '700' } })
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-      fireEvent.change(screen.getByLabelText('traveler_empcode new-1'), { target: { value: 'E7' } })
+      pickTraveler('new-1', 'E7')
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '2' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
       fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ประเทศไทย' } })
@@ -872,7 +1014,7 @@ describe('TripManager', () => {
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
       // Card new-1: fully filled (valid).
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
-      fireEvent.change(screen.getByLabelText('traveler_empcode new-1'), { target: { value: 'E9' } })
+      pickTraveler('new-1', 'E9')
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '3' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
       fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ประเทศไทย' } })

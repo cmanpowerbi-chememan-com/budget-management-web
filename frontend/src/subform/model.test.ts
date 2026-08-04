@@ -160,8 +160,8 @@ describe('destination country options (auto country_group)', () => {
 
 describe('resolveTravelerDisplay', () => {
   const TRAVELERS = [
-    { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor' },
-    { empcode: 'E2', name: 'สมหญิง มั่นคง', position: 'Manager' },
+    { empcode: 'E1', name: 'สมชาย ใจดี', position: 'Supervisor', email: 'somchai.j@chememan.com' },
+    { empcode: 'E2', name: 'สมหญิง มั่นคง', position: 'Manager', email: 'somying.m@chememan.com' },
   ]
 
   it('resolves name + position from the traveler list when the empcode is listed', () => {
@@ -169,13 +169,13 @@ describe('resolveTravelerDisplay', () => {
   })
 
   it('falls back to the trip response values for an empcode no longer in the list', () => {
-    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer' }
+    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer', email: '' }
     expect(resolveTravelerDisplay('E9', TRAVELERS, server)).toEqual({ name: 'อดีตพนักงาน', position: 'Officer' })
   })
 
   it('returns nulls when nothing matches (blank pick, or empcode changed away from the server one)', () => {
     expect(resolveTravelerDisplay('', TRAVELERS, null)).toEqual({ name: null, position: null })
-    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer' }
+    const server = { empcode: 'E9', name: 'อดีตพนักงาน', position: 'Officer', email: '' }
     expect(resolveTravelerDisplay('E8', TRAVELERS, server)).toEqual({ name: null, position: null })
   })
 })

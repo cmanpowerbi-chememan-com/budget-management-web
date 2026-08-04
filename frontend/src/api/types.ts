@@ -137,12 +137,16 @@ export interface DepartmentRow {
   c_level: string | null
 }
 
-/** `GET /reference/travelers?cost_center=` — Fill-scope traveler picklist for
- * the Trip Manager (full roster of that CC, `position` drives per-diem). */
+/** `GET /reference/travelers?cost_center=` — traveler picklist scoped to the
+ * cost center being edited (its Filler(s) + manager chain, `position`
+ * drives per-diem). `email` (added 2026-08-04) lets the frontend combobox
+ * search by email, not just name — a fallback traveler built from a trip's
+ * own response (`TripState`/`TripListItem` carry no email) uses `''`. */
 export interface TravelerOption {
   empcode: string
   name: string
   position: string
+  email: string
 }
 
 /** `GET /reference/countries` — destination master. The API returns groups

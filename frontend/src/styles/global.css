@@ -1987,6 +1987,69 @@ th.total-year-col {
 .free-text-input {
   margin-top: 4px;
 }
+
+/* Traveler combobox (Trip Manager TRAVELER NAME, 2026-08-04) — same
+   searchable-list pattern as the "+ เพิ่ม transaction" GL combobox
+   (.gl-combo above); the roster can run to hundreds of names, so a plain
+   <select> was unusable. The <input> itself inherits border/padding/font
+   from ".trip-field-grid input" (the general rule above) — only the
+   floating list + width need their own rules. */
+.trip-field-grid .traveler-combo {
+  position: relative;
+  /* .trip-field-grid label sets text-transform:uppercase for its own
+     all-caps field-caption style ("TRAVELER NAME · SAP") — reset it here so
+     it doesn't cascade onto real data (names/positions and, notably,
+     emails: an uppercased address is exactly the readability search-by-
+     email is meant to fix). One reset on the wrapper covers every child
+     below (input + list + options), none of which override it again. */
+  text-transform: none;
+}
+.traveler-combo-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.traveler-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow: auto;
+  z-index: 30;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 8px 20px rgba(30, 25, 20, 0.12);
+}
+.traveler-combo-option {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.traveler-combo-option:hover,
+.traveler-combo-option.active {
+  background: var(--paper-2);
+}
+.traveler-combo-option-name {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+/* Secondary line — email — is what makes "search by email" discoverable. */
+.traveler-combo-option-email {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.traveler-combo-empty {
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
 .trip-months-label {
   font-family: var(--mono);
   font-size: 10.5px;

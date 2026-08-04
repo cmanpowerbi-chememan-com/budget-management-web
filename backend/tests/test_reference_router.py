@@ -214,7 +214,7 @@ def test_countries_502_on_db_error(client):
 # GET /reference/travelers — See-scope gated per cost_center (admin bypass)
 # ---------------------------------------------------------------------------
 
-_TRAVELER_ROWS = [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"}]
+_TRAVELER_ROWS = [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager", "email": "somchai@chememan.com"}]
 
 
 def test_travelers_401_without_auth_header(client):
@@ -236,12 +236,17 @@ def test_travelers_in_see_scope_returns_list(client):
     )
     with patch("app.routers.reference.get_fabric_conn") as mock_fabric, patch(
         "app.routers.reference.resolve_scope", return_value=fake_scope
-    ), patch("app.routers.reference.fetch_travelers", return_value=_TRAVELER_ROWS):
+    ), patch("app.routers.reference.fetch_travelers", return_value=_TRAVELER_ROWS) as mock_fetch:
         mock_fabric.return_value.__enter__.return_value = MagicMock()
         response = client.get("/reference/travelers?cost_center=CC2")
 
     assert response.status_code == 200
     assert response.json() == _TRAVELER_ROWS
+    # fetch_travelers is called with the REQUESTED cost_center (the CC being
+    # edited), not derived from the caller's own department.
+    args, _ = mock_fetch.call_args
+    assert args[1] == "CC2"
+    assert args[2] == "filler@chememan.com"
 
 
 def test_travelers_outside_see_scope_403_and_never_queries_roster(client):

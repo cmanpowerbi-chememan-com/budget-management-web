@@ -11,13 +11,19 @@ master read:
   c_level) rows from `dbo.cc_filler_map`, scoped exactly like `GET /budget`
   (See-scope list, or `None` for the admin-wide bypass). Feeds the ฝ่าย
   picker's สายงาน›ฝ่าย›CC hierarchy (ADR-0019).
-- `fetch_travelers` — Trip Manager's traveler picker: the caller's
-  department-scoped roster from `dbo.v_traveler_picker` (same department +
-  direct manager + manager's manager + direct reports — see
+- `fetch_travelers` — Trip Manager's traveler picker, scoped by the
+  COST CENTER BEING EDITED (2026-08-04) — the ฝ่าย/CC the grid has open,
+  never the caller's own department (an admin has none). Resolves
+  `cost_center` -> its Filler email(s) in `dbo.cc_filler_map` -> the UNION of
+  `dbo.v_traveler_picker` rows for those Fillers (same department + direct
+  manager + manager's manager + direct reports — see
   db/ddl/traveler_picker_views.sql), a SUBSET of `dbo.v_employee_primary`
   which `write_model._lookup_traveler` validates against, so every pickable
-  traveler stays save-able. Falls back to the full roster when the login
-  email is not in the employee roster at all (admin/test accounts).
+  traveler stays save-able. Falls back to the CALLER's own picker rows when
+  the cost center has no Filler mapping, then to the full roster when the
+  caller isn't in the employee roster either (admin/test accounts) — a
+  filler must never lose the ability to pick (never an empty list where the
+  old code returned rows).
 - `fetch_countries` — Trip Manager's destination-country picker from
   `dbo.country_group` (group NAME → per-diem group int).
 
@@ -124,43 +130,105 @@ def fetch_departments(conn: pyodbc.Connection, cost_centers: list[str] | None) -
     ]
 
 
-def fetch_travelers(conn: pyodbc.Connection, filler_email: str) -> list[dict]:
-    """Department-scoped traveler list for the login, sorted by Thai name.
+# v_traveler_picker's own dedup (view 2 of traveler_picker_views.sql) only
+# collapses ONE filler's rows. Unioning several fillers of the same cost
+# center can reintroduce the same traveler via more than one leg — this
+# keeps the single strongest reason, same priority order as the view.
+_PICK_REASON_RANK = {"manager": 0, "skip_manager": 1, "direct_report": 2, "same_department": 3}
 
-    Scoped via `dbo.v_traveler_picker` (build + live validation:
-    db/ddl/traveler_picker_views.sql): same-department colleagues (dept_key =
-    org_code prefix + suffix-stripped org name, derived from ONE source so it
-    always resolves — the old cc_filler_map.department name match failed for
-    ~70% of ฝ่าย), UNION direct manager + manager's manager + direct
-    reports. Every row also exists in `dbo.v_employee_primary` (the picker
-    view's base), which `write_model._lookup_traveler` validates against —
-    every pickable traveler is save-able.
 
-    Fallback: a login email absent from the employee roster (admin/test
-    account) gets the FULL roster from `dbo.v_employee_primary` + a warning,
-    so non-employee sessions keep working exactly as before. NULL HR fields
-    coerce to '' (API contract is plain strings)."""
+def _query_picker_rows(cursor: pyodbc.Cursor, filler_emails: list[str]) -> list[tuple]:
+    """One `dbo.v_traveler_picker` read for however many Filler emails are
+    reaching for the same cost center (1 for the caller-fallback path, N for
+    a multi-Filler CC)."""
+    placeholders = ", ".join(["?"] * len(filler_emails))
+    cursor.execute(
+        "SELECT traveler_empcode, traveler_name, traveler_position, traveler_email, pick_reason "
+        f"FROM dbo.v_traveler_picker WHERE filler_email IN ({placeholders}) "
+        # Deterministic input to the dedupe below — without it a tie between
+        # two Fillers' rows for the same traveler is resolved by whatever
+        # order the engine happened to return.
+        "ORDER BY traveler_empcode",
+        *[e.strip().lower() for e in filler_emails],
+    )
+    return cursor.fetchall()
+
+
+def _dedupe_picker_rows(rows: list[tuple]) -> list[dict]:
+    """Collapse (filler x traveler) pairs to one row per `traveler_empcode`,
+    keeping the strongest `pick_reason`, sorted by name. NULL HR fields
+    coerce to '' (API contract is plain strings); email is lower-cased."""
+    best: dict[str, tuple[int, str, str, str]] = {}
+    for empcode, name, position, email, pick_reason in rows:
+        rank = _PICK_REASON_RANK.get(pick_reason, 99)
+        if empcode not in best or rank < best[empcode][0]:
+            best[empcode] = (rank, name or "", position or "", (email or "").lower())
+    result = [
+        {"empcode": empcode, "name": name, "position": position, "email": email}
+        for empcode, (_rank, name, position, email) in best.items()
+    ]
+    result.sort(key=lambda r: r["name"])
+    return result
+
+
+def fetch_travelers(conn: pyodbc.Connection, cost_center: str, caller_email: str) -> list[dict]:
+    """Traveler list for the cost_center being edited, sorted by Thai name.
+
+    Scoping order (each fallback logged at WARNING — a filler must never
+    lose the ability to pick, so this never returns an empty list where the
+    old caller-only lookup returned rows):
+    1. `dbo.cc_filler_map` -> every Filler email mapped to `cost_center` ->
+       the UNION of their `dbo.v_traveler_picker` rows (dept + manager chain
+       + direct reports, deduped by empcode — see `_dedupe_picker_rows`).
+    2. No Filler mapped to `cost_center` (or the mapped Fillers matched 0
+       picker rows) -> the CALLER's own picker rows (today's pre-scoping
+       behavior) — e.g. an admin browsing a CC they don't fill.
+    3. Caller absent from the picker too (admin/test account, not an
+       employee at all) -> the FULL roster from `dbo.v_employee_primary`.
+    """
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            "SELECT traveler_empcode, traveler_name, traveler_position "
-            "FROM dbo.v_traveler_picker WHERE filler_email = ? ORDER BY traveler_name",
-            filler_email.lower(),
-        )
-        rows = cursor.fetchall()
-        if not rows:
+        cursor.execute("SELECT DISTINCT filler_email FROM dbo.cc_filler_map WHERE cost_center = ?", cost_center)
+        # `.strip()` guards a whitespace-only mapping row: SQL Server compares
+        # strings trailing-blank-insensitively, so a lone ' ' would match the
+        # picker view's empty filler_email bucket (235 travelers) and hand one
+        # cost center the wrong department.
+        filler_emails = [r[0] for r in cursor.fetchall() if r[0] and r[0].strip()]
+
+        if filler_emails:
+            rows = _dedupe_picker_rows(_query_picker_rows(cursor, filler_emails))
+            if rows:
+                return rows
             logger.warning(
-                "fetch_travelers: %r not in dbo.v_traveler_picker — full-roster fallback",
-                filler_email,
+                "fetch_travelers: cost_center=%r's %d filler(s) matched 0 v_traveler_picker rows — "
+                "falling back to caller %r",
+                cost_center, len(filler_emails), caller_email,
             )
-            cursor.execute(
-                "SELECT employee_code, full_name_th, job_level_name_en "
-                "FROM dbo.v_employee_primary ORDER BY full_name_th"
+        else:
+            logger.warning(
+                "fetch_travelers: cost_center=%r has no dbo.cc_filler_map row — falling back to caller %r",
+                cost_center, caller_email,
             )
-            rows = cursor.fetchall()
+
+        rows = _dedupe_picker_rows(_query_picker_rows(cursor, [caller_email]))
+        if rows:
+            return rows
+
+        logger.warning(
+            "fetch_travelers: caller %r not in dbo.v_traveler_picker either — full-roster fallback",
+            caller_email,
+        )
+        cursor.execute(
+            "SELECT employee_code, full_name_th, job_level_name_en, email "
+            "FROM dbo.v_employee_primary ORDER BY full_name_th"
+        )
+        rows = [
+            {"empcode": r[0], "name": r[1] or "", "position": r[2] or "", "email": (r[3] or "").lower()}
+            for r in cursor.fetchall()
+        ]
     finally:
         cursor.close()
-    return [{"empcode": r[0], "name": r[1] or "", "position": r[2] or ""} for r in rows]
+    return rows
 
 
 def fetch_countries(conn: pyodbc.Connection) -> list[dict]:

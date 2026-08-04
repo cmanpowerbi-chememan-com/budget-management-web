@@ -208,61 +208,125 @@ def test_fetch_countries_closes_cursor():
 
 
 # ---------------------------------------------------------------------------
-# fetch_travelers — Trip Manager traveler picker (dept-scoped via
-# dbo.v_traveler_picker; full-roster fallback for non-employee logins)
+# fetch_travelers — Trip Manager traveler picker, scoped by the COST CENTER
+# being edited (2026-08-04): dbo.cc_filler_map -> Filler email(s) -> UNION of
+# dbo.v_traveler_picker rows, deduped by empcode. Falls back to the caller's
+# own picker rows (no Filler mapping), then the full roster (caller absent
+# too) — never an empty list where the old caller-only lookup returned rows.
 # ---------------------------------------------------------------------------
 
-def test_fetch_travelers_maps_dept_scoped_roster_from_picker_view():
-    """Dept-scoped roster from dbo.v_traveler_picker keyed by the login
-    email (same dept + manager chain + direct reports — see
-    db/ddl/traveler_picker_views.sql). The view's base is
-    dbo.v_employee_primary, the SAME roster write_model._lookup_traveler
-    validates against, so every pickable traveler is save-able."""
-    conn = MagicMock()
-    conn.cursor.return_value.fetchall.return_value = [
-        ("100001", "สมชาย ใจดี", "Manager"),
-        ("100002", "สมหญิง สายลม", "Officer"),
-    ]
-    rows = fetch_travelers(conn, "SuchanyaY@chememan.com")
-    assert rows == [
-        {"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"},
-        {"empcode": "100002", "name": "สมหญิง สายลม", "position": "Officer"},
-    ]
-    call = conn.cursor.return_value.execute.call_args
-    assert "dbo.v_traveler_picker" in call.args[0]
-    assert "WHERE filler_email = ?" in call.args[0]
-    assert "ORDER BY traveler_name" in call.args[0]
-    assert call.args[1] == "suchanyay@chememan.com"  # parameterized, lower-cased
+def _picker_row(empcode, name, position, email, pick_reason):
+    return (empcode, name, position, email, pick_reason)
 
 
-def test_fetch_travelers_unknown_login_falls_back_to_full_roster(caplog):
-    """A login email absent from the picker view (admin/test account) gets
-    the FULL roster from dbo.v_employee_primary + a warning — non-employee
-    sessions keep working exactly as before the dept-scoping."""
+def test_fetch_travelers_cost_center_scoped_returns_dept_and_manager_rows():
+    """One Filler mapped to the cost_center -> its dbo.v_traveler_picker
+    rows (dept + manager chain + direct reports), sorted by name, email
+    carried through and lower-cased."""
     conn = MagicMock()
     conn.cursor.return_value.fetchall.side_effect = [
-        [],                                            # picker view: no rows
-        [("100001", "สมชาย ใจดี", "Manager")],          # fallback roster
+        [("suchanyay@chememan.com",)],  # cc_filler_map: 1 filler for the CC
+        [
+            _picker_row("100002", "สมหญิง สายลม", "Officer", "SomyingS@chememan.com", "same_department"),
+            _picker_row("100001", "สมชาย ใจดี", "Manager", "somchai@chememan.com", "manager"),
+        ],
+    ]
+    rows = fetch_travelers(conn, "CC1", "suchanyay@chememan.com")
+    assert rows == [
+        {"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager", "email": "somchai@chememan.com"},
+        {"empcode": "100002", "name": "สมหญิง สายลม", "position": "Officer", "email": "somyings@chememan.com"},
+    ]
+    cc_sql = conn.cursor.return_value.execute.call_args_list[0].args
+    assert "dbo.cc_filler_map" in cc_sql[0] and "WHERE cost_center = ?" in cc_sql[0]
+    assert cc_sql[1] == "CC1"
+    picker_sql = conn.cursor.return_value.execute.call_args_list[1].args
+    assert "dbo.v_traveler_picker" in picker_sql[0]
+    assert "WHERE filler_email IN (?)" in picker_sql[0]
+    assert picker_sql[1] == "suchanyay@chememan.com"  # parameterized, lower-cased
+
+
+def test_fetch_travelers_multi_filler_cc_dedupes_by_empcode_keeping_strongest_reason():
+    """2 Fillers mapped to the same cost_center both reach the same
+    traveler via different legs — one row survives, the stronger
+    pick_reason (manager beats same_department)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("fillera@chememan.com",), ("fillerb@chememan.com",)],
+        [
+            _picker_row("999", "กลาง คนกลาง", "Officer", "old@chememan.com", "same_department"),
+            _picker_row("999", "กลาง คนกลาง", "Officer", "new@chememan.com", "manager"),
+        ],
+    ]
+    rows = fetch_travelers(conn, "CC-MULTI", "fillera@chememan.com")
+    assert rows == [{"empcode": "999", "name": "กลาง คนกลาง", "position": "Officer", "email": "new@chememan.com"}]
+    picker_sql = conn.cursor.return_value.execute.call_args_list[1].args
+    assert "WHERE filler_email IN (?, ?)" in picker_sql[0]
+    assert picker_sql[1:] == ("fillera@chememan.com", "fillerb@chememan.com")
+
+
+def test_fetch_travelers_no_filler_mapping_falls_back_to_caller_picker_rows(caplog):
+    """cost_center has no dbo.cc_filler_map row (e.g. an admin browsing a CC
+    they don't fill) -> fall back to the CALLER's own picker rows, warned."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [],  # cc_filler_map: no filler mapped to this CC
+        [_picker_row("100001", "สมชาย ใจดี", "Manager", "somchai@chememan.com", "same_department")],
     ]
     with caplog.at_level(logging.WARNING):
-        rows = fetch_travelers(conn, "admin@example.com")
-    assert rows == [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager"}]
+        rows = fetch_travelers(conn, "CC-ORPHAN", "admin@chememan.com")
+    assert rows == [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager", "email": "somchai@chememan.com"}]
+    assert "no dbo.cc_filler_map row" in caplog.text
+    caller_picker_sql = conn.cursor.return_value.execute.call_args_list[1].args
+    assert caller_picker_sql[1] == "admin@chememan.com"
+
+
+def test_fetch_travelers_caller_absent_falls_back_to_full_roster(caplog):
+    """Neither the CC's Fillers nor the caller are in dbo.v_traveler_picker
+    (admin/test account, not an employee at all) -> FULL roster from
+    dbo.v_employee_primary + a warning, exactly like before the CC-scoping."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [],  # cc_filler_map: no filler mapped
+        [],  # picker view for the caller: no rows either
+        [("100001", "สมชาย ใจดี", "Manager", "somchai@chememan.com")],  # fallback roster
+    ]
+    with caplog.at_level(logging.WARNING):
+        rows = fetch_travelers(conn, "CC-ORPHAN", "admin@example.com")
+    assert rows == [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager", "email": "somchai@chememan.com"}]
     assert "full-roster fallback" in caplog.text
-    fallback_sql = conn.cursor.return_value.execute.call_args.args[0]
-    assert "dbo.v_employee_primary" in fallback_sql
+    fallback_sql = conn.cursor.return_value.execute.call_args_list[2].args[0]
+    assert "dbo.v_employee_primary" in fallback_sql and "email" in fallback_sql
+
+
+def test_fetch_travelers_filler_mapped_but_zero_picker_rows_falls_back_to_caller():
+    """A mapped Filler that matches 0 v_traveler_picker rows (edge case —
+    e.g. a stale email) still falls back to the caller, never an empty list."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("stale@chememan.com",)],
+        [],  # picker rows for the stale filler: none
+        [_picker_row("100001", "สมชาย ใจดี", "Manager", "somchai@chememan.com", "manager")],
+    ]
+    rows = fetch_travelers(conn, "CC1", "caller@chememan.com")
+    assert rows == [{"empcode": "100001", "name": "สมชาย ใจดี", "position": "Manager", "email": "somchai@chememan.com"}]
+    caller_picker_sql = conn.cursor.return_value.execute.call_args_list[2].args
+    assert caller_picker_sql[1] == "caller@chememan.com"
 
 
 def test_fetch_travelers_coerces_null_name_or_position_to_empty_string():
     """API contract is plain strings — a NULL HR field renders as '' in the
     picker, never null/None."""
     conn = MagicMock()
-    conn.cursor.return_value.fetchall.return_value = [("100003", None, None)]
-    rows = fetch_travelers(conn, "a@b.com")
-    assert rows == [{"empcode": "100003", "name": "", "position": ""}]
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("filler@chememan.com",)],
+        [_picker_row("100003", None, None, None, "same_department")],
+    ]
+    rows = fetch_travelers(conn, "CC1", "filler@chememan.com")
+    assert rows == [{"empcode": "100003", "name": "", "position": "", "email": ""}]
 
 
 def test_fetch_travelers_closes_cursor():
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = []
-    fetch_travelers(conn, "a@b.com")
+    fetch_travelers(conn, "CC1", "a@b.com")
     conn.cursor.return_value.close.assert_called_once()

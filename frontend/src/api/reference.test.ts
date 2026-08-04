@@ -24,7 +24,7 @@ describe('fetchTravelers', () => {
   })
 
   it('returns the parsed traveler list on success', async () => {
-    const travelers = [{ empcode: '100123', name: 'สมชาย ทดสอบ', position: 'Officer' }]
+    const travelers = [{ empcode: '100123', name: 'สมชาย ทดสอบ', position: 'Officer', email: 'somchai.t@chememan.com' }]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, travelers)))
     await expect(fetchTravelers('CC1')).resolves.toEqual(travelers)
   })
