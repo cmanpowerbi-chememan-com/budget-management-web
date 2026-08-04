@@ -9,7 +9,7 @@ export interface YearPickerProps {
  * drop off as time passes; the list grows by one entry per year via the
  * `currentYear + WINDOW_AFTER` ceiling. */
 const FIRST_PLANNING_YEAR = 2020
-const WINDOW_AFTER = 2
+const WINDOW_AFTER = 1
 
 /** Planning-year picker — `year` prop/state/API param is the Pending layer's
  * year (Y+1), unchanged contract with the backend (`read_model.get_budget_grid`,
@@ -17,9 +17,10 @@ const WINDOW_AFTER = 2
  * year Y (= year-1) instead, matching mockup `0002.3budget-export.html`'s
  * semantic: SAP/Approved(Y) + Pending(Y+1) all read as "Year Y". Option
  * `value` stays the planning year so `onChange`/state/API calls never change.
- * Options run from FIRST_PLANNING_YEAR up to `now + WINDOW_AFTER`; the
- * currently selected year is always included even if a deep-link or stale
- * state points outside it. */
+ * Options run from FIRST_PLANNING_YEAR up to `now + WINDOW_AFTER`, which
+ * makes the newest option always labelled with the current calendar year —
+ * nothing beyond today's year is ever offered. The currently selected year
+ * is always included even if a deep-link or stale state points outside it. */
 export function YearPicker({ year, onChange }: YearPickerProps) {
   const currentYear = new Date().getFullYear()
   const years = new Set<number>()

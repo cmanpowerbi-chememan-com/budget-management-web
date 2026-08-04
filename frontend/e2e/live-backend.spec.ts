@@ -19,7 +19,8 @@
  * The ONE test-environment shim (not a mock): the browser's clock is pinned
  * to 2098 via addInitScript. Why: the product deliberately rejects deep-link
  * years outside "now" ± 5 (`filters/deepLink.ts`) and the YearPicker only
- * offers current-1..current+2 — so sentinel planning-year 2099 is
+ * offers labels up to the current calendar year (planning years
+ * FIRST_PLANNING_YEAR..current+1) — so sentinel planning-year 2099 is
  * unreachable through the real UI unless "now" moves. With the clock at
  * 2098, `?year=2098` parses to planning year 2099 through the REAL deep-link
  * code path. All backend/DB behavior is untouched by this.

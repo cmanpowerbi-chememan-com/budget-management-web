@@ -11,8 +11,9 @@ describe('YearPicker', () => {
   it('calls onChange with the picked year as a number', () => {
     const onChange = vi.fn()
     render(<YearPicker year={2027} onChange={onChange} />)
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2028' } })
-    expect(onChange).toHaveBeenCalledWith(2028)
+    // 2020 is the fixed floor (always a valid option regardless of today's date).
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2020' } })
+    expect(onChange).toHaveBeenCalledWith(2020)
   })
 
   it('always includes the currently selected year even if outside the default window', () => {
@@ -30,5 +31,14 @@ describe('YearPicker', () => {
     render(<YearPicker year={2027} onChange={vi.fn()} />)
     const option = screen.getByRole('option', { name: 'Year 2026' }) as HTMLOptionElement
     expect(option.value).toBe('2027')
+  })
+
+  it('caps the newest option label at the current calendar year — nothing beyond today', () => {
+    const currentYear = new Date().getFullYear()
+    render(<YearPicker year={2027} onChange={vi.fn()} />)
+    expect(screen.getByRole('option', { name: `Year ${currentYear}` })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: `Year ${currentYear + 1}` })
+    ).not.toBeInTheDocument()
   })
 })
