@@ -547,6 +547,8 @@ describe('BudgetGrid', () => {
     const fxLink = zone.querySelector('a')
     expect(fxLink).toHaveAttribute('target', '_blank')
     expect(fxLink).toHaveAttribute('href', 'https://witty-meadow-01107f500.7.azurestaticapps.net/master-currency.html')
+    // Collapsed to one line (2026-08-04): the old stacked second row is gone.
+    expect(zone.querySelector('.admin-zone-actions')).not.toBeInTheDocument()
   })
 
   it('never shows the admin-only info strip for a non-admin scope', async () => {

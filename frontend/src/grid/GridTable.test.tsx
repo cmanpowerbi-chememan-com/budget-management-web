@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow, GlAccount } from '../api/types'
 import { COLUMN_WIDTH_MIN, COLUMN_WIDTHS_STORAGE_KEY } from './model'
 import { GridTable } from './GridTable'
@@ -893,6 +893,317 @@ describe('GridTable', () => {
       expect(() => fireEvent.click(btn)).not.toThrow()
     })
   })
+
+  describe('last-table measured max-height (replaces hardcoded 380px/260px reserve)', () => {
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }), // COST, Office expenses
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }), // SGA, Office expenses
+    ]
+    const onlyCostRows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
+
+    const ORIGINAL_INNER_HEIGHT = window.innerHeight
+
+    function setInnerHeight(px: number) {
+      Object.defineProperty(window, 'innerHeight', { value: px, configurable: true })
+    }
+
+    /** jsdom never lays out real geometry (`getBoundingClientRect` always
+     * reports zeros) — stub it on one element so the measured-reserve math
+     * has a real, known number to compute from. Returns the spy so callers
+     * can also assert call counts (proves whether a recompute actually
+     * re-read the element, not just that the final number looks right). */
+    function stubHeight(el: Element, height: number) {
+      return vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+        height, width: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => undefined,
+      })
+    }
+
+    /** jsdom has no `ResizeObserver` at all, so the RO branch in GridTable
+     * (`typeof ResizeObserver !== 'undefined'`) is otherwise never
+     * exercised. Minimal stub, scoped to this describe block only via
+     * `vi.stubGlobal` in `beforeEach`/`vi.unstubAllGlobals` in `afterEach`
+     * below — never added to `src` or to the shared `test/setup.ts`. */
+    class FakeResizeObserver {
+      static instances: FakeResizeObserver[] = []
+      readonly disconnect = vi.fn()
+      private readonly callback: ResizeObserverCallback
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+        FakeResizeObserver.instances.push(this)
+      }
+      observe() {
+        /* no-op — GridTable's callback (`recompute`) ignores the target and
+           re-reads live DOM state instead, so nothing to track here. */
+      }
+      unobserve() {}
+      /** Simulates the browser reporting an observed size change. */
+      trigger() {
+        this.callback([], this as unknown as ResizeObserver)
+      }
+    }
+
+    beforeEach(() => {
+      FakeResizeObserver.instances = []
+      vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    })
+
+    /** GridTable measures `.nav` / the approval bar (`.approval-bar`,
+     * falling back to `[data-testid="approval-bar"]`) / the shared
+     * `.budget-grid` ancestor via `document.querySelector` — all three
+     * normally live in BudgetGrid, one level up. GridTable is unit-tested
+     * in isolation here, so build a minimal stand-in for that page-level
+     * chrome and clean it up in `afterEach` below. The approval bar carries
+     * BOTH the class and the testid, matching the real
+     * `ApprovalActionBar.tsx` (which renders both on every branch). */
+    function mountChrome({
+      navHeight,
+      approvalHeight,
+      budgetGridMarginBottom,
+      budgetGridPaddingBottom,
+    }: {
+      navHeight: number
+      approvalHeight: number
+      /** `.budget-grid`'s own margin-bottom (normal mode, global.css:471 =
+       * 60px in production) — set as an inline style so `getComputedStyle`
+       * can read it back. */
+      budgetGridMarginBottom?: number
+      /** `.budget-grid.is-fullscreen`'s padding-bottom (fullscreen mode,
+       * global.css:488 = 28px in production). */
+      budgetGridPaddingBottom?: number
+    }) {
+      const budgetGrid = document.createElement('div')
+      budgetGrid.className = 'budget-grid'
+      if (budgetGridMarginBottom !== undefined) budgetGrid.style.marginBottom = `${budgetGridMarginBottom}px`
+      if (budgetGridPaddingBottom !== undefined) budgetGrid.style.paddingBottom = `${budgetGridPaddingBottom}px`
+      document.body.appendChild(budgetGrid)
+      const nav = document.createElement('div')
+      nav.className = 'nav'
+      stubHeight(nav, navHeight)
+      document.body.appendChild(nav)
+      const approvalBar = document.createElement('div')
+      approvalBar.className = 'approval-bar'
+      approvalBar.setAttribute('data-testid', 'approval-bar')
+      const approvalSpy = stubHeight(approvalBar, approvalHeight)
+      budgetGrid.appendChild(approvalBar)
+      return { budgetGrid, approvalBar, approvalSpy }
+    }
+
+    afterEach(() => {
+      document.querySelectorAll('.nav, .budget-grid').forEach((el) => el.remove())
+      setInnerHeight(ORIGINAL_INNER_HEIGHT)
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    })
+
+    it('applies a computed inline max-height to the LAST rendered section only, leaving the earlier one on the CSS cap', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      const costWrap = screen.getByTestId('side-section-COST').querySelector('.table-wrap') as HTMLElement
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // 1000 - (64 nav + 80 approval bar + 0 measured margins/heading-row in
+      // this bare jsdom DOM) = 856.
+      expect(sgaWrap.style.maxHeight).toBe('856px')
+      expect(costWrap.style.maxHeight).toBe('')
+    })
+
+    it('when only one section has rows, THAT section is treated as last and gets the computed max-height', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={onlyCostRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      expect(screen.queryByTestId('side-section-SGA')).not.toBeInTheDocument()
+      const costWrap = screen.getByTestId('side-section-COST').querySelector('.table-wrap') as HTMLElement
+      expect(costWrap.style.maxHeight).toBe('856px')
+    })
+
+    it('falls back to the CSS cap (no inline max-height) when the approval bar is not in the DOM', () => {
+      // No mountChrome() — no `.nav`/approval-bar exist, matching an
+      // isolated GridTable render or a page where no ฝ่าย is selected yet.
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      const costWrap = screen.getByTestId('side-section-COST').querySelector('.table-wrap') as HTMLElement
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      expect(costWrap.style.maxHeight).toBe('')
+      expect(sgaWrap.style.maxHeight).toBe('')
+    })
+
+    it('recomputes on window resize', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      expect(sgaWrap.style.maxHeight).toBe('856px')
+
+      setInnerHeight(700)
+      fireEvent(window, new Event('resize'))
+      // 700 - 144 (same 64+80 reserve) = 556.
+      expect(sgaWrap.style.maxHeight).toBe('556px')
+    })
+
+    it('fullscreen mode omits the .nav height from the reserve (the overlay paints over nav at inset:0)', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} isFullscreen onToggleFullscreen={vi.fn()} />)
+
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // 1000 - (0 nav, skipped in fullscreen + 80 approval bar) = 920.
+      expect(sgaWrap.style.maxHeight).toBe('920px')
+    })
+
+    it('reads .budget-grid margin-bottom into the reserve in normal mode (GATE FIX1) — padding-bottom is ignored here', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80, budgetGridMarginBottom: 60, budgetGridPaddingBottom: 28 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // 1000 - (64 nav + 80 approval bar + 60 .budget-grid margin-bottom) =
+      // 796. Before GATE FIX1 this term was omitted entirely (would have
+      // read 856px, ~60px too tall).
+      expect(sgaWrap.style.maxHeight).toBe('796px')
+    })
+
+    it('swaps to .budget-grid padding-bottom in fullscreen mode (GATE FIX1) — margin-bottom is ignored there', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80, budgetGridMarginBottom: 60, budgetGridPaddingBottom: 28 })
+      render(
+        <GridTable
+          rows={bothSidesRows}
+          glRef={GL_REF}
+          onCommitMonth={vi.fn()}
+          isFullscreen
+          onToggleFullscreen={vi.fn()}
+        />,
+      )
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // 1000 - (0 nav, skipped in fullscreen + 80 approval bar + 28
+      // .budget-grid padding-bottom) = 892. Before GATE FIX1 this would
+      // have read 920px, ~28px too tall.
+      expect(sgaWrap.style.maxHeight).toBe('892px')
+    })
+
+    it('finds the approval bar by its real .approval-bar class with no data-testid at all (GATE FIX3) — a testid rename can never silently drop back to the CSS cap', () => {
+      setInnerHeight(1000)
+      const budgetGrid = document.createElement('div')
+      budgetGrid.className = 'budget-grid'
+      document.body.appendChild(budgetGrid)
+      const nav = document.createElement('div')
+      nav.className = 'nav'
+      stubHeight(nav, 64)
+      document.body.appendChild(nav)
+      const approvalBar = document.createElement('div')
+      approvalBar.className = 'approval-bar' // deliberately no data-testid
+      stubHeight(approvalBar, 80)
+      budgetGrid.appendChild(approvalBar)
+
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // Same 856px as the testid-carrying mountChrome tests — proves the
+      // class selector alone is sufficient, the testid is not load-bearing.
+      expect(sgaWrap.style.maxHeight).toBe('856px')
+    })
+
+    it('falls back cleanly (no inline max-height) when reserved > 0 but the viewport is shorter than the reserve', () => {
+      setInnerHeight(100)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      // reserved = 144 > 0, available = 100 - 144 = -44 <= 0 — must fall
+      // back to the CSS cap, never set a negative/zero max-height.
+      expect(sgaWrap.style.maxHeight).toBe('')
+    })
+
+    it('recomputes when the ResizeObserver reports the approval bar changed size (test gap L5)', () => {
+      setInnerHeight(1000)
+      const { approvalBar } = mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      expect(sgaWrap.style.maxHeight).toBe('856px')
+
+      const ro = FakeResizeObserver.instances.at(-1)
+      expect(ro).toBeDefined()
+
+      // The approval bar grows (e.g. the reject panel opens) — re-stub its
+      // height, then fire the observer callback the same way a real
+      // ResizeObserver would when it detects the change. `act()` is
+      // required here: unlike `fireEvent`, a raw manual call is not
+      // dispatched through React's own event handling, so the resulting
+      // `setState` is otherwise left batched/unflushed at assertion time
+      // (React 18 automatic batching outside act/fireEvent).
+      stubHeight(approvalBar, 140)
+      act(() => {
+        ro!.trigger()
+      })
+
+      // 1000 - (64 nav + 140 approval bar) = 796.
+      expect(sgaWrap.style.maxHeight).toBe('796px')
+    })
+
+    it('recomputes when the approval bar mounts or unmounts later (MutationObserver, direct-child only — GATE FIX2)', async () => {
+      setInnerHeight(1000)
+      const budgetGrid = document.createElement('div')
+      budgetGrid.className = 'budget-grid'
+      document.body.appendChild(budgetGrid)
+      const nav = document.createElement('div')
+      nav.className = 'nav'
+      stubHeight(nav, 64)
+      document.body.appendChild(nav)
+
+      // No approval bar yet — mirrors "no ฝ่าย selected" before it mounts.
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      expect(sgaWrap.style.maxHeight).toBe('')
+
+      const approvalBar = document.createElement('div')
+      approvalBar.className = 'approval-bar'
+      stubHeight(approvalBar, 80)
+      budgetGrid.appendChild(approvalBar) // direct-child add of .budget-grid
+
+      await waitFor(() => expect(sgaWrap.style.maxHeight).toBe('856px'))
+
+      budgetGrid.removeChild(approvalBar) // direct-child remove
+
+      await waitFor(() => expect(sgaWrap.style.maxHeight).toBe(''))
+    })
+
+    it('ignores a mutation nested inside the approval bar itself (GATE FIX2 — subtree:false, no longer a forced reflow on every table edit)', async () => {
+      setInnerHeight(1000)
+      const { approvalBar, approvalSpy } = mountChrome({ navHeight: 64, approvalHeight: 80 })
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const sgaWrap = screen.getByTestId('side-section-SGA').querySelector('.table-wrap') as HTMLElement
+      expect(sgaWrap.style.maxHeight).toBe('856px')
+      const callsBeforeMutation = approvalSpy.mock.calls.length
+
+      // A mutation NESTED inside the approval bar (standing in for typing
+      // in a column filter, or a per-row save message appearing, deep
+      // inside `.budget-grid`) is not a direct-child mutation of
+      // `.budget-grid` itself and must NOT trigger a recompute.
+      const note = document.createElement('span')
+      note.textContent = 'typing in a column filter'
+      approvalBar.appendChild(note)
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(approvalSpy.mock.calls.length).toBe(callsBeforeMutation)
+    })
+
+    it('removes the resize listener, ResizeObserver, and MutationObserver on unmount (test gap L5)', () => {
+      setInnerHeight(1000)
+      mountChrome({ navHeight: 64, approvalHeight: 80 })
+      const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
+      const mutationDisconnectSpy = vi.spyOn(MutationObserver.prototype, 'disconnect')
+
+      const { unmount } = render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const ro = FakeResizeObserver.instances.at(-1)
+      expect(ro).toBeDefined()
+
+      unmount()
+
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function))
+      expect(mutationDisconnectSpy).toHaveBeenCalled()
+      expect(ro!.disconnect).toHaveBeenCalled()
+    })
+  })
+
   describe('ADR-0026 hidden SAP months', () => {
     const HIDDEN_TOOLTIP = 'ข้อมูล SAP เดือนนี้ยังไม่ครบ จึงยังไม่แสดง'
     const janToMarRow = makeRow({

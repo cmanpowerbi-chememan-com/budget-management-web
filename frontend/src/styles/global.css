@@ -118,7 +118,7 @@ input:focus-visible {
 }
 .page-title {
   font-family: var(--serif);
-  font-size: clamp(48px, 7vw, 86px);
+  font-size: clamp(34px, 4.9vw, 60px);
   line-height: 0.98;
   letter-spacing: -0.025em;
   font-weight: 400;
@@ -490,14 +490,22 @@ input:focus-visible {
   background: var(--paper);
 }
 /* Give the rows back the height the covered page chrome used to eat. The
-   normal rule is max-height: calc(100vh - 380px) (.table-wrap below). The
-   260px is a first estimate (toolbar + legend + heading) — tune against the
-   verification screenshot. */
+   normal rule is max-height: calc(100vh - 380px) (.table-wrap below). This
+   260px is the FALLBACK ONLY, used when the measured reserve is
+   unavailable — see the .table-wrap comment below for the real (measured)
+   mechanism, which applies in fullscreen too. */
 .budget-grid.is-fullscreen .table-wrap {
   max-height: calc(100vh - 260px);
 }
 .budget-grid.is-fullscreen .side-section {
   margin-bottom: 20px;
+}
+/* Same "no trailing margin on the last section" rule as the normal-mode
+   `.side-section:last-child` below, restated here with matching specificity
+   — a plain `.side-section:last-child` selector loses to the rule above
+   inside `.budget-grid.is-fullscreen` otherwise. */
+.budget-grid.is-fullscreen .side-section:last-child {
+  margin-bottom: 0;
 }
 .grid-toolbar {
   display: flex;
@@ -571,21 +579,14 @@ input:focus-visible {
 .admin-zone {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 13px 16px;
-  margin-bottom: 18px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
   border-radius: var(--r);
   background: color-mix(in oklab, var(--status-approved) 7%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--status-approved) 32%, var(--line));
   border-left: 4px solid var(--status-approved);
-}
-.admin-zone-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 .admin-zone-ic {
   width: 16px;
@@ -596,7 +597,7 @@ input:focus-visible {
 .admin-zone-title {
   font-family: var(--serif);
   font-weight: 500;
-  font-size: 17px;
+  font-size: 14.5px;
   letter-spacing: -0.005em;
   color: var(--status-approved);
 }
@@ -609,11 +610,6 @@ input:focus-visible {
 .admin-zone-note b {
   color: var(--status-approved);
   font-weight: 700;
-}
-.admin-zone-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 /* ─── ฝ่าย picker ─── */
@@ -852,6 +848,15 @@ input:focus-visible {
 .side-section {
   margin-bottom: 28px;
 }
+/* The LAST rendered section (COST/SGA, whichever has no sibling after it)
+   needs none of that 28px — `.budget-grid`'s own flex `gap` (16px) plus the
+   approval bar's own margin-top (18px) already give it real breathing room;
+   stacking this margin ON TOP of that gap is exactly the dead band this
+   task removes. Between COST and SGA themselves the 28px is untouched — this
+   selector only ever matches whichever section has no following sibling. */
+.side-section:last-child {
+  margin-bottom: 0;
+}
 /* Heading + "Reset columns" button share this row (UI-parity point 8c,
    revised) — the button used to live in its own right-aligned row above
    both tables; it now sits beside each side's heading instead, so the
@@ -883,7 +888,16 @@ input:focus-visible {
 /* The actual scroll container: vertical scroll keeps the sticky header
    pinned, horizontal scroll keeps the frozen identity columns pinned.
    No min-height — the panel hugs its rows (a fixed floor left a dead
-   white band under short tables); max-height alone bounds tall ones. */
+   white band under short tables); max-height alone bounds tall ones.
+   calc(100vh - 380px) here is the FALLBACK: the LAST rendered side-section
+   (COST or SGA, whichever actually has rows and renders last — GridTable.tsx
+   `measureLastTableMaxHeight`) gets a measured inline max-height instead,
+   computed from the real DOM (sticky .nav height + that section's own
+   .side-heading-row height + the approval bar's height + the real CSS
+   margins/gaps between them), in BOTH normal and fullscreen mode. Every
+   earlier section, and the last one whenever the measurement is
+   unavailable (SSR, an isolated render, no approval bar mounted yet),
+   still uses this flat estimate. */
 .table-wrap {
   overflow: auto;
   max-height: calc(100vh - 380px);

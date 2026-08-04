@@ -165,6 +165,111 @@ function measureColumnWidths(container: HTMLElement | null): ColumnWidths {
   }
 }
 
+/** Reads a numeric CSS length off a live computed style (margin/gap) so the
+ * reserve calc below never drifts out of sync with global.css the way a
+ * hand-copied constant would — a later CSS tweak is picked up automatically.
+ * Missing element / unset property folds to 0 rather than NaN. */
+function computedLength(
+  el: Element | null,
+  property: 'marginBottom' | 'marginTop' | 'rowGap' | 'paddingBottom',
+): number {
+  if (!el) return 0
+  const parsed = parseFloat(getComputedStyle(el)[property])
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * Computes the vertical space to reserve OUTSIDE the LAST side-table's
+ * `.table-wrap` so its scrolled bottom edge lands just above the approval
+ * bar, replacing the flat `calc(100vh - 380px)` / `calc(100vh - 260px)`
+ * guesses in global.css (the 260px comment there literally called it "a
+ * first estimate ... tune against the verification screenshot" — this is
+ * that tuning, done live from the real DOM instead of by hand).
+ *
+ * Measured, not hardcoded: the sticky `.nav`'s real height (0 in
+ * fullscreen — `.budget-grid.is-fullscreen` is `position:fixed;inset:0`,
+ * painting OVER nav at the same top edge, so nav consumes none of the
+ * overlay's OWN vertical budget there), THIS section's own
+ * `.side-heading-row` height (it sits directly above the table-wrap being
+ * sized), the approval bar's height, and the real CSS margins/gaps between
+ * them (`.side-heading-row`'s margin-bottom, its parent `.side-section`'s
+ * own margin-bottom — the space down to the next section or, for the last
+ * one, to the approval bar — `.approval-bar`'s margin-top, `.budget-grid`'s
+ * flex `gap`) — read live via `computedLength` above rather than copied as
+ * numbers.
+ *
+ * Measurement lives HERE, inside GridTable (`document.querySelector` for
+ * the nav/approval-bar/`.budget-grid` — all page-level singletons this
+ * component doesn't own), rather than as a reserve prop threaded down from
+ * BudgetGrid: GridTable already computes "which side is last" internally
+ * (`sidesWithData`), and it owns `.side-heading-row`; splitting the
+ * measurement across both components would need BudgetGrid to know about a
+ * GridTable-internal element for no real benefit.
+ *
+ * Returns `undefined` — "measurement unavailable" — whenever the approval
+ * bar isn't in the DOM yet (isolated GridTable renders, or no ฝ่าย
+ * selected), or the computed reserve/available height comes out to 0 or
+ * less; callers must fall back to the existing CSS `max-height` cap rather
+ * than apply a meaningless number.
+ */
+/** `.approval-bar` (the real, stable class ApprovalActionBar.tsx renders on
+ * every branch) is tried before `[data-testid="approval-bar"]` — a testid is
+ * a test hook, not a contract; if one gets renamed this measurement must not
+ * silently fall back to the CSS cap. The testid stays only as a fallback. */
+function queryApprovalBar(): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>('.approval-bar') ??
+    document.querySelector<HTMLElement>('[data-testid="approval-bar"]')
+  )
+}
+
+function measureLastTableMaxHeight(headingEl: HTMLElement | null, isFullscreen: boolean): number | undefined {
+  if (typeof window === 'undefined') return undefined
+  const approvalEl = queryApprovalBar()
+  if (!approvalEl) return undefined
+
+  const navEl = document.querySelector<HTMLElement>('.nav')
+  const navHeight = isFullscreen ? 0 : (navEl?.getBoundingClientRect().height ?? 0)
+  const headingHeight = headingEl?.getBoundingClientRect().height ?? 0
+  const headingMargin = computedLength(headingEl, 'marginBottom')
+  // `.side-heading-row`'s own parent is the `.side-section` wrapper — ITS
+  // margin-bottom (28px normal / 20px fullscreen, global.css) is the space
+  // between this section and whatever follows (the next side-section, or —
+  // for the LAST one — `.budget-grid`'s flex gap down to the approval bar).
+  // Missing this term left the measured reserve ~28px short (verified
+  // empirically: table-wrap grew that far past where the approval bar
+  // actually starts).
+  const sideSectionMargin = computedLength(headingEl?.parentElement ?? null, 'marginBottom')
+  const approvalHeight = approvalEl.getBoundingClientRect().height
+  const approvalMargin = computedLength(approvalEl, 'marginTop')
+  const budgetGridEl = document.querySelector('.budget-grid')
+  const budgetGridGap = computedLength(budgetGridEl, 'rowGap')
+  // `.budget-grid` reserves space AFTER its last child (the approval bar)
+  // too: a `margin-bottom` in normal mode (60px, global.css:471) that swaps
+  // to `padding-bottom` in fullscreen mode (28px, global.css:488 — the
+  // overlay resets margin to 0). Missing this term left the reserve short
+  // by exactly that amount, so the last `.table-wrap` could stretch ~60px
+  // (normal) / ~28px (fullscreen) past where the approval bar's own box
+  // already ends, tucking its heading under the sticky nav once scrolled.
+  const budgetGridBottomSpacing = isFullscreen
+    ? computedLength(budgetGridEl, 'paddingBottom')
+    : computedLength(budgetGridEl, 'marginBottom')
+
+  const reserved =
+    navHeight +
+    headingHeight +
+    headingMargin +
+    sideSectionMargin +
+    approvalHeight +
+    approvalMargin +
+    budgetGridGap +
+    budgetGridBottomSpacing
+  if (reserved <= 0) return undefined
+
+  const available = window.innerHeight - reserved
+  return available > 0 ? available : undefined
+}
+
 /** Hidden (visually, not `display:none` — that would report 0 widths in a
  * real browser too) DOM measurement pass for the 4 identity columns
  * (UI-parity point 8d — fit-to-content default). Renders each header label +
@@ -644,6 +749,120 @@ export function GridTable({
   // from ever re-triggering itself (no loop).
   const measureCandidates = useMemo(() => selectMeasureCandidates(rows, glRef), [rows, glRef])
 
+  // Which sides exist AT ALL (ignoring the column filters) — decides both
+  // whether a side renders its table+header (below, after the empty-state
+  // return) AND which one is "last" (for the measured max-height effect
+  // right below) — hoisted into a memo so BOTH consumers share one
+  // computation and, critically, so "last side" is known BEFORE the
+  // rows.length===0 early return further down (React hooks must run
+  // unconditionally on every render, so this can't wait until after it).
+  const sidesWithData = useMemo(() => groupAndSortBySide(rows, glRef), [rows, glRef])
+  // The side actually rendered LAST (COST/SGA render in that fixed order,
+  // but either can be absent when a side has no rows) — only ITS
+  // `.table-wrap` gets the measured stretch; the earlier one keeps the
+  // content-driven CSS-cap height it always had.
+  const lastRenderedSide = useMemo(
+    () => (['COST', 'SGA'] as const).filter((side) => sidesWithData[side].length > 0).pop() ?? null,
+    [sidesWithData],
+  )
+
+  // Measured max-height for the LAST side's `.table-wrap` (see
+  // `measureLastTableMaxHeight` above) — `undefined` means "fall back to
+  // the CSS cap", never a stretched/collapsed height.
+  const [lastTableMaxHeight, setLastTableMaxHeight] = useState<number | undefined>(undefined)
+  // One ref per side (not just "the last one") so whichever side turns out
+  // to be last always has an attached `.side-heading-row` node to measure —
+  // simpler than conditionally attaching/detaching a single ref as
+  // `lastRenderedSide` changes across renders.
+  const headingRowRefs = useRef<Partial<Record<'COST' | 'SGA', HTMLDivElement | null>>>({})
+  // Which approval-bar DOM node the ResizeObserver below is CURRENTLY
+  // attached to — lets a MutationObserver-triggered recompute tell "same
+  // element, just resized" (already covered by the RO) apart from "a
+  // different element replaced/removed it" (re-observe needed) without
+  // tearing the RO down on every single recompute call.
+  const observedApprovalElRef = useRef<Element | null>(null)
+  const approvalResizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  // useLayoutEffect (not useEffect) — matching the column-fit effect
+  // further below: runs synchronously after the DOM updates but BEFORE the
+  // browser paints, so the first paint and every fullscreen toggle already
+  // show the measured max-height instead of flashing the CSS-cap height
+  // for one frame.
+  useLayoutEffect(() => {
+    // SSR/static-export guard (`output: export`) — window/document are
+    // only ever touched from inside this effect (post-render, client-only),
+    // never during render itself; this early return is a cheap extra
+    // safety net on top of that. The app is client-only (`dynamic(ssr:
+    // false)`), so this component tree never actually server-renders —
+    // useLayoutEffect's SSR warning path never applies here.
+    if (typeof window === 'undefined') return
+    if (!lastRenderedSide) {
+      setLastTableMaxHeight(undefined)
+      return
+    }
+
+    function syncApprovalResizeObserver() {
+      const approvalEl = queryApprovalBar()
+      if (approvalEl === observedApprovalElRef.current) return
+      approvalResizeObserverRef.current?.disconnect()
+      approvalResizeObserverRef.current = null
+      observedApprovalElRef.current = approvalEl
+      // Guard for jsdom/older browsers without ResizeObserver — degrades to
+      // "no live resize tracking", the other triggers (resize/rows/
+      // fullscreen/mutation) still recompute.
+      if (approvalEl && typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(recompute)
+        ro.observe(approvalEl)
+        approvalResizeObserverRef.current = ro
+      }
+    }
+
+    function recompute() {
+      const headingEl = headingRowRefs.current[lastRenderedSide as 'COST' | 'SGA'] ?? null
+      setLastTableMaxHeight(measureLastTableMaxHeight(headingEl, isFullscreen))
+      syncApprovalResizeObserver()
+    }
+
+    recompute()
+    window.addEventListener('resize', recompute)
+
+    // The approval bar mounts/unmounts from OUTSIDE this component
+    // (BudgetGrid's `{department && <ApprovalActionBar .../>}` guard) and
+    // can also grow (the reject panel opening, an error hint wrapping) —
+    // resize is covered by the ResizeObserver above; appear/disappear is
+    // covered here by a MutationObserver on the shared `.budget-grid`
+    // ancestor (both this table and the approval bar live inside it), the
+    // honest tool for "did a node get added/removed" the same way
+    // ResizeObserver is the honest tool for "did a node change size".
+    // `subtree: false` (the default — no `subtree` key at all) is
+    // deliberate: the approval bar is a DIRECT child of `.budget-grid`, so
+    // watching only direct-child add/remove already catches mount/unmount.
+    // `subtree: true` was over-broad — it also fired `recompute` (3
+    // `getBoundingClientRect` + 4 `getComputedStyle` reads, a forced
+    // reflow) on every mutation ANYWHERE inside the grid, including typing
+    // in a column filter or a per-row save message appearing.
+    const budgetGridEl = document.querySelector('.budget-grid')
+    let mutationObserver: MutationObserver | undefined
+    if (budgetGridEl && typeof MutationObserver !== 'undefined') {
+      mutationObserver = new MutationObserver(recompute)
+      mutationObserver.observe(budgetGridEl, { childList: true })
+    }
+
+    return () => {
+      window.removeEventListener('resize', recompute)
+      mutationObserver?.disconnect()
+      approvalResizeObserverRef.current?.disconnect()
+      approvalResizeObserverRef.current = null
+      observedApprovalElRef.current = null
+    }
+    // Recompute triggers (per spec): window resize (listener above),
+    // fullscreen toggle (isFullscreen), rows changing (rows — also covers
+    // most department/ฝ่าย switches, since those refetch the grid), and
+    // "which side is last" changing. Approval-bar appear/resize are their
+    // own observers, not deps, by design (see comments above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, isFullscreen, lastRenderedSide])
+
   useLayoutEffect(() => {
     // Guard: no rows means nothing rendered to measure (this component
     // itself short-circuits to the plain empty state below when
@@ -763,11 +982,11 @@ export function GridTable({
   // only the matching rows (sectionTotals runs on the filtered set).
   const filteredRows = filterRows(rows, glRef, colFilters)
   const sections = groupAndSortBySide(filteredRows, glRef)
-  // Which sides exist AT ALL (ignoring the filter) — decides whether a side
-  // renders its table+header, same as before this feature existed. A side
-  // that legitimately has zero groups pre-filter (e.g. no SG&A rows in this
-  // scope) still renders nothing, unchanged.
-  const sidesWithData = groupAndSortBySide(rows, glRef)
+  // sidesWithData/lastRenderedSide are computed above (useMemo, before this
+  // early return) — reused here unchanged: which sides exist AT ALL
+  // (ignoring the filter) decides whether a side renders its table+header.
+  // A side that legitimately has zero groups pre-filter (e.g. no SG&A rows
+  // in this scope) still renders nothing, unchanged.
   const nowMonth = nowMonthKey()
 
   // ADR-0026: months whose SAP actuals are incomplete arrive as null, so the
@@ -833,7 +1052,12 @@ export function GridTable({
                state shared by both side-tables, so both buttons call the
                same handler; each side needs its own data-testid since the
                button now renders twice. */}
-            <div className="side-heading-row">
+            <div
+              className="side-heading-row"
+              ref={(el) => {
+                headingRowRefs.current[side] = el
+              }}
+            >
               <h2 className="side-heading">{SIDE_LABEL[side]}</h2>
               <button
                 type="button"
@@ -856,9 +1080,20 @@ export function GridTable({
             </div>
             {/* .table-panel = bordered frame (border/radius live here, not on
                .data-table, so the sticky header isn't clipped); .table-wrap =
-               the actual vertical+horizontal scroll container. */}
+               the actual vertical+horizontal scroll container. Only the
+               LAST rendered side gets a measured inline max-height (see
+               `measureLastTableMaxHeight` above) — an earlier side (or the
+               last one whenever the measurement is unavailable) keeps the
+               plain CSS cap, no inline style at all. */}
             <div className="table-panel">
-              <div className="table-wrap">
+              <div
+                className="table-wrap"
+                style={
+                  side === lastRenderedSide && lastTableMaxHeight !== undefined
+                    ? { maxHeight: lastTableMaxHeight }
+                    : undefined
+                }
+              >
                 <table className="data-table" style={freezeStyle}>
                   {/* Column widths live on the <colgroup> (fixed layout) —
                      the 4 identity cols (incl. Remark) come from the SAME
