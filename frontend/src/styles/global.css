@@ -1738,6 +1738,13 @@ th.total-year-col {
   gap: 8px;
 }
 
+/* Session-expiry dialog (auth/SessionExpiredDialog.tsx) must outrank the
+   ordinary .modal-backdrop (z500) so it still covers an already-open
+   subform/trip modal when the session dies mid-edit. */
+.session-expired-backdrop {
+  z-index: 600;
+}
+
 /* ─── Special-GL detail table (DetailSubform) ─── */
 .detail-table {
   width: 100%;

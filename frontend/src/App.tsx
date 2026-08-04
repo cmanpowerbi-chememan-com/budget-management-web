@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './auth/useAuth'
 import { useScope } from './auth/useScope'
+import { SessionExpiredDialog } from './auth/SessionExpiredDialog'
 import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
 import { UserBar } from './userbar/UserBar'
@@ -64,6 +65,11 @@ function App() {
 
   return (
     <>
+      {/* Mounted unconditionally, above the `ready` gate below — must still
+          render even when the very first boot call (GET /me, useAuth) is
+          what raises the session-expiry latch, before BudgetGrid mounts. */}
+      <SessionExpiredDialog />
+
       <nav className="nav">
         <div className="nav-inner">
           <div className="nav-logo-text">

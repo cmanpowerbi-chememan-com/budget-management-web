@@ -190,3 +190,21 @@ A GL group whose Pending amount is NOT typed monthly but produced by a detail su
 (button "+ ใส่รายละเอียดงบทำการ"); the summed total flows back read-only. Six groups —
 Travelling Expense (per-diem engine), Entertainment, Lease & Rental, Professional & Legal
 Fee, Public Relation & Donation, Training & Seminar. See spec doc 02.
+
+### Login session
+The period during which a logged-in user may use the app without authenticating again.
+**Fixed-length, not sliding**: it is counted from the moment of login and is NOT extended
+by activity — 14 hours since ADR-0028 (previously 8). When it ends the user is not logged
+out mid-action by the app; the next request the app makes simply fails, and the app then
+shows the session-expiry dialog. Distinct from "the server is down" and from "the network
+is offline" — all three look similar to the user and must be worded differently.
+_Avoid_: "token หมดอายุ" for this — the user-facing concept is the session, and the
+service-principal token the backend uses to reach the database is an unrelated thing that
+renews itself.
+
+### Draft (unsaved input)
+Numbers a user has typed into the grid or a subform but has not yet saved. Not yet budget
+data — nothing downstream sees it, and it belongs to no layer (Approved / SAP / Pending).
+A draft lives only in the open page: it is **not** persisted anywhere and does **not**
+survive a session expiry, a reload, or a closed tab (ADR-0028 — the loss was priced and
+accepted rather than designed around). Saving is what turns a draft into budget data.

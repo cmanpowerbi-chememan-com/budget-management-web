@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { isSessionExpired, SESSION_EXPIRED_MESSAGE, subscribeSessionExpired } from './sessionExpiry'
 import { ApiError, apiFetch, buildLoginRedirectUrl } from './client'
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -7,6 +8,20 @@ function jsonResponse(status: number, body: unknown): Response {
     status,
     json: async () => body,
   } as Response
+}
+
+/** An opaqueredirect `Response` is what a real browser hands back for
+ * `fetch(url, {redirect:'manual'})` on a cross-origin 302 (measured
+ * 2026-08-04, see the design brief) — status 0, no headers, no body. */
+function opaqueRedirectResponse(): Response {
+  return {
+    ok: false,
+    status: 0,
+    type: 'opaqueredirect',
+    json: async () => {
+      throw new Error('opaque response body is not readable')
+    },
+  } as unknown as Response
 }
 
 describe('buildLoginRedirectUrl', () => {
@@ -56,6 +71,57 @@ describe('apiFetch', () => {
     )
 
     await expect(apiFetch('/health')).rejects.toMatchObject({ status: 0 })
+  })
+
+  it('a rejected fetch (offline/server-down) does NOT raise the session-expiry dialog (false-positive guard)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    await expect(apiFetch('/health')).rejects.toThrow()
+
+    expect(isSessionExpired()).toBe(false)
+  })
+
+  describe('session-expiry detection (opaqueredirect)', () => {
+    it('always sends redirect:"manual" and a caller cannot override it', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(200, {}))
+      vi.stubGlobal('fetch', fetchSpy)
+
+      await apiFetch('/health', { redirect: 'follow' } as RequestInit)
+
+      expect(fetchSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirect: 'manual' }))
+    })
+
+    it('an opaqueredirect response raises the dialog exactly once and throws the session ApiError, not the connectivity one', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(opaqueRedirectResponse()))
+
+      await expect(apiFetch('/budget')).rejects.toMatchObject({ message: SESSION_EXPIRED_MESSAGE })
+      expect(isSessionExpired()).toBe(true)
+    })
+
+    it('N concurrent auth failures raise the latch exactly once', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(opaqueRedirectResponse()))
+      const listener = vi.fn()
+      subscribeSessionExpired(listener)
+
+      const results = await Promise.allSettled([
+        apiFetch('/budget'),
+        apiFetch('/scope'),
+        apiFetch('/budget/gl-accounts'),
+      ])
+
+      expect(results.every((r) => r.status === 'rejected')).toBe(true)
+      expect(listener).toHaveBeenCalledOnce()
+    })
+
+    it('a status:0 (non-opaqueredirect-typed) response is treated the same as opaqueredirect', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: false, status: 0, json: async () => ({}) } as unknown as Response),
+      )
+
+      await expect(apiFetch('/budget')).rejects.toMatchObject({ message: SESSION_EXPIRED_MESSAGE })
+      expect(isSessionExpired()).toBe(true)
+    })
   })
 
   it('maps a 409 response to a conflict ApiError with a Thai message', async () => {

@@ -14,6 +14,7 @@
  */
 import { apiBase } from '../platform/env'
 import { currentHref, navigate } from '../platform/location'
+import { raiseSessionExpired, SESSION_EXPIRED_MESSAGE } from './sessionExpiry'
 
 const API_BASE: string = apiBase()
 
@@ -208,9 +209,29 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   let response: Response
   try {
-    response = await fetch(`${API_BASE}${path}`, { credentials: 'include', ...init })
+    // `redirect: 'manual'` MUST be last (after `...init`) so no caller can
+    // override it — it is load-bearing for the check below. Easy Auth
+    // (ADR-0004) answers an unauthenticated browser request with a 302 to
+    // login.windows.net; `fetch`'s default `redirect:'follow'` chases that
+    // cross-origin and CORS then rejects the promise with the exact same
+    // `TypeError: Failed to fetch` as an offline browser or a dead server —
+    // no way to tell them apart. `redirect:'manual'` instead RESOLVES with
+    // an opaque `Response` (`type:'opaqueredirect'`, `status:0`), which is
+    // the one shape only Easy Auth's redirect produces (verified live +
+    // Playwright-repro'd 2026-08-04 — see the design brief).
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'include', ...init, redirect: 'manual' })
   } catch {
     throw new ApiError(0, 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต')
+  }
+
+  // Session-dead branch — MUST run before the 401 check and before
+  // `!response.ok`: an opaque redirect is `ok:false`/`status:0`, so either
+  // later branch would otherwise swallow it as a generic failure. Raising
+  // is idempotent (first-call-wins latch, sessionExpiry.ts) — N concurrent
+  // requests failing at once still show exactly one dialog.
+  if (response.type === 'opaqueredirect' || response.status === 0) {
+    raiseSessionExpired()
+    throw new ApiError(0, SESSION_EXPIRED_MESSAGE)
   }
 
   if (response.status === 401) {
