@@ -2112,10 +2112,17 @@ th.total-year-col {
   margin-top: 18px;
   padding: 0 4px;
 }
-/* Status chip + hints on their own line ABOVE the action buttons — full-width
-   flex item so the buttons wrap to the next line; both lines hug the right. */
+/* Status chip + hints sit INLINE, immediately left of the action buttons
+   (jakkaritw 2026-08-04 — they used to take a full-width line of their own
+   above the buttons, which read as unrelated to them). `flex: 1 1 auto` +
+   `min-width: 0` lets a long hint (reject reason / error) shrink and wrap
+   inside this block instead of pushing Submit off the row; the inner
+   flex-end keeps the chip hugging the button it belongs to. On a narrow
+   viewport the parent's flex-wrap still drops the buttons to their own
+   line — the old stacked layout, only when there is genuinely no room. */
 .approval-bar-status {
-  flex-basis: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
