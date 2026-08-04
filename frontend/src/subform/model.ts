@@ -3,7 +3,7 @@
  * GL-conditional validation exactly (parity-tested against the shared
  * fixture in `glDropdownConstants.test.ts`), so the UI never offers/submits
  * a value the server will reject (A9 never-cut). */
-import type { BudgetRow, CountryOption, DetailLineInput, DetailLineState, TravelerOption, TripInput, TripListItem } from '../api/types'
+import type { CountryOption, DetailLineInput, DetailLineState, TravelerOption, TripInput, TripListItem } from '../api/types'
 import { MONTH_KEYS, type MonthKey } from '../grid/model'
 import {
   ENTERTAINMENT_EXTERNAL_VALUES,
@@ -247,45 +247,23 @@ export function detailLineTotal(draft: DetailLineDraft): number {
 
 export type TripSide = 'COST' | 'SGA'
 
-/** Which accounting side(s) a ฝ่าย actually books travel to, aggregated from
- * the main grid's sap/board history (decided 2026-07-16, ฝ่าย grain — 85% of
- * ฝ่าย with travel history use exactly one side). Drives the Trip Manager's
- * side select: single side → hard-locked for non-admins; both → enabled,
- * defaulting to the larger total; none → no silent default, the user must
- * pick before save. */
-export interface TravelSideHistory {
-  sides: TripSide[]
-  defaultSide: TripSide | null
-}
-
-const TRAVEL_GLS_OF_SIDE: Record<TripSide, string[]> = {
-  COST: Object.values(TRAVEL_GL_BY_TYPE_SIDE).map((g) => g.COST),
-  SGA: Object.values(TRAVEL_GL_BY_TYPE_SIDE).map((g) => g.SGA),
-}
-
-/** Aggregates travel-GL history for ALL cost centers of the trip CC's ฝ่าย
- * (`departmentCostCenters`) — a new/small CC with no history of its own
- * inherits its ฝ่าย's side. "History" = nonzero sap or board total_year;
- * Pending amounts never count (they are the numbers being drafted, not the
- * dept's real booking pattern). Tie on a both-side ฝ่าย defaults to SGA
- * (the org-wide majority side). */
-export function deriveTravelSideHistory(rows: BudgetRow[], departmentCostCenters: readonly string[]): TravelSideHistory {
-  const ccSet = new Set(departmentCostCenters)
-  const totals: Record<TripSide, number> = { COST: 0, SGA: 0 }
-  const hasHistory: Record<TripSide, boolean> = { COST: false, SGA: false }
-  for (const row of rows) {
-    if (!ccSet.has(row.cost_center)) continue
-    for (const side of ['COST', 'SGA'] as const) {
-      if (!TRAVEL_GLS_OF_SIDE[side].includes(row.gl_account)) continue
-      if (row.sap.total_year !== 0 || row.board.total_year !== 0) {
-        hasHistory[side] = true
-        totals[side] += row.sap.total_year + row.board.total_year
-      }
-    }
+/** Reverse-lookup: which accounting side does this GL belong to, across all
+ * 4 travel types (per-diem included). Trip Manager is now opened FROM a
+ * specific grid row (jakkaritw, 2026-08-04 — final decision, applies to
+ * every user incl. admins) and locks its side select to that row's own
+ * side, so the trip's GLs always match the row the user clicked — offering
+ * the other side could only create a mismatch. `null` is defensive-only:
+ * every GL that can open Trip Manager (`gl_group === 'Travelling Expense'`)
+ * is one of these 8, so a real caller never sees it. Replaces the old
+ * ฝ่าย-booking-history heuristic (`deriveTravelSideHistory`, removed —
+ * nothing needs an inferred default once the side is always known
+ * up front). */
+export function deriveTravelSideFromGl(glAccount: string): TripSide | null {
+  for (const sides of Object.values(TRAVEL_GL_BY_TYPE_SIDE)) {
+    if (sides.COST === glAccount) return 'COST'
+    if (sides.SGA === glAccount) return 'SGA'
   }
-  const sides = (['COST', 'SGA'] as const).filter((s) => hasHistory[s])
-  const defaultSide = sides.length === 1 ? sides[0] : sides.length === 2 ? (totals.COST > totals.SGA ? 'COST' : 'SGA') : null
-  return { sides, defaultSide }
+  return null
 }
 
 export interface TripDraft {
@@ -303,15 +281,19 @@ export interface TripDraft {
   travel_months: string[]
   project: string | null
   purpose: string | null
-  /** null = the ฝ่าย has no travel history and the user has not picked yet
-   * — save is blocked until set (never a silent default). */
+  /** Kept nullable defensively (`validateTripDraft` still blocks save on
+   * null) but in practice always set: Trip Manager locks every card — new
+   * and existing — to the side derived from the GL row it was opened from
+   * (`deriveTravelSideFromGl`), so a caller never has "no side yet" to
+   * silently default. */
   side: TripSide | null
   expected_updated_at: string | null
 }
 
-/** `side` comes from `deriveTravelSideHistory(...).defaultSide` — never a
- * hard-coded value: the caller must state what the ฝ่าย's history says
- * (null when there is none). */
+/** `side` is the Trip Manager's locked side (`deriveTravelSideFromGl` of the
+ * GL row the modal was opened from) — never a hard-coded value, and never
+ * the ฝ่าย-history heuristic this used to read (removed, see
+ * `deriveTravelSideFromGl`'s docstring). */
 export function blankTripDraft(costCenter: string, fiscalYear: number, side: TripSide | null): TripDraft {
   return {
     trip_id: null,

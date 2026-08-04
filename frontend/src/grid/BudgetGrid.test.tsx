@@ -375,20 +375,17 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
   })
 
-  it('derives the trip side at ฝ่าย grain: a CC with no own travel history inherits its sibling CC\'s side (locked for non-admin)', async () => {
+  // 2026-08-04, jakkaritw — FINAL: the Trip Manager's ฝั่งบัญชี select locks
+  // to the side of the GL row the form was opened FROM (never ฝ่าย booking
+  // history anymore), for every user incl. admins. These 3 tests replace
+  // the old ฝ่าย-history-inheritance test above.
+  it('opening from a 6xxx (SG&A) travel row locks the new trip to SG&A, select disabled', async () => {
     const TRAVEL_GL_REF = [
       { gl_code: '6210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem SGA', is_special: true },
     ]
-    const TWO_CC_DEPT = [
-      { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
-      { cost_center: 'CC2', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
-    ]
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
-    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(TWO_CC_DEPT)
-    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
-      makeRow('CC1', '6210400010'), // the trip CC — zero history of its own
-      makeRow('CC2', '6210400010', { sap: blankLayer({ m01: 100, total_year: 100 }) }), // sibling CC: SGA history
-    ])
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '6210400010')])
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
 
@@ -401,8 +398,61 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(addBtn).toBeEnabled()) // disabled while the trip list loads
     fireEvent.click(addBtn)
     const select = screen.getByLabelText('side new-0')
-    expect(select).toHaveValue('SGA') // inherited from CC2, not a blind default
-    expect(select).toBeDisabled() // single side across the ฝ่าย + non-admin
+    expect(select).toHaveValue('SGA') // derived directly from the clicked row's own GL
+    expect(select).toBeDisabled()
+  })
+
+  it('opening from a 5xxx (COST) travel row locks the new trip to COST, select disabled', async () => {
+    const TRAVEL_GL_REF = [
+      { gl_code: '5210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem COST', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5210400010')])
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    fireEvent.click(await screen.findByTestId('open-subform-CC1-5210400010'))
+    expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+
+    const addBtn = await screen.findByRole('button', { name: /เพิ่มทริป/ })
+    await waitFor(() => expect(addBtn).toBeEnabled())
+    fireEvent.click(addBtn)
+    const select = screen.getByLabelText('side new-0')
+    expect(select).toHaveValue('COST')
+    expect(select).toBeDisabled()
+  })
+
+  // Regression for the removed `!isAdmin` exemption (TripManager.tsx used to
+  // read `!isAdmin && sideHistory.sides.length === 1`) — an admin scope must
+  // get the SAME lock. TripManager no longer even accepts an `isAdmin` prop,
+  // so this is the only level left that can prove the exemption is gone.
+  it('locks the Trip Manager side select for an admin too — no exemption', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = {
+      role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null,
+    }
+    const TRAVEL_GL_REF = [
+      { gl_code: '6210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem SGA', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '6210400010')])
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: null, year: null }} />)
+
+    fireEvent.click(await screen.findByTestId('open-subform-CC1-6210400010'))
+    expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+
+    const addBtn = await screen.findByRole('button', { name: /เพิ่มทริป/ })
+    await waitFor(() => expect(addBtn).toBeEnabled())
+    fireEvent.click(addBtn)
+    const select = screen.getByLabelText('side new-0')
+    expect(select).toHaveValue('SGA')
+    expect(select).toBeDisabled() // admin gets the same lock — no exemption
   })
 
   it('shows an actionable no-scope message (caller email + contact + master file) and never calls the budget/departments endpoints (A10 scope-role UX)', async () => {

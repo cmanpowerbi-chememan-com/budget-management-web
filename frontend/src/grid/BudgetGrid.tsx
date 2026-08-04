@@ -11,7 +11,7 @@ import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
 import { DetailSubform } from '../subform/DetailSubform'
-import { deriveTravelSideHistory } from '../subform/model'
+import { deriveTravelSideFromGl, type TripSide } from '../subform/model'
 import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
@@ -63,7 +63,12 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย"
   // button (GridTable). `null` = none open.
   const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string } | null>(null)
-  const [tripManagerOpenFor, setTripManagerOpenFor] = useState<string | null>(null) // cost_center, or null
+  // The open Trip Manager's target CC + its LOCKED accounting side (jakkaritw,
+  // 2026-08-04 — final: the side is always the one the clicked GL row
+  // belongs to, for every user incl. admins — never editable, never
+  // inferred from ฝ่าย history). One state, not two, so the two values can
+  // never drift out of sync with each other.
+  const [tripManagerOpenFor, setTripManagerOpenFor] = useState<{ costCenter: string; lockedSide: TripSide } | null>(null)
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   // Fullscreen overlay (⤢ toggle, jakkaritw-approved 2026-07-31) — lifts the
   // WHOLE grid block (toolbar + legend + both side-tables + Submit bar) into
@@ -186,19 +191,6 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     [isPureAdmin, departments, scope.fillCostCenters],
   )
 
-  // Trip side history is ฝ่าย grain (decided 2026-07-16): the trip CC
-  // inherits the travel side its WHOLE ฝ่าย actually books to. The loaded
-  // grid already carries every sibling-CC row this caller can see (the dept
-  // filter is applied server-side under the same RLS a refetch would use),
-  // so no extra fetch adds anything. An unmapped CC (data gap — admin adds
-  // the mapping later) degrades to its own rows only.
-  const tripSideHistory = useMemo(() => {
-    if (!tripManagerOpenFor) return null
-    const dept = departments.find((d) => d.cost_center === tripManagerOpenFor)?.department
-    const deptCostCenters = dept ? costCentersOfDepartment(departments, dept) : [tripManagerOpenFor]
-    return deriveTravelSideHistory(rows, deptCostCenters)
-  }, [tripManagerOpenFor, departments, rows])
-
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
   const selectedDeptCostCenterCount = department !== null ? costCentersOfDepartment(departments, department).length : 0
   const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
@@ -252,10 +244,22 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
   /** Special-GL cells never edit inline (A8) — clicking "เปิดฟอร์มย่อย"
    * opens the matching A9 editor: Travelling Expense (8 GL, trip-centric)
-   * goes to Trip Manager; the other 5 special groups go to DetailSubform. */
+   * goes to Trip Manager, LOCKED to the clicked row's own accounting side
+   * (jakkaritw, 2026-08-04 — final, applies to every user incl. admins: a
+   * trip's GLs must match the row the user clicked, offering the other
+   * side could only create a mismatch); the other 5 special groups go to
+   * DetailSubform. */
   function handleOpenSpecial(row: BudgetRow, glGroup: string) {
     if (glGroup === 'Travelling Expense') {
-      setTripManagerOpenFor(row.cost_center)
+      const lockedSide = deriveTravelSideFromGl(row.gl_account)
+      if (lockedSide === null) {
+        // Defensive only — every GL that reaches here via a Travelling
+        // Expense row IS one of the 8 travel GLs, so this never fires in
+        // practice. Bail out rather than open a modal with no side to lock.
+        console.error(`Travelling Expense row has an unrecognized GL: ${row.gl_account}`)
+        return
+      }
+      setTripManagerOpenFor({ costCenter: row.cost_center, lockedSide })
     } else {
       setDetailTarget({ row, glGroup })
     }
@@ -475,12 +479,11 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         />
       )}
 
-      {tripManagerOpenFor && tripSideHistory && (
+      {tripManagerOpenFor && (
         <TripManager
-          costCenter={tripManagerOpenFor}
+          costCenter={tripManagerOpenFor.costCenter}
           fiscalYear={year}
-          sideHistory={tripSideHistory}
-          isAdmin={scope.isAdmin}
+          lockedSide={tripManagerOpenFor.lockedSide}
           onClose={() => setTripManagerOpenFor(null)}
           onSaved={loadGrid}
         />

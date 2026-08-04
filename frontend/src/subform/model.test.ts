@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CountryOption, DetailLineState, TripListItem } from '../api/types'
 import { MONTH_KEYS } from '../grid/model'
-import { blankLayer, makeRow } from '../grid/testUtils'
+import { blankLayer } from '../grid/testUtils'
 import {
   blankDetailDraft,
   blankManualLineDraft,
@@ -11,7 +11,7 @@ import {
   buildTripPayload,
   countryGroupFor,
   countryOptionsWithOther,
-  deriveTravelSideHistory,
+  deriveTravelSideFromGl,
   detailFieldsFor,
   detailLineTotal,
   draftFromServerLine,
@@ -351,60 +351,16 @@ describe('validateTripDraft', () => {
   })
 })
 
-describe('deriveTravelSideHistory (ฝ่าย grain — decided 2026-07-16)', () => {
-  const CCS = ['CC1', 'CC2'] // the ฝ่าย's cost centers; CC1 is the trip CC
-
-  it('SGA-only history across the ฝ่าย → single side, defaults SGA', () => {
-    const rows = [makeRow({ cost_center: 'CC1', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) })]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['SGA'], defaultSide: 'SGA' })
+describe('deriveTravelSideFromGl (2026-08-04 — replaces the old ฝ่าย-history heuristic)', () => {
+  it('resolves every one of the 8 travel GLs to its own side, per-diem included', () => {
+    expect(deriveTravelSideFromGl('5210400010')).toBe('COST') // per_diem COST
+    expect(deriveTravelSideFromGl('6210400010')).toBe('SGA') // per_diem SGA
+    expect(deriveTravelSideFromGl('5210400020')).toBe('COST') // transport COST
+    expect(deriveTravelSideFromGl('6210400999')).toBe('SGA') // other SGA
   })
 
-  it('COST-only history → single side, defaults COST', () => {
-    const rows = [makeRow({ cost_center: 'CC1', gl_account: '5210400020', board: { ...makeRow({ cost_center: 'x', gl_account: 'y' }).board, m03: 50, total_year: 50 } })]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST'], defaultSide: 'COST' })
-  })
-
-  it('a CC with no travel history of its OWN inherits the side its ฝ่าย siblings use', () => {
-    const rows = [
-      makeRow({ cost_center: 'CC1', gl_account: '6210400010' }), // trip CC — all zero
-      makeRow({ cost_center: 'CC2', gl_account: '6210400030', sap: blankLayer({ m05: 900, total_year: 900 }) }),
-    ]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['SGA'], defaultSide: 'SGA' })
-  })
-
-  it('both sides in the ฝ่าย → both offered, default = larger summed total (sap+board)', () => {
-    const rows = [
-      makeRow({ cost_center: 'CC1', gl_account: '5210400010', sap: blankLayer({ m01: 2000, total_year: 2000 }) }),
-      makeRow({ cost_center: 'CC2', gl_account: '6210400010', sap: blankLayer({ m01: 577263, total_year: 577263 }) }),
-    ]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST', 'SGA'], defaultSide: 'SGA' })
-  })
-
-  it('both sides, COST larger → default COST', () => {
-    const rows = [
-      makeRow({ cost_center: 'CC1', gl_account: '5210400999', sap: blankLayer({ m01: 9000, total_year: 9000 }) }),
-      makeRow({ cost_center: 'CC2', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) }),
-    ]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: ['COST', 'SGA'], defaultSide: 'COST' })
-  })
-
-  it('no travel history anywhere in the ฝ่าย → no sides, no default (user must pick)', () => {
-    const rows = [
-      makeRow({ cost_center: 'CC1', gl_account: '6210400010' }), // travel GL, zero history
-      makeRow({ cost_center: 'CC1', gl_account: '5211800030', sap: blankLayer({ m01: 999, total_year: 999 }) }), // non-travel GL — irrelevant
-    ]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
-  })
-
-  it('pending-only amounts are NOT history (only sap/board count)', () => {
-    const base = makeRow({ cost_center: 'CC1', gl_account: '6210400010' })
-    const rows = [{ ...base, pending: { ...base.pending, m01: 500, total_year: 500 } }]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
-  })
-
-  it("rows of another ฝ่าย's CC are excluded from the aggregation", () => {
-    const rows = [makeRow({ cost_center: 'CC9', gl_account: '6210400010', sap: blankLayer({ m01: 100, total_year: 100 }) })]
-    expect(deriveTravelSideHistory(rows, CCS)).toEqual({ sides: [], defaultSide: null })
+  it('returns null for a GL outside the 8 travel accounts (defensive — never a real caller)', () => {
+    expect(deriveTravelSideFromGl('5211800030')).toBeNull()
   })
 })
 

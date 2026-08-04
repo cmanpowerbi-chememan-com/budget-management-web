@@ -1988,6 +1988,22 @@ th.total-year-col {
   margin-top: 4px;
 }
 
+/* An existing trip stored on the OTHER accounting side than the row Trip
+   Manager was opened from (jakkaritw, 2026-08-04 — side lock is final): the
+   ฝั่งบัญชี select stays disabled either way, this is purely informational
+   so the mismatch is never silently invisible. Sits in .trip-field-grid's
+   uppercase/mono label context, so its own font is reset back to normal
+   sentence-case Thai body text (a plain note, not a field caption). */
+.trip-side-note {
+  margin-top: 4px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--special-edge);
+}
+
 /* Traveler combobox (Trip Manager TRAVELER NAME, 2026-08-04) — same
    searchable-list pattern as the "+ เพิ่ม transaction" GL combobox
    (.gl-combo above); the roster can run to hundreds of names, so a plain

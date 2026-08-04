@@ -27,21 +27,28 @@ import {
   validateTripDraft,
   type DestinationOption,
   type ManualLineDraft,
-  type TravelSideHistory,
   type TripDraft,
   type TripSide,
 } from './model'
 
+/** Same copy used in the ฝั่งบัญชี `<option>`s and the other-side note below
+ * — one source so the two never drift apart. */
+const TRIP_SIDE_LABEL_TH: Record<TripSide, string> = {
+  COST: 'ฝั่งผลิต / ต้นทุน (5xxx)',
+  SGA: 'ฝั่งบริหาร / ขาย · SG&A (6xxx)',
+}
+
 export interface TripManagerProps {
   costCenter: string
   fiscalYear: number
-  /** ฝ่าย-level travel-side history (`deriveTravelSideHistory` over the
-   * parent's already-loaded grid rows) — decides the side select's
-   * default / lock / placeholder state. */
-  sideHistory: TravelSideHistory
-  /** `is_admin` from /scope — only an admin may book a side the ฝ่าย has
-   * never used (e.g. legitimately introducing it in a forward budget). */
-  isAdmin: boolean
+  /** Accounting side of the grid row this modal was opened FROM
+   * (`deriveTravelSideFromGl`, resolved by the caller) — a trip's GLs must
+   * match the row the user clicked, so this LOCKS the ฝั่งบัญชี select for
+   * every card and every user, admins included (jakkaritw, 2026-08-04,
+   * final — do not add an admin exemption back). No longer derived from
+   * ฝ่าย booking history: the side is always already known from the click
+   * that opened this modal, so there is nothing left to infer or default. */
+  lockedSide: TripSide
   onClose: () => void
   /** Called after EVERY successful trip/manual-line save — the parent grid
    * refetches so all 8 travel GL cells (both sides, in case of a side flip)
@@ -299,7 +306,7 @@ function TravelerField({ ariaLabel, travelers, value, onChange, fallback }: Trav
  * accommodation/other) are entered per month, locked to the trip's selected
  * travel_months. Per-diem is NEVER computed here — only the server's own
  * response/read is ever shown (never-cut). */
-export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onClose, onSaved }: TripManagerProps) {
+export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSaved }: TripManagerProps) {
   const [cards, setCards] = useState<TripCardState[]>([])
   /** Always mirrors the LATEST `cards` state — read by long-running async
    * handlers (delete's 409 catch) that must see edits made to a SIBLING card
@@ -321,11 +328,6 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
    * (via `<fieldset>`) plus the footer buttons so no edit is made mid-batch
    * and lost by the final `setCards`. */
   const [saving, setSaving] = useState(false)
-
-  // Exactly one side in the ฝ่าย's real history → non-admins cannot
-  // mis-book to the side the ฝ่าย never uses. Both sides / no history →
-  // the select stays open (nothing to lock to).
-  const sideLocked = !isAdmin && sideHistory.sides.length === 1
 
   async function load() {
     setLoading(true)
@@ -360,7 +362,7 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
       ...prev,
       {
         localId,
-        draft: blankTripDraft(costCenter, fiscalYear, sideHistory.defaultSide),
+        draft: blankTripDraft(costCenter, fiscalYear, lockedSide),
         dirty: false,
         serverTraveler: null,
         perDiemMonths: null,
@@ -787,15 +789,26 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                         }
                       />
                     </label>
-                    {/* ฝั่งบัญชี — kept exactly as-is (locked/derived select, ADR
-                      * per jakkaritw): only its position in the grid changed. */}
+                    {/* ฝั่งบัญชี — ALWAYS locked/disabled, for every user incl.
+                      * admins (jakkaritw, 2026-08-04, final — do not re-add an
+                      * admin exemption): the trip's GLs must match the row the
+                      * modal was opened from. Still shown (never hidden) so the
+                      * user always sees which side the trip books to; both
+                      * `<option>`s stay in the DOM for context even though only
+                      * the card's own value can ever be selected. Since the
+                      * `onChange` below can never fire (disabled), a card's
+                      * `draft.side` never changes except via `blankTripDraft`
+                      * (new cards) or the server response (existing cards) —
+                      * editing OTHER fields and saving always resends the SAME
+                      * stored side, never silently re-homing it to
+                      * `lockedSide` behind the user's back. */}
                     <label>
                       ฝั่งบัญชี
                       <select
                         aria-label={`side ${card.localId}`}
                         value={card.draft.side ?? ''}
-                        disabled={sideLocked}
-                        title={sideLocked ? 'ฝ่ายนี้ใช้ฝั่งนี้ฝั่งเดียวตามข้อมูลจริง — เฉพาะ Admin เปลี่ยนได้' : undefined}
+                        disabled
+                        title="ฝั่งบัญชีล็อกตามแถว GL ที่เปิดฟอร์มนี้ — เปลี่ยนไม่ได้ (รวมถึง Admin)"
                         onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, side: e.target.value as TripSide }))}
                       >
                         {card.draft.side === null && (
@@ -803,9 +816,21 @@ export function TripManager({ costCenter, fiscalYear, sideHistory, isAdmin, onCl
                             — เลือกฝั่ง —
                           </option>
                         )}
-                        <option value="COST">ฝั่งผลิต / ต้นทุน (5xxx)</option>
-                        <option value="SGA">ฝั่งบริหาร / ขาย · SG&A (6xxx)</option>
+                        <option value="COST">{TRIP_SIDE_LABEL_TH.COST}</option>
+                        <option value="SGA">{TRIP_SIDE_LABEL_TH.SGA}</option>
                       </select>
+                      {/* Existing trip stored on the OTHER side than the row
+                        * this modal was opened from — never silently flipped
+                        * or hidden (REQUIRED #4): shown as-is, with a plain
+                        * explanation. The select above stays disabled either
+                        * way, so there is nothing to "fix" here — this note is
+                        * purely informational. */}
+                      {card.draft.side !== null && card.draft.side !== lockedSide && (
+                        <span className="trip-side-note" data-testid={`trip-side-note-${card.localId}`}>
+                          ทริปนี้บันทึกไว้ฝั่ง{TRIP_SIDE_LABEL_TH[card.draft.side]} — คนละฝั่งกับแถวที่เปิดฟอร์มนี้
+                          (ระบบจะไม่เปลี่ยนฝั่งให้อัตโนมัติ)
+                        </span>
+                      )}
                     </label>
                   </div>
 
