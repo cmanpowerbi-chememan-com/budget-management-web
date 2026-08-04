@@ -397,8 +397,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         </div>
       </div>
 
+      {/* Admin marker only (jakkaritw 2026-08-04) — the strip used to carry the
+          whole provenance sentence + the FX read-out; every word of that now
+          lives in the tooltip so the row costs one icon's height. The visible
+          text is deliberately just "Admin". */}
       {scope.isAdmin && (
-        <div className="admin-zone" data-testid="admin-zone">
+        <div
+          className="admin-zone"
+          data-testid="admin-zone"
+          title={`งบอนุมัติ (Approved) · ทั้งบริษัท · ทั้งปี · ไม่ขึ้นกับตัวกรองปี / ฝ่าย ที่เลือกดู — อ่านอย่างเดียว (read-only) มาจากไฟล์ Excel รายปีใน SharePoint › Budgeting and Management › approved budget · Master FX (USD→THB · FY${year - 1}) แก้ที่ Master Currency (Module 09) เท่านั้น`}
+        >
           <svg
             className="admin-zone-ic"
             viewBox="0 0 24 24"
@@ -411,31 +419,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          <span className="admin-zone-title">งบอนุมัติ (Approved) · Admin</span>
-          <span
-            className="admin-zone-note"
-            title="งบอนุมัติ (Approved) มาจากไฟล์ Excel รายปีที่วางใน SharePoint › Budgeting and Management › approved budget — เว็บอ่านอย่างเดียว แก้ไม่ได้ และไม่ขึ้นกับตัวกรองปี / ฝ่าย ที่เลือกดู"
-          >
-            ทั้งบริษัท · ทั้งปี · ไม่ขึ้นกับตัวกรองที่เลือก — อ่านอย่างเดียว (read-only) จากไฟล์ Excel ใน SharePoint › <b>Budgeting and Management</b>
-          </span>
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            <span
-              className="admin-zone-note"
-              title="แก้ที่ Master Currency (Module 09) เท่านั้น · OPEX โชว์ค่านี้ + คิดเบี้ยเลี้ยงตามค่านี้ (recompute-on-read, ADR-0015)"
-            >
-              💱 Master FX (USD→THB · FY{year - 1}):{' '}
-              <b style={{ color: 'var(--status-approved)', fontFamily: 'var(--mono)', fontSize: 14 }}>—</b>{' '}
-              <span style={{ color: 'var(--ink-3)' }}>(read-only)</span>
-            </span>
-            <a
-              href="https://witty-meadow-01107f500.7.azurestaticapps.net/master-currency.html"
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--status-approved)', textDecoration: 'underline' }}
-            >
-              แก้ที่ Master Currency ↗
-            </a>
-          </span>
+          <span className="admin-zone-title">Admin</span>
         </div>
       )}
 

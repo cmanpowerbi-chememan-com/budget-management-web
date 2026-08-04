@@ -52,6 +52,37 @@ describe('apiFetch', () => {
     expect(onUnauthorized).toHaveBeenCalledOnce()
   })
 
+  // ADR-0028: a real browser session-dead response is a cross-origin 302,
+  // which `redirect:'manual'` turns into `opaqueredirect` (covered below) —
+  // never a literal 401. The 401 branch is kept only for non-browser callers
+  // (setup/ scripts, smoke tests). It must NOT also raise the dialog latch,
+  // or a non-browser 401 would leave the browser-only latch in a state that
+  // makes no sense for that caller.
+  it('a plain 401 does NOT raise the session-expiry dialog latch (that branch is for non-browser callers only, ADR-0028)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(401, {})))
+
+    await expect(apiFetch('/me', { onUnauthorized: vi.fn() })).rejects.toThrow(ApiError)
+
+    expect(isSessionExpired()).toBe(false)
+  })
+
+  it('a 401 with a non-JSON body (e.g. an HTML login page) still calls onUnauthorized and throws, without crashing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => {
+          throw new Error('Unexpected token < in JSON')
+        },
+      } as unknown as Response),
+    )
+    const onUnauthorized = vi.fn()
+
+    await expect(apiFetch('/me', { onUnauthorized })).rejects.toMatchObject({ status: 401 })
+    expect(onUnauthorized).toHaveBeenCalledOnce()
+  })
+
   it('maps a 403 response to a forbidden ApiError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(403, {})))
 

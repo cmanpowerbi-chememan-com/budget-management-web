@@ -145,6 +145,31 @@ describe('BudgetGrid', () => {
     )
   })
 
+  it('on a non-conflict save failure (e.g. session-expiry), the typed value stays in the cell — only a 409 reverts it', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+      makeRow('CC1', '5211800030', {
+        pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+      }),
+    ])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(0, 'หมดเวลาการเข้าใช้งาน (ระบบให้ล็อกอินได้ครั้งละ 14 ชั่วโมง) กรุณา login ใหม่อีกครั้ง'),
+    )
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(screen.getByText(/หมดเวลาการเข้าใช้งาน/)).toBeInTheDocument())
+    // Never refetches on this error kind (unlike 409) — the optimistic
+    // value is simply left in place, not reconciled against the server.
+    expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('999')
+  })
+
   describe('grid trailing "ลบ" column — deleting a manually-added row', () => {
     beforeEach(() => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -530,7 +555,7 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('admin-mode-checkbox')).not.toBeInTheDocument()
   })
 
-  it('shows the read-only "Approved · Admin" info strip for an admin scope, with the FX year one behind the selected planning year', async () => {
+  it('shows only the gear + "Admin" marker for an admin scope, with the full provenance (incl. the FX year one behind the planning year) in its tooltip', async () => {
     const ADMIN_SCOPE: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
@@ -539,15 +564,22 @@ describe('BudgetGrid', () => {
     render(<BudgetGrid scope={ADMIN_SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
     const zone = await screen.findByTestId('admin-zone')
-    expect(zone).toHaveTextContent('งบอนุมัติ (Approved) · Admin')
-    expect(zone).toHaveTextContent('FY2026') // planning year 2027 - 1
-    expect(zone).toHaveTextContent('read-only')
-    expect(zone).toHaveTextContent('Budgeting and Management')
+    // Visible text is deliberately just "Admin" (2026-08-04) — the strip is a
+    // marker now, not a paragraph, so the grid gets the vertical space back.
+    expect(zone).toHaveTextContent('Admin')
+    expect(zone).not.toHaveTextContent('งบอนุมัติ (Approved) · Admin')
+    expect(zone.querySelector('.admin-zone-title')).toHaveTextContent(/^Admin$/)
+    expect(zone.querySelector('svg.admin-zone-ic')).toBeInTheDocument()
+    // Everything the strip used to spell out survives in the tooltip, incl.
+    // the FX year, which still tracks the selected planning year minus one.
+    const tooltip = zone.getAttribute('title') ?? ''
+    expect(tooltip).toContain('FY2026') // planning year 2027 - 1
+    expect(tooltip).toContain('read-only')
+    expect(tooltip).toContain('Budgeting and Management')
+    expect(tooltip).toContain('Master Currency')
+    // Read-only strip: no controls of any kind, and no stacked second row.
     expect(zone.querySelector('button')).not.toBeInTheDocument()
-    const fxLink = zone.querySelector('a')
-    expect(fxLink).toHaveAttribute('target', '_blank')
-    expect(fxLink).toHaveAttribute('href', 'https://witty-meadow-01107f500.7.azurestaticapps.net/master-currency.html')
-    // Collapsed to one line (2026-08-04): the old stacked second row is gone.
+    expect(zone.querySelector('a')).not.toBeInTheDocument()
     expect(zone.querySelector('.admin-zone-actions')).not.toBeInTheDocument()
   })
 
