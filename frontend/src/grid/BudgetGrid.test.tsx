@@ -329,13 +329,70 @@ describe('BudgetGrid', () => {
 
     await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
-    // GL picker is a searchable combobox — focus opens the list, click picks.
+    // Cost Center and GL Code are both searchable comboboxes — focus opens
+    // the list, click picks.
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
     fireEvent.focus(screen.getByLabelText('GL Code'))
     fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
     await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toBeInTheDocument())
+  })
+
+  // Spec B path ข (jakkaritw, 2026-08-05): picking a special-GL code in
+  // "+ เพิ่ม Transaction" must NOT go through /budget/rows — the backend
+  // unconditionally refuses to create a special-GL header row that way
+  // (`_save_one_pending_row`: SpecialGlDirectEditError). It routes straight
+  // into that GL's own subform instead, exactly like clicking an existing
+  // special-GL row's own open button; the subform's own save lazily creates
+  // the pending_budget row on its first write.
+  it('"+ เพิ่ม Transaction" on a special-GL code opens its subform directly, without calling /budget/rows', async () => {
+    const SPECIAL_GL_REF = [
+      { gl_code: '6211900030', gl_group: 'Entertainment', gl_name: 'Ent SGA', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SPECIAL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /6211900030/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    expect(await screen.findByTestId('detail-subform')).toBeInTheDocument()
+    expect(budgetApi.saveRow).not.toHaveBeenCalled()
+  })
+
+  it('"+ เพิ่ม Transaction" on a Travelling Expense GL opens Trip Manager directly, locked to that GL\'s side', async () => {
+    const TRAVEL_GL_REF = [
+      { gl_code: '6210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem SGA', is_special: true },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /6210400010/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+    expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
+    expect(budgetApi.saveRow).not.toHaveBeenCalled()
   })
 
   it('opens the A9 DetailSubform for a non-travel special-GL row and refetches the grid after a save', async () => {

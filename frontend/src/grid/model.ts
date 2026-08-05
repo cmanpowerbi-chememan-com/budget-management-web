@@ -585,18 +585,17 @@ export interface ValidationResult {
 }
 
 /** Validates "+ เพิ่ม transaction" BEFORE calling the API — the server
- * re-checks all of this anyway (Fill scope, special-GL block, PK
- * collision -> 409), but a client-side check gives an immediate,
- * friendly message instead of a round-trip for an obviously-invalid pick. */
+ * re-checks Fill scope and PK collision (-> 409) the same way, but a
+ * client-side check gives an immediate, friendly message instead of a
+ * round-trip for an obviously-invalid pick. Special-GL codes are ALLOWED
+ * here (Spec B path ข, jakkaritw 2026-08-05 — was rejected before): picking
+ * one routes straight into its own subform on save, same as any special-GL
+ * row (see `BudgetGrid.handleAddTransaction`). */
 export function validateNewTransaction(input: NewTransactionInput): ValidationResult {
   if (!input.costCenter) return { ok: false, errorTh: 'กรุณาเลือก Cost Center' }
   if (!input.glAccount) return { ok: false, errorTh: 'กรุณาเลือก GL Code' }
   if (!input.fillCostCenters.includes(input.costCenter)) {
     return { ok: false, errorTh: `${input.costCenter} ไม่อยู่ในสิทธิ์กรอกงบของคุณ` }
-  }
-  const meta = glMetaFor(input.glAccount, input.glRef)
-  if (meta.is_special) {
-    return { ok: false, errorTh: `${input.glAccount} เป็นกลุ่มพิเศษ (${meta.gl_group}) — แก้ไขผ่านฟอร์มย่อย` }
   }
   const exists = input.existingRows.some(
     (r) => r.cost_center === input.costCenter && r.gl_account === input.glAccount,

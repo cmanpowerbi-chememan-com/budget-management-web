@@ -66,7 +66,9 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // `!row.editable` AT OPEN TIME — the grid already computed the real
   // edit-rights rule (Fill scope × department lock × admin bypass) server-
   // side, so the modal never re-derives it.
-  const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string; readOnly: boolean } | null>(null)
+  const [detailTarget, setDetailTarget] = useState<
+    { costCenter: string; glAccount: string; glGroup: string; readOnly: boolean } | null
+  >(null)
   // The open Trip Manager's target CC + its LOCKED accounting side (jakkaritw,
   // 2026-08-04 — final: the side is always the one the clicked GL row
   // belongs to, for every user incl. admins — never editable, never
@@ -255,25 +257,45 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * (jakkaritw, 2026-08-04 — final, applies to every user incl. admins: a
    * trip's GLs must match the row the user clicked, offering the other
    * side could only create a mismatch); the other 5 special groups go to
-   * DetailSubform. */
-  function handleOpenSpecial(row: BudgetRow, glGroup: string) {
-    const readOnly = !row.editable
+   * DetailSubform. Shared by an existing row's own open button
+   * (`handleOpenSpecial`) AND "+ เพิ่ม Transaction" picking a special-GL
+   * code (`handleAddTransaction`) — neither needs a pre-existing
+   * `pending_budget` row to open the subform, only the (CC, GL) pair. */
+  function openSpecialForm(costCenter: string, glAccount: string, glGroup: string, readOnly: boolean) {
     if (glGroup === 'Travelling Expense') {
-      const lockedSide = deriveTravelSideFromGl(row.gl_account)
+      const lockedSide = deriveTravelSideFromGl(glAccount)
       if (lockedSide === null) {
         // Defensive only — every GL that reaches here via a Travelling
         // Expense row IS one of the 8 travel GLs, so this never fires in
         // practice. Bail out rather than open a modal with no side to lock.
-        console.error(`Travelling Expense row has an unrecognized GL: ${row.gl_account}`)
+        console.error(`Travelling Expense row has an unrecognized GL: ${glAccount}`)
         return
       }
-      setTripManagerOpenFor({ costCenter: row.cost_center, lockedSide, readOnly })
+      setTripManagerOpenFor({ costCenter, lockedSide, readOnly })
     } else {
-      setDetailTarget({ row, glGroup, readOnly })
+      setDetailTarget({ costCenter, glAccount, glGroup, readOnly })
     }
   }
 
+  function handleOpenSpecial(row: BudgetRow, glGroup: string) {
+    openSpecialForm(row.cost_center, row.gl_account, glGroup, !row.editable)
+  }
+
+  /** "+ เพิ่ม Transaction" — a special-GL pick (Spec B path ข, jakkaritw
+   * 2026-08-05) skips `/budget/rows` entirely and opens that GL's own
+   * subform directly, exactly like clicking an existing special-GL row's
+   * open button: the backend unconditionally refuses to create a
+   * special-GL header row through the plain create path
+   * (`_save_one_pending_row`: SpecialGlDirectEditError) — the subform's own
+   * save lazily creates the `pending_budget` row on its first write, then
+   * `onSaved={loadGrid}` picks it up for real. A non-special GL keeps the
+   * original create-a-blank-row flow. */
   async function handleAddTransaction(costCenter: string, glAccount: string): Promise<AddResult> {
+    const meta = glMetaFor(glAccount, glRef)
+    if (meta.is_special) {
+      openSpecialForm(costCenter, glAccount, meta.gl_group, false)
+      return { ok: true }
+    }
     try {
       const saved = await saveRow(buildNewRowPayload(costCenter, glAccount, year))
       const months = Object.fromEntries(
@@ -477,10 +499,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
       {detailTarget && (
         <DetailSubform
-          costCenter={detailTarget.row.cost_center}
-          glAccount={detailTarget.row.gl_account}
+          costCenter={detailTarget.costCenter}
+          glAccount={detailTarget.glAccount}
           glGroup={detailTarget.glGroup}
-          glName={glMetaFor(detailTarget.row.gl_account, glRef).gl_name}
+          glName={glMetaFor(detailTarget.glAccount, glRef).gl_name}
           fiscalYear={year}
           readOnly={detailTarget.readOnly}
           onClose={() => setDetailTarget(null)}

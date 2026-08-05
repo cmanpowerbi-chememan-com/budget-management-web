@@ -242,11 +242,11 @@ describe('validateNewTransaction', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('rejects a special-GL account (routes through a subform, not a plain cell — A9)', () => {
+  it('accepts a special-GL account — it routes into its own subform on save, same as any special-GL row (Spec B path ข, jakkaritw 2026-08-05)', () => {
     const result = validateNewTransaction({
       costCenter: 'CC1', glAccount: '5211900030', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
     })
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
   })
 
   it('rejects a (CC, GL) pair that already has a visible row', () => {

@@ -1,14 +1,310 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-02T15:16:33+0700",
+  "updated": "2026-08-05T21:35:36+0700",
   "tasks": [
     {
-      "id": "notif-sender-cmanpowerbi",
+      "id": "addtxn-special-gl-cc-search",
+      "state": "done",
+      "created": "2026-08-05T21:17:17+0700",
+      "updated": "2026-08-05T21:31:06+0700",
+      "ai": "Special-GL codes now pickable in AddTransactionForm GL combo (removed nonSpecialGls filter + validateNewTransaction reject); CC field replaced plain select with same searchable-combobox pattern as GL. Found BudgetGrid.tsx also needed a fix (3rd file, genuine): backend SpecialGlDirectEditError rejects /budget/rows for special GL, so handleAddTransaction now routes special picks straight to openSpecialForm (shared w/ handleOpenSpecial) instead of create-row; detailTarget state simplified to {costCenter,glAccount} vs full BudgetRow. GridTable canOpenSpecial/onOpenSpecial confirmed keyed off meta.is_special from GL master only, no change needed. Frontend suite 590/590 pass, next build+tsc clean, oxlint clean. Not committed (per instructions). plan.md updated.",
+      "agent": "claude"
+    },
+    {
+      "id": "addtxn-cc-search-special-gl",
+      "state": "done",
+      "created": "2026-08-05T20:36:11+0700",
+      "updated": "2026-08-05T21:35:36+0700",
+      "ai": "Duplicate of addtxn-special-gl-cc-search (agent logged its own entry) - see that entry for full detail. Dispatched 05-software-developer inline, jakkaritw approved unblocking special-GL in AddTransactionForm via AskUserQuestion. Done: guards removed (AddTransactionForm.tsx + model.ts validateNewTransaction), CC search combobox added, BudgetGrid.tsx 3rd-file fix (special-GL create routes to subform not /budget/rows, since backend SpecialGlDirectEditError blocks direct creates). 590/590 frontend tests pass, next build clean, not committed yet.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-d0672fc-stg-prd",
+      "state": "done",
+      "created": "2026-08-05T16:42:47+0700",
+      "updated": "2026-08-05T16:42:47+0700",
+      "ai": "STAGING + PRODUCTION DEPLOYED 2026-08-05 on jakkaritw's 'stg and prd deploy'. Image budget-web:d0672fc (ACR run cmw), one build promoted to both. Staging rev 0000028 Running/Healthy/100pct (prev 0000027/1e441de); Production rev 0000014 RunningAtMaxScale/Healthy/100pct (prev 0000013/1e441de). Anonymous curl 401 on both = Easy Auth ON, expected. CONTENT: d0672fc = ADR-0013 subform read-only lock (written by the PARALLEL session, not this one) - special-GL rows now open the subform for every row the caller can SEE regardless of row.editable, in read-only mode when the department is mid-approval/APPROVED or the caller is See-only; TripManager/DetailSubform gained a readOnly prop (whole card list wrapped in a disabled fieldset, เพิ่มทริป/บันทึก hidden, ยกเลิก becomes ปิด). Pre-deploy verification run by me at that commit: frontend vitest 585/585 33 files, backend pytest 863 passed/48 deselected, next build clean. NOT gate-reviewed by this session (06/07/08 were run by the parallel session that wrote it) - flagged, not blocking, since jakkaritw approved the deploy explicitly. Rollback for BOTH apps = --image cmanbudgetacr.azurecr.io/budget-web:1e441de. prd and stg are now on the SAME image and main is fully shipped (nothing unshipped on main).",
+      "agent": "claude"
+    },
+    {
+      "id": "decision-other-country-destination",
+      "state": "done",
+      "created": "2026-08-05T16:32:28+0700",
+      "updated": "2026-08-05T16:32:28+0700",
+      "ai": "DECISION by jakkaritw 2026-08-05 (do NOT re-litigate): the destination dropdown stays as-is. Rule confirmed by him: dbo.country_group / SharePoint country.xlsx lists 13 countries (Thailand=ในประเทศ -> group 1; the other 12 incl South Africa=ต่างประเทศ-อาเซียน -> group 2); ANY country not in that file is 'ประเทศอื่น' -> group 3 -> per_diem_rate.rate_other. The app already prices that correctly via the single frontend-added option OTHER_COUNTRY_OPTION='อื่นๆ (Other)' (model.ts:135, countryOptionsWithOther adds it with country_group 3; the API only ever serves groups 1-2). KNOWN AND ACCEPTED LOSS: picking 'อื่นๆ' stores destination='อื่นๆ (Other)', so the real country name (Germany, Japan, ...) is NOT recorded anywhere - jakkaritw was offered a free-text/typeahead capture twice and explicitly chose 'ปล่อยไว้ตามเดิม - คิดเงินถูกอยู่แล้ว ยอมเสียรายละเอียดชื่อประเทศ'. Do not 'fix' this as a bug. If a future audit needs the country name, that is a NEW request, not a regression. Legacy free-typed destinations on old trips keep their stored group (countryGroupFor returns null for an unknown name and the stored group is preserved until the user re-picks).",
+      "agent": "claude"
+    },
+    {
+      "id": "perdiem-trip-data-verify-2027",
+      "state": "done",
+      "created": "2026-08-05T16:28:12+0700",
+      "updated": "2026-08-05T16:28:12+0700",
+      "ai": "VERIFIED by jakkaritw ('pass') 2026-08-05 on PRD-equivalent data, CC 10IT012000 FY2027. Trip 30: สุชัญญา ยุปา (101159), Assistant Department Head (MGR), South Africa, country_group=2 asian, 2 days, months 01,02 -> 2 x 80 USD x 33.00 = 5,280.00 THB split Jan 2,640.00 + Feb 2,640.00. Trip 31: เจณภพ สุริยะวงศ์ (100925), Senior Supervisor 2, China, group 2, 2 days, month 04 -> 2 x 70 x 33.00 = 4,620.00 THB. CONTROL NUMBER: pending_budget_detail (is_auto_calc=1, detail_id 166+167) sums to 9,900.00 = pending_budget row for GL 6210400010 total_year 9,900.00, diff 0.00. Masters confirmed against the authoritative SharePoint file (Budgeting and Management/country.xlsx, modified 2026-07-13): 13 countries, Thailand=ในประเทศ, the other 12 incl South Africa=ต่างประเทศ-อาเซียน; dbo.country_group matches the file 13/13. per_diem_rate: Assistant Department Head (MGR) 300/80/90, Senior Supervisor 2 250/70/80. master_currency_rate FY2027=33.00 (FY2026=35.50, FY2025=40.00) - the derivation uses the TRIP's fiscal_year, not year-1. NOTE for later: country.xlsx has only 2 groups (ในประเทศ / ต่างประเทศ-อาเซียน) - no country maps to group 3, so the rate_other column (90 USD here) is only reachable via the frontend-added 'อื่นๆ' destination; add rows to the file if a real third group is wanted. Hand-run SQL for this reconcile was given to jakkaritw (3 queries: formula-vs-stored diff, stored group vs master group, detail-vs-grid control total).",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-prd-1e441de",
+      "state": "done",
+      "created": "2026-08-05T15:57:46+0700",
+      "updated": "2026-08-05T15:57:46+0700",
+      "ai": "PRODUCTION DEPLOYED 2026-08-05 by jakkaritw's explicit go. cman-budget-web-prd rev 0000013, image budget-web:1e441de (same image staging rev 0000027 was running - no rebuild, ACR run cmv reused). Previous prd = 0000012 / 68a18a2 (NOT c2bd552 - earlier ledger/session notes said c2bd552, that was wrong; corrected here). Revision RunningAtMaxScale/Healthy/100pct traffic, anon curl 401 = Easy Auth ON (expected). FQDN cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io. SHIPPED (9 commits 68a18a2..1e441de): year filter capped at current calendar year (04d1c46); legend +40pct (2d6c92c); Reset-columns on each side-heading row (577524b); DRAFT chip inline left of Submit (55eef13); session-expiry dialog vs network error, ANOTHER SESSION's work (ff67b25); last table fills to the approval bar + admin strip 1 line + page title -30pct (60db5fa); admin strip reduced to gear+'Admin' (fdfa441); searchable dept-scoped traveller picker (05e7b65); accounting side locked to the opening GL row (1e441de). NOT shipped: d0672fc (ADR-0013 subform read-only lock, another session, never ran on staging) - staging is now BEHIND HEAD by that commit. Rollback = az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --image cmanbudgetacr.azurecr.io/budget-web:68a18a2. Post-deploy smoke by a human still pending.",
+      "agent": "claude"
+    },
+    {
+      "id": "adr0013-readonly-lock-port",
+      "state": "done",
+      "created": "2026-08-05T11:00:51+0700",
+      "updated": "2026-08-05T11:35:47+0700",
+      "ai": "GATE fix pass (06+07+08 combined, APPROVE-WITH-SUGGESTIONS, security PASS 8/8) applied same day: (1) dropped dead PENDING_STATUSES import write_model.py; (2) corrected overclaimed can-never-drift-apart docstrings in approval.py/read_model.py/plan.md -> only the status SET is shared, dept resolution still snapshot(read) vs live(write), flagged D2 for jakkaritw; (3) BudgetGrid.test.tsx +4 tests closing zero-coverage on readOnly wiring line, RED-first confirmed by inverting; (4) closed gate D1 - get_budget_grid now fetches cc_dims when locked_departments non-empty even without department_filter (was fail-open bug for SAP-led rows on plain grid load), RED-first confirmed, +2 tests; (5) added fetch_locked_departments query-shape test (was fully monkeypatched/unverified), +3 tests; optional admin_wide skip applied +1 test. Backend 863 passed/48 deselected (was 857). Frontend 585 passed/33 files (was 581). next build clean, oxlint clean, checks.sh clean. Explicitly NOT touched: D2 resolution order itself (needs jakkaritw), flaky BudgetGrid.test.tsx:261/279 toHaveBeenCalledTimes(1) (pre-existing, separate ticket), traveller-PII question. Still not committed.",
+      "agent": "claude"
+    },
+    {
+      "id": "subform-readonly-lock",
+      "state": "done",
+      "created": "2026-08-05T10:01:32+0700",
+      "updated": "2026-08-05T11:45:03+0700",
+      "ai": "DONE commit d0672fc. ADR-0013 read-only lock ported to React. Backend: approval.LOCKED_APPROVAL_STATUSES hoisted (write_model imports it); read_model.fetch_locked_departments(planning_year, skipped when admin_wide) + locked_departments arg -> row.editable = admin_wide OR (fill_cc AND row_dept not locked); row_dept = pending.department or board.department or cc_dims or department_filter; cc_dims now fetched when department_filter set OR locked_departments non-empty (gate D1 fix: SAP-led rows used to fail-OPEN on unfiltered grid). Frontend: GridTable renders subform button for ALL visible special rows (locked variant lock-icon + du-rai-la-iad, .special-open-btn-locked opacity .55) -> approvers can finally review; BudgetGrid threads readOnly=!row.editable into DetailSubform+TripManager; both get readOnly prop (lock in title, disabled inputs, hide add/save, cancel->close, TripManager via trip-cards-fieldset disabled) + early-return guards on every mutator. 2 GridTable tests REWRITTEN on purpose (asserted button hidden for non-editable = contradicts spec). Verified independently in main session: backend 863 pass, frontend 585 pass, next build clean. gate:APPROVE-WITH-SUGGESTIONS (06+07+08, all legs ran, security PASS 8/8, all 6 hidden controls have server backstops via _ensure_department_not_locked). OPEN follow-ups: D2 read=snapshot dept vs write=live cc_filler_map diverge after a CC->dept remap (needs jakkaritw product call, NOT fixed, documented in docstrings); See-only users can now open Trip Manager from UI = traveller PII (name/position/destination/purpose) reaches wider audience, authz boundary UNCHANGED (GET /budget/trip always allowed See scope) - needs jakkaritw ack; pre-existing flaky BudgetGrid.test.tsx:261/279 double-fetch went red 1 of 2 gate runs. NOT deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "trip-side-lock-from-gl-row",
+      "state": "done",
+      "created": "2026-08-05T00:28:11+0700",
+      "updated": "2026-08-05T00:28:11+0700",
+      "ai": "DONE + PUSHED + STAGING LIVE. Commit 1e441de, staging rev 0000027 (image budget-web:1e441de, prev 0000026/05e7b65). ฝั่งบัญชี select in Trip Manager is now LOCKED to the side of the GL row the modal was opened from - 6xxx -> SGA, 5xxx -> COST - for EVERY user incl. admin (jakkaritw final call; the old !isAdmin exemption removed). deriveTravelSideHistory + TravelSideHistory + TRAVEL_GLS_OF_SIDE DELETED (side is always known from the click, nothing left to infer); new model.ts deriveTravelSideFromGl(gl) reverse-lookup over TRAVEL_GL_BY_TYPE_SIDE returns null for a non-travel GL and BudgetGrid.handleOpenSpecial console.errors + refuses to open rather than showing an unset lock. TripManagerProps: lockedSide replaces sideHistory+isAdmin. FINANCIAL NEVER-CUT verified by gate: a saved trip stored on the OTHER side renders its own side (disabled) + Thai note and saving sends the CARD's side - buildTripPayload/saveAll read card.draft.side, never lockedSide, so no silent COST<->SGA money move; regression test pins it. Backend already cross-validates a manual line's GL side vs the trip's stored side (TripSideMismatchError, write_model.py:943-947). GATE 06+07+08: APPROVE-WITH-SUGGESTIONS, 0 blockers, coverage delta 578->573 audited test-by-test = no real loss (8 dead-helper tests -> 2, one synthetic-dispatch test -> a stronger other-side-save test, +3 in BudgetGrid incl. an admin-gets-the-same-lock regression). next build clean. RESIDUAL (pre-existing, not a blocker): POST /budget/trip still trusts the client's side (Literal COST|SGA, CC write-scope enforced) - blast radius = classification only, within a CC the caller may already write. OPEN LOW: the permanently-disabled <select> is skipped by Tab; a read-only text field would be friendlier for keyboard/AT users. NOT on PRD (still c2bd552).",
+      "agent": "claude"
+    },
+    {
+      "id": "specb-subform-verify",
+      "state": "done",
+      "created": "2026-08-04T23:59:31+0700",
+      "updated": "2026-08-05T21:35:16+0700",
+      "ai": "[CORRECTION 2026-08-05] The 'HIGH finding: read-only lock UNIMPLEMENTED' reported earlier in this entry is WRONG - ADR-0013 read-only lock was already shipped in commit d0672fc (2026-08-05 11:44, gated 06+07+08 APPROVE-WITH-SUGGESTIONS, already had a memory file project_adr0013_readonly_lock_port.md from a prior session documenting this). My code read of DetailSubform.tsx/TripManager.tsx/GridTable.tsx earlier in this session somehow returned pre-d0672fc content despite d0672fc being HEAD at session start - root cause of the stale read unclear, but git diff HEAD confirms current working tree matches HEAD exactly, which HAS full readOnly support (props, disabled inputs, hidden buttons, lock icon, '\\xf0\\x9f\\x94\\x92 \\xe0\\xb8\\x94\\xe0\\xb8\\xb9\\xe0\\xb8\\xa3\\xe0\\xb8\\xb2\\xe0\\xb8\\xa2\\xe0\\xb8\\xa5\\xe0\\xb8\\xb0\\xe0\\xb9\\x80\\xe0\\xb8\\xad\\xe0\\xb8\\xb5\\xe0\\xb8\\xa2\\xe0\\xb8\\x94 button in GridTable.tsx). Told jakkaritw to skip live-testing this in the human test guide based on the wrong finding - corrected in chat. Remaining real findings from this task stand: 2 cosmetic PDF-vs-code label mismatches (non-issues). Separately found+fixed (new task addtxn-special-gl-cc-search / addtxn-cc-search-special-gl): AddTransactionForm blocked special-GL codes entirely, contradicting spec path (kho) - fixed, CC search box added too.",
+      "agent": "claude"
+    },
+    {
+      "id": "traveler-search-dept-scope",
+      "state": "done",
+      "created": "2026-08-04T23:06:17+0700",
+      "updated": "2026-08-04T23:06:17+0700",
+      "ai": "DONE + PUSHED + STAGING LIVE. Commit 05e7b65, staging rev 0000026 (image budget-web:05e7b65, prev 0000025/fdfa441). WHAT: Trip Manager traveller <select> -> searchable combobox (role=combobox/listbox/option + aria-activedescendant, arrows/Enter/Esc, click-outside close) filtering on name+email+position, email shown as 2nd line per option. SCOPE FIX: fetch_travelers(conn, cost_center, caller_email) - resolves cost_center -> filler email(s) in dbo.cc_filler_map -> UNION of their dbo.v_traveler_picker rows deduped by empcode, strongest pick_reason wins (manager>skip_manager>direct_report>same_department), so the list follows the on-screen ฝ่าย filter for EVERY caller incl. admin. Fallback chain (each WARNING-logged): CC has no filler mapping -> caller's own picker rows -> full v_employee_primary roster. TravelerRow gains email; TravelerOption.email now REQUIRED in TS. _ensure_see_scope untouched and pinned by test_travelers_outside_see_scope_403_and_never_queries_roster. LIVE PROBE EVIDENCE (2026-08-04, fabric_sql_database): suchanyay@chememan.com -> 7 rows incl arthids@chememan.com pick_reason=manager; jakkaritw@chememan.com -> 0 rows (he is vendor/contract officer, not on the employee roster) which is why the old login-keyed picker fell back to all 609; v_employee_primary=609; one filler_email='' bucket holds 235 travellers. GATE 06+07+08: APPROVE-WITH-SUGGESTIONS, 0 blockers, security PASS (SQL fully parameterised, See-scope gate before enumeration). Fixed both MED findings + 2 LOW: whitespace-only filler_email now stripped (SQL Server trailing-blank-insensitive compare would have matched the 235-row '' bucket), Escape-then-type reopens the list (field looked dead), ArrowDown clamped >=0 on an empty filter, ORDER BY traveler_empcode for deterministic dedupe, stale 2-arg caller in bin/diagnostic-scripts/check_traveler_picker.py updated (bin/ is gitignored, not committed). Tests: backend 849 passed/48 deselected, frontend 578/578 33 files, next build clean. NOT on PRD (still c2bd552). OPEN LOW from gate: combobox list may clip at the modal's bottom edge on the last trip card (same trait as .gl-combo) - needs jakkaritw's eyes; Thai name sort differs between scoped path (Python codepoint) and full-roster fallback (SQL collation).",
+      "agent": "claude"
+    },
+    {
+      "id": "trip-manager-traveler-search",
+      "state": "done",
+      "created": "2026-08-04T22:45:49+0700",
+      "updated": "2026-08-04T22:46:04+0700",
+      "ai": "backend/app/reference_data.py fetch_travelers(conn,cost_center,caller_email) CC-scoped via cc_filler_map->v_traveler_picker union+dedup, 3-step fallback ladder, email field added; backend/app/routers/reference.py TravelerRow.email + call-site update. frontend/src/subform/TripManager.tsx new local TravelerField combobox (role=combobox/listbox/option, aria-activedescendant, keyboard nav) replaces <select>; frontend/src/api/types.ts TravelerOption.email; global.css .traveler-combo* + text-transform:none fix (uppercase was leaking onto emails). Tests: backend 849 passed/48 deselected (was 844); frontend 577/577 (33 files, was 571); next build clean; oxlint clean. Playwright shoot_ui.py extended (run_traveler_search_scenario) PASS: 8 options before/1 after typing 'arth', email visible normal-case, 0 console errors, 9 pre-existing shots unaffected. Not committed, not deployed, no live DB touched. plan.md updated same session.",
+      "agent": "claude"
+    },
+    {
+      "id": "admin-strip-marker-only",
+      "state": "done",
+      "created": "2026-08-04T21:42:11+0700",
+      "updated": "2026-08-04T21:42:11+0700",
+      "ai": "DONE + PUSHED + STAGING LIVE. Commit fdfa441 (staging rev 0000025, image budget-web:fdfa441; previous 0000024/60db5fa). Admin strip reduced to gear icon + literal text 'Admin' only - provenance sentence, read-only note, FX read-out (FY=planning-1) and the Master Currency pointer all moved into the row's title tooltip. SIDE EFFECT jakkaritw was told: the 'แก้ที่ Master Currency ↗' LINK is gone from the strip (tooltip text is not clickable) - one word restores it as a small trailing link. BudgetGrid.test.tsx rewritten for the new contract: visible .admin-zone-title === 'Admin', gear svg present, tooltip contains FY2026/read-only/Budgeting and Management/Master Currency, and the strip now has zero <button> AND zero <a>. Also committed the session-expiry automated proof (client.test.ts +2, BudgetGrid.test.tsx +1) from the verification agent. Verify: vitest 571/571 33 files (first full run had 2 FLAKY failures in BudgetGrid mount-fetch counts - 0 and 2 instead of 1 - under machine load; file alone 36/36 and a clean re-run 571/571 exit 0, so flake not regression, worth watching), next build clean. GitHub: 7 commits pushed (04d1c46 2d6c92c 577524b 55eef13 ff67b25 60db5fa fdfa441) - origin/main now current. PRD still c2bd552, NOT deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "session-expiry-e2e-proof",
+      "state": "done",
+      "created": "2026-08-04T21:20:36+0700",
+      "updated": "2026-08-04T21:22:50+0700",
+      "ai": "DONE, verification-only, NOT committed. Vitest: added 2 tests to frontend/src/api/client.test.ts (plain 401 does NOT raise the session-expiry latch; 401 with unparsable/HTML body still calls onUnauthorized without crashing) + 1 to frontend/src/grid/BudgetGrid.test.tsx (non-409 save failure e.g. session-expiry ApiError leaves the typed cell value in place, only 409 reverts). Full suite 571/571 pass (33 files, was 568), next build clean. E2E: extended shoot_ui.py (scratchpad harness) with PUT /budget/rows mock (STATE['save_mode']: success/401/redirect/offline) + run_session_expiry_scenarios() driving a real cell edit+blur through 3 scenarios -- literal 401 fulfil, same-origin 302 fulfil (opaqueredirect shape), abort('internetdisconnected')+navigator.onLine=false. All 3 PASS, 0 regressions to the 9 pre-existing shots. KEY FINDING (not a defect, reported per ADR-0028): the literal-401 branch is NOT what a real browser gets for a dead Easy Auth session (that's always the 302->opaqueredirect shape per ADR-0028's measured table) -- literal 401 instead hard-navigates the browser away immediately (client.ts defaultOnUnauthorized), no dialog, no in-tab evidence. Only the redirect/opaqueredirect scenario is the true Case A and correctly shows the dialog with the typed value preserved. Case B (offline) correctly never shows the dialog, shows the connectivity Thai message, value preserved. navigator.onLine flip is inert (code never reads it, confirmed via grep) -- included per brief, noted as inert not a gap. Screenshots (not Read, per policy): scratchpad/session_expiry_401.png, session_expiry_redirect.png (bonus), session_expiry_offline.png.",
+      "agent": "claude"
+    },
+    {
+      "id": "measured-table-height-gate-fixes",
+      "state": "done",
+      "created": "2026-08-04T19:38:36+0700",
+      "updated": "2026-08-04T19:38:53+0700",
+      "ai": "All 4 fixes + L5 test gaps done, TDD RED-first confirmed (temporarily reverted, 5 new tests failed for right reasons, restored, GREEN). frontend/src/grid/GridTable.tsx: widened computedLength to add paddingBottom, added budgetGridBottomSpacing term (60px normal/28px fullscreen, verified live 812->752px), new queryApprovalBar() helper (.approval-bar class first, testid fallback) used at 2 call sites, dropped MutationObserver subtree:true, switched measurement useEffect->useLayoutEffect. frontend/src/grid/GridTable.test.tsx: +8 tests (FakeResizeObserver stub scoped to this file only, not setup.ts). Full suite 568/568 (560 baseline+8), next build clean, oxlint clean. Playwright harness re-shot grid_fill_after/fullscreen/short.png, all PASS (gap=35.0px x3, hug diff=0.0px). Scope respected - did not touch sessionExpiry/SessionExpiredDialog/App.tsx/client.ts/setup.ts/.session-expired-backdrop (parallel session owns those). Not committed per instructions. plan.md updated with new section.",
+      "agent": "claude"
+    },
+    {
+      "id": "admin-strip-oneline-title-shrink",
+      "state": "done",
+      "created": "2026-08-04T18:44:27+0700",
+      "updated": "2026-08-04T20:59:55+0700",
+      "ai": "DONE + STAGING LIVE (rev 0000024, image budget-web:60db5fa). Commit 60db5fa bundles 3 space-recovery changes: (1) LAST rendered side-table gets a MEASURED inline max-height (nav + its own .side-heading-row + approval bar + real margins/gaps + .budget-grid margin-bottom 60px normal / padding-bottom 28px fullscreen, all via getComputedStyle) replacing the flat calc(100vh-380px)/(100vh-260px) guesses; falls back to the CSS cap on SSR/no-approval-bar/available<=0; recompute on resize + fullscreen + rows + approval-bar mount/resize (MutationObserver childList only, no subtree - perf), all listeners/observers cleaned on unmount; still max-height not min so short tables hug rows. (2) admin 'งบอนุมัติ (Approved) · Admin' strip 2 rows -> 1 line, 70px -> 39.8px, .admin-zone-head/.admin-zone-actions deleted from markup AND css, dropped text folded into the note tooltip. (3) .page-title clamp(48,7vw,86) -> clamp(34,4.9vw,60) = 86px -> 60px measured at 1600px. Gate 06+07+08 rerun clean after the earlier degraded run (agent died mid-flight + classifier unavailable): APPROVE-WITH-SUGGESTIONS, 0 blockers, security PASS; its 2 MED findings (missing .budget-grid bottom spacing in the reserve; MutationObserver subtree thrash) were FIXED, plus class-first .approval-bar lookup and useLayoutEffect. Proof: applied max-height 812->752px normal (exactly the 60px margin), fullscreen block up 28px, short-table diff 0.0px, vitest 568/568 33 files, next build clean. Open LOW (not blocking): mockup 0002.3 still shows the old 2-row admin strip - update before the next sign-off doc. Parallel session's session-expiry work landed separately as ff67b25; my commit deliberately excluded it. NOT on PRD (still c2bd552), nothing pushed to GitHub.",
+      "agent": "claude"
+    },
+    {
+      "id": "approval-chip-inline-left",
+      "state": "done",
+      "created": "2026-08-04T17:15:53+0700",
+      "updated": "2026-08-04T17:15:53+0700",
+      "ai": "DONE (stg deploy pending). Commit 55eef13: global.css .approval-bar-status flex-basis:100% -> flex:1 1 auto + min-width:0, so the DRAFT status chip 'แบบร่าง (ยังไม่ส่งอนุมัติ)' sits inline immediately LEFT of the ส่งอนุมัติ button instead of on its own full-width line above it (jakkaritw UX call). Long hints (reject reason / action error) shrink+wrap inside the block instead of pushing Submit off the row; .approval-bar flex-wrap still stacks when truly out of room; .reject-panel keeps flex-basis:100% so it stays its own line. CSS-only, no JSX/logic change. Verify: vitest src/approval 41/41 pass, next build OK; real-build Playwright w/ mocked API at 1600px chip+Submit same row dy=0.0px, chip right 1423.6 < submit left 1437.6; at 700px still one row (content fits, wrap not triggered - observation not defect). Reusable screenshot harness now lives at scratchpad/shoot_ui.py (serves frontend/out + mocks /me,/scope,/budget,/approval; SHOTS list at top; rerun = npx next build then python -X utf8 shoot_ui.py). NOT deployed, NOT pushed.",
+      "agent": "claude"
+    },
+    {
+      "id": "reset-columns-heading-row-screenshot",
+      "state": "done",
+      "created": "2026-08-04T16:59:40+0700",
+      "updated": "2026-08-04T16:59:55+0700",
+      "ai": "Served frontend/out (static export, port 4399) + one-off Playwright script (mocked /me,/scope,/scope/departments,/budget,/budget/gl-accounts,/approval/status,/approval/pending-for-me,/attachments,/reference/*, shapes mirrored from e2e/fixtures.ts) - real React app, not a static HTML mock. Both sides PASS: COST deltaY=0.00, SGA deltaY=0.00 (threshold 12), button right of heading both sides, 0 console errors. Screenshots: scratchpad/grid_heading_row_real.png (full page) + grid_heading_row_sga_crop.png (cropped heading row). Confirms plan.md line 152's uncommitted point-8c-followup change renders correctly. Script deleted after run per policy, no code changed.",
+      "agent": "claude"
+    },
+    {
+      "id": "session-cookie-14h",
+      "state": "done",
+      "created": "2026-08-04T16:38:00+0700",
+      "updated": "2026-08-04T16:38:00+0700",
+      "ai": "Easy Auth session cookie 8h->14h on BOTH envs, applied 2026-08-04 with jakkaritw approval ('เอา'). Command: az containerapp auth update -n <app> -g CMAN-BUDGET-MNGT-WEB-RG --set login.cookieExpiration.timeToExpiration=14:00:00. stg cman-budget-web-stg applied first, then prd cman-budget-web-prd. VERIFIED post-change on prd: cookie.timeToExpiration=14:00:00, clientId 61d5d556 + allowedAudiences unchanged, unauth=RedirectToLoginPage unchanged, platform.enabled=true, rev 0000012 RunningAtMaxScale/Healthy, live probes browser-UA / ->302, no-UA /api/me ->401, /.auth/login/aad ->302. NOTE convention=FixedTime is NOT echoed back by the API (defaults are elided) - this is expected, not a failed write. Pre-change configs backed up to scratchpad stg-auth-backup.json / prd-auth-backup.json (both were login.cookieExpiration={}). No user logged out: existing cookies keep their minted 8h expiry, 14h applies from each user's next login. 14h NOT yet empirically proven - needs #k8-long-session-soak. Rationale + rejected alternatives in ADR-0028. NOT COMMITTED yet (ADR-0028 + CONTEXT.md edits pending).",
+      "agent": "claude"
+    },
+    {
+      "id": "pending-preyear-excel-import",
+      "state": "willdo",
+      "created": "2026-08-04T16:33:35+0700",
+      "updated": "2026-08-04T16:39:23+0700",
+      "ai": "[DECISION LOCKED 2026-08-04 - DO NOT BUILD YET] jakkaritw answered the open question: option (kho) - the pre-FY2027 pending figures are a DIFFERENT DATA SET from the board-approved numbers already in dbo.board_budget, so this is NOT duplication and the separate pending lane IS justified. He then said 'อย่าพึ่งทำ' = do not start building. STATE: requirement confirmed + design mapped, implementation deliberately NOT started. Any session picking this up must get a fresh go-ahead from jakkaritw first. Still unanswered when it does start: (1) how far back to load - FY2025 only, or 2024/2023 too; (2) what to do about retired cost centres, which currently REJECT THE WHOLE FILE (options: re-add to dbo.cc_filler_map / drop those rows from the file and accept an incomplete total / relax the loader). The 4 pieces to build stay as recorded: new SharePoint folder under library 'Budgeting and Management', a pending_budget_<yyyy>.xlsx filename contract (year derived from filename only), a transform+loader in c:\\\\19.dw_jakkaritw targeting budget.pending_budget, and the year lock - the lock is a HARD PAIR with this, otherwise a filler can open an imported past year and edit it.",
+      "agent": "claude"
+    },
+    {
+      "id": "reset-columns-heading-row",
+      "state": "done",
+      "created": "2026-08-04T16:32:22+0700",
+      "updated": "2026-08-04T16:46:18+0700",
+      "ai": "DONE (staging deploy pending user call). Commit 577524b: Reset-columns button moved off the standalone right-aligned .grid-column-controls row onto each side-table heading row. GridTable.tsx - new .side-heading-row (h2 left / button right), button renders once per side, both call the same handleResetColumns (colWidths is ONE shared state by design, unchanged); data-testid split reset-columns-btn -> reset-columns-btn-COST/-SGA; each button gets aria-label 'Reset columns - <section>' (gate a11y finding, two identical accessible names otherwise). global.css - .grid-column-controls rule+comment deleted (no dead CSS), .side-heading-row added carrying the 8px margin-bottom, .side-heading now margin:0 so vertical rhythm unchanged. Gate 06+07+08: APPROVE-WITH-SUGGESTIONS, 0 blockers, security PASS (markup/CSS only), vitest 536/536 (31 files) then 67/67 on GridTable after the aria-label, next build OK. Known LOW (accepted): a side with 0 rows now renders no button because the whole section returns null - no table to reset, so intended; untested edge (COST rows + SGA empty). No e2e/mockup hits for the old testid. plan.md entry added. NOT deployed to stg yet, NOT pushed.",
+      "agent": "claude"
+    },
+    {
+      "id": "plan-folder-removal",
+      "state": "done",
+      "created": "2026-08-04T16:29:09+0700",
+      "updated": "2026-08-04T16:29:09+0700",
+      "ai": "CONFIRMED INTENTIONAL by jakkaritw 2026-08-04: 'ลบถูกแล้ว' - the 13 deleted plan/*.md files stay deleted, do NOT run 'git checkout -- plan/'. I had flagged the empty plan/ folder as a possible accidental deletion (the files were readable earlier in the same session and then vanished); that concern is now closed as a deliberate cleanup. State: the deletions are UNSTAGED in the working tree - the files still exist in HEAD, so any session that runs a broad 'git checkout'/'git stash' could resurrect them; committing the removal is the way to make it stick. Historical tracker entries still cite paths like plan/email-notify-revamp.md, plan/sap-actuals-dw-gap-fix.md, plan/post-deploy-smoke-uat-plan.md, plan/grid-fullscreen-toggle.md - those references are now GIT-HISTORY ONLY (recover with 'git show HEAD:plan/<file>'), not live files.",
+      "agent": "claude"
+    },
+    {
+      "id": "k8-session-expiry-test",
       "state": "doing",
+      "created": "2026-08-04T16:29:08+0700",
+      "updated": "2026-08-04T16:29:08+0700",
+      "ai": "OWNED BY ANOTHER SESSION - jakkaritw 2026-08-04: 'อีก session กำลังแก้'. Do NOT start this work here; coordinate before touching frontend/src/api/client.ts or the Easy Auth config. Scope (P2-K8): what happens when the Easy Auth session dies mid-editing. Findings already established here, hand them over: (a) prd Easy Auth has cookieExpiration unset = platform default ~8h, so the plan's literal '1 hour' test can never expire anything - the real moment is ~8h or a tab left overnight; (b) blast radius is small because the grid auto-saves per row on blur (MonthCell.tsx:65 -> BudgetGrid.tsx:216 persistRow), there is no bulk save button and no localStorage draft of typed values (only column widths/theme/admin toggle are persisted), so a dead session loses ONE cell not a day of work; (c) on 401 apiFetch calls defaultOnUnauthorized (client.ts:50,216) which NAVIGATES to the Easy Auth login immediately, no warning, killing the in-flight 'กำลังบันทึก…' state; buildLoginRedirectUrl(currentHref()) returns the user to the same URL after login; (d) P2-K5 already proved a bogus cookie yields a clean empty 401, not an HTML login page. Cheap repro instead of waiting 8h: type in a cell, delete the AppServiceAuthSession cookie in DevTools, blur the cell.",
+      "agent": "other-session"
+    },
+    {
+      "id": "legend-size-plus40",
+      "state": "done",
+      "created": "2026-08-04T16:11:51+0700",
+      "updated": "2026-08-04T16:11:51+0700",
+      "ai": "DONE + STAGING LIVE. Commit 2d6c92c: frontend/src/styles/global.css status-legend scaled +40% per jakkaritw - font 11.5->16px, .legend-dot 8->11px, .legend gap 14->20px + padding 4->6px, .legend-item gap 6->8px. CSS comment records this as a DELIBERATE divergence from mockup 0002.3 (do not 'restore' to parity). trip-legend untouched; fullscreen .table-wrap calc(100vh-260px) absorbs the ~5px growth. Verify: BudgetGrid.test.tsx 35/35 pass, next build OK (no test asserts legend px). DEPLOY: acr run cmr Succeeded tag budget-web:2d6c92c, cman-budget-web-stg rev 0000023 Running/Healthy/100pct (was 0000022/04d1c46), anon curl 401 = Easy Auth ON expected. PRD still c2bd552, not deployed. Nothing pushed to GitHub yet (04d1c46 + 2d6c92c local only).",
+      "agent": "claude"
+    },
+    {
+      "id": "adr0026-watermark-prd-eyecheck",
+      "state": "done",
+      "created": "2026-08-04T16:11:22+0700",
+      "updated": "2026-08-04T16:11:22+0700",
+      "ai": "CLOSED 2026-08-04: jakkaritw opened PRD in the browser and confirmed the ADR-0026 watermark renders correctly - 'pass'. This was the last open item from the P2-K/manual leftovers list for the watermark lane. Prior evidence was local-only (pre-deploy run on :3000: coverage year=2027 visible[1,2,3] hidden[4..12] watermark 2026-04-29, grid Jan-Mar values + Apr-Dec en-dash, total 1,506,806.25 labelled Jan-Mar); stg/prd post-deploy checks could only reach startup logs + 401 because Easy Auth sits at the platform edge. Now visually confirmed on prd rev 0000012 (image budget-web:68a18a2). No code change.",
+      "agent": "claude"
+    },
+    {
+      "id": "session-expired-dialog",
+      "state": "done",
+      "created": "2026-08-04T16:09:34+0700",
+      "updated": "2026-08-04T18:52:49+0700",
+      "ai": "DONE + COMMITTED ff67b25 (14 files, 619+/1-). Client-side half of ADR-0028. Shipped: frontend/src/api/sessionExpiry.ts (first-call-wins latch + locked copy, single source), frontend/src/auth/SessionExpiredDialog.tsx (variant A: role=alertdialog, ONE button 'เข้าสู่ระบบใหม่', no ✕/Esc/backdrop-close, focus on container not button so a queued Enter cannot auto-navigate), client.ts (redirect:'manual' pinned AFTER ...init at :222; opaqueredirect||status===0 branch at :232 placed before the 401 check at :237; catch unchanged so offline/server-down keeps the connectivity message), App.tsx mounts the dialog unconditionally so a dead session on the boot GET /me still shows it, global.css .session-expired-backdrop z-index 600 > .modal-backdrop 500, test/setup.ts resets the latch in the shared afterEach, backend/tests/test_no_redirect_routes.py guards the one real false-positive vector (a same-origin 3xx is indistinguishable from the Easy Auth 302 once redirect:'manual' makes it opaque). GATE 06+07+08 = APPROVE WITH SUGGESTIONS, 0 blockers, all 10 locked constraints verified incl. SHA-256 match on the Thai copy; 2 doc findings fixed (ADR title still said 'local draft restore'; the backend docstring's production story was wrong - the SPA catch-all makes a slash mismatch 200 not 3xx, so the guard has teeth only in the API-only CI config) + 1 coverage gap closed (useAuth boot-path opaqueredirect test). VERIFIED BY MAIN SESSION not by agent claim: vitest 559 pass/33 files, tsc clean, pytest 1 pass. COMMIT HYGIENE: global.css also held 7 hunks from a PARALLEL session (GridTable fullscreen/side-section) - staged ONLY my .session-expired-backdrop hunk via a constructed patch + git apply --cached; GridTable.tsx/BudgetGrid.tsx/.claude/plan.md left uncommitted and untouched. NOT PUSHED, NOT DEPLOYED - awaiting jakkaritw. Open: LOW nits declined (inline justify-content on the modal foot; parametrize the redirect-guard paths); e2e spec not written; real-browser verification on staging still pending (#k8-long-session-soak).",
+      "agent": "claude"
+    },
+    {
+      "id": "k8-long-session-soak",
+      "state": "doing",
+      "created": "2026-08-04T14:00:54+0700",
+      "updated": "2026-08-04T14:00:54+0700",
+      "ai": "P2-K8 (1h long-session token-refresh soak) never run - 0 ledger hits. FINDING: 1h is the wrong number. az containerapp auth show cman-budget-web-prd -> login.cookieExpiration={} = Container Apps default FixedTime 08:00:00, no login.tokenStore -> no sliding refresh, /.auth/refresh unusable. Real cliff = 8h from LOGIN (not last activity); 1h idle proves nothing auth-wise. Backend DB token is safe: db.py uses msal acquire_token_for_client (self-refreshing cache), not a pinned 1h token. Real risk = frontend/src/api/client.ts:216-219 -> any 401 calls onUnauthorized -> hard redirect to /.auth/login/aad -> unsaved grid cells lost. Test plan proposed: (C) force-expire cookie in DevTools + Save = 2min failure-path test; (B) Playwright unattended soak w/ storageState, ping /me q5min, sentinel save at T+60m and T+8h05m. Awaiting jakkaritw scope pick.",
+      "agent": "claude"
+    },
+    {
+      "id": "yearpicker-cap-current-year",
+      "state": "done",
+      "created": "2026-08-04T13:54:19+0700",
+      "updated": "2026-08-04T14:26:02+0700",
+      "ai": "DONE + STAGING LIVE. Commit 04d1c46: frontend/src/grid/YearPicker.tsx WINDOW_AFTER 2->1 so newest option label == current calendar year (2026 -> last option 'Year 2026', was 'Year 2027'); option value stays planning year (label = value-1) so backend contract + defaults getFullYear()+1 unchanged; FIRST_PLANNING_YEAR 2020 (floor label Year 2019) and years.add(year) deep-link escape hatch untouched; deepLink.ts +/-5 window untouched. New date-relative test asserts Year<cur> present + Year<cur+1> absent (no rot on 2027-01-01); stale comment in e2e/live-backend.spec.ts fixed. Gate (06+07+08 combined): APPROVE-WITH-SUGGESTIONS, 0 blockers, security 8/8 PASS, vitest 535/535 pass 31 files, next build OK. DEPLOY: az acr build run cmq Succeeded from clean detached worktree (main tree had parallel-session leftovers), tag budget-web:04d1c46 in cmanbudgetacr; containerapp cman-budget-web-stg rev 0000022 Running/Healthy/100pct traffic on 04d1c46 (was 0000021/68a18a2). anon curl 401 = Easy Auth ON, expected. az CLI still exits 1 with UnicodeEncodeError on the warn glyph - trust az acr task list-runs not the exit code. PRD still on c2bd552 - NOT deployed, awaits jakkaritw.",
+      "agent": "claude"
+    },
+    {
+      "id": "preyear-budget-import-path",
+      "state": "doing",
+      "created": "2026-08-04T13:41:11+0700",
+      "updated": "2026-08-04T16:11:22+0700",
+      "ai": "PAUSED then RESUMING: workflow wh3fvf1sv (run wf_2f144cdf-df2) had no completion record - the previous Claude Code process exited while it ran. Read-only scout run, so relaunching with resumeFromRunId replays completed agents from cache. Next step = read the synthesis and answer jakkaritw: how pre-FY2027 budget years get loaded (board_budget path), what is already loaded per year, and the traps that hide an imported row in the app.",
+      "agent": "claude"
+    },
+    {
+      "id": "sync-submission-deadline-2027",
+      "state": "done",
+      "created": "2026-08-04T13:18:33+0700",
+      "updated": "2026-08-04T13:29:57+0700",
+      "ai": "LANDED + VERIFIED 2026-08-04 13:28. jakkaritw ran run_notebook.py --live himself (my two attempts were blocked by the CC permission classifier, not by Fabric). He Ctrl+C'd the first run while it sat in client.py:459 time.sleep(retry_after) - that killed only the LOCAL poller; the Fabric job had already been submitted (202 + Location header) and completed server-side, so the sync did land. A second --live run was started before that was known = a harmless idempotent re-run of the same full replace. VERIFIED by my own probe against the live DB (scratchpad/i4_after_sync.txt): dbo.submission_deadline ROWCOUNT=1, fiscal_year=2027 closing_date=31 closing_month=10 closing_year=2026 reminder_day=15 deadline_date=2026-10-31 reminder_date=2026-10-15, _load_dttm=2026-08-04T13:28:44.191512 (was 06:31:33 with 4 rows). Rows 2024/2025/2026 deleted as predicted. The FY2027 cycle now has a real cutoff: non-admin edits/submits blocked from 2026-11-01 (deadline-day inclusive), auto_submit fires post-deadline, reminder window opens 2026-10-15. STILL OPEN (unchanged by this sync): planning years 2020-2026 have no deadline row = treated as OPEN, so fillers can still edit closed years - jakkaritw must pick one of (a) back-dated rows per year in the Excel, (b) the spec year-rollover lock (budget-transactional-data-model.md:689), (c) narrow YearPicker FIRST_PLANNING_YEAR=2020.",
+      "agent": "claude"
+    },
+    {
+      "id": "i4-closing-date-one-truth",
+      "state": "done",
+      "created": "2026-08-04T12:02:05+0700",
+      "updated": "2026-08-04T13:12:25+0700",
+      "ai": "[UPDATE 2026-08-04] Root cause of the 4-identical-rows finding: the SOURCE Excel had ONE row with the WRONG fiscal_year. jakkaritw opened SharePoint 'วันปิดรับข้อมูลงบประมาณ.xlsx' and it held a single row fiscal_year=2026 (not 2027) - the app keys the deadline on the PLANNING year (BudgetGrid.tsx:42 default = getFullYear()+1 = 2027; YearPicker labels planning year minus 1, so the on-screen 'Year 2026' IS planning year 2027 - that label is what made the officer type 2026). First correction attempt set closing_year=2027 (would have derived deadline_date=2027-10-31, a year late); flagged, jakkaritw corrected again. FINAL FILE NOW: fiscal_year=2027, closing_date=31, closing_month=10, closing_year=2026, reminder_day=15 - verified against the loader contract: headers match FILE_REGISTRY column_map verbatim (budget_masters_lib.py:1404-1411 expects SPACES 'fiscal year'/'closing date'/'closing month'/'closing year' but underscore 'reminder_day'), sheet tab is 'Sheet' as required (line 1402), cast_int tolerates text-formatted cells. EXPECTED AFTER THE NEXT 06:31 SYNC: exactly 1 row, deadline_date=2026-10-31, reminder_date=2026-10-15; rows 2024/2025/2026 DELETED because the merge is a true full replace (build_full_replace_merge_sql, WHEN NOT MATCHED BY SOURCE THEN DELETE). CONSEQUENCE - the closed-years-editable finding is UNCHANGED, not fixed: a year with no row is treated as OPEN by design (deadline.py:33-38), so planning years 2020-2026 stay editable by fillers. Options given to jakkaritw: add back-dated rows per year (2024->2023-10-31 etc, zero code change) OR build the spec's year-rollover lock (budget-transactional-data-model.md:689) OR narrow YearPicker's FIRST_PLANNING_YEAR=2020 floor. STILL OPEN: nobody has verified the sync landed - check dbo.submission_deadline after 06:31 tomorrow (2026-08-05); probe script kept at scratchpad/i4_db_probe.py.",
+      "agent": "claude"
+    },
+    {
+      "id": "k6-viewport-matrix",
+      "state": "done",
+      "created": "2026-08-04T12:02:04+0700",
+      "updated": "2026-08-04T12:02:04+0700",
+      "ai": "SKIPPED BY JAKKARITW 2026-08-04 ('skip') - deliberate decision, not 'not done yet'. P2-K6 scope dropped: Edge+Chrome-on-Windows matrix and the phone-sized APPROVER viewport (approve-from-Outlook-mobile). What IS proven and stands: task viewport-smoke-cc 2026-07-24 Playwright tablet 768 + phone 390 on the FILLER grid = PASS (frozen cols sticky, 12-month area scrolls, month input typeable, console clean), with the reported caveat 332px visible vs 2086px content = ~6x hscroll, desktop-first by design. That run predates 4 later UI changes (313325e fullscreen toggle, bdde1a4 ADR-0026 watermark, 09ce34d override button, d0052ab YearPicker) - unretested at small widths, accepted. Reopen only if an approver reports they cannot act from a phone.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-prd-68a18a2",
+      "state": "done",
+      "created": "2026-08-03T00:12:33+0700",
+      "updated": "2026-08-03T00:12:33+0700",
+      "ai": "PRODUCTION DEPLOYED 68a18a2 (2026-08-02, jakkaritw approved): prd rev 0000012 Healthy/RunningAtMaxScale/2 replicas/100% traffic, image cmanbudgetacr.azurecr.io/budget-web:68a18a2 (supersedes c2bd552 = perf fix, verified ancestor). Startup clean: fabric 1.1s, gold 4.5s, SAP cache primed 7.2s, warmup total 12.9s. Anonymous curl 401 = Easy Auth ON (expected). NOTIFICATIONS_DRY_RUN unset on prd = still dry-run, so no mail fires. Ships: sender cmanpowerbi@ + reworded step-override refusals. Rollback line: az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --image cmanbudgetacr.azurecr.io/budget-web:c2bd552. NOTE first az containerapp update attempt was blocked by the CC auto-mode classifier until jakkaritw granted permission",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-stg-68a18a2",
+      "state": "done",
+      "created": "2026-08-02T17:49:40+0700",
+      "updated": "2026-08-02T17:49:40+0700",
+      "ai": "STAGING DEPLOYED 68a18a2 (notify sender cmanpowerbi + reworded step-override refusals): az acr build run cmp Succeeded from a CLEAN detached worktree (parallel session had 3 uncommitted files), tag budget-web:68a18a2 in cmanbudgetacr; containerapp stg rev 0000021 Healthy/Running/100% traffic, startup clean, warmup 11.9s, SAP cache primed. Anonymous curl returns 401 = Easy Auth ON (expected, not a failure). az CLI still dies with UnicodeEncodeError on the warn glyph - verify via az acr task list-runs, never the CLI exit code. ADMIN_EMAILS restored to 3 emails. PRD still on c2bd552 - not deployed, awaits jakkaritw",
+      "agent": "claude"
+    },
+    {
+      "id": "gl-editby-filler-eye-check",
+      "state": "done",
+      "created": "2026-08-02T16:14:07+0700",
+      "updated": "2026-08-02T17:17:54+0700",
+      "ai": "PASS: non-admin view on staging returns exactly 134 GL rows (Ctrl+F edit_by => 134 matches, all value 'user'), 5211300010 absent. Method: temporarily removed jakkaritw from stg ADMIN_EMAILS (rev 0000019), jakkaritw loaded /budget/gl-accounts, then RESTORED 3-email list (rev 0000020, verified via az show). No DB change, prd untouched. NOTE: with GL_EDIT_BY_ENABLED=true the edit_by FIELD is still serialized to non-admins (always 'user' since admin rows are filtered out) - harmless, not a leak; my earlier expectation that the field disappears was wrong. gl-editby-flag-rollout now fully verified both sides (admin sees 146 incl 5211300010, filler sees 134)",
+      "agent": "claude"
+    },
+    {
+      "id": "override-refusal-staging-test",
+      "state": "done",
+      "created": "2026-08-02T15:18:15+0700",
+      "updated": "2026-08-02T15:26:59+0700",
+      "ai": "PASS both refusal cases on staging: (A) Solution Delivery FY2028 at PENDING_APPROVER2 -> approve button absent entirely; (B) Application Services FY2028 PENDING_APPROVER1 with approver1=101032 -> button rendered, click refused 409 identity lock, DB verified unchanged (status/approver1 same, approval_log 0 rows). Test rows deleted, approval_status=0 approval_log=0 CLEAN. Follow-up shipped 68a18a2: all 3 StepNotOverridable messages reworded to name the blocking approver + next action (jakkaritw: old text unreadable); 845 tests pass. NOTE only-active-position branch proven unreachable (needs approver1 in {101032,100427} which the occupant check catches first)",
+      "agent": "claude"
+    },
+    {
+      "id": "log-908704a",
+      "state": "done",
+      "created": "2026-08-02T15:16:59+0700",
+      "updated": "2026-08-02T15:16:59+0700",
+      "agent": "autolog",
+      "ai": "@ feat(notify): send app mail as cmanpowerbi@ instead of a personal mailbox [commit 908704a]"
+    },
+    {
+      "id": "notif-sender-cmanpowerbi",
+      "state": "done",
       "created": "2026-08-02T15:16:33+0700",
-      "updated": "2026-08-02T15:16:33+0700",
-      "ai": "switch app notification sender jakkaritw@ -> cmanpowerbi@chememan.com (shared CMAN_PowerBI mailbox) per jakkaritw 2026-08-02; Settings.notifications_sender_email + _post_send_mail(sender=); verified Graph 202 sending as cmanpowerbi; 845 backend tests pass; 6 probe mails re-sent from new sender",
+      "updated": "2026-08-02T15:17:14+0700",
+      "ai": "DONE: app notification sender = cmanpowerbi@chememan.com (CMAN_PowerBI shared mailbox), Settings.notifications_sender_email env-repointable; _post_send_mail takes sender=; +1 unit test asserting URL comes from settings; 845 backend tests pass; verified live Graph 202 as cmanpowerbi; 6 probe mails re-sent from new sender for jakkaritw eye-check. setup/send_signoff_email.py intentionally still sends as jakkaritw. NOT pushed, NOT deployed - staging/prd containers still run the old image (sender flips only after redeploy)",
       "agent": "claude"
     },
     {

@@ -11,36 +11,55 @@ export interface AddTransactionFormProps {
   fillCostCenters: string[]
   glRef: GlAccount[]
   existingRows: BudgetRow[]
-  /** Performs the actual create (PUT /budget/rows, expected_updated_at=null)
-   * — owned by the parent (`BudgetGrid`) so this component never calls the
-   * API directly. Resolves `{ok:false, errorTh}` on a server-side rejection
-   * (e.g. a 409 raced by another Filler) instead of throwing, so the form
-   * can show it inline without a try/catch at the call site. */
+  /** Owned by the parent (`BudgetGrid`) so this component never calls the API
+   * directly. For a plain GL: creates the blank Pending row (PUT
+   * /budget/rows, expected_updated_at=null) and resolves `{ok:false,
+   * errorTh}` on a server-side rejection (e.g. a 409 raced by another
+   * Filler) instead of throwing, so the form can show it inline without a
+   * try/catch at the call site. For a special-GL pick (Spec B path ข,
+   * jakkaritw 2026-08-05): skips the create call entirely and opens that
+   * GL's own subform directly — always resolves `{ok:true}`. */
   onAdd: (costCenter: string, glAccount: string) => Promise<AddResult>
 }
 
-/** "+ เพิ่ม transaction" — picks a Cost Center (Fill scope only) + a
- * non-special GL, then creates a new blank Pending row (ADR-0010: the
- * manual door for a (CC, GL) with no SAP actual yet). The GL picker is a
- * SEARCHABLE combobox (130+ master rows — a plain <select> was unusable):
- * type to filter by code/name, Enter picks the first match, Esc closes. */
+/** "+ เพิ่ม transaction" — picks a Cost Center + a GL code (Fill scope
+ * only; special-GL codes ARE pickable too, Spec B path ข, jakkaritw
+ * 2026-08-05 — routes straight into that GL's own subform, same as any
+ * special-GL row), then either creates a new blank Pending row (ADR-0010:
+ * the manual door for a non-special (CC, GL) with no SAP actual yet) or
+ * opens the subform (special GL — see `onAdd` doc). BOTH pickers are the
+ * SAME searchable-combobox pattern (a plain <select> was unusable — 130+ GL
+ * rows, 400+ Fill-scope cost centers): type to filter, Enter picks the
+ * first match, Esc closes, click also picks. */
 export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd }: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
   const [costCenter, setCostCenter] = useState('')
+  const [ccSearch, setCcSearch] = useState('')
+  const [ccListOpen, setCcListOpen] = useState(false)
   const [glAccount, setGlAccount] = useState('')
   const [glSearch, setGlSearch] = useState('')
   const [glListOpen, setGlListOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const nonSpecialGls = glRef.filter((g) => !g.is_special)
-  const selectedGl = nonSpecialGls.find((g) => g.gl_code === glAccount)
+  const ccQuery = ccSearch.trim().toLowerCase()
+  // Cost centers are bare codes (no name/department string available in
+  // this component's props) — filter by substring on the code itself.
+  const filteredCcs = ccQuery ? fillCostCenters.filter((cc) => cc.toLowerCase().includes(ccQuery)) : fillCostCenters
+
+  function pickCc(cc: string) {
+    setCostCenter(cc)
+    setCcSearch(cc)
+    setCcListOpen(false)
+  }
+
+  const selectedGl = glRef.find((g) => g.gl_code === glAccount)
   const query = glSearch.trim().toLowerCase()
   // Match code, name AND group — the label shows only name, but users also
   // search by group (e.g. "office" for the Office Expenses GLs).
   const filteredGls = query
-    ? nonSpecialGls.filter((g) => `${g.gl_code} ${g.gl_name ?? ''} ${g.gl_group}`.toLowerCase().includes(query))
-    : nonSpecialGls
+    ? glRef.filter((g) => `${g.gl_code} ${g.gl_name ?? ''} ${g.gl_group}`.toLowerCase().includes(query))
+    : glRef
 
   function glLabel(g: GlAccount): string {
     return `${g.gl_code} — ${g.gl_name ?? g.gl_group}${g.edit_by === 'admin' ? ' (เฉพาะแอดมิน)' : ''}`
@@ -55,6 +74,8 @@ export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd
   function reset() {
     setOpen(false)
     setCostCenter('')
+    setCcSearch('')
+    setCcListOpen(false)
     setGlAccount('')
     setGlSearch('')
     setGlListOpen(false)
@@ -91,14 +112,52 @@ export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd
     <div className="add-txn-form">
       <label>
         Cost Center
-        <select value={costCenter} onChange={(e) => setCostCenter(e.target.value)} aria-label="Cost Center">
-          <option value="">— เลือก Cost Center —</option>
-          {fillCostCenters.map((cc) => (
-            <option key={cc} value={cc}>
-              {cc}
-            </option>
-          ))}
-        </select>
+        <div className="gl-combo">
+          <input
+            aria-label="Cost Center"
+            className="gl-combo-input"
+            placeholder="— เลือก Cost Center —"
+            value={ccListOpen ? ccSearch : costCenter || ccSearch}
+            onFocus={() => {
+              setCcListOpen(true)
+              setCcSearch('')
+            }}
+            onChange={(e) => {
+              // Free text is never a selection by itself — the CC only
+              // counts once the user picks it from the filtered list.
+              setCcSearch(e.target.value)
+              setCostCenter('')
+            }}
+            onBlur={() => setCcListOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setCcListOpen(false)
+              if (e.key === 'Enter' && ccListOpen && filteredCcs.length > 0) {
+                e.preventDefault()
+                pickCc(filteredCcs[0])
+              }
+            }}
+          />
+          {ccListOpen && (
+            <div className="gl-combo-list" role="listbox" aria-label="ตัวเลือก Cost Center">
+              {filteredCcs.length === 0 && <div className="gl-combo-empty">ไม่พบ Cost Center ที่ค้นหา</div>}
+              {filteredCcs.map((cc) => (
+                <button
+                  key={cc}
+                  type="button"
+                  role="option"
+                  aria-selected={cc === costCenter}
+                  className="gl-combo-option"
+                  // preventDefault keeps input focus — otherwise blur would
+                  // close the list before the click lands.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickCc(cc)}
+                >
+                  {cc}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </label>
       <label>
         GL Code

@@ -25,8 +25,19 @@ function pickGlOption(name: string | RegExp) {
   fireEvent.click(screen.getByRole('option', { name }))
 }
 
+/** The Cost Center picker is the SAME searchable-combobox pattern as GL Code
+ * (see the module doc comment) — focus opens the list, click picks. */
+function openCcList() {
+  fireEvent.focus(screen.getByLabelText('Cost Center'))
+}
+
+function pickCcOption(name: string | RegExp) {
+  openCcList()
+  fireEvent.click(screen.getByRole('option', { name }))
+}
+
 describe('AddTransactionForm', () => {
-  it('renders a Cost Center select limited to the Fill scope', () => {
+  it('opens the Cost Center combobox listing every option in the Fill scope', () => {
     render(
       <AddTransactionForm
         fillCostCenters={['CC1', 'CC2']}
@@ -36,17 +47,65 @@ describe('AddTransactionForm', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    const ccSelect = screen.getByLabelText('Cost Center')
-    expect(ccSelect).toHaveTextContent('CC1')
-    expect(ccSelect).toHaveTextContent('CC2')
+    openCcList()
+    expect(screen.getByRole('option', { name: 'CC1' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'CC2' })).toBeInTheDocument()
   })
 
-  it('excludes special-GL accounts from the GL picker options', () => {
+  it('typing filters Cost Center options by substring; no match shows an empty hint', () => {
+    render(
+      <AddTransactionForm
+        fillCostCenters={['CC1', 'CC2', '10IT011300']}
+        glRef={GL_REF}
+        existingRows={[]}
+        onAdd={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    const ccInput = screen.getByLabelText('Cost Center')
+
+    openCcList()
+    fireEvent.change(ccInput, { target: { value: 'it01' } })
+    expect(screen.getByRole('option', { name: '10IT011300' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'CC1' })).not.toBeInTheDocument()
+
+    fireEvent.change(ccInput, { target: { value: 'zzz' } })
+    // Only one combobox list is open at a time — safe to query the lone listbox.
+    expect(within(screen.getByRole('listbox')).queryByRole('option')).not.toBeInTheDocument()
+    expect(screen.getByText('ไม่พบ Cost Center ที่ค้นหา')).toBeInTheDocument()
+  })
+
+  it('Enter picks the first filtered Cost Center match; free text alone never selects a CC', () => {
+    render(<AddTransactionForm fillCostCenters={['CC1', 'CC2']} glRef={GL_REF} existingRows={[]} onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    const ccInput = screen.getByLabelText('Cost Center') as HTMLInputElement
+
+    openCcList()
+    fireEvent.change(ccInput, { target: { value: 'CC2' } })
+    fireEvent.keyDown(ccInput, { key: 'Enter' })
+
+    expect(ccInput.value).toBe('CC2')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument() // list closed after pick
+  })
+
+  it('includes special-GL accounts in the GL picker (Spec B path ข, jakkaritw 2026-08-05 — no longer excluded)', () => {
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
     openGlList()
     expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /5211900030/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /5211900030/ })).toBeInTheDocument()
+  })
+
+  it('a picked special-GL code is no longer rejected — onAdd is called (it will route into its own subform on save)', async () => {
+    const onAdd = vi.fn().mockResolvedValue({ ok: true })
+    render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />)
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    pickCcOption('CC1')
+    pickGlOption(/5211900030/)
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC1', '5211900030'))
+    expect(screen.queryByText(/เป็นกลุ่มพิเศษ/)).not.toBeInTheDocument()
   })
 
   it('marks an admin-only GL with a badge in the picker label (GL edit_by lock, design v2)', () => {
@@ -101,7 +160,7 @@ describe('AddTransactionForm', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
+    pickCcOption('CC1')
     pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
     expect(screen.getByText('รายการนี้มีอยู่ในตารางแล้ว')).toBeInTheDocument()
@@ -112,7 +171,7 @@ describe('AddTransactionForm', () => {
     const onAdd = vi.fn().mockResolvedValue({ ok: true })
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
+    pickCcOption('CC1')
     pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
@@ -124,7 +183,7 @@ describe('AddTransactionForm', () => {
     const onAdd = vi.fn().mockResolvedValue({ ok: false, errorTh: 'สร้างรายการไม่สำเร็จ' })
     render(<AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />)
     fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-    fireEvent.change(screen.getByLabelText('Cost Center'), { target: { value: 'CC1' } })
+    pickCcOption('CC1')
     pickGlOption(/5211800030/)
     fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
