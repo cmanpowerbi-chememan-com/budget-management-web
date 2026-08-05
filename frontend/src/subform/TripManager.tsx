@@ -49,6 +49,14 @@ export interface TripManagerProps {
    * ฝ่าย booking history: the side is always already known from the click
    * that opened this modal, so there is nothing left to infer or default. */
   lockedSide: TripSide
+  /** ADR-0013 read-only lock (UI parity port, 2026-08-05) — set by the
+   * caller from `!row.editable` at open time (See-only viewer, or the
+   * department is mid-approval/APPROVED for this Filler). The whole card
+   * list is wrapped in a disabled `<fieldset>` (every input/select/button
+   * inside disabled in one place); `เพิ่มทริป`/`บันทึก & ลงบัญชี` are hidden
+   * and `ยกเลิก` becomes `ปิด`. Defaults to `false` (editable) so existing
+   * callers/tests are unaffected. */
+  readOnly?: boolean
   onClose: () => void
   /** Called after EVERY successful trip/manual-line save — the parent grid
    * refetches so all 8 travel GL cells (both sides, in case of a side flip)
@@ -306,7 +314,7 @@ function TravelerField({ ariaLabel, travelers, value, onChange, fallback }: Trav
  * accommodation/other) are entered per month, locked to the trip's selected
  * travel_months. Per-diem is NEVER computed here — only the server's own
  * response/read is ever shown (never-cut). */
-export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSaved }: TripManagerProps) {
+export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = false, onClose, onSaved }: TripManagerProps) {
   const [cards, setCards] = useState<TripCardState[]>([])
   /** Always mirrors the LATEST `cards` state — read by long-running async
    * handlers (delete's 409 catch) that must see edits made to a SIBLING card
@@ -356,6 +364,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
   }, [costCenter, fiscalYear])
 
   function addTrip() {
+    if (readOnly) return
     const localId = `new-${newTripCounter}`
     setNewTripCounter((n) => n + 1)
     setCards((prev) => [
@@ -412,7 +421,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
    * (financial never-cut). Every card is attempted; one card's failure
    * never blocks the rest of the batch (partial-failure policy). */
   async function saveAll() {
-    if (saving || loading) return
+    if (readOnly || saving || loading) return
     setSaving(true)
     setConflictMessage(null)
     const snapshot = cards
@@ -539,6 +548,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
   }
 
   async function deleteTripCard(localId: string) {
+    if (readOnly) return
     const card = cards.find((c) => c.localId === localId)
     if (!card) return
 
@@ -612,6 +622,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
             </h2>
             <p className="modal-subtitle">
               {costCenter} · FY{fiscalYear} · ทริปทั้งหมดรวมกัน 4 ประเภทค่าใช้จ่าย
+              {readOnly ? ' · 🔒 อ่านอย่างเดียว (แก้ไม่ได้)' : ''}
             </p>
           </div>
           <button type="button" className="modal-close" aria-label="Close" disabled={saving} onClick={onClose}>
@@ -667,10 +678,15 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
           )}
 
           {!loading && !loadError && (
-            // Disables every descendant input/select/button at once while a
-            // save-all batch is in flight — no edit can be made mid-batch
-            // and lost by the final setCards (native fieldset semantics).
-            <fieldset disabled={saving} className="trip-cards-fieldset">
+            // Disables every descendant input/select/button at once — while a
+            // save-all batch is in flight (native fieldset semantics, no edit
+            // lost mid-batch), OR permanently when the caller opened this in
+            // read-only mode (ADR-0013, UI parity port: mockup's own
+            // `<fieldset disabled>${html}</fieldset>` wrap — reused here
+            // rather than a second parallel fieldset, since this one already
+            // resets the native fieldset chrome the mockup's inline style
+            // targets, see .trip-cards-fieldset above).
+            <fieldset disabled={saving || readOnly} className="trip-cards-fieldset">
             {cards.map((card, idx) => {
               const traveler = resolveTravelerDisplay(card.draft.traveler_empcode, travelers, card.serverTraveler)
               // A stored traveler/destination missing from the current master
@@ -1010,22 +1026,28 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, onClose, onSav
           </div>
           <div className="modal-actions">
             <button type="button" className="btn" disabled={loading || saving} onClick={onCancel}>
-              ยกเลิก
+              {readOnly ? 'ปิด' : 'ยกเลิก'}
             </button>
-            {/* Disabled while load() is in-flight — its setCards(...) REPLACES the
-             * array, so a card added before the data lands would be silently lost. */}
-            <button type="button" className="btn" disabled={loading || saving} onClick={addTrip}>
-              + เพิ่มทริป
-            </button>
-            <button
-              type="button"
-              className="btn btn-export"
-              disabled={loading || saving || cards.length === 0}
-              onClick={saveAll}
-              data-testid="save-all"
-            >
-              {saving ? 'กำลังบันทึก…' : 'บันทึก & ลงบัญชี'}
-            </button>
+            {/* Add/save hidden entirely when read-only (ADR-0013) — mockup
+             * tripAddBtn/tripSaveBtn display:none. */}
+            {!readOnly && (
+              <>
+                {/* Disabled while load() is in-flight — its setCards(...) REPLACES the
+                 * array, so a card added before the data lands would be silently lost. */}
+                <button type="button" className="btn" disabled={loading || saving} onClick={addTrip}>
+                  + เพิ่มทริป
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-export"
+                  disabled={loading || saving || cards.length === 0}
+                  onClick={saveAll}
+                  data-testid="save-all"
+                >
+                  {saving ? 'กำลังบันทึก…' : 'บันทึก & ลงบัญชี'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -90,12 +90,16 @@ describe('GridTable', () => {
     expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
   })
 
-  it('does not show the open-subform button for a non-editable (See-only) special-GL row', () => {
+  it('shows the locked "🔒 ดูรายละเอียด" variant (still clickable) for a non-editable special-GL row (ADR-0013 read-only lock)', () => {
     const onOpenSpecial = vi.fn()
     const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: false })]
     render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
-    expect(screen.queryByTestId('open-subform-CC1-5211900030')).not.toBeInTheDocument()
-    expect(screen.getByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).toBeInTheDocument()
+    const openBtn = screen.getByTestId('open-subform-CC1-5211900030')
+    expect(openBtn).toHaveTextContent('🔒 ดูรายละเอียด')
+    expect(openBtn).toHaveClass('special-open-btn-locked')
+    expect(openBtn).toHaveAttribute('title', 'อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้')
+    fireEvent.click(openBtn)
+    expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
   })
 
   describe('trailing "ลบ" (delete) column', () => {
@@ -781,14 +785,17 @@ describe('GridTable', () => {
       expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
     })
 
-    it('a non-editable (See-only) special row shows no ↗ button and no hint text in compact mode', () => {
+    it('a non-editable (See-only) special row shows the locked 🔒 icon button (still clickable) in compact mode', () => {
       const onOpenSpecial = vi.fn()
       const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: false })]
       render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} onOpenSpecial={onOpenSpecial} />)
       clickFirstCollapseButton()
 
-      expect(screen.queryByTestId('open-subform-CC1-5211900030')).not.toBeInTheDocument()
-      expect(screen.queryByText('แก้ไขผ่านฟอร์มย่อย', { exact: false })).not.toBeInTheDocument()
+      const openBtn = screen.getByTestId('open-subform-CC1-5211900030')
+      expect(openBtn).toHaveTextContent('🔒')
+      expect(openBtn).toHaveClass('special-open-btn-locked')
+      fireEvent.click(openBtn)
+      expect(onOpenSpecial).toHaveBeenCalledWith(rows[0], 'Entertainment')
     })
 
     it('Pending month inputs stay editable and commit still fires in compact mode', () => {

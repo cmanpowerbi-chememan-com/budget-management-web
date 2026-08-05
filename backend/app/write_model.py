@@ -63,7 +63,7 @@ from typing import Literal
 import pyodbc
 from pydantic import BaseModel, Field, field_validator
 
-from app.approval import APPROVED, PENDING_STATUSES
+from app.approval import LOCKED_APPROVAL_STATUSES
 from app.config import Settings, get_settings
 from app.deadline import PastDeadlineError, is_post_deadline
 from app.gl_access import normalize_edit_by
@@ -417,13 +417,6 @@ def _ensure_not_admin_only_gl(dims: dict[str, str | None], gl_account: str, scop
         raise AdminOnlyGlError(f"{gl_account} is an admin-only GL account — only admins may edit it")
 
 
-# Locked once a department's approval record has left DRAFT/REJECTED for this
-# fiscal_year — mid-chain (PENDING_APPROVER1/2/3) or fully signed off
-# (APPROVED). DRAFT/REJECTED and "no row yet" (never submitted) are NOT
-# locked — matches ADR-0013's edit-rights-by-status table exactly.
-_LOCKED_APPROVAL_STATUSES: frozenset[str] = PENDING_STATUSES | {APPROVED}
-
-
 def _lookup_department_approval_status(conn: pyodbc.Connection, department: str, fiscal_year: int) -> str | None:
     """Current `budget.approval_status.status` for `(department, fiscal_year)`,
     or `None` if no row exists yet (nothing has ever been submitted -> not
@@ -482,7 +475,7 @@ def _ensure_department_not_locked(
     if department is None:
         return
     status = _lookup_department_approval_status(conn, department, fiscal_year)
-    if status in _LOCKED_APPROVAL_STATUSES:
+    if status in LOCKED_APPROVAL_STATUSES:
         raise DepartmentLockedError(
             f"{department}/{fiscal_year} is {status} — mid-approval or approved, editing is locked"
         )

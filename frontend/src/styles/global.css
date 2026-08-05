@@ -1666,6 +1666,13 @@ th.total-year-col {
   background: var(--special-bg);
   border-color: var(--ink);
 }
+/* ADR-0013 read-only lock (mockup 0002.3budget-export.html openDetailModal,
+   btn-detail's read-only branch: `opacity:.55`) — dims the button when the
+   department is locked / the caller is view-only, without hiding it: the
+   subform still opens, just in read-only mode. */
+.special-open-btn-locked {
+  opacity: 0.55;
+}
 
 /* ─── A9 modal shell (special-GL DetailSubform + Trip Manager) ─── */
 .modal-backdrop {

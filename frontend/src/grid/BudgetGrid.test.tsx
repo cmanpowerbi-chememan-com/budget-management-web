@@ -375,6 +375,90 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
   })
 
+  // ADR-0013 read-only lock (UI parity port, 2026-08-05) — the single line
+  // `const readOnly = !row.editable` in handleOpenSpecial is the whole
+  // feature's wiring point and had zero coverage at this level; inverting it
+  // to `row.editable` left every other test green (gate finding item 3).
+  describe('ADR-0013 read-only lock wiring (handleOpenSpecial -> readOnly prop)', () => {
+    it('opening DetailSubform from a LOCKED (editable:false) special row renders its read-only affordances', async () => {
+      const SPECIAL_GL_REF = [
+        { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SPECIAL_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211900030', { editable: false })])
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByTestId('open-subform-CC1-5211900030'))
+
+      expect(await screen.findByTestId('detail-subform')).toBeInTheDocument()
+      expect(screen.getByText(/อ่านอย่างเดียว \(แก้ไม่ได้\)/)).toBeInTheDocument()
+      expect(screen.queryByTestId('save-all')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ปิด' })).toBeInTheDocument()
+    })
+
+    it('opening DetailSubform from an EDITABLE special row renders NO read-only affordances', async () => {
+      const SPECIAL_GL_REF = [
+        { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SPECIAL_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211900030', { editable: true })])
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByTestId('open-subform-CC1-5211900030'))
+
+      expect(await screen.findByTestId('detail-subform')).toBeInTheDocument()
+      expect(screen.queryByText(/อ่านอย่างเดียว \(แก้ไม่ได้\)/)).not.toBeInTheDocument()
+      expect(screen.getByTestId('save-all')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ยกเลิก' })).toBeInTheDocument()
+    })
+
+    it('opening Trip Manager from a LOCKED (editable:false) travel row renders its read-only affordances', async () => {
+      const TRAVEL_GL_REF = [
+        { gl_code: '5210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem', is_special: true },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5210400010', { editable: false })])
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByTestId('open-subform-CC1-5210400010'))
+
+      expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+      expect(screen.getByText(/🔒 อ่านอย่างเดียว \(แก้ไม่ได้\)/)).toBeInTheDocument()
+      expect(screen.queryByTestId('save-all')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ปิด' })).toBeInTheDocument()
+    })
+
+    it('opening Trip Manager from an EDITABLE travel row renders NO read-only affordances', async () => {
+      const TRAVEL_GL_REF = [
+        { gl_code: '5210400010', gl_group: 'Travelling Expense', gl_name: 'Per Diem', is_special: true },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(TRAVEL_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5210400010', { editable: true })])
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByTestId('open-subform-CC1-5210400010'))
+
+      expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
+      expect(screen.queryByText(/🔒 อ่านอย่างเดียว \(แก้ไม่ได้\)/)).not.toBeInTheDocument()
+      expect(screen.getByTestId('save-all')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ยกเลิก' })).toBeInTheDocument()
+    })
+  })
+
   // 2026-08-04, jakkaritw — FINAL: the Trip Manager's ฝั่งบัญชี select locks
   // to the side of the GL row the form was opened FROM (never ฝ่าย booking
   // history anymore), for every user incl. admins. These 3 tests replace

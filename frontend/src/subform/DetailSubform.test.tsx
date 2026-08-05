@@ -464,4 +464,63 @@ describe('DetailSubform', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
     expect(onClose).toHaveBeenCalled()
   })
+
+  describe('read-only lock (ADR-0013, UI parity port, 2026-08-05)', () => {
+    function renderReadOnly(lines: DetailLineState[] = [blankLine()]) {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue(lines)
+      const onClose = vi.fn()
+      const onSaved = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName="ค่าเลี้ยงรับรองภายนอก"
+          fiscalYear={2027}
+          readOnly
+          onClose={onClose}
+          onSaved={onSaved}
+        />,
+      )
+      return { onClose, onSaved }
+    }
+
+    it('shows the 🔒 title marker and the อ่านอย่างเดียว subtitle', async () => {
+      renderReadOnly()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      expect(screen.getByRole('heading')).toHaveTextContent('🔒')
+      expect(screen.getByText(/อ่านอย่างเดียว \(แก้ไม่ได้\)/)).toBeInTheDocument()
+    })
+
+    it('every meta/month input is disabled and the trash button is hidden', async () => {
+      renderReadOnly()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      expect(screen.getByLabelText('รายละเอียด')).toBeDisabled()
+      expect(screen.getByLabelText('m01 existing-1')).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'ลบรายการ' })).not.toBeInTheDocument()
+    })
+
+    it('hides "+ เพิ่มรายการ" and "บันทึก", and the close button reads "ปิด"', async () => {
+      renderReadOnly()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: /เพิ่มรายการ/ })).not.toBeInTheDocument()
+      expect(screen.queryByTestId('save-all')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ปิด' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'ยกเลิก' })).not.toBeInTheDocument()
+    })
+
+    it('"ปิด" calls onClose, and no write API is ever called', async () => {
+      const { onClose } = renderReadOnly()
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
+
+      expect(onClose).toHaveBeenCalled()
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+      expect(subformApi.deleteDetailLine).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -68,10 +68,12 @@ export interface GridTableProps {
    * batch-shaped-but-independent contract). */
   rowMessages?: Record<string, RowMessage>
   /** Opens the A9 special-GL detail subform (or Trip Manager, for
-   * `glGroup === 'Travelling Expense'`) for one row — only offered when the
-   * row is in the caller's Fill scope (`row.editable`); a See-only special
-   * row just shows the static tooltip (viewing the detail breakdown for
-   * read-only users is out of this task's scope, flagged as a fast-follow). */
+   * `glGroup === 'Travelling Expense'`) for one row — offered for EVERY
+   * special-GL row the caller can SEE, regardless of `row.editable` (ADR-0013
+   * read-only lock, UI parity port, 2026-08-05): a non-editable row (See-only,
+   * or the department is mid-approval/APPROVED for this Filler) still opens,
+   * just in read-only mode — see `DetailSubform`/`TripManager`'s `readOnly`
+   * prop. */
   onOpenSpecial?: (row: BudgetRow, glGroup: string) => void
   /** Trailing "ลบ" column — deletes one manually-added Pending row (see
    * `isDeletableRow` for the eligibility gate). Optional so presentational
@@ -92,6 +94,10 @@ const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
 }
 
 const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อย'
+// ADR-0013 read-only lock (mockup 0002.3budget-export.html, canEditPending()/
+// openDetailModal): shown on the locked-variant button in place of the
+// editable tooltip above.
+const SPECIAL_GL_LOCKED_TOOLTIP = 'อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้'
 const COLLAPSE_COLUMNS_LABEL = 'ซ่อนคอลัมน์ GL Group / Remark / Status'
 const EXPAND_COLUMNS_LABEL = 'แสดงคอลัมน์ GL Group / Remark / Status'
 const ENTER_FULLSCREEN_LABEL = 'ขยายตารางเต็มหน้าจอ'
@@ -538,7 +544,19 @@ function TxnBlock({
   // Same condition the EXPANDED open-subform button already uses (in the
   // Pending status cell) — in compact mode that cell doesn't render at all,
   // so the button moves into the GL cell instead. Never both at once.
-  const canOpenSpecial = meta.is_special && row.editable && onOpenSpecial
+  //
+  // ADR-0013 read-only lock (UI parity port, 2026-08-05): the button is now
+  // offered for EVERY special-GL row the caller can SEE (`row.editable` is
+  // no longer part of this gate) — an approver, or a Filler whose department
+  // is mid-approval/APPROVED, still needs to open the subform to REVIEW the
+  // detail lines, just not edit them. `specialLocked` picks which of the two
+  // button variants renders below.
+  // NOT wrapped in Boolean(...) — keeping `onOpenSpecial` itself as the last
+  // `&&` operand lets TS's aliased-condition narrowing carry the "is
+  // defined" fact into the JSX below (`canOpenSpecial && ... onOpenSpecial(...)`),
+  // the same way the pre-existing code relied on.
+  const canOpenSpecial = meta.is_special && onOpenSpecial
+  const specialLocked = meta.is_special && !row.editable
 
   return (
     <tbody className="txn-block" data-testid={`txn-${cc}-${gl}`}>
@@ -547,7 +565,7 @@ function TxnBlock({
         <td className={`gl-cell frz frz-2${columnsCollapsed ? ' frz-edge' : ''}`}>
           <span className="gl-code-text">{gl}</span>
           <div className="gl-name">{meta.gl_name ?? '—'}</div>
-          {columnsCollapsed && canOpenSpecial && (
+          {columnsCollapsed && canOpenSpecial && !specialLocked && (
             <button
               type="button"
               className="special-open-btn compact"
@@ -557,6 +575,18 @@ function TxnBlock({
               onClick={() => onOpenSpecial(row, meta.gl_group)}
             >
               ↗
+            </button>
+          )}
+          {columnsCollapsed && canOpenSpecial && specialLocked && (
+            <button
+              type="button"
+              className="special-open-btn compact special-open-btn-locked"
+              title={SPECIAL_GL_LOCKED_TOOLTIP}
+              aria-label={SPECIAL_GL_LOCKED_TOOLTIP}
+              data-testid={`open-subform-${cc}-${gl}`}
+              onClick={() => onOpenSpecial(row, meta.gl_group)}
+            >
+              🔒
             </button>
           )}
         </td>
@@ -623,7 +653,7 @@ function TxnBlock({
           <td className="status-cell pending frz frz-5">
             <span className="status-cell-content">
               Pending · รออนุมัติ
-              {canOpenSpecial && (
+              {canOpenSpecial && !specialLocked && (
                 <button
                   type="button"
                   className="special-open-btn"
@@ -632,6 +662,17 @@ function TxnBlock({
                   onClick={() => onOpenSpecial(row, meta.gl_group)}
                 >
                   {SPECIAL_GL_TOOLTIP} ↗
+                </button>
+              )}
+              {canOpenSpecial && specialLocked && (
+                <button
+                  type="button"
+                  className="special-open-btn special-open-btn-locked"
+                  title={SPECIAL_GL_LOCKED_TOOLTIP}
+                  data-testid={`open-subform-${cc}-${gl}`}
+                  onClick={() => onOpenSpecial(row, meta.gl_group)}
+                >
+                  🔒 ดูรายละเอียด
                 </button>
               )}
               {meta.is_special && !canOpenSpecial && (

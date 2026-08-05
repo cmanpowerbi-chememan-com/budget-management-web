@@ -1202,4 +1202,55 @@ describe('TripManager', () => {
       expect(within(perDiemRow).getByText(TRAVEL_GL_BY_TYPE_SIDE.per_diem.SGA, { selector: '.exp-gl-chip' })).toBeInTheDocument()
     })
   })
+
+  describe('read-only lock (ADR-0013, UI parity port, 2026-08-05)', () => {
+    it('shows the 🔒 อ่านอย่างเดียว subtitle', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} readOnly onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      expect(screen.getByText(/🔒 อ่านอย่างเดียว \(แก้ไม่ได้\)/)).toBeInTheDocument()
+    })
+
+    it('wraps the card list body in a disabled fieldset — every input/select/button inside is disabled', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} readOnly onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      const fieldset = screen.getByLabelText('days existing-10').closest('fieldset')
+      expect(fieldset).toBeDisabled()
+      expect(screen.getByLabelText('days existing-10')).toBeDisabled()
+      expect(screen.getByLabelText('destination existing-10')).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'ลบทริป' })).toBeDisabled()
+    })
+
+    it('hides "+ เพิ่มทริป" and "บันทึก & ลงบัญชี", and the close button reads "ปิด"', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} readOnly onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: /เพิ่มทริป/ })).not.toBeInTheDocument()
+      expect(screen.queryByTestId('save-all')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'ปิด' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'ยกเลิก' })).not.toBeInTheDocument()
+    })
+
+    it('"ปิด" calls onClose directly, and no write API is ever called', async () => {
+      const onClose = vi.fn()
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} readOnly onClose={onClose} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
+
+      expect(onClose).toHaveBeenCalled()
+      expect(subformApi.createTrip).not.toHaveBeenCalled()
+      expect(subformApi.updateTrip).not.toHaveBeenCalled()
+      expect(subformApi.deleteTrip).not.toHaveBeenCalled()
+    })
+  })
 })

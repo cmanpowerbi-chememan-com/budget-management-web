@@ -60,15 +60,22 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const [error, setError] = useState<string | null>(null)
 
   // A9: which special-GL subform (or Trip Manager) is currently open, if
-  // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย"
-  // button (GridTable). `null` = none open.
-  const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string } | null>(null)
+  // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย" /
+  // "🔒 ดูรายละเอียด" button (GridTable). `null` = none open. `readOnly`
+  // (ADR-0013 read-only lock, UI parity port, 2026-08-05) is captured from
+  // `!row.editable` AT OPEN TIME — the grid already computed the real
+  // edit-rights rule (Fill scope × department lock × admin bypass) server-
+  // side, so the modal never re-derives it.
+  const [detailTarget, setDetailTarget] = useState<{ row: BudgetRow; glGroup: string; readOnly: boolean } | null>(null)
   // The open Trip Manager's target CC + its LOCKED accounting side (jakkaritw,
   // 2026-08-04 — final: the side is always the one the clicked GL row
   // belongs to, for every user incl. admins — never editable, never
-  // inferred from ฝ่าย history). One state, not two, so the two values can
+  // inferred from ฝ่าย history) + its read-only lock (ADR-0013, same policy
+  // as `detailTarget` above). One state, not several, so the values can
   // never drift out of sync with each other.
-  const [tripManagerOpenFor, setTripManagerOpenFor] = useState<{ costCenter: string; lockedSide: TripSide } | null>(null)
+  const [tripManagerOpenFor, setTripManagerOpenFor] = useState<{ costCenter: string; lockedSide: TripSide; readOnly: boolean } | null>(
+    null,
+  )
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   // Fullscreen overlay (⤢ toggle, jakkaritw-approved 2026-07-31) — lifts the
   // WHOLE grid block (toolbar + legend + both side-tables + Submit bar) into
@@ -250,6 +257,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * side could only create a mismatch); the other 5 special groups go to
    * DetailSubform. */
   function handleOpenSpecial(row: BudgetRow, glGroup: string) {
+    const readOnly = !row.editable
     if (glGroup === 'Travelling Expense') {
       const lockedSide = deriveTravelSideFromGl(row.gl_account)
       if (lockedSide === null) {
@@ -259,9 +267,9 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         console.error(`Travelling Expense row has an unrecognized GL: ${row.gl_account}`)
         return
       }
-      setTripManagerOpenFor({ costCenter: row.cost_center, lockedSide })
+      setTripManagerOpenFor({ costCenter: row.cost_center, lockedSide, readOnly })
     } else {
-      setDetailTarget({ row, glGroup })
+      setDetailTarget({ row, glGroup, readOnly })
     }
   }
 
@@ -474,6 +482,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           glGroup={detailTarget.glGroup}
           glName={glMetaFor(detailTarget.row.gl_account, glRef).gl_name}
           fiscalYear={year}
+          readOnly={detailTarget.readOnly}
           onClose={() => setDetailTarget(null)}
           onSaved={loadGrid}
         />
@@ -484,6 +493,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           costCenter={tripManagerOpenFor.costCenter}
           fiscalYear={year}
           lockedSide={tripManagerOpenFor.lockedSide}
+          readOnly={tripManagerOpenFor.readOnly}
           onClose={() => setTripManagerOpenFor(null)}
           onSaved={loadGrid}
         />

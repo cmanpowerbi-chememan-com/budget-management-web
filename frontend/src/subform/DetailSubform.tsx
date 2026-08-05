@@ -21,6 +21,13 @@ export interface DetailSubformProps {
   glGroup: string
   glName: string | null
   fiscalYear: number
+  /** ADR-0013 read-only lock (UI parity port, 2026-08-05) — set by the
+   * caller from `!row.editable` at open time (See-only viewer, or the
+   * department is mid-approval/APPROVED for this Filler). Every mutation
+   * (add/save/delete row, edit a field) is a no-op; `บันทึก`/`+ เพิ่มรายการ`
+   * are hidden and `ยกเลิก` becomes `ปิด`. Defaults to `false` (editable) so
+   * existing callers/tests are unaffected. */
+  readOnly?: boolean
   onClose: () => void
   /** Called after a successful save batch (at least one line written) — the
    * parent grid refetches so the aggregate Pending cell (server-recomputed
@@ -53,7 +60,16 @@ function rowsFromServer(lines: DetailLineState[]): RowState[] {
  * (`PUT /budget/detail` is still one line per call) so one line's error never
  * blocks another — on full success the modal closes, on any failure it stays
  * open with the failed rows marked. */
-export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYear, onClose, onSaved }: DetailSubformProps) {
+export function DetailSubform({
+  costCenter,
+  glAccount,
+  glGroup,
+  glName,
+  fiscalYear,
+  readOnly = false,
+  onClose,
+  onSaved,
+}: DetailSubformProps) {
   const [rows, setRows] = useState<RowState[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -82,6 +98,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
   }, [costCenter, glAccount, fiscalYear])
 
   function addRow() {
+    if (readOnly) return
     const localId = `new-${newRowCounter}`
     setNewRowCounter((n) => n + 1)
     setRows((prev) => [...prev, { localId, draft: blankDetailDraft(costCenter, glAccount, fiscalYear), status: 'idle' }])
@@ -92,10 +109,12 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
   }
 
   function setMeta(localId: string, key: string, value: string) {
+    if (readOnly) return
     updateDraft(localId, (d) => ({ ...d, meta: { ...d.meta, [key]: value } }))
   }
 
   function setMonth(localId: string, month: (typeof MONTH_KEYS)[number], value: number) {
+    if (readOnly) return
     updateDraft(localId, (d) => ({ ...d, months: { ...d.months, [month]: value } }))
   }
 
@@ -107,7 +126,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
    * (mock saveDetailData); any failure keeps it open with the failed rows
    * marked so the user can fix and re-click. */
   async function saveAll() {
-    if (saving || loading) return
+    if (readOnly || saving || loading) return
     setSaving(true)
     setConflictMessage(null)
     const snapshot = rows
@@ -155,6 +174,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
   }
 
   async function deleteRow(localId: string) {
+    if (readOnly) return
     const row = rows.find((r) => r.localId === localId)
     if (!row) return
 
@@ -197,9 +217,11 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
           <div>
             <h2 className="modal-title">
               รายละเอียด <em>{glGroup}</em>
+              {readOnly ? ' 🔒' : ''}
             </h2>
             <p className="modal-subtitle">
               {costCenter} · {glAccount} · {glName ?? '—'}
+              {readOnly ? ' · อ่านอย่างเดียว (แก้ไม่ได้)' : ''}
             </p>
           </div>
           <button type="button" className="modal-close" aria-label="Close" onClick={onClose}>
@@ -278,6 +300,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                               aria-label={f.key}
                               className="detail-input"
                               value={selectValue}
+                              disabled={readOnly}
                               onChange={(e) => setMeta(row.localId, f.key, e.target.value)}
                             >
                               <option value="">— เลือก —</option>
@@ -293,6 +316,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                                 className="detail-input free-text-input"
                                 placeholder={`พิมพ์${f.key}`}
                                 value={fieldFreeText(f, storedValue)}
+                                disabled={readOnly}
                                 onChange={(e) =>
                                   // Empty box falls back to the trigger literal so the
                                   // select stays on อื่นๆ; save is blocked in that state.
@@ -309,6 +333,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                             aria-label={f.key}
                             className="detail-input"
                             value={row.draft.meta[f.key] ?? ''}
+                            disabled={readOnly}
                             onChange={(e) => setMeta(row.localId, f.key, e.target.value)}
                           />
                         </td>
@@ -321,6 +346,7 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                           className="detail-input month-input"
                           inputMode="numeric"
                           value={row.draft.months[m] || ''}
+                          disabled={readOnly}
                           onChange={(e) => setMonth(row.localId, m, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
                         />
                       </td>
@@ -329,24 +355,27 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
                       <span className="month-value pending-readonly">{formatThb(detailLineTotal(row.draft))}</span>
                     </td>
                     <td>
-                      {/* Icon-only trash, mockup #detailModal .action-btn (26×26) */}
-                      <button
-                        type="button"
-                        className="action-btn"
-                        aria-label="ลบรายการ"
-                        title="ลบรายการ"
-                        disabled={row.status === 'deleting' || saving}
-                        onClick={() => deleteRow(row.localId)}
-                      >
-                        {row.status === 'deleting' ? (
-                          '…'
-                        ) : (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          </svg>
-                        )}
-                      </button>
+                      {/* Icon-only trash, mockup #detailModal .action-btn (26×26) —
+                       * hidden entirely when read-only (ADR-0013), not just disabled. */}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="action-btn"
+                          aria-label="ลบรายการ"
+                          title="ลบรายการ"
+                          disabled={row.status === 'deleting' || saving}
+                          onClick={() => deleteRow(row.localId)}
+                        >
+                          {row.status === 'deleting' ? (
+                            '…'
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -386,22 +415,28 @@ export function DetailSubform({ costCenter, glAccount, glGroup, glName, fiscalYe
           </div>
           <div className="modal-actions">
             <button type="button" className="btn" disabled={loading || saving} onClick={onClose}>
-              ยกเลิก
+              {readOnly ? 'ปิด' : 'ยกเลิก'}
             </button>
-            {/* Disabled while load() is in-flight — its setRows(...) REPLACES the
-             * array, so a row added before the data lands would be silently lost. */}
-            <button type="button" className="btn btn-add" disabled={loading || saving} onClick={addRow}>
-              + เพิ่มรายการ
-            </button>
-            <button
-              type="button"
-              className="btn btn-export"
-              disabled={loading || saving || rows.length === 0}
-              onClick={saveAll}
-              data-testid="save-all"
-            >
-              {saving ? 'กำลังบันทึก…' : 'บันทึก'}
-            </button>
+            {/* Add/save hidden entirely when read-only (ADR-0013) — mockup
+             * #detailModal footer: detailAddBtn/detailSaveBtn display:none. */}
+            {!readOnly && (
+              <>
+                {/* Disabled while load() is in-flight — its setRows(...) REPLACES the
+                 * array, so a row added before the data lands would be silently lost. */}
+                <button type="button" className="btn btn-add" disabled={loading || saving} onClick={addRow}>
+                  + เพิ่มรายการ
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-export"
+                  disabled={loading || saving || rows.length === 0}
+                  onClick={saveAll}
+                  data-testid="save-all"
+                >
+                  {saving ? 'กำลังบันทึก…' : 'บันทึก'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

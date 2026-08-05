@@ -53,6 +53,28 @@ _POSITION_TO_STATUS: dict[int, str] = {1: PENDING_APPROVER1, 2: PENDING_APPROVER
 _STATUS_TO_POSITION: dict[str, int] = {v: k for k, v in _POSITION_TO_STATUS.items()}
 PENDING_STATUSES: frozenset[str] = frozenset(_STATUS_TO_POSITION)
 
+# A department is "locked" (read-only for a non-admin) once its approval
+# record has left DRAFT/REJECTED for a fiscal_year — mid-chain
+# (PENDING_APPROVER1/2/3) or fully signed off (APPROVED). DRAFT/REJECTED and
+# "no row yet" (never submitted) are NOT locked — matches ADR-0013's
+# edit-rights-by-status table exactly. ONE definition of the STATUS SET shared
+# by the write-side gate (`write_model._ensure_department_not_locked`) and the
+# read-side grid lock (`read_model.merge_budget_rows`'s `row.editable`,
+# ADR-0013 read-only lock UI parity, 2026-08-05).
+#
+# NOT shared: which STATUSES count as locked can never drift (this constant),
+# but WHICH DEPARTMENT a cost_center resolves to still can — the write path
+# always resolves it live from `dbo.cc_filler_map` (`_lookup_cc_dims`), while
+# the read path prefers the SNAPSHOT stored on the row
+# (`pending.department`/`board.department`, written at save time) and only
+# falls back to a live `cc_dims` lookup when that snapshot is absent. After a
+# CC->ฝ่าย remap in `dbo.cc_filler_map`, an old row's snapshot still names the
+# OLD department, so the two paths can disagree about which department a row
+# belongs to (in either direction) until that row is re-saved. This is a
+# known residual gap (gate finding 2026-08-05, D2) — reconciling snapshot-vs-
+# live resolution needs a product decision (jakkaritw), not fixed here.
+LOCKED_APPROVAL_STATUSES: frozenset[str] = PENDING_STATUSES | {APPROVED}
+
 # Append-only action log values this module writes.
 ACTION_SUBMIT = "SUBMIT"
 ACTION_RESUBMIT = "RESUBMIT"

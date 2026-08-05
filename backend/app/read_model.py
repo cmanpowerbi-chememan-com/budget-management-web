@@ -33,6 +33,7 @@ from datetime import datetime
 from pydantic import BaseModel
 import pyodbc
 
+from app.approval import LOCKED_APPROVAL_STATUSES
 from app.config import Settings, get_settings
 from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
 from app.rls import Scope
@@ -134,6 +135,34 @@ def fetch_cc_dims(conn: pyodbc.Connection, cost_centers: list[str]) -> dict[str,
     finally:
         cursor.close()
     return {r[0]: {"department": r[1], "division": r[2], "c_level": r[3]} for r in rows}
+
+
+def fetch_locked_departments(conn: pyodbc.Connection, fiscal_year: int) -> frozenset[str]:
+    """Every department whose `(department, fiscal_year)` approval record is
+    mid-chain or fully signed off (ADR-0013 read-only lock, UI parity port,
+    2026-08-05) — the read-side counterpart of
+    `write_model._ensure_department_not_locked`, sharing the SAME
+    `app.approval.LOCKED_APPROVAL_STATUSES` set so the two paths can never
+    disagree about WHICH STATUSES are locked. They can still disagree about
+    WHICH DEPARTMENT a given cost_center resolves to (write resolves it live
+    from `dbo.cc_filler_map`; the read side calling `merge_budget_rows`
+    prefers the department SNAPSHOT stored on the row and only falls back to
+    a live lookup when that snapshot is absent) — see the longer note beside
+    `app.approval.LOCKED_APPROVAL_STATUSES` (known residual, gate finding
+    2026-08-05 D2, not fixed here). One query per grid request (not per
+    row) — `get_budget_grid` calls this once and `merge_budget_rows`
+    consults the returned set per row, in memory."""
+    placeholders = ", ".join("?" for _ in LOCKED_APPROVAL_STATUSES)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT DISTINCT department FROM budget.approval_status WHERE fiscal_year = ? AND status IN ({placeholders})",
+            fiscal_year, *LOCKED_APPROVAL_STATUSES,
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    return frozenset(r[0] for r in rows)
 
 
 def fetch_board_pending_rows(
@@ -327,6 +356,7 @@ def merge_budget_rows(
     admin_gl_codes: frozenset[str] | None = None,
     master_gl_codes: frozenset[str] | None = None,
     visible_sap_months: frozenset[int] | None = None,
+    locked_departments: frozenset[str] | None = None,
 ) -> list[BudgetRow]:
     """Pure merge: board+pending join rows + SAP dict + RLS scope -> the final
     visible/editable row list. No I/O (aside from the optional pre-fetched
@@ -383,6 +413,26 @@ def merge_budget_rows(
     only: the net-zero row-hide above still reads the FULL year, so a row
     whose only actual falls in a hidden month keeps its row (ADR-0010 row
     visibility is deliberately untouched).
+
+    `locked_departments` (ADR-0013 read-only lock, UI parity port with
+    `write_model._ensure_department_not_locked`, 2026-08-05): departments
+    whose `(department, fiscal_year)` approval record is mid-chain
+    (PENDING_APPROVER1/2/3) or fully signed off (APPROVED) — a Fill-scope
+    cost_center in one of these departments is no longer `editable`, because
+    a write there would be rejected by that same write-side gate; opening the
+    special-GL subform on such a row now opens READ-ONLY instead of failing
+    late on save. Resolved per row: `row.pending.department`, falling back to
+    `row.board.department`, then `cc_dims[cost_center]["department"]` (when
+    supplied), then `department_filter` itself — legitimate as a last resort
+    because the `department_filter is not None` block above already dropped
+    every row that does not belong to that department, so any row reaching
+    this point necessarily belongs to it. An unresolvable department (all
+    four sources `None`) stays fail-OPEN (editable), mirroring
+    `_ensure_department_not_locked`'s own documented policy for a department
+    that resolves to `None`. `admin_wide` always bypasses this check (ADR-0012
+    — admin edits any Pending freely, including a locked department). `None`
+    (the default) preserves old behavior for callers that don't pass it
+    (e.g. existing tests) — identical to today.
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
@@ -441,7 +491,14 @@ def merge_budget_rows(
                 dept = cc_dims.get(cc, {}).get("department")
             if dept != department_filter:
                 continue
-        row.editable = admin_wide or cc in fill_ccs
+        row_dept = (
+            row.pending.department
+            or row.board.department
+            or (cc_dims and cc_dims.get(cc, {}).get("department"))
+            or department_filter
+        )
+        row_locked = bool(locked_departments) and row_dept in locked_departments
+        row.editable = admin_wide or (cc in fill_ccs and not row_locked)
         result.append(row)
 
     return sorted(result, key=lambda r: (r.cost_center, r.gl_account))
@@ -477,7 +534,19 @@ def get_budget_grid(
     GL master-membership rule (2026-07-18, NOT flag-gated, NOT role-based):
     always fetches `dbo.gl_group`'s gl_code set and passes it to the merge
     so a GL absent from the master is hidden from EVERY caller, admin
-    included."""
+    included.
+
+    ADR-0013 read-only lock (UI parity port, 2026-08-05): fetches the
+    locked-departments set for `planning_year` — skipped entirely for an
+    admin-wide caller (`admin_wide` bypasses the lock unconditionally inside
+    `merge_budget_rows`, so the result would never even be consulted;
+    relevant to the first-load perf work). `cc_dims` is now ALSO fetched
+    whenever something is actually locked (gate finding D1, 2026-08-05), not
+    only when `department_filter` is set (D10's original reason) — a SAP-led
+    row (no board/pending layer) has no department of its own, and without
+    `cc_dims` it resolves to an unresolvable (fail-OPEN) department even when
+    its real department IS locked, silently re-opening the exact defect this
+    task exists to close for that row shape."""
     settings = settings or get_settings()
     board_year = planning_year - 1
     admin_wide = scope.is_admin and admin_view_enabled
@@ -495,10 +564,21 @@ def get_budget_grid(
     # raises SapActualsFetchError -> 502: fail closed, never "show everything".
     sap_coverage = resolve_sap_coverage_cached(gold_conn, fiscal_year=board_year)
 
-    # D10: only fetch cc_dims when the department filter is actually in use —
-    # avoids an extra round-trip on every plain (unfiltered) grid load.
+    # ADR-0013 read-only lock: skipped entirely for admin-wide (nothing would
+    # consult it — merge_budget_rows bypasses the lock unconditionally for
+    # admin_wide before it ever looks at `locked_departments`).
+    locked_departments: frozenset[str] = (
+        frozenset() if admin_wide else fetch_locked_departments(fabric_conn, fiscal_year=planning_year)
+    )
+
+    # D10 + gate finding D1 (2026-08-05): fetch cc_dims when the department
+    # filter is in use (D10's original reason) OR when something is actually
+    # locked (D1) — a SAP-led row (no board/pending layer) has no department
+    # of its own; without cc_dims it resolves an unresolvable (fail-OPEN)
+    # `row_dept` even when its real department IS locked. Skipped when
+    # neither applies, to avoid the extra round-trip on a plain grid load.
     cc_dims = None
-    if department_filter is not None:
+    if department_filter is not None or locked_departments:
         all_ccs = {jr["cost_center"] for jr in join_rows} | {key[0] for key in sap_actuals}
         cc_dims = fetch_cc_dims(fabric_conn, sorted(all_ccs))
 
@@ -519,4 +599,5 @@ def get_budget_grid(
         admin_gl_codes=admin_gl_codes,
         master_gl_codes=master_gl_codes,
         visible_sap_months=frozenset(sap_coverage.visible_months),
+        locked_departments=locked_departments,
     )

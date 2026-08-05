@@ -11,10 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.approval import LOCKED_APPROVAL_STATUSES
 from app.read_model import (
     JOIN_ROW_COLUMNS,
     fetch_board_pending_rows,
     fetch_cc_dims,
+    fetch_locked_departments,
     get_budget_grid,
     merge_budget_rows,
 )
@@ -168,6 +170,47 @@ def test_fetch_cc_dims_returns_one_deterministic_row_per_cc():
 
 
 # ---------------------------------------------------------------------------
+# fetch_locked_departments — ADR-0013 read-only lock query shape (gate
+# finding 2026-08-05, item 5: previously monkeypatched away in every
+# get_budget_grid test, so the real SQL/params/return mapping were unverified)
+# ---------------------------------------------------------------------------
+
+def test_fetch_locked_departments_query_shape():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.return_value = [("deptA",), ("deptB",)]
+
+    result = fetch_locked_departments(conn, 2027)
+
+    assert result == frozenset({"deptA", "deptB"})
+    call = cursor.execute.call_args
+    sql_text = call.args[0]
+    assert "budget.approval_status" in sql_text
+    assert "fiscal_year = ?" in sql_text
+    assert "status IN" in sql_text
+    # One `?` placeholder per locked status, and the placeholder count in the
+    # SQL text matches the number of params actually bound after fiscal_year.
+    assert sql_text.count("?") == 1 + len(LOCKED_APPROVAL_STATUSES)
+    fiscal_year_param, *status_params = call.args[1:]
+    assert fiscal_year_param == 2027
+    assert set(status_params) == set(LOCKED_APPROVAL_STATUSES)
+
+
+def test_fetch_locked_departments_empty_result_returns_empty_frozenset():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    result = fetch_locked_departments(conn, 2027)
+    assert result == frozenset()
+
+
+def test_fetch_locked_departments_closes_cursor():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+    fetch_locked_departments(conn, 2027)
+    conn.cursor.return_value.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # merge_budget_rows — pure merge / visibility / RLS / editable
 # ---------------------------------------------------------------------------
 
@@ -311,6 +354,80 @@ def test_see_only_cost_center_is_visible_but_not_editable():
 
 def test_fill_cost_center_is_editable():
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert rows[0].editable is True
+
+
+# ---------------------------------------------------------------------------
+# merge_budget_rows — ADR-0013 read-only lock (UI parity port with
+# write_model._ensure_department_not_locked, 2026-08-05)
+# ---------------------------------------------------------------------------
+
+def test_locked_department_makes_fill_cc_not_editable():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, locked_departments=frozenset({"DEPT1"}))
+
+    assert rows[0].editable is False
+
+
+@pytest.mark.parametrize("department", ["DEPT1", None])
+def test_fill_cc_stays_editable_when_own_department_not_in_locked_set(department):
+    """DRAFT/REJECTED (no row, or a row whose status is not in the locked
+    set) and 'never submitted' (department absent) both stay editable — only
+    the DEPARTMENT'S OWN presence in `locked_departments` locks it."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department=department)]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, locked_departments=frozenset({"SOME_OTHER_DEPT"}))
+
+    assert rows[0].editable is True
+
+
+def test_admin_wide_bypasses_the_department_lock():
+    """ADR-0012: admin-wide (is_admin AND admin_view_enabled) always edits,
+    even a locked department."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(
+        join_rows, {}, scope, admin_view_enabled=True, locked_departments=frozenset({"DEPT1"})
+    )
+
+    assert rows[0].editable is True
+
+
+def test_locked_department_resolved_via_department_filter_fallback_when_row_has_no_own_department():
+    """A SAP-led row (no board/pending row, so no department field of its
+    own) reached via `department_filter` narrowing must still be lock-checked
+    correctly — resolved via `cc_dims` (the same source that let it survive
+    the `department_filter` visibility check above) or, failing that, via
+    `department_filter` itself (valid once set, since every row surviving
+    that check already belongs to it by construction)."""
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    sap_actuals = {("CC1", "GL1"): {"m01": 100.0}}
+    cc_dims = {"CC1": {"department": "DEPT1", "division": None, "c_level": None}}
+
+    rows = merge_budget_rows(
+        [], sap_actuals, scope,
+        department_filter="DEPT1", cc_dims=cc_dims,
+        locked_departments=frozenset({"DEPT1"}),
+    )
+
+    assert len(rows) == 1
+    assert rows[0].pending.department is None  # no board/pending row -> no department field of its own
+    assert rows[0].editable is False
+
+
+def test_locked_departments_none_is_identical_to_today_regression_guard():
+    """`locked_departments=None` (the default) must behave exactly as before
+    this feature existed — a Fill CC is editable regardless of any approval
+    status, because the caller never fetched/passed the locked set."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, {}, scope)
@@ -1036,6 +1153,117 @@ def test_get_budget_grid_master_filter_drops_non_master_row_end_to_end(monkeypat
     rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
 
     assert [r.gl_account for r in rows] == ["GL-MASTER"]
+
+
+# ---------------------------------------------------------------------------
+# get_budget_grid — ADR-0013 read-only lock wiring (UI parity port, 2026-08-05)
+# ---------------------------------------------------------------------------
+
+def test_get_budget_grid_fetches_locked_departments_for_the_planning_year(monkeypatch):
+    captured = {}
+
+    def fake_fetch_locked_departments(conn, fiscal_year):
+        captured["fiscal_year"] = fiscal_year
+        return frozenset({"DEPT1"})
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", fake_fetch_locked_departments)
+
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+
+    assert captured["fiscal_year"] == 2027  # the PENDING year, not board_year
+
+
+def test_get_budget_grid_locked_department_ends_up_not_editable_end_to_end(monkeypatch):
+    """End-to-end: get_budget_grid actually applies the fetched locked set,
+    not just calls the fetch function."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+
+    assert rows[0].editable is False
+
+
+def test_get_budget_grid_fetches_cc_dims_when_something_is_locked_even_without_department_filter(monkeypatch):
+    """Gate finding D1 (2026-08-05): a SAP-led row (no board/pending layer)
+    has no department of its own. Before this fix, `cc_dims` was fetched
+    ONLY when `department_filter` was set — so on a plain (unfiltered) grid
+    load such a row silently fell back to `row_dept = None` and stayed
+    editable even though its real department was locked (a Filler in a
+    submitted department got an editable cell and a late 403
+    `department_locked` on save). Fixed: `cc_dims` is now also fetched
+    whenever `locked_departments` is non-empty."""
+    calls = {"n": 0}
+
+    def fake_fetch_cc_dims(conn, cost_centers):
+        calls["n"] += 1
+        return {"CC1": {"department": "DEPT1", "division": None, "c_level": None}}
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr(
+        "app.read_model.fetch_sap_actuals_cached",
+        lambda conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
+    )
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
+    monkeypatch.setattr("app.read_model.fetch_cc_dims", fake_fetch_cc_dims)
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    # No department_filter passed at all — the plain grid-load shape.
+    rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+
+    assert calls["n"] == 1  # cc_dims WAS fetched, driven by locked_departments alone
+    assert rows[0].editable is False  # resolved via cc_dims -> locked -> not editable
+
+
+def test_get_budget_grid_unresolvable_department_stays_fail_open_even_when_something_is_locked(monkeypatch):
+    """Pins the fail-OPEN policy end-to-end: `locked_departments` is
+    non-empty (so `cc_dims` IS fetched, per the D1 fix above), but `cc_dims`
+    genuinely has no entry for this row's cost_center — `row_dept` stays
+    unresolvable (`None`) and the row stays editable, mirroring
+    `_ensure_department_not_locked`'s own documented policy for a department
+    that resolves to `None` (never silently locks something we can't name)."""
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr(
+        "app.read_model.fetch_sap_actuals_cached",
+        lambda conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
+    )
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
+    monkeypatch.setattr("app.read_model.fetch_cc_dims", lambda conn, cost_centers: {})  # CC1 unresolved
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+
+    assert rows[0].editable is True
+
+
+def test_get_budget_grid_admin_wide_skips_the_locked_departments_fetch(monkeypatch):
+    """Optional perf item (gate 2026-08-05): admin_wide bypasses the lock
+    unconditionally inside merge_budget_rows, so the fetch's result would
+    never be consulted — skip the query entirely for that caller."""
+    calls = {"n": 0}
+
+    def fake_fetch_locked_departments(conn, fiscal_year):
+        calls["n"] += 1
+        return frozenset()
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", fake_fetch_locked_departments)
+
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, admin_view_enabled=True)
+
+    assert calls["n"] == 0
 
 
 # ---------------------------------------------------------------------------
