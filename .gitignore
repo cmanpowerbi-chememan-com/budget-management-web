@@ -49,7 +49,7 @@ bin/
 .playwright_auth.json
 # Easy Auth session cookie pasted in by hand for the prod harnesses
 # (setup/smoke_prd.py, phase2_harness_*.py) — a LIVE credential, never commit
-setup/_auth_cookie.tmp.txt
+setup/_auth_cookie*.tmp.txt
 # Throwaway UI review screenshots rendered for a visual sign-off
 noscope-*.png
 
