@@ -1,0 +1,5 @@
+﻿# cman-budget-web-prd
+platform.enabled=True
+login.cookieExpiration.timeToExpiration=14:00:00
+globalValidation.unauthenticatedClientAction=RedirectToLoginPage
+globalValidation.redirectToProvider=azureactivedirectory

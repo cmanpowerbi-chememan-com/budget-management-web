@@ -1,0 +1,13 @@
+﻿# cman-budget-web-prd  — env keys: 11
+APP_ENV=production
+FABRIC_SQL_SERVER=<set> (plain, value withheld)
+FABRIC_SQL_DATABASE=<set> (plain, value withheld)
+GOLD_SQL_SERVER=<set> (plain, value withheld)
+GOLD_SQL_DATABASE=<set> (plain, value withheld)
+ADMIN_EMAILS=jakkaritw@chememan.com,nipapornt@chememan.com,warapornt@chememan.com
+APP_BASE_URL=https://cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io
+ENTRA_CLIENT_ID=<set> (secretRef)
+ENTRA_CLIENT_SECRET=<set> (secretRef)
+ENTRA_TENANT_ID=<set> (secretRef)
+GL_EDIT_BY_ENABLED=true
+NOTIFICATIONS_DRY_RUN=<KEY ABSENT>

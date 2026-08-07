@@ -1,0 +1,8 @@
+﻿{
+  "fqdn": "cman-budget-web-stg.kindstone-f34836dd.southeastasia.azurecontainerapps.io",
+  "image": "cmanbudgetacr.azurecr.io/budget-web:1bbddcb",
+  "maxRep": 2,
+  "minRep": 0,
+  "prov": "Succeeded",
+  "rev": "cman-budget-web-stg--0000029"
+}

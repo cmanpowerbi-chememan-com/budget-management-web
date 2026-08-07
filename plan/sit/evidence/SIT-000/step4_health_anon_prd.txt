@@ -1,0 +1,9 @@
+﻿HTTP/1.1 401 Unauthorized
+date: Fri, 07 Aug 2026 06:45:11 GMT
+www-authenticate: Bearer realm="cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io" authorization_uri="https://login.windows.net/13c85daf-a73b-4705-8244-f89c655ab851/oauth2/v2.0/authorize" resource_id="61d5d556-ee48-44f7-91b3-b8e05d6419aa"
+x-ms-middleware-request-id: 54cc9932-44d8-4949-b801-a024e7bf3c74
+strict-transport-security: max-age=31536000; includeSubDomains
+transfer-encoding: chunked
+
+
+---CURLSTATS--- http_code=401 time_total=0.317736 time_connect=0.200771 size=0

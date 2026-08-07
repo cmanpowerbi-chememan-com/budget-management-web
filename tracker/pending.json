@@ -1,8 +1,46 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-05T21:35:36+0700",
+  "updated": "2026-08-07T22:31:10+0700",
   "tasks": [
+    {
+      "id": "sit-wave-a",
+      "state": "doing",
+      "created": "2026-08-07T13:18:55+0700",
+      "updated": "2026-08-07T22:31:10+0700",
+      "ai": "[PERMANENT MASTER CHANGE APPLIED 2026-08-07 22:28, jakkaritw authorised] Department 'Data & Analytic' filler reduced to pornthipp@chememan.com ALONE. Edited cc dept.xlsx (site CMANDWPRD / drive 'Budgeting and Management') rows 193 (10IT011300) and 194 (10IT0130000), column F 'คนกรอกข้อมูล', from 'laddawank@chememan.com, pornthipp@chememan.com' to 'pornthipp@chememan.com'; a row-layout guard checked column E still said the expected department before writing. Graph PUT 200, eTag ,114 -> ,115. Triggered pl_budget_daily -> HTTP 202, Completed at 165s. RESULT VERIFIED: dbo.cc_filler_map for that dept went 4 rows -> 2 rows (synced 22:28:04); resolve_scope now returns pornthipp fill=['10IT011300','10IT0130000'] see=2CC, and laddawank fill=[] see=2CC admin=False. So ลัดดาวัลย์ can no longer fill but still sees both CCs as pornthipp's manager AND remains her step-1 approver. Pristine pre-change workbook saved at scratchpad/ccdept_BEFORE_20260807-222719.xlsx in case the business decision reverses. CONSEQUENCES: (a) UAT now has clean separation - one filler -> manager approves -> นิภาพร -> วราพร, no filler-approves-own-department overlap, and อาทิตย์ สาหร่าย is not involved at all; (b) 'ยังไม่ได้ส่งงบ' reminders for this dept go to pornthipp only; (c) the two-people-one-CC collision case can no longer be reproduced on this dept - it was already proven earlier today, recorded in run log section 21; (d) BONUS UNLOCK: ลัดดาวัลย์ is now a see-only manager who is also an approver, which is exactly the persona item 12 (traveller-PII evidence) needs - it no longer depends on re-swapping สุชัญญา. Recorded in plan/sit/sit-test-plan.md under the UAT section."
+    },
+    {
+      "id": "sit-plan-authoring",
+      "state": "done",
+      "created": "2026-08-07T09:42:27+0700",
+      "updated": "2026-08-07T12:57:08+0700",
+      "ai": "DONE (files written, originals NOT yet deleted - awaiting jakkaritw). plan/sit/sit-test-plan.md 997 lines / 20 Parts + plan/sit/sit-run-log.md 378 lines. Consolidated ui-test-plan.md (12 Parts/96 items) + STAGING_TEST_PLAN.md (5 suites) + 6 git-only plan/*.md. Carried 150 old cases (103 UI + 47 staging) + 153 NEW never-run cases (95 P1); 139 NEW-Ax-nn ids + 8 SIT-00x gate cases. Workflow whye6meaz (wf_7e77918b-92f) 14 agents 0 errors: 4 recon + 7 drafters (169 drafted) + 2 critics (READY-WITH-FIXES / NOT-READY, 16 must-add) + assembler; 28 duplicates merged. CORRECTION TO MY OWN EARLIER CLAIM THIS SESSION: d0672fc is NOT unshipped - verified via az, prod cman-budget-web-prd rev 0000015 image budget-web:1bbddcb created 2026-08-05T15:32Z, and d0672fc (2026-08-05 11:44 tanasedw, same 14 files/740 insertions) is its ancestor => the ADR-0013 read-only lock has been LIVE IN PRODUCTION since 2026-08-05. SIT therefore verifies live behavior, not a pre-deploy gate. Deliberate drops: plan/testscript.md byte-identical to ui-test-plan.md (0 diff); items 5.3/5.4 inverted by 1bbddcb; 6F.5 reversed by 1e441de; DC6 GL counts obsolete (live 146=134+12); spoof-header rule dead (Easy Auth ON both envs since 2026-07-28); port-5180 proxy dead (Next.js); Phase-3 UAT 47 items condensed to a 1-page appendix = the ONE scope reduction. 16 open questions in the plan; 4 BLOCK the run (which dept/year may be used as test field, may prod be written, is the single real-email case approved, may the Excel master be edited). L3 only half-closable: none of the 48 integration tests touches the READ side of the lock. NEXT: jakkaritw approves deleting docs/test/ui-test-plan.md + docs/test/STAGING_TEST_PLAN.md and the 6 already-deleted plan/*.md; results/evidence in docs/test/ stay."
+    },
+    {
+      "id": "perdiem-rate-zero-gap-job-levels",
+      "state": "doing",
+      "created": "2026-08-06T01:31:12+0700",
+      "updated": "2026-08-06T02:57:41+0700",
+      "ai": "PAUSED 2026-08-05 - jakkaritw confirmed values to use (spec-based: Dept Head 300/80/90, Operator 1/2/3 200/70/80, Driver 200/60/70; Maid stays 0/intentional) but said 'skip this topic' before executing - deferred, not fixed. Attempted fix via Graph API PATCH to SharePoint source ค่าเบี่ยเลี้ยง.xlsx (drive b!yMQKs8rOc0CSyxosit6gVJ-jsz3SMHhEsjhrhVwMu3U6WiCnc-8ET6z8xMhvYx2y, item 01BDTJLIM34PDYAMMGHBG3NT6DI3RJUZFF, Sheet1, rows B20:D23=Operator1/2/3+Driver, B25:D25=Dept Head) - BLOCKED by Claude Code auto-mode classifier (external write action), twice, even after explicit user reconfirmation in chat. Needs either a Bash permission-rule change in settings, or jakkaritw edits the xlsx himself then asks for the dbo.per_diem_rate DB-side update + verify. Exact cell values already given to jakkaritw in chat as a copy-paste table. 291 real employees still affected (0 THB per-diem) until this lands.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-1bbddcb-stg-prd",
+      "state": "done",
+      "created": "2026-08-05T22:34:43+0700",
+      "updated": "2026-08-05T22:34:43+0700",
+      "ai": "STAGING + PRODUCTION DEPLOYED 2026-08-05 on jakkaritw's explicit 'deploy stg prd' approval (AskUserQuestion, both envs). Image budget-web:1bbddcb (ACR run cmx, built from clean detached worktree per reference_staging_deploy_recipe.md). Staging rev cman-budget-web-stg--0000029 Running/Healthy/100pct (prev 0000028/d0672fc); Production rev cman-budget-web-prd--0000015 RunningAtMaxScale/Healthy/100pct (prev 0000014/d0672fc). Anonymous curl 401 on both = Easy Auth ON, expected, verify-deploy-landed satisfied. CONTENT: 1bbddcb = special-GL codes now pickable in \"+ เพิ่ม Transaction\" (removed AddTransactionForm.tsx nonSpecialGls filter + model.ts validateNewTransaction reject; BudgetGrid.tsx routes a special-GL pick straight into its subform, skipping /budget/rows which the backend 400s for special GLs) + searchable Cost Center combobox (mirrors the existing GL Code combobox pattern). GATED before deploy: 07-security-auditor PASS (auth/authz confirmed structural server-side via _ensure_write_scope/_save_one_pending_row SpecialGlDirectEditError/_ensure_department_not_locked, unaffected by the frontend guard removal; no injection/secrets issues in the new CC combobox, pure client-side filter over already-authorized fillCostCenters). Pre-deploy tests: frontend vitest 590/590 (33 files), next build clean, oxlint clean. main was fully shipped before this (only d0672fc+1bbddcb ahead of the last deployed image, both now live). Rollback for BOTH apps = --image cmanbudgetacr.azurecr.io/budget-web:d0672fc.",
+      "agent": "claude"
+    },
+    {
+      "id": "security-audit-1bbddcb",
+      "state": "done",
+      "created": "2026-08-05T22:11:03+0700",
+      "updated": "2026-08-05T22:11:20+0700",
+      "ai": "PASS - no deploy block. Backend independently re-validates Fill scope (_ensure_write_scope, write_model.py:296-308) + special-GL block (SpecialGlDirectEditError, write_model.py:584-587) + dept-lock (_ensure_department_not_locked, write_model.py:443-481) on EVERY write path (rows:578/595, detail:896-899/955, trip:1310/1354) regardless of frontend input - frontend guard removal in 1bbddcb is UI-routing only, no auth weakening. CC combobox = pure client array filter over fillCostCenters prop (authorized list), React text interpolation only, no dangerouslySetInnerHTML, no new data source. No secrets/logging introduced. No dependency changes in diff.",
+      "agent": "claude"
+    },
     {
       "id": "addtxn-special-gl-cc-search",
       "state": "done",

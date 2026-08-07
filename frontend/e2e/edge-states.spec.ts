@@ -11,7 +11,7 @@ test.describe('edge states', () => {
 
     await page.goto('/')
 
-    await expect(page.getByTestId('no-scope-empty-state')).toContainText('คุณไม่มีสิทธิ์กรอกงบประมาณ')
+    await expect(page.getByTestId('no-scope-empty-state')).toContainText('ไม่มีสิทธิ์เข้าถึงระบบงบประมาณ')
     await expect(page.getByRole('combobox', { name: /ปีฐาน/ })).toHaveCount(0)
     expect(world.captured.budgetQueries.length).toBe(0)
     expect(world.captured.departmentsQueries.length).toBe(0)

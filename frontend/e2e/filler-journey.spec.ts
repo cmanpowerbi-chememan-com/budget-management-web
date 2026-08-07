@@ -69,8 +69,16 @@ test.describe('filler journey', () => {
     const sgaSection = page.getByTestId('side-section-SGA')
     await expect(costSection).toBeVisible()
     await expect(sgaSection).toBeVisible()
-    await expect(costSection.getByText(/รวมทั้งหมด/)).toBeVisible()
-    await expect(sgaSection.getByText(/รวมทั้งหมด/)).toBeVisible()
+    // Each section's subtotal row is now 3-way — SAP/Approved/Pending each
+    // get their own "รวมทั้งหมด · <layer>" label (jakkaritw's 3-layer
+    // transaction block) — so /รวมทั้งหมด/ alone now matches 3 cells per
+    // section; assert all 3 layer labels explicitly instead of one loose regex.
+    await expect(costSection.getByText('รวมทั้งหมด · SAP · ใช้จริง', { exact: false })).toBeVisible()
+    await expect(costSection.getByText('รวมทั้งหมด · Approved · งบ')).toBeVisible()
+    await expect(costSection.getByText('รวมทั้งหมด · Pending · รออนุมัติ')).toBeVisible()
+    await expect(sgaSection.getByText('รวมทั้งหมด · SAP · ใช้จริง', { exact: false })).toBeVisible()
+    await expect(sgaSection.getByText('รวมทั้งหมด · Approved · งบ')).toBeVisible()
+    await expect(sgaSection.getByText('รวมทั้งหมด · Pending · รออนุมัติ')).toBeVisible()
     // one known gl_group header, rendered per-row (GridTable has no separate
     // group-header row — the group name shows on every row's GL Group cell).
     await expect(costSection.getByText('Office Expenses').first()).toBeVisible()
@@ -276,17 +284,30 @@ test.describe('filler journey', () => {
     const card = page.getByTestId('trip-card-new-0')
     await expect(card).toContainText('ระบบจะคำนวณให้หลังกดบันทึก')
 
-    // traveler = dropdown from /reference/travelers (value=empcode); position
-    // auto-displays read-only; destination dropdown AUTO-SETS country_group
-    // (ญี่ปุ่น → 2) — the manual group select no longer exists.
-    await card.getByLabel('traveler_empcode new-0').selectOption('100123')
+    // traveler = searchable combobox from /reference/travelers, NOT a native
+    // <select> (jakkaritw, 2026-08-04, commit 1e441de) — type to filter, then
+    // click the matching option; position auto-displays read-only; destination
+    // dropdown AUTO-SETS country_group (ญี่ปุ่น → 2) — the manual group select
+    // no longer exists.
+    const travelerInput = card.getByLabel('traveler_empcode new-0')
+    await travelerInput.click()
+    await travelerInput.fill('สมชาย')
+    await card.getByRole('option', { name: /สมชาย ทดสอบ/ }).click()
+    await expect(travelerInput).toHaveValue('สมชาย ทดสอบ')
     await expect(card.getByTestId('position-new-0')).toHaveText('Officer')
     expect(await card.getByLabel('country_group new-0').count()).toBe(0)
     await card.getByLabel('destination new-0').selectOption('ญี่ปุ่น')
     await card.getByLabel('days new-0').fill('5')
     await card.getByRole('button', { name: 'Mar', exact: true }).click()
     await card.getByRole('button', { name: 'Apr', exact: true }).click()
-    await card.getByLabel('side new-0').selectOption('COST')
+    // ฝั่งบัญชี (accounting side) is now locked to the GL row that opened this
+    // subform, disabled for every user incl. admins (jakkaritw, 2026-08-04,
+    // commit 1e441de) — the modal was opened from GL_TRAVEL_PERDIEM_COST, so
+    // the select is already COST and cannot be changed; assert the lock
+    // instead of calling selectOption (which times out on a disabled control).
+    const sideSelect = card.getByLabel('side new-0')
+    await expect(sideSelect).toBeDisabled()
+    await expect(sideSelect).toHaveValue('COST')
     // Consolidated save-all (2026-07-19) — one bottom-bar button saves every
     // card/line in the modal; the per-card "บันทึกทริป" button was removed.
     await page.getByTestId('save-all').click()
