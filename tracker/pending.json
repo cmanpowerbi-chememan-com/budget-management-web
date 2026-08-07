@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-07T22:31:10+0700",
+  "updated": "2026-08-07T22:52:44+0700",
   "tasks": [
     {
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
-      "updated": "2026-08-07T22:31:10+0700",
-      "ai": "[PERMANENT MASTER CHANGE APPLIED 2026-08-07 22:28, jakkaritw authorised] Department 'Data & Analytic' filler reduced to pornthipp@chememan.com ALONE. Edited cc dept.xlsx (site CMANDWPRD / drive 'Budgeting and Management') rows 193 (10IT011300) and 194 (10IT0130000), column F 'คนกรอกข้อมูล', from 'laddawank@chememan.com, pornthipp@chememan.com' to 'pornthipp@chememan.com'; a row-layout guard checked column E still said the expected department before writing. Graph PUT 200, eTag ,114 -> ,115. Triggered pl_budget_daily -> HTTP 202, Completed at 165s. RESULT VERIFIED: dbo.cc_filler_map for that dept went 4 rows -> 2 rows (synced 22:28:04); resolve_scope now returns pornthipp fill=['10IT011300','10IT0130000'] see=2CC, and laddawank fill=[] see=2CC admin=False. So ลัดดาวัลย์ can no longer fill but still sees both CCs as pornthipp's manager AND remains her step-1 approver. Pristine pre-change workbook saved at scratchpad/ccdept_BEFORE_20260807-222719.xlsx in case the business decision reverses. CONSEQUENCES: (a) UAT now has clean separation - one filler -> manager approves -> นิภาพร -> วราพร, no filler-approves-own-department overlap, and อาทิตย์ สาหร่าย is not involved at all; (b) 'ยังไม่ได้ส่งงบ' reminders for this dept go to pornthipp only; (c) the two-people-one-CC collision case can no longer be reproduced on this dept - it was already proven earlier today, recorded in run log section 21; (d) BONUS UNLOCK: ลัดดาวัลย์ is now a see-only manager who is also an approver, which is exactly the persona item 12 (traveller-PII evidence) needs - it no longer depends on re-swapping สุชัญญา. Recorded in plan/sit/sit-test-plan.md under the UAT section."
+      "updated": "2026-08-07T22:52:44+0700",
+      "ai": "[STALE TEST DATA PURGED 2026-08-07] jakkaritw approved after seeing the full row list. Every row was authored by jakkaritw@chememan.com on 2026-08-05 between 17:00 and 18:26 - i.e. predating today's SIT run, whose own writes had already been cleaned and verified. Deleted child-first with one commit: budget.pending_budget_detail 11 rows, budget.budget_trip 1 row (trip_id 32 on 10IT011300 FY2027, purpose 'test'), budget.pending_budget 11 rows (10 on 10IT011300 + 1 on 10AC020000, all FY2027). Full-column snapshot with IDENTITY_INSERT saved to plan/sit/restore_stale_testdata_2026-08-07.sql. VERIFIED AFTER: pending_budget 0, pending_budget_detail 0, budget_trip 0, approval_status 0, approval_log 0 - every transactional table in the budget schema is now EMPTY system-wide. Consequence for UAT on 17 Aug: testers start from a genuine zero, no fake numbers mixed into their work, and the UAT opening control total is 0 across every table, which makes the closing reconcile trivially checkable - any row found afterwards belongs to a tester. Recorded in run log section 23."
     },
     {
       "id": "sit-plan-authoring",
