@@ -146,6 +146,33 @@ class MidChainAdminOverwriteError(PermissionError):
     not a rewrite."""
 
 
+class DepartmentEmptyError(ValueError):
+    """Submit refused — bug 3 of the 2026-08-07 confirmed-defect wave,
+    reproduced live (Solution Delivery/FY2026, 0 rows): submit was ACCEPTED,
+    locking the department and landing a real request on a real approver who
+    then opened an empty grid. `department`/`fiscal_year` has ZERO
+    `budget.pending_budget` rows across every cost center currently mapped
+    to it — there is nothing to approve.
+
+    A data-VALIDITY gate, not a permission gate (jakkaritw, 2026-08-08,
+    option ก): it runs for EVERY caller identically, admin included, and
+    BEFORE any admin-door branch (`submit_department`'s very first check,
+    ahead of even the filler/admin branch split) — the orphan/Template-2/
+    post-deadline admin doors exist to submit ON BEHALF OF a department that
+    HAS data but nobody to submit it, never to submit emptiness itself.
+    Template-2 can never trip this guard in practice (a department only
+    reaches that door because it already has `template='ADMIN'` pending
+    rows). The orphan door CAN still succeed — orphan means zero cost
+    centers are currently mapped to the department, not zero data:
+    `_department_has_pending_rows` falls back to the department SNAPSHOT
+    column for that case (see its own docstring), the only remaining way to
+    see an orphan department's real, pre-existing rows.
+
+    The message is Thai on purpose, same convention as
+    `StepNotOverridableError` above: the router maps this to a 400 whose
+    detail the UI shows directly, no client-side translation needed."""
+
+
 class InvalidApprovalStateError(ValueError):
     """Submit called while the record is locked (PENDING_* — no recall, ADR-0006)
     or already APPROVED (editing an APPROVED department never needs
@@ -201,6 +228,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "admin_cannot_submit_in_cycle": 403,
     "mid_chain_admin_overwrite": 409,
     "past_deadline": 403,
+    "department_empty": 400,
     "invalid_approval_state": 409,
     "approval_record_not_found": 404,
     "not_current_approver": 403,
@@ -215,6 +243,7 @@ ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     AdminCannotSubmitInCycleError: "admin_cannot_submit_in_cycle",
     MidChainAdminOverwriteError: "mid_chain_admin_overwrite",
     PastDeadlineError: "past_deadline",
+    DepartmentEmptyError: "department_empty",
     InvalidApprovalStateError: "invalid_approval_state",
     ApprovalRecordNotFoundError: "approval_record_not_found",
     NotCurrentApproverError: "not_current_approver",
@@ -344,6 +373,59 @@ def _department_cost_centers(conn: pyodbc.Connection, department: str) -> set[st
     finally:
         cursor.close()
     return {r[0] for r in rows}
+
+
+def _department_has_pending_rows(
+    conn: pyodbc.Connection, department: str, cost_centers: set[str], fiscal_year: int
+) -> bool:
+    """True iff `budget.pending_budget` holds >=1 row for `department` at
+    `fiscal_year` — the predicate behind `DepartmentEmptyError` (bug 3,
+    2026-08-07 wave). See that class's docstring for the policy; this
+    function is only the query, in two mutually-exclusive shapes:
+
+    - `cost_centers` non-empty (the department IS currently live-mapped in
+      `dbo.cc_filler_map`, `cost_centers` = `dept_ccs`, already resolved by
+      the caller): scoped to those LIVE cost centers, NOT to
+      `pending_budget.department` — the snapshot column written at save
+      time. This is the same live-first policy gate finding D2 (closed
+      2026-08-07) established for the read path: once a CC is reassigned to
+      a different department, its OLD department's stale snapshot rows must
+      not count as "this department still has data".
+    - `cost_centers` empty (the orphan-department admin door — no CC
+      currently mapped to `department` at all): there is no live set to
+      scope by, so this is the ONLY way to see whether the department ever
+      had data — same query shape as `_department_has_admin_template_rows`
+      just below, minus its `template='ADMIN'` filter. This is not a
+      contradiction of the live-first policy above: live-first means "prefer
+      live over snapshot when live has an answer", and an orphan
+      department's live answer is exactly "no cost centers", so there is
+      nothing for it to prefer over the snapshot.
+
+    "Zero rows" means precisely zero `pending_budget` rows — verified
+    sufficient because no child row can exist without one: both the detail-
+    line and trip save paths always call `write_model._recompute_parent_cell`
+    first, which creates the parent `pending_budget` row on its very first
+    write (`rowcount == 0` -> INSERT) before touching its own
+    `pending_budget_detail`/`budget_trip` rows. So a department with zero
+    parent rows cannot hold any detail or trip data either — checking only
+    `pending_budget` is enough, no UNION with the child tables needed."""
+    cursor = conn.cursor()
+    try:
+        if cost_centers:
+            placeholders = ", ".join("?" for _ in cost_centers)
+            cursor.execute(
+                f"SELECT TOP 1 1 FROM budget.pending_budget WHERE fiscal_year = ? AND cost_center IN ({placeholders})",
+                fiscal_year, *cost_centers,
+            )
+        else:
+            cursor.execute(
+                "SELECT TOP 1 1 FROM budget.pending_budget WHERE department = ? AND fiscal_year = ?",
+                department, fiscal_year,
+            )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return row is not None
 
 
 def _department_has_admin_template_rows(conn: pyodbc.Connection, department: str, fiscal_year: int) -> bool:
@@ -517,9 +599,20 @@ def submit_department(
     approved-on-save the instant the admin (Budget dept) saves them (A5's
     write path), independent of this normal chain. A normal submit governs
     only the department's lane-2.1 (user-GL) rows, whether the submitter is
-    an admin who also Fills the department or a plain non-admin filler."""
+    an admin who also Fills the department or a plain non-admin filler.
+
+    Bug 3 (2026-08-07 wave) fix: the VERY FIRST check, before the
+    filler/admin branch split, is `DepartmentEmptyError` —
+    `_department_has_pending_rows` on the department's live cost-center set.
+    A department with zero `budget.pending_budget` rows has nothing to
+    approve, so this refuses EVERY caller identically (jakkaritw, option ก) —
+    a plain filler, and an admin via any of the three doors below. This is
+    intentionally checked ahead of even `NotFillerOfDepartmentError` — data
+    validity is a more fundamental precondition than who is asking."""
     existing = _fetch_row(conn, department, fiscal_year)
     dept_ccs = _department_cost_centers(conn, department)
+    if not _department_has_pending_rows(conn, department, dept_ccs, fiscal_year):
+        raise DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้")
     is_filler = bool(dept_ccs & set(scope.fill_cost_centers))
     now = _now()
 

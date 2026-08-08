@@ -11,6 +11,7 @@ from app.approval import (
     PENDING_APPROVER2,
     ApprovalRecordNotFoundError,
     ApprovalStatusState,
+    DepartmentEmptyError,
     InvalidApprovalStateError,
     MidChainAdminOverwriteError,
     NotAuthorizedToViewDepartmentError,
@@ -62,6 +63,23 @@ def test_submit_forbidden_maps_to_403(client):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 403
+
+
+def test_submit_department_empty_maps_to_400(client):
+    """Bug 3 (2026-08-07 wave): `DepartmentEmptyError` -> 400 with the
+    server's own Thai detail, the same `_run` dict-based mapping idiom every
+    other approval error already uses."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        side_effect=DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้"
 
 
 def test_submit_invalid_state_maps_to_409(client):

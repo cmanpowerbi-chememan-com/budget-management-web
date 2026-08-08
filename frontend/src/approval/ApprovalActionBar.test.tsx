@@ -169,6 +169,21 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
   })
 
+  it('on a 400 department_empty error, shows the server\'s own Thai detail (bug 3, 2026-08-08 -- no new frontend code, same describeApiError fallback every non-409 submit failure already uses)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT' }))
+    vi.mocked(approvalApi.submitDepartment).mockRejectedValue(
+      new ApiError(400, 'คำขอไม่ถูกต้อง', 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้'),
+    )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<ApprovalActionBar {...BASE_PROPS} rowCount={0} />)
+    fireEvent.click(await screen.findByTestId('approval-submit-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้'),
+    )
+  })
+
   it('hides Approve/Reject in admin mode even when can_act is true (ADR-0014)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true }),

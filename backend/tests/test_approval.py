@@ -26,6 +26,7 @@ from app.approval import (
     AdminCannotSubmitInCycleError,
     ApprovalRecordNotFoundError,
     ConcurrentApprovalError,
+    DepartmentEmptyError,
     InvalidApprovalStateError,
     MidChainAdminOverwriteError,
     MissingReasonError,
@@ -37,6 +38,7 @@ from app.approval import (
     _active_positions,
     _bangkok_today,
     _current_step_started_at,
+    _department_has_pending_rows,
     _is_post_deadline,
     admin_override_step,
     approve_department,
@@ -160,6 +162,7 @@ def test_submit_first_time_full_chain():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline -> no deadline row configured
         ("999", "200"),   # resolve_submitter
     ]
@@ -197,6 +200,7 @@ def test_submit_admin_filler_routes_normal_chain_admin_gl_rows_never_block_it():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline -> no deadline row configured
         ("999", "200"),   # resolve_submitter
     ]
@@ -217,6 +221,7 @@ def test_submit_non_admin_filler_routes_normal_chain_unaffected():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline -> no deadline row configured
         ("999", "200"),   # resolve_submitter
     ]
@@ -237,11 +242,14 @@ def test_submit_first_time_concurrent_insert_race_raises_conflict_not_raw_502():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record (both racers see this)
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline -> no deadline row configured
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
-    cursor.execute.side_effect = [None, None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
+    # 5 dummy calls (_fetch_row, _department_cost_centers, _department_has_pending_rows,
+    # _is_post_deadline, resolve_submitter) then the INSERT raises.
+    cursor.execute.side_effect = [None, None, None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
 
     with pytest.raises(ConcurrentApprovalError):
         submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
@@ -251,7 +259,7 @@ def test_submit_first_time_concurrent_insert_race_raises_conflict_not_raw_502():
 def test_submit_blocked_while_pending_no_recall():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [_status_row(status=PENDING_APPROVER2)]
+    cursor.fetchone.side_effect = [_status_row(status=PENDING_APPROVER2), (1,)]  # _fetch_row; _department_has_pending_rows -> has rows
     cursor.fetchall.side_effect = [[("CC1",)]]
 
     with pytest.raises(InvalidApprovalStateError):
@@ -262,7 +270,7 @@ def test_submit_blocked_while_pending_no_recall():
 def test_submit_blocked_when_approved_no_reapproval_needed():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [_status_row(status=APPROVED)]
+    cursor.fetchone.side_effect = [_status_row(status=APPROVED), (1,)]  # _fetch_row; _department_has_pending_rows -> has rows
     cursor.fetchall.side_effect = [[("CC1",)]]
 
     with pytest.raises(InvalidApprovalStateError):
@@ -270,10 +278,14 @@ def test_submit_blocked_when_approved_no_reapproval_needed():
 
 
 def test_submit_allowed_after_reject_resubmit_restarts_chain():
+    """Also the bug-3 regression guard (2026-08-08): a REJECTED department
+    that still HAS pending rows must keep resubmitting normally — the new
+    emptiness guard only refuses a department with ZERO rows."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
+        (1,),             # _department_has_pending_rows -> still has rows
         None,             # _is_post_deadline
         ("999", "200"),   # resolve_submitter
     ]
@@ -295,6 +307,7 @@ def test_resubmit_update_is_conditioned_on_status_rejected():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline
         ("999", "200"),   # resolve_submitter
     ]
@@ -319,6 +332,7 @@ def test_resubmit_concurrent_status_change_raises_conflict():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _is_post_deadline
         ("999", "200"),   # resolve_submitter
     ]
@@ -333,7 +347,11 @@ def test_resubmit_concurrent_status_change_raises_conflict():
 def test_submit_past_deadline_blocks_normal_user():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [None, (date(2020, 1, 1),)]  # existing=None, deadline already passed
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row -> no existing record
+        (1,),   # _department_has_pending_rows -> has rows
+        (date(2020, 1, 1),),  # _is_post_deadline -> already passed
+    ]
     cursor.fetchall.side_effect = [[("CC1",)]]
 
     with pytest.raises(PastDeadlineError):
@@ -343,7 +361,10 @@ def test_submit_past_deadline_blocks_normal_user():
 def test_submit_forbidden_for_non_filler_non_admin():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [None]  # _fetch_row only -- short-circuits right after
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row
+        (1,),   # _department_has_pending_rows -> has rows, so the emptiness guard passes and the NotFiller check is reached
+    ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # dept has CCs, but caller Fills none of them
 
     with pytest.raises(NotFillerOfDepartmentError):
@@ -356,6 +377,7 @@ def test_admin_submit_via_template_2_door_logs_admin_submit():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,           # _fetch_row
+        (1,),           # _department_has_pending_rows -> has rows (Template-2 always does)
         (1,),           # _department_has_admin_template_rows -> found
         ("500", None),  # resolve_submitter (admin)
     ]
@@ -378,13 +400,14 @@ def test_admin_direct_approve_concurrent_insert_race_raises_conflict_not_pyodbc(
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,           # _fetch_row
+        (1,),           # _department_has_pending_rows -> has rows
         (1,),           # _department_has_admin_template_rows -> found
         ("500", None),  # resolve_submitter (admin)
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]
-    # 4 dummy calls (_fetch_row, _department_has_admin_template_rows,
-    # resolve_submitter, +1) then the INSERT raises the PK violation.
-    cursor.execute.side_effect = [None, None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
+    # 5 dummy calls (_fetch_row, _department_cost_centers, _department_has_pending_rows,
+    # _department_has_admin_template_rows, resolve_submitter) then the INSERT raises the PK violation.
+    cursor.execute.side_effect = [None, None, None, None, None, pyodbc.IntegrityError("23000", "duplicate key")]
 
     with pytest.raises(ConcurrentApprovalError):
         submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
@@ -396,6 +419,7 @@ def test_admin_submit_orphan_department_logs_admin_override():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,          # _fetch_row
+        (1,),          # _department_has_pending_rows -> orphan fallback finds real snapshot rows
         None,          # _department_has_admin_template_rows -> none
         ("500", None), # resolve_submitter
     ]
@@ -410,6 +434,7 @@ def test_admin_submit_post_deadline_any_department_logs_admin_override():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,               # _fetch_row
+        (1,),               # _department_has_pending_rows -> has rows
         None,               # _department_has_admin_template_rows -> none
         (date(2020, 1, 1),),  # _is_post_deadline -> already passed
         ("500", None),      # resolve_submitter
@@ -425,6 +450,7 @@ def test_admin_cannot_submit_normal_in_cycle_department_they_do_not_fill():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,             # _fetch_row
+        (1,),             # _department_has_pending_rows -> has rows
         None,             # _department_has_admin_template_rows -> none
         None,             # _is_post_deadline -> not passed
     ]
@@ -447,6 +473,7 @@ def test_admin_submit_via_template_2_door_blocked_when_existing_is_mid_chain_or_
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=blocked_status),  # _fetch_row -> existing mid-chain/approved record
+        (1,),                                  # _department_has_pending_rows -> has rows
         (1,),                                  # _department_has_admin_template_rows -> found
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]
@@ -461,6 +488,7 @@ def test_admin_submit_via_template_2_door_allowed_when_existing_is_rejected():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="bad", rejected_by_empcode="200"),  # _fetch_row
+        (1,),           # _department_has_pending_rows -> has rows
         (1,),           # _department_has_admin_template_rows -> found
         ("500", None),  # resolve_submitter
     ]
@@ -476,6 +504,7 @@ def test_admin_submit_orphan_department_blocked_when_existing_is_mid_chain_or_ap
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=blocked_status),  # _fetch_row
+        (1,),                                  # _department_has_pending_rows -> orphan fallback finds real snapshot rows
         None,                                  # _department_has_admin_template_rows -> none
     ]
     cursor.fetchall.side_effect = [[]]  # orphan: zero cost centers for this department
@@ -490,6 +519,7 @@ def test_admin_submit_orphan_department_allowed_when_existing_is_rejected():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="bad", rejected_by_empcode="200"),  # _fetch_row
+        (1,),           # _department_has_pending_rows -> orphan fallback finds real snapshot rows
         None,           # _department_has_admin_template_rows -> none
         ("500", None),  # resolve_submitter
     ]
@@ -507,6 +537,7 @@ def test_admin_submit_post_deadline_still_overrides_mid_chain_or_approved(existi
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         _status_row(status=existing_status),  # _fetch_row
+        (1,),                  # _department_has_pending_rows -> has rows
         None,                 # _department_has_admin_template_rows -> none
         (date(2020, 1, 1),),  # _is_post_deadline -> already passed
         ("500", None),        # resolve_submitter
@@ -526,6 +557,7 @@ def test_nipaporn_dual_role_submits_her_own_department_uses_normal_chain_not_adm
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         None,                              # _fetch_row
+        (1,),                              # _department_has_pending_rows -> has rows
         None,                              # _is_post_deadline
         (NIPAPORN_EMPCODE, WARAPORN_EMPCODE),  # resolve_submitter(nipaporn) -> her manager is Waraporn
     ]
@@ -537,6 +569,105 @@ def test_nipaporn_dual_role_submits_her_own_department_uses_normal_chain_not_adm
     assert result.status == PENDING_APPROVER1  # single surviving step (Waraporn)
     assert result.approver1_empcode == WARAPORN_EMPCODE
     assert result.current_approver_empcode == WARAPORN_EMPCODE
+
+
+# ---------------------------------------------------------------------------
+# submit_department — DepartmentEmptyError (bug 3 of the 2026-08-07 confirmed
+# wave, reproduced live: Solution Delivery/FY2026, 0 rows -> submit was
+# ACCEPTED, locking the department and landing a real request on a real
+# approver over an empty grid). Runs BEFORE any admin-door branch and applies
+# to every caller identically (jakkaritw, 2026-08-08, option ก).
+# ---------------------------------------------------------------------------
+
+def test_submit_department_empty_as_filler_refused():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row -> no existing record
+        None,   # _department_has_pending_rows -> zero rows for CC1
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers -- department IS live-mapped
+
+    with pytest.raises(DepartmentEmptyError, match="ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ"):
+        submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+    conn.commit.assert_not_called()
+
+
+def test_submit_department_empty_admin_orphan_door_refused():
+    """Option ก's actual new coverage: the orphan admin door normally
+    reaches `_admin_direct_approve` unconditionally -- with zero cost
+    centers AND zero pending_budget rows (the orphan-fallback query), it
+    must now be refused instead."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row
+        None,   # _department_has_pending_rows -> orphan fallback finds zero rows
+    ]
+    cursor.fetchall.side_effect = [[]]  # orphan: zero cost centers for this department
+
+    with pytest.raises(DepartmentEmptyError):
+        submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+    conn.commit.assert_not_called()
+
+
+def test_submit_department_empty_admin_post_deadline_door_refused():
+    """Option ก's other new coverage: the post-deadline door normally
+    overrides ANY existing status (ADR-0012) -- it never even gets that far
+    here, proving the emptiness guard runs BEFORE the post-deadline check
+    (no `_is_post_deadline` call is mocked at all -- if the guard ran later,
+    this test would fail with a MagicMock StopIteration, not a clean
+    DepartmentEmptyError)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row
+        None,   # _department_has_pending_rows -> zero rows for the department's live CCs
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # has real CCs -- not orphan
+
+    with pytest.raises(DepartmentEmptyError):
+        submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+    conn.commit.assert_not_called()
+
+
+def test_department_has_pending_rows_query_shape_live_cost_centers():
+    """>=1 live cost center -> scoped to `cost_center IN (...)`, never to
+    the `pending_budget.department` snapshot column (D2 live-first policy)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = (1,)
+
+    result = _department_has_pending_rows(conn, DEPT, {"CC1", "CC2"}, FY)
+
+    assert result is True
+    sql, *params = cursor.execute.call_args.args
+    assert "budget.pending_budget" in sql
+    assert "fiscal_year = ?" in sql
+    assert "cost_center IN" in sql
+    assert "department" not in sql  # must NOT touch the snapshot column here
+    assert sql.count("?") == 3  # fiscal_year + 2 cost centers
+    assert params[0] == FY
+    assert set(params[1:]) == {"CC1", "CC2"}
+    cursor.close.assert_called_once()
+
+
+def test_department_has_pending_rows_orphan_fallback_query_shape():
+    """Zero live cost centers (orphan department) -> falls back to the
+    `pending_budget.department` snapshot column -- the only way to see an
+    orphan department's real, pre-existing rows (same query shape as
+    `_department_has_admin_template_rows`, minus its template filter)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = None
+
+    result = _department_has_pending_rows(conn, DEPT, set(), FY)
+
+    assert result is False
+    sql, *params = cursor.execute.call_args.args
+    assert "WHERE department = ? AND fiscal_year = ?" in sql
+    assert params == [DEPT, FY]
+    cursor.close.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
