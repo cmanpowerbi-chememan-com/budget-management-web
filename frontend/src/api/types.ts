@@ -331,6 +331,14 @@ export interface PendingForMeResponse {
   departments: string[]
 }
 
+/** `GET /approval/locked-departments` (`routers/approval.LockedDepartmentsResponse`)
+ * — "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix): every
+ * department, among the CALLER's OWN Fill-scope departments, whose approval
+ * status is currently locked (ADR-0013) for one fiscal_year. */
+export interface LockedDepartmentsResponse {
+  departments: string[]
+}
+
 /** `GET/POST /attachments*` (`routers/attachments.py`) — SharePoint file
  * metadata, no local DB row (the folder path is the index, spec R1). */
 export interface AttachmentInfo {

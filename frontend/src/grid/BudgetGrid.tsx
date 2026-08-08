@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
-import { fetchPendingForMe } from '../api/approval'
+import { fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError } from '../api/client'
 import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
@@ -15,7 +15,9 @@ import { deriveTravelSideFromGl, type TripSide } from '../subform/model'
 import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
-import { buildNewRowPayload, buildSavePayload, glMetaFor, mergeSavedRow, type MonthKey } from './model'
+import {
+  buildNewRowPayload, buildSavePayload, glMetaFor, isCostCenterLocked, lockedCostCenterDepartments, mergeSavedRow, type MonthKey,
+} from './model'
 import { DeptPicker } from '../picker/DeptPicker'
 import { buildDeptHierarchy, resolveInitialDept } from '../picker/model'
 import { YearPicker } from './YearPicker'
@@ -87,6 +89,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // compact mode: always starts normal on load.
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [pendingApprovalDepartments, setPendingApprovalDepartments] = useState<Set<string>>(new Set())
+  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, ADR-0013 UI
+  // parity): every one of the CALLER's OWN Fill-scope departments that is
+  // currently mid-approval/APPROVED for `year` (`GET
+  // /approval/locked-departments`, backed by the exact same
+  // `read_model.fetch_locked_departments` the grid's own `row.editable` is
+  // built from — one source, cannot drift). Crossed with `departments`
+  // (the live CC->department mapping already fetched for the ฝ่าย picker)
+  // in `lockedCostCenters` below.
+  const [lockedDepartments, setLockedDepartments] = useState<Set<string>>(new Set())
 
   // Pure admins (ADR-0014: no base actor role, so no toggle — always
   // admin-wide). Dual-role admins (is_admin AND some Fill/See scope, e.g.
@@ -165,6 +176,40 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, hasNoScope])
 
+  /** "+ เพิ่ม Transaction" lock-awareness data fetch. Admin-wide bypasses the
+   * lock everywhere else in this component (`row.editable`, subform
+   * read-only) — its result would never be consulted (`lockedCostCenters`
+   * below stays empty for admin-wide regardless), so skip the round trip
+   * entirely, same "never consulted" reasoning as `get_budget_grid`'s own
+   * admin_wide skip server-side. Refetched on year change AND after any
+   * submit/approve/reject (`handleApprovalChanged` below) — a submit can
+   * lock a department immediately. */
+  async function loadLockedDepartments() {
+    if (hasNoScope || adminViewEnabled) {
+      setLockedDepartments(new Set())
+      return
+    }
+    try {
+      const result = await fetchLockedDepartments(year)
+      setLockedDepartments(new Set(result.departments))
+    } catch {
+      setLockedDepartments(new Set()) // fail-open — never blocks "+ เพิ่ม Transaction" on a fetch error
+    }
+  }
+
+  useEffect(() => {
+    loadLockedDepartments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, hasNoScope, adminViewEnabled])
+
+  /** Refreshes both approval-driven caches after a submit/approve/reject —
+   * a submit can both change the รออนุมัติ badge list AND lock the
+   * department the caller just submitted. */
+  function handleApprovalChanged() {
+    loadPendingApprovals()
+    loadLockedDepartments()
+  }
+
   async function loadGrid() {
     if (hasNoScope) return
     setLoading(true)
@@ -198,6 +243,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const fillCostCenters = useMemo(
     () => (isPureAdmin ? [...new Set(departments.map((d) => d.cost_center))] : scope.fillCostCenters),
     [isPureAdmin, departments, scope.fillCostCenters],
+  )
+
+  /** cost_center -> department, LOCKED entries only, for every Cost Center
+   * "+ เพิ่ม Transaction" can offer — feeds `AddTransactionForm`'s lock
+   * check (see `model.lockedCostCenterDepartments`). `lockedDepartments` is
+   * already empty for admin-wide (`loadLockedDepartments` above), so no
+   * separate admin bypass is needed here. */
+  const lockedCostCenters = useMemo(
+    () => lockedCostCenterDepartments(fillCostCenters, departments, lockedDepartments),
+    [fillCostCenters, departments, lockedDepartments],
   )
 
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
@@ -322,7 +377,13 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           department: saved.department,
           updated_at: saved.updated_at,
         } as BudgetRow['pending'],
-        editable: true,
+        // Derived, not hardcoded (jakkaritw 2026-08-08 bug fix): the create
+        // above only ever succeeds for a Cost Center this SAME
+        // `lockedCostCenters` answer says is not locked (the Add form's own
+        // `validateNewTransaction` check already refused it otherwise) —
+        // this stays the honest, self-correcting source of truth rather
+        // than a value that merely HAPPENS to always be true today.
+        editable: !isCostCenterLocked(costCenter, lockedCostCenters),
       }
       setRows((prev) => [...prev, newRow])
       return { ok: true }
@@ -408,6 +469,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           glRef={glRef}
           existingRows={rows}
           onAdd={handleAddTransaction}
+          lockedCostCenters={lockedCostCenters}
         />
         {department && (
           <button type="button" className="btn btn-attach" onClick={() => setAttachmentsOpen(true)}>
@@ -493,7 +555,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           isAdmin={scope.isAdmin}
           rowCount={rows.length}
           costCenterCount={selectedDeptCostCenterCount}
-          onChanged={loadPendingApprovals}
+          onChanged={handleApprovalChanged}
         />
       )}
 

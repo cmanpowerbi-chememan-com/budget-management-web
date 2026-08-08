@@ -3,7 +3,7 @@
  * endpoint, no caching/state here — that lives in `ApprovalActionBar`
  * (approval status/actions) and `BudgetGrid` (the รออนุมัติ badge list). */
 import { apiFetch } from './client'
-import type { ApprovalStatusState, PendingForMeResponse } from './types'
+import type { ApprovalStatusState, LockedDepartmentsResponse, PendingForMeResponse } from './types'
 
 /** `GET /approval/status` — current state for one (department, fiscal_year). */
 export function fetchApprovalStatus(department: string, fiscalYear: number): Promise<ApprovalStatusState> {
@@ -60,4 +60,11 @@ export function overrideStep(department: string, fiscalYear: number): Promise<Ap
  * approval step, for the รออนุมัติ ฝ่าย-picker badge. */
 export function fetchPendingForMe(fiscalYear: number): Promise<PendingForMeResponse> {
   return apiFetch<PendingForMeResponse>(`/approval/pending-for-me?fiscal_year=${fiscalYear}`)
+}
+
+/** `GET /approval/locked-departments` — "+ เพิ่ม Transaction" lock-awareness
+ * (2026-08-08 bug fix): every one of the caller's OWN Fill-scope departments
+ * that is currently mid-approval or APPROVED for `fiscalYear`. */
+export function fetchLockedDepartments(fiscalYear: number): Promise<LockedDepartmentsResponse> {
+  return apiFetch<LockedDepartmentsResponse>(`/approval/locked-departments?fiscal_year=${fiscalYear}`)
 }

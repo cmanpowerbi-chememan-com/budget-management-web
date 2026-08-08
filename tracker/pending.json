@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-07T23:25:03+0700",
+  "updated": "2026-08-08T11:36:55+0700",
   "tasks": [
+    {
+      "id": "addtxn-lock-awareness",
+      "state": "done",
+      "created": "2026-08-08T11:29:36+0700",
+      "updated": "2026-08-08T11:29:55+0700",
+      "ai": "DONE. New GET /approval/locked-departments (routers/approval.py, reuses read_model.fetch_locked_departments -- one source, scoped to caller's own scope.fill_cost_centers, no new leakage). Frontend: model.ts isCostCenterLocked/lockedCostCenterDepartments/lockedAddReasonTh/ALL_COST_CENTERS_LOCKED_REASON_TH; validateNewTransaction rejects a locked CC pick pre-API; AddTransactionForm shows the control disabled+Thai reason (visible, never hidden) when EVERY Fill CC is locked, else stays actionable so a mixed locked/open-department filler can still add to the open one; BudgetGrid wires GET /approval/locked-departments (fetched on year change + after submit/approve/reject, skipped for admin-wide) + fixes handleAddTransaction's hardcoded editable:true -> derived via isCostCenterLocked. Tests: backend +5 (test_approval_router.py), frontend model.test.ts +7, AddTransactionForm.test.tsx +4, BudgetGrid.test.tsx +3. Results: backend 874 passed (was 869, +5, 0 regressions); frontend vitest 605/605 (was 590, +15); npx next build clean. Verified headless Playwright against the REAL built static export (not jsdom) with mocked API routes: 8/8 PASS (locked->disabled+reason, open->unchanged, mixed->stays actionable+open CC addable+locked CC rejected with reason, 0 console errors). Not committed, not deployed per instructions.",
+      "agent": "claude"
+    },
     {
       "id": "gate-d2-live-department-resolution",
       "state": "done",
@@ -15,8 +23,8 @@
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
-      "updated": "2026-08-07T23:00:09+0700",
-      "ai": "[ITEM 13 SCHEDULED for Mon 2026-08-10] jakkaritw: use นิภาพร's cookie ALONE - wave 0 measured her personal See scope as byte-identical to วราพร's (7 CC / 5 departments), so one identity settles it. Prepared: .gitignore widened to setup/_auth_cookie*.tmp.txt (verified ignored), target file setup/_auth_cookie_nipaporn.tmp.txt, safest capture is her logging in on the tester's machine so no credential is transmitted. Test procedure recorded in run log section 24 and it is READ-ONLY for her identity: (1) GET her scope, (2) the tester's OWN service principal inserts the approval_status row that locks one of her fill departments - never her identity, so approval_log/_user never falsely says she acted, (3) GET grid with admin_view_enabled=false -> the locked department's rows must be editable=false, (4) GET with admin_view_enabled=true -> same rows editable=true, (5) service principal deletes the lock row and verifies 0. Delete the cookie file and have her log out immediately afterwards. Commits today: 48ebacb (consolidated plan + run, old plans deleted), 9b4b2aa (PDPA decision + zero baseline), bbb1bae (cookie-file gitignore + Monday plan). TALLY 15/16."
+      "updated": "2026-08-08T11:36:55+0700",
+      "ai": "[BUG 2 FIXED 2026-08-08, uncommitted] '+ เพิ่ม Transaction' is now lock-aware, option ข per jakkaritw (control stays visible, disabled with a Thai reason when every fill CC is locked; per-CC rejection with the department name when only some are locked - the multi-department filler keeps working). Source of truth = NEW GET /approval/locked-departments wrapping read_model.fetch_locked_departments scoped to the caller's fill_cost_centers => cannot drift from the grid's own editable rule, no leakage beyond /scope/departments. Also fixed BudgetGrid.tsx handleAddTransaction hardcoded editable:true -> derived via isCostCenterLocked. Verified INDEPENDENTLY in main session: backend 874 passed (was 869, +5 endpoint tests), frontend 605 passed (was 590, +15). Subagent also ran 8/8 headless Playwright scenarios vs the real static export. jakkaritw also asked + was answered: APPROVED depts block new transactions too (LOCKED = PENDING_1/2/3 + APPROVED, open = DRAFT + REJECTED, admin bypasses per ADR-0012). D2 fix committed earlier as f71fc15. NEXT after compact: commit bug-2 fix, then bug 3 (submit with 0 rows guard), bug 4 (413 Thai message), bug 5 ('(ไม่พบชื่อ)' fallback in the step-override mail)."
     },
     {
       "id": "sit-plan-authoring",

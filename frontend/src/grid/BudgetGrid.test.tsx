@@ -43,6 +43,11 @@ describe('BudgetGrid', () => {
     // change, so every test needs a default (most tests are not testing
     // the badge itself and just need this to resolve quietly).
     vi.mocked(approvalApi.fetchPendingForMe).mockResolvedValue({ departments: [] })
+    // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix) — called
+    // unconditionally on every mount/year change, same as fetchPendingForMe
+    // above; most tests are not testing this feature and just need it to
+    // resolve quietly with "nothing locked".
+    vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [] })
     // Trip Manager loads these reference masters whenever it opens — the two
     // trip tests here only need them to resolve quietly.
     vi.mocked(referenceApi.fetchTravelers).mockResolvedValue([])
@@ -430,6 +435,89 @@ describe('BudgetGrid', () => {
 
     expect(await screen.findByTestId('trip-manager')).toBeInTheDocument()
     expect(screen.queryByTestId('detail-subform')).not.toBeInTheDocument()
+  })
+
+  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, ADR-0013 UI
+  // parity): a Filler whose department is already mid-approval/APPROVED
+  // used to be able to open the Add form, pick a Cost Center + GL, and only
+  // THEN get a late 403 `department_locked`. jakkaritw's decision: keep the
+  // button VISIBLE but non-actionable with the reason on screen — never a
+  // blanket disable, since a Filler can hold Cost Centers in more than one
+  // ฝ่าย (45% do).
+  describe('"+ เพิ่ม Transaction" lock-awareness (BudgetGrid wiring)', () => {
+    it('the caller\'s only department is locked — the Add button is visible but disabled, reason on screen', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'] })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+      expect(screen.getByText(/ถูกล็อกไว้/)).toBeInTheDocument()
+    })
+
+    it('the department is open (DRAFT, nothing locked) — unchanged: Add button works and the new row renders editable (derived, not hardcoded)', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [] })
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({
+        cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).not.toBeDisabled()
+      fireEvent.click(trigger)
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      // A real editable <input>, not a read-only display — proves the new
+      // row's `editable` was actually derived, not just hardcoded true.
+      expect(await screen.findByTestId('pending-input-CC1-5211800030-m01')).toBeInTheDocument()
+    })
+
+    it('one locked and one open department — the button stays actionable and the OPEN Cost Center can still be added (a blanket disable would break this)', async () => {
+      const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
+      const twoDepartments = [
+        ...DEPARTMENTS,
+        { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'] })
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({
+        cost_center: 'CC2', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      })
+
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).not.toBeDisabled() // >1 ฝ่าย with only one locked -> never a blanket disable
+      fireEvent.click(trigger)
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: 'CC2' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      expect(await screen.findByTestId('pending-input-CC2-5211800030-m01')).toBeInTheDocument()
+    })
   })
 
   // ADR-0013 read-only lock (UI parity port, 2026-08-05) — the single line

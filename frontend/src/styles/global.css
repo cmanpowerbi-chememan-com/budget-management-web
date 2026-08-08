@@ -805,6 +805,17 @@ input:focus-visible {
   display: flex;
   gap: 8px;
 }
+/* ADR-0013 UI parity (2026-08-08): "+ เพิ่ม Transaction" stays visible even
+   when every Fill-scope Cost Center is locked -- the disabled button and
+   its Thai reason (.act-status, same tone as the approval bar's own locked
+   hint) sit inline together, wrapping onto their own line if the toolbar is
+   narrow. */
+.add-txn-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 /* ─── Loading / empty / error states ─── */
 .grid-loading,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
-import { validateNewTransaction } from './model'
+import { ALL_COST_CENTERS_LOCKED_REASON_TH, validateNewTransaction } from './model'
 
 export interface AddResult {
   ok: boolean
@@ -20,6 +20,16 @@ export interface AddTransactionFormProps {
    * jakkaritw 2026-08-05): skips the create call entirely and opens that
    * GL's own subform directly — always resolves `{ok:true}`. */
   onAdd: (costCenter: string, glAccount: string) => Promise<AddResult>
+  /** cost_center -> department, LOCKED entries only (ADR-0013 UI parity,
+   * 2026-08-08 bug fix) — built by `BudgetGrid` from `GET
+   * /approval/locked-departments` + the caller's own CC->department
+   * mapping, the SAME live source the server's `row.editable` resolves
+   * from first. Optional/defaults to `{}` — "nothing is locked", the
+   * pre-existing behavior. jakkaritw's decision: keep the button VISIBLE,
+   * never hidden — disable it + show the reason when EVERY Fill-scope CC
+   * is locked; a specific locked pick is rejected the same way a
+   * duplicate-row pick already is. */
+  lockedCostCenters?: Record<string, string>
 }
 
 /** "+ เพิ่ม transaction" — picks a Cost Center + a GL code (Fill scope
@@ -31,7 +41,9 @@ export interface AddTransactionFormProps {
  * SAME searchable-combobox pattern (a plain <select> was unusable — 130+ GL
  * rows, 400+ Fill-scope cost centers): type to filter, Enter picks the
  * first match, Esc closes, click also picks. */
-export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd }: AddTransactionFormProps) {
+export function AddTransactionForm({
+  fillCostCenters, glRef, existingRows, onAdd, lockedCostCenters = {},
+}: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
   const [costCenter, setCostCenter] = useState('')
   const [ccSearch, setCcSearch] = useState('')
@@ -84,7 +96,7 @@ export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd
   }
 
   async function handleSubmit() {
-    const validation = validateNewTransaction({ costCenter, glAccount, fillCostCenters, glRef, existingRows })
+    const validation = validateNewTransaction({ costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters })
     if (!validation.ok) {
       setError(validation.errorTh ?? 'ข้อมูลไม่ถูกต้อง')
       return
@@ -100,11 +112,20 @@ export function AddTransactionForm({ fillCostCenters, glRef, existingRows, onAdd
     }
   }
 
+  // jakkaritw's decision (2026-08-08): every Fill-scope Cost Center locked
+  // -> the button stays VISIBLE (never hidden silently) but non-actionable,
+  // with the Thai reason shown right beside it — same "say why on screen"
+  // tone as the subform's own 🔒 ดูรายละเอียด lock affordance.
+  const allLocked = fillCostCenters.length > 0 && fillCostCenters.every((cc) => cc in lockedCostCenters)
+
   if (!open) {
     return (
-      <button type="button" className="btn btn-add" onClick={() => setOpen(true)}>
-        + เพิ่ม Transaction
-      </button>
+      <div className="add-txn-trigger">
+        <button type="button" className="btn btn-add" onClick={() => setOpen(true)} disabled={allLocked}>
+          + เพิ่ม Transaction
+        </button>
+        {allLocked && <span className="act-status">{ALL_COST_CENTERS_LOCKED_REASON_TH}</span>}
+      </div>
     )
   }
 

@@ -190,4 +190,87 @@ describe('AddTransactionForm', () => {
     await waitFor(() => expect(screen.getByText('สร้างรายการไม่สำเร็จ')).toBeInTheDocument())
     expect(screen.getByLabelText('Cost Center')).toBeInTheDocument()
   })
+
+  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, decision by
+  // jakkaritw: keep the control VISIBLE but non-actionable, reason on
+  // screen — never hide it silently, same tone as the locked subform button.
+  describe('department-lock awareness (ADR-0013 UI parity)', () => {
+    it('department open (nothing in lockedCostCenters) — unchanged: the button works and add still succeeds', async () => {
+      const onAdd = vi.fn().mockResolvedValue({ ok: true })
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={onAdd}
+          lockedCostCenters={{}}
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).not.toBeDisabled()
+      fireEvent.click(trigger)
+      pickCcOption('CC1')
+      pickGlOption(/5211800030/)
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC1', '5211800030'))
+    })
+
+    it('every Fill-scope Cost Center locked — the "+ เพิ่ม Transaction" button is visible but disabled, with a Thai reason on screen', () => {
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={vi.fn()}
+          lockedCostCenters={{ CC1: 'Accounting' }}
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).toBeInTheDocument() // visible, not hidden
+      expect(trigger).toBeDisabled() // not actionable
+      expect(screen.getByText(/ถูกล็อกไว้/)).toBeInTheDocument() // the reason is on screen
+    })
+
+    it('one locked and one open Cost Center — the button stays actionable, and the OPEN one can still be added (a blanket disable would break this)', async () => {
+      const onAdd = vi.fn().mockResolvedValue({ ok: true })
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1', 'CC2']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={onAdd}
+          lockedCostCenters={{ CC1: 'Accounting' }}
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).not.toBeDisabled()
+      fireEvent.click(trigger)
+      pickCcOption('CC2')
+      pickGlOption(/5211800030/)
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC2', '5211800030'))
+    })
+
+    it('picking the LOCKED Cost Center in that same mix is rejected with the reason shown, and onAdd is never called', () => {
+      const onAdd = vi.fn()
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1', 'CC2']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={onAdd}
+          lockedCostCenters={{ CC1: 'Accounting' }}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      pickCcOption('CC1')
+      pickGlOption(/5211800030/)
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      expect(screen.getByText(/Accounting/)).toBeInTheDocument()
+      expect(onAdd).not.toHaveBeenCalled()
+    })
+  })
 })

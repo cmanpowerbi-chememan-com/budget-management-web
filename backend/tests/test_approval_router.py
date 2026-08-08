@@ -529,6 +529,85 @@ def test_override_step_notify_turn_failure_still_sends_override_notice(client):
     mock_overridden.assert_called_once()  # the override notice must still have been sent
 
 
+# ---------------------------------------------------------------------------
+# GET /approval/locked-departments — "+ เพิ่ม Transaction" lock-awareness
+# (2026-08-08 bug fix, ADR-0013 UI parity extension)
+# ---------------------------------------------------------------------------
+
+def test_locked_departments_401_without_auth(client):
+    response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 401
+
+
+def test_locked_departments_returns_only_the_callers_own_locked_departments(client):
+    """Intersection of (a) the departments the caller's OWN Fill cost
+    centers belong to and (b) the server's locked set — a locked department
+    the caller has no Fill cost center in must never appear (no leakage
+    beyond what GET /scope/departments already reveals)."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope",
+        return_value=MagicMock(fill_cost_centers=["CC1", "CC2"]),
+    ), patch(
+        "app.routers.approval.fetch_departments",
+        return_value=[
+            {"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None},
+            {"cost_center": "CC2", "department": "Warehouse", "division": None, "c_level": None},
+        ],
+    ), patch(
+        "app.routers.approval.fetch_locked_departments",
+        return_value=frozenset({"Accounting", "Some Other Department"}),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json() == {"departments": ["Accounting"]}
+
+
+def test_locked_departments_no_fill_scope_returns_empty_and_skips_the_extra_queries(client):
+    """A caller with no Fill cost center (e.g. a pure admin, or a see_only
+    manager) has nothing to check — short-circuit without even querying
+    fetch_departments/fetch_locked_departments."""
+    _override_auth("nobody@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(fill_cost_centers=[])
+    ), patch("app.routers.approval.fetch_departments") as mock_fetch_departments, patch(
+        "app.routers.approval.fetch_locked_departments"
+    ) as mock_fetch_locked:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json() == {"departments": []}
+    mock_fetch_departments.assert_not_called()
+    mock_fetch_locked.assert_not_called()
+
+
+def test_locked_departments_none_locked_returns_empty_list(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(fill_cost_centers=["CC1"])
+    ), patch(
+        "app.routers.approval.fetch_departments",
+        return_value=[{"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None}],
+    ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json() == {"departments": []}
+
+
+def test_locked_departments_db_failure_maps_to_502(client):
+    import pyodbc
+
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", side_effect=pyodbc.Error("connection lost")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 502
+
+
 def test_override_step_not_overridable_maps_to_409_with_thai_detail(client):
     """StepNotOverridableError (positions 2/3, or the only-active-position
     case) -> 409 whose Thai detail the UI shows as-is."""

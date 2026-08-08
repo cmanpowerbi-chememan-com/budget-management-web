@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GlAccount, PendingRowState } from '../api/types'
+import type { DepartmentRow, GlAccount, PendingRowState } from '../api/types'
 import {
   applyMonthEdit,
   BLANK_COLUMN_FILTERS,
@@ -23,9 +23,11 @@ import {
   groupChipClass,
   hasStoredColumnWidthsOverride,
   identityColSpan,
+  isCostCenterLocked,
   isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
+  lockedCostCenterDepartments,
   mergeSavedRow,
   MONTH_LABELS,
   nowMonthKey,
@@ -261,6 +263,67 @@ describe('validateNewTransaction', () => {
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
     })
     expect(result.ok).toBe(true)
+  })
+
+  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, ADR-0013 UI
+  // parity): a Cost Center whose department is mid-approval/APPROVED must
+  // be rejected here, BEFORE ever calling the API — same pattern as the
+  // existing duplicate-row check above.
+  it('rejects a Cost Center whose department is locked, naming the department in the Thai reason', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+      lockedCostCenters: { CC1: 'Accounting' },
+    })
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toContain('Accounting')
+  })
+
+  it('accepts a Cost Center that is NOT in the locked map, even when lockedCostCenters has other entries', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+      lockedCostCenters: { CC9: 'Warehouse' },
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('lockedCostCenters is optional — omitting it entirely behaves like "nothing is locked"', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+    })
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('isCostCenterLocked', () => {
+  it('true when the cost center is a key in the locked map', () => {
+    expect(isCostCenterLocked('CC1', { CC1: 'Accounting' })).toBe(true)
+  })
+
+  it('false when the cost center is absent from the locked map', () => {
+    expect(isCostCenterLocked('CC1', { CC9: 'Warehouse' })).toBe(false)
+    expect(isCostCenterLocked('CC1', {})).toBe(false)
+  })
+})
+
+describe('lockedCostCenterDepartments', () => {
+  const departmentRows: DepartmentRow[] = [
+    { cost_center: 'CC1', department: 'Accounting', division: null, c_level: null },
+    { cost_center: 'CC2', department: 'Warehouse', division: null, c_level: null },
+  ]
+
+  it('maps only the cost centers whose department is in the locked set', () => {
+    const result = lockedCostCenterDepartments(['CC1', 'CC2'], departmentRows, new Set(['Accounting']))
+    expect(result).toEqual({ CC1: 'Accounting' })
+  })
+
+  it('a cost center missing from departmentRows is treated as NOT locked (fail-open, mirrors the server\'s own unresolvable-department policy)', () => {
+    const result = lockedCostCenterDepartments(['CC9'], departmentRows, new Set(['Accounting', 'Warehouse']))
+    expect(result).toEqual({})
+  })
+
+  it('returns an empty object when nothing is locked', () => {
+    const result = lockedCostCenterDepartments(['CC1', 'CC2'], departmentRows, new Set())
+    expect(result).toEqual({})
   })
 })
 

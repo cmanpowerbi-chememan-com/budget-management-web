@@ -3,7 +3,7 @@
  * COST (5xxx GL) and SG&A (6xxx GL) totals must never cross/combine —
  * there is deliberately no function that sums a COST section and an SGA
  * section together. */
-import type { BudgetRow, GlAccount, LayerAmounts, PendingRowInput, PendingRowState, SapCoverage } from '../api/types'
+import type { BudgetRow, DepartmentRow, GlAccount, LayerAmounts, PendingRowInput, PendingRowState, SapCoverage } from '../api/types'
 
 export const MONTH_KEYS = [
   'm01', 'm02', 'm03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10', 'm11', 'm12',
@@ -571,12 +571,72 @@ export function buildNewRowPayload(costCenter: string, glAccount: string, fiscal
   }
 }
 
+// ---------------------------------------------------------------------------
+// "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix) — ADR-0013's
+// read-only lock ported to a (CC, GL) pair that has no row yet, so a Filler
+// can no longer pick+add into a locked department and only THEN get a late
+// 403 `department_locked`. `lockedCostCenters` (cost_center -> department,
+// LOCKED entries only) is built once in `BudgetGrid` from `GET
+// /approval/locked-departments` + the caller's own CC->department mapping
+// (`GET /scope/departments`) — the SAME live source `_resolve_live_department`
+// prioritizes server-side, so this can never disagree with `row.editable`.
+// ---------------------------------------------------------------------------
+
+/** True when `costCenter` resolves (via `lockedCostCenters`) to a currently
+ * locked department. ONE helper, used by BOTH `validateNewTransaction`
+ * (reject before ever calling the API) and `BudgetGrid.handleAddTransaction`
+ * (the newly-created row's own `editable`) — so the two call sites can never
+ * disagree with each other. */
+export function isCostCenterLocked(costCenter: string, lockedCostCenters: Record<string, string>): boolean {
+  return costCenter in lockedCostCenters
+}
+
+/** Thai reason shown inline when a specific Cost Center pick is rejected —
+ * names the department so the user knows exactly why, same tone as the
+ * subform's own ADR-0013 lock copy ("อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้"). */
+export function lockedAddReasonTh(department: string): string {
+  return `ฝ่าย "${department}" อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว ไม่สามารถเพิ่มรายการใหม่ในฝ่ายนี้ได้ในสถานะนี้`
+}
+
+/** Thai reason shown next to the "+ เพิ่ม Transaction" button itself when
+ * EVERY Cost Center the caller can Fill is locked — the button stays
+ * visible (never hidden silently, jakkaritw 2026-08-08) but is disabled. */
+export const ALL_COST_CENTERS_LOCKED_REASON_TH =
+  'Cost Center ที่คุณกรอกงบได้ทั้งหมดถูกล็อกไว้ (ฝ่ายอยู่ระหว่างอนุมัติหรืออนุมัติแล้ว) ไม่สามารถเพิ่มรายการใหม่ได้ในสถานะนี้'
+
+/** Builds `lockedCostCenters` (cost_center -> department, LOCKED entries
+ * only) for every cost_center in `costCenters` — one CC->department lookup
+ * (`departmentRows`, the caller's OWN live `dbo.cc_filler_map` mapping,
+ * already fetched for the ฝ่าย picker) crossed with the locked-departments
+ * set (`GET /approval/locked-departments`). A cost_center with no row in
+ * `departmentRows` (unresolvable department) is treated as NOT locked —
+ * the same fail-open policy `write_model._ensure_department_not_locked`
+ * documents for its own "department resolves to None" case, so the client
+ * can never lock something the server itself would let through. */
+export function lockedCostCenterDepartments(
+  costCenters: string[],
+  departmentRows: DepartmentRow[],
+  lockedDepartments: Set<string>,
+): Record<string, string> {
+  const departmentByCc = new Map(departmentRows.map((d) => [d.cost_center, d.department]))
+  const result: Record<string, string> = {}
+  for (const cc of costCenters) {
+    const department = departmentByCc.get(cc)
+    if (department && lockedDepartments.has(department)) result[cc] = department
+  }
+  return result
+}
+
 export interface NewTransactionInput {
   costCenter: string
   glAccount: string
   fillCostCenters: string[]
   glRef: GlAccount[]
   existingRows: BudgetRow[]
+  /** cost_center -> department, LOCKED entries only (see `lockedCostCenterDepartments`
+   * above). Optional — omitted/empty means "nothing is locked", same as
+   * before this feature existed. */
+  lockedCostCenters?: Record<string, string>
 }
 
 export interface ValidationResult {
@@ -596,6 +656,10 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   if (!input.glAccount) return { ok: false, errorTh: 'กรุณาเลือก GL Code' }
   if (!input.fillCostCenters.includes(input.costCenter)) {
     return { ok: false, errorTh: `${input.costCenter} ไม่อยู่ในสิทธิ์กรอกงบของคุณ` }
+  }
+  const lockedDepartment = (input.lockedCostCenters ?? {})[input.costCenter]
+  if (lockedDepartment) {
+    return { ok: false, errorTh: lockedAddReasonTh(lockedDepartment) }
   }
   const exists = input.existingRows.some(
     (r) => r.cost_center === input.costCenter && r.gl_account === input.glAccount,

@@ -32,6 +32,8 @@ from app.approval import (
 from app.auth import get_current_user_email
 from app.config import get_settings
 from app.db import get_fabric_conn
+from app.read_model import fetch_locked_departments
+from app.reference_data import fetch_departments
 from app.rls import resolve_scope
 
 logger = logging.getLogger(__name__)
@@ -166,6 +168,20 @@ class PendingForMeResponse(BaseModel):
     departments: list[str]
 
 
+class LockedDepartmentsResponse(BaseModel):
+    """"+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix): every
+    department, among the CALLER's OWN Fill-scope departments, whose
+    approval status is locked for `fiscal_year`. Built from the exact same
+    `read_model.fetch_locked_departments` (`LOCKED_APPROVAL_STATUSES`)
+    `merge_budget_rows` already uses to compute `row.editable` — this
+    endpoint can never grow a second, drifting definition of "locked".
+    Scoped to `scope.fill_cost_centers` only (never all-company): a caller
+    only ever learns about departments they could already see via
+    `GET /scope/departments`, so this adds no new leakage."""
+
+    departments: list[str]
+
+
 def _run(action: Callable[[], _T]) -> _T:
     try:
         return action()
@@ -247,6 +263,28 @@ def pending_for_me(fiscal_year: int = Query(...), email: str = Depends(get_curre
         with get_fabric_conn() as conn:
             departments = list_departments_pending_my_approval(conn, fiscal_year, email)
             return PendingForMeResponse(departments=departments)
+
+    return _run(_action)
+
+
+@router.get("/locked-departments", response_model=LockedDepartmentsResponse)
+def locked_departments(fiscal_year: int = Query(...), email: str = Depends(get_current_user_email)):
+    """Feeds "+ เพิ่ม Transaction"'s per-Cost-Center lock check
+    (`BudgetGrid.tsx`): the caller already knows which department each of
+    their own Fill cost centers belongs to (`GET /scope/departments`) — this
+    only adds whether that department is currently locked, so the Add form
+    can reject a locked pick with a reason before ever calling
+    `PUT /budget/rows` (the late-403 UX ADR-0013 exists to eliminate)."""
+
+    def _action():
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            if not scope.fill_cost_centers:
+                return LockedDepartmentsResponse(departments=[])
+            dept_rows = fetch_departments(conn, scope.fill_cost_centers)
+            own_departments = {row["department"] for row in dept_rows if row["department"]}
+            locked = fetch_locked_departments(conn, fiscal_year)
+            return LockedDepartmentsResponse(departments=sorted(own_departments & locked))
 
     return _run(_action)
 
