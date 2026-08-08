@@ -306,6 +306,32 @@ def lookup_email_by_empcode(conn: pyodbc.Connection, empcode: str | None) -> str
     return row[0] if row else None
 
 
+UNRESOLVED_EMPLOYEE_DISPLAY = "(ไม่พบชื่อ)"
+
+
+def _display_name_for_empcode(conn: pyodbc.Connection, empcode: str | None) -> str:
+    """Resolves `empcode` to text safe for an email BODY — never an address.
+    Returns `UNRESOLVED_EMPLOYEE_DISPLAY` when `empcode` is blank, the
+    lookup finds no record, or the lookup itself raises (always logged) —
+    so a raw employee code (a leaver, an empcode not yet synced to
+    `dbo.v_employee_budget_01`, a mid-sync gap) never reaches a rendered
+    email (bug 5, 2026-08-07: a probe's placeholder empcode printed
+    verbatim in a real delivered mail). Deliberately independent of
+    `_resolve_approver1_cc`, whose own `None` ALSO means "cc == To,
+    suppress the cc" — a delivery decision that must never leak into what
+    this renders as body text."""
+    if not empcode:
+        return UNRESOLVED_EMPLOYEE_DISPLAY
+    try:
+        resolved = lookup_email_by_empcode(conn, empcode)
+    except Exception:
+        logger.warning(
+            "notifications: display lookup failed for empcode=%r — showing placeholder, not the raw code", empcode
+        )
+        return UNRESOLVED_EMPLOYEE_DISPLAY
+    return resolved or UNRESOLVED_EMPLOYEE_DISPLAY
+
+
 def _resolve_approver1_cc(conn: pyodbc.Connection, to_email: str, approver1_empcode: str | None) -> list[str] | None:
     """2026-07-31 revamp cc rule (plan §3.1): reject + final-approve mails
     cc the FROZEN approver1. Returns None (no cc) when the empcode is blank,
@@ -451,29 +477,25 @@ def notify_step_overridden(
     สถานะปัจจุบัน row. No monthly digest — this immediate mail is the one
     and only override notification; the next approver ALSO still gets their
     normal `notify_turn` mail (router wiring), so an override sends exactly
-    two mails."""
+    two mails.
+
+    Both body rows that name a person (ผู้อนุมัติที่ถูกข้าม, สถานะปัจจุบัน) go
+    through `_display_name_for_empcode` — a raw employee code never reaches
+    the rendered email (bug 5, 2026-08-07/08); an unresolvable one renders
+    `UNRESOLVED_EMPLOYEE_DISPLAY` instead. This is intentionally a SEPARATE
+    lookup from the `cc` address above: `cc`'s own suppression (cc == To)
+    is a delivery decision that must not change what a human reads in the
+    body."""
     if not submitter_email:
         logger.warning(
             "notify_step_overridden: no submitter_email for department=%r/%s — skipped", department, fiscal_year
         )
         return None
     cc = _resolve_approver1_cc(conn, submitter_email, skipped_approver_empcode)
-    skipped_display = cc[0] if cc else (skipped_approver_empcode or "-")
+    skipped_display = _display_name_for_empcode(conn, skipped_approver_empcode)
     waiting_display = "-"
     if new_current_approver_empcode:
-        # Review fix: this lookup feeds ONLY the cosmetic สถานะปัจจุบัน row —
-        # same posture as `_resolve_approver1_cc` just above, a display-only
-        # query must never abort the functional To send. Guarded the same
-        # way: log a warning and fall back to the raw empcode.
-        try:
-            next_email = lookup_email_by_empcode(conn, new_current_approver_empcode)
-        except Exception:
-            logger.warning(
-                "notify_step_overridden: next-approver email lookup failed for empcode=%r — "
-                "falling back to the empcode in the body", new_current_approver_empcode,
-            )
-            next_email = None
-        waiting_display = f"รอการอนุมัติจาก {next_email or new_current_approver_empcode}"
+        waiting_display = f"รอการอนุมัติจาก {_display_name_for_empcode(conn, new_current_approver_empcode)}"
     now_str = datetime.now(ZoneInfo("Asia/Bangkok")).strftime("%d/%m/%Y %H:%M")
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ดำเนินการแทนผู้อนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"

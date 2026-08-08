@@ -18,6 +18,7 @@ from app.attachments import (
     list_attachments,
     sanitize_attachment_filename,
     sanitize_department_folder,
+    too_large_message,
     upload_attachment,
     validate_upload,
 )
@@ -86,8 +87,44 @@ def test_validate_upload_rejects_file_over_the_size_cap():
         validate_upload("big.pdf", MAX_ATTACHMENT_BYTES + 1)
 
 
+def test_validate_upload_over_cap_message_is_thai_with_correct_sizes():
+    """Bug 4 (2026-08-07/08 production defect): the old message was English
+    ('bytes -- exceeds ... byte attachment limit') and unreadable (a
+    ten-digit byte count). Real over-limit size, both numbers in MB."""
+    actual_bytes = int(12.3 * 1024 * 1024)  # rounds to exactly "12.3 MB"
+    with pytest.raises(FileTooLargeError) as exc_info:
+        validate_upload("big.pdf", actual_bytes)
+    assert str(exc_info.value) == "ไฟล์ใหญ่เกินกำหนด (12.3 MB) — อัปโหลดได้ไม่เกิน 10 MB"
+
+
 def test_validate_upload_accepts_file_exactly_at_the_cap():
-    validate_upload("exact.pdf", MAX_ATTACHMENT_BYTES)  # must not raise
+    validate_upload("exact.pdf", MAX_ATTACHMENT_BYTES)  # must not raise, boundary is inclusive
+
+
+# ---------------------------------------------------------------------------
+# too_large_message — shared Thai copy for BOTH size checks on the upload
+# path (this module's byte-accurate backstop and the router's fast
+# Content-Length pre-check), so the two can never disagree in wording.
+# ---------------------------------------------------------------------------
+
+def test_too_large_message_uses_one_decimal_for_the_actual_size():
+    actual_bytes = int(12.3 * 1024 * 1024)
+    assert too_large_message(actual_bytes) == "ไฟล์ใหญ่เกินกำหนด (12.3 MB) — อัปโหลดได้ไม่เกิน 10 MB"
+
+
+def test_too_large_message_renders_a_round_limit_without_a_trailing_decimal():
+    # MAX_ATTACHMENT_BYTES (10 * 1024*1024) is a round number in MB -- must
+    # read "10 MB", not "10.0 MB".
+    assert "10 MB" in too_large_message(MAX_ATTACHMENT_BYTES + 1)
+    assert "10.0 MB" not in too_large_message(MAX_ATTACHMENT_BYTES + 1)
+
+
+def test_too_large_message_mb_base_matches_how_the_limit_is_defined():
+    # MAX_ATTACHMENT_BYTES is defined as 10 * 1024 * 1024 -- the printed
+    # limit must equal that exactly, which only holds for a MiB-style
+    # (1024*1024) conversion, not a decimal (1000*1000) one.
+    assert MAX_ATTACHMENT_BYTES == 10 * 1024 * 1024
+    assert "10 MB" in too_large_message(MAX_ATTACHMENT_BYTES + 1)
 
 
 # ---------------------------------------------------------------------------

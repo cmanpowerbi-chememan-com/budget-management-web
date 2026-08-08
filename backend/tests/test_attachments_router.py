@@ -220,6 +220,27 @@ def test_upload_over_size_cap_rejected_via_content_length_before_reading_body(cl
     mock_upload.assert_not_called()
 
 
+def test_upload_over_size_cap_413_detail_is_thai_with_correct_mb_sizes(client):
+    """Bug 4: the 413 detail must be the agreed Thai sentence with the real
+    declared size and the configured limit, both in MB -- never the old
+    English 'bytes -- exceeds ... byte attachment limit' wording."""
+    _override_auth("filler@chememan.com")
+    declared_size = MAX_ATTACHMENT_BYTES + int(0.3 * 1024 * 1024)  # ~10.3 MB
+    oversized_content = b"x" * declared_size
+    with patch("app.routers.attachments.get_fabric_conn"), patch("app.routers.attachments.upload_attachment"):
+        response = client.post(
+            "/attachments/upload",
+            data={"department": DEPT, "fiscal_year": FY},
+            files={"file": ("big.pdf", oversized_content, "application/pdf")},
+        )
+
+    assert response.status_code == 413
+    detail = response.json()["detail"]
+    assert detail == "ไฟล์ใหญ่เกินกำหนด (10.3 MB) — อัปโหลดได้ไม่เกิน 10 MB"
+    assert "bytes" not in detail
+    assert "exceeds" not in detail
+
+
 def test_upload_not_configured_maps_to_501(client):
     from app.attachments import AttachmentsNotConfiguredError
 

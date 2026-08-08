@@ -634,13 +634,15 @@ def test_notify_step_overridden_body_carries_department_year_both_names_and_link
 def test_notify_step_overridden_still_sends_when_next_approver_lookup_fails(monkeypatch):
     """Review fix: `lookup_email_by_empcode` for the NEXT approver (feeds
     only the cosmetic สถานะปัจจุบัน body row) must NEVER prevent the To send
-    -- same posture as the cc lookup. Body degrades to the raw empcode."""
+    -- same posture as the cc lookup. Bug 5 (2026-08-08): body degrades to
+    the Thai placeholder, never the raw empcode."""
     conn = MagicMock()
 
     def _execute(sql, *args, **kwargs):
-        # First lookup (cc, via _resolve_approver1_cc) succeeds; the SECOND
-        # lookup (next approver, feeding สถานะปัจจุบัน only) fails.
-        if conn.cursor.return_value.execute.call_count > 1:
+        # Calls 1-2 resolve the SKIPPED approver empcode "200" (cc, then the
+        # independent display lookup for the same empcode) and succeed; call
+        # 3 is the NEXT approver lookup (สถานะปัจจุบัน only) -- this one fails.
+        if conn.cursor.return_value.execute.call_count > 2:
             raise RuntimeError("db down")
 
     conn.cursor.return_value.execute.side_effect = _execute
@@ -658,7 +660,50 @@ def test_notify_step_overridden_still_sends_when_next_approver_lookup_fails(monk
     (to_email, _, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert kwargs["cc"] == ["vp@chememan.com"]  # cc lookup (first call) was unaffected
-    assert "101032" in body  # degraded to the raw empcode, no crash
+    assert "101032" not in body  # the raw empcode must never reach the body
+    assert "(ไม่พบชื่อ)" in body  # degrades to the agreed Thai placeholder instead
+
+
+def test_notify_step_overridden_unresolvable_skipped_approver_shows_placeholder_not_raw_code(monkeypatch):
+    """Bug 5 (2026-08-07 production defect): a probe's fake empcode
+    ('TESTPROBE') rendered verbatim in the delivered mail's ผู้อนุมัติที่ถูกข้าม
+    row. The same fallback fires in production for a leaver or a mid-sync
+    gap -- an unresolvable empcode must show the agreed Thai placeholder,
+    and the raw code must not appear anywhere in the body (not merely
+    alongside the placeholder)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # lookup finds no record
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="TESTPROBE", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    assert "TESTPROBE" not in body
+    assert "(ไม่พบชื่อ)" in body
+
+
+def test_notify_step_overridden_resolved_skipped_approver_display_unchanged(monkeypatch):
+    """Happy path regression: a resolved empcode renders exactly as before
+    the fix -- the resolved email, never the placeholder."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    assert "vp@chememan.com" in body
+    assert "(ไม่พบชื่อ)" not in body
 
 
 def test_notify_step_overridden_no_submitter_email_skips(monkeypatch):

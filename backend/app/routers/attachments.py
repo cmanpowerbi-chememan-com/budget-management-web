@@ -22,6 +22,7 @@ from app.attachments import (
     MAX_ATTACHMENT_BYTES,
     get_download_url,
     list_attachments,
+    too_large_message,
     upload_attachment,
 )
 from app.auth import get_current_user_email
@@ -98,10 +99,7 @@ def _reject_if_declared_too_large(request: Request) -> None:
     except ValueError:
         return
     if declared_bytes > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"request body is {declared_bytes} bytes -- exceeds the {MAX_ATTACHMENT_BYTES}-byte attachment limit",
-        )
+        raise HTTPException(status_code=413, detail=too_large_message(declared_bytes))
 
 
 @router.get("", response_model=list[AttachmentInfoResponse])

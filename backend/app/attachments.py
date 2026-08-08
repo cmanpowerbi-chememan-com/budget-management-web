@@ -69,6 +69,32 @@ class FileTooLargeError(ValueError):
     """File exceeds `MAX_ATTACHMENT_BYTES`."""
 
 
+def _format_attachment_mb(num_bytes: int) -> str:
+    """`num_bytes` -> `"<N[.d]> MB"`, base 1024*1024 (MiB) -- matches how
+    `MAX_ATTACHMENT_BYTES` is defined above (`10 * 1024 * 1024`), so the
+    printed limit always equals the configured one exactly (a 1000*1000
+    conversion would print "10.5 MB" for a 10 MiB cap — wrong). Rounds to
+    one decimal place, then drops a trailing ".0" so a round number reads
+    naturally ("10 MB", not "10.0 MB") — the SAME rule for both the actual
+    file size and the limit, so the two numbers in the "too large" message
+    can never look formatted differently."""
+    mb = num_bytes / (1024 * 1024)
+    text = f"{mb:.1f}"
+    if text.endswith(".0"):
+        text = text[:-2]
+    return f"{text} MB"
+
+
+def too_large_message(actual_bytes: int) -> str:
+    """Thai copy (jakkaritw-approved wording) for a file over
+    `MAX_ATTACHMENT_BYTES` — shared by BOTH size checks on the upload path
+    (the router's fast Content-Length pre-check and this module's own
+    byte-accurate backstop below) so the two can never disagree in
+    wording (bug 4, 2026-08-07/08: the old text was English and printed a
+    raw ten-digit byte count)."""
+    return f"ไฟล์ใหญ่เกินกำหนด ({_format_attachment_mb(actual_bytes)}) — อัปโหลดได้ไม่เกิน {_format_attachment_mb(MAX_ATTACHMENT_BYTES)}"
+
+
 class AttachmentTransportError(RuntimeError):
     """A Graph call failed for a reason other than the folder being missing
     (auth, network, unexpected status) — always surfaced loudly, never
@@ -163,7 +189,7 @@ def validate_upload(filename: str, size: int) -> str:
             f"file type '.{ext}' is not allowed — allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
         )
     if size > MAX_ATTACHMENT_BYTES:
-        raise FileTooLargeError(f"file is {size} bytes — the limit is {MAX_ATTACHMENT_BYTES} bytes (10 MB)")
+        raise FileTooLargeError(too_large_message(size))
     return safe_filename
 
 
