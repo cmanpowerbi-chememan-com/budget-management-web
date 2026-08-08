@@ -62,17 +62,28 @@ PENDING_STATUSES: frozenset[str] = frozenset(_STATUS_TO_POSITION)
 # read-side grid lock (`read_model.merge_budget_rows`'s `row.editable`,
 # ADR-0013 read-only lock UI parity, 2026-08-05).
 #
-# NOT shared: which STATUSES count as locked can never drift (this constant),
-# but WHICH DEPARTMENT a cost_center resolves to still can — the write path
-# always resolves it live from `dbo.cc_filler_map` (`_lookup_cc_dims`), while
-# the read path prefers the SNAPSHOT stored on the row
-# (`pending.department`/`board.department`, written at save time) and only
-# falls back to a live `cc_dims` lookup when that snapshot is absent. After a
-# CC->ฝ่าย remap in `dbo.cc_filler_map`, an old row's snapshot still names the
-# OLD department, so the two paths can disagree about which department a row
-# belongs to (in either direction) until that row is re-saved. This is a
-# known residual gap (gate finding 2026-08-05, D2) — reconciling snapshot-vs-
-# live resolution needs a product decision (jakkaritw), not fixed here.
+# WHICH DEPARTMENT a cost_center resolves to is now ALSO shared in priority
+# (gate finding 2026-08-05 D2, fixed 2026-08-07 per jakkaritw's decision —
+# option A, fix both consumers): the write path always resolves it live from
+# `dbo.cc_filler_map` (`_lookup_cc_dims`); the read path's
+# `read_model.merge_budget_rows` now resolves it the SAME way, live-first,
+# via `read_model._resolve_live_department` — the SNAPSHOT stored on the row
+# (`pending.department`/`board.department`, written at save time) is only a
+# fallback for a cost_center the live master has nothing to say about
+# (absent from `dbo.cc_filler_map` entirely, or `cc_dims` not fetched at
+# all). Before this fix the read path preferred the snapshot and only fell
+# back to a live lookup when it was absent, so a CC->ฝ่าย remap could make
+# the two paths disagree in either direction until the row was re-saved
+# (proven live against production 2026-08-07, CC 10IT012000) — jakkaritw
+# explicitly accepted the visible consequence that a remapped row now moves
+# to the new department's grid entirely ("ย้ายฝ่ายแล้วก็ควรย้ายทั้งตัว ไม่ใช่
+# ครึ่งตัว"). One theoretical edge remains, unchanged from the write path's
+# own accepted policy: a cost_center removed ENTIRELY from `dbo.cc_filler_map`
+# (not merely remapped) still fails open on write (`department=None`), but the
+# read path would still fall back to a stale snapshot for that same row if
+# one exists — `write_model._ensure_department_not_locked`'s own docstring
+# already notes this cannot currently be reached by a non-admin, since their
+# Fill scope is itself derived from `dbo.cc_filler_map`.
 LOCKED_APPROVAL_STATUSES: frozenset[str] = PENDING_STATUSES | {APPROVED}
 
 # Append-only action log values this module writes.

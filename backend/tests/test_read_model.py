@@ -435,6 +435,111 @@ def test_locked_departments_none_is_identical_to_today_regression_guard():
     assert rows[0].editable is True
 
 
+# ---------------------------------------------------------------------------
+# merge_budget_rows — live department resolution (gate finding D2 fix,
+# 2026-08-07): both consumers (department filter grouping + the lock
+# decision) now resolve live `cc_dims` FIRST, matching
+# `write_model._ensure_department_not_locked`'s own live-only resolution —
+# a stale snapshot can no longer outrank the live master after a CC->ฝ่าย
+# remap. Reproduces both divergence directions proven live against
+# production on 2026-08-07 (CC 10IT012000 temporarily remapped).
+# ---------------------------------------------------------------------------
+
+def test_live_cc_dims_beats_stale_snapshot_direction_2_new_department_locked():
+    """Direction 2 (proven live 2026-08-07): the row's snapshot names
+    DEPT_OLD, the live master (`cc_dims`) says DEPT_NEW. DEPT_NEW is locked,
+    DEPT_OLD is not. Before this fix the read path resolved DEPT_OLD (the
+    snapshot) and stayed editable=True while a write would have been
+    REFUSED with `department_locked` — the classic late-error the ADR-0013
+    port exists to remove. Fixed: live cc_dims wins, editable is False."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT_OLD")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    cc_dims = {"CC1": {"department": "DEPT_NEW", "division": None, "c_level": None}}
+
+    rows = merge_budget_rows(join_rows, {}, scope, cc_dims=cc_dims, locked_departments=frozenset({"DEPT_NEW"}))
+
+    assert rows[0].editable is False
+
+
+def test_live_cc_dims_beats_stale_snapshot_direction_1_old_department_locked():
+    """Direction 1 (proven live 2026-08-07): same row/cc_dims as above, but
+    DEPT_OLD (the stale snapshot) is locked and DEPT_NEW (live) is not.
+    Before this fix the read path resolved DEPT_OLD and locked the screen
+    (editable=False) while `save_pending_rows` ACCEPTED the write — the UI
+    forbade what the API allowed. Fixed: live cc_dims wins, editable is
+    True."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT_OLD")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    cc_dims = {"CC1": {"department": "DEPT_NEW", "division": None, "c_level": None}}
+
+    rows = merge_budget_rows(join_rows, {}, scope, cc_dims=cc_dims, locked_departments=frozenset({"DEPT_OLD"}))
+
+    assert rows[0].editable is True
+
+
+def test_department_filter_groups_the_row_under_the_live_department_not_the_snapshot():
+    """jakkaritw's accepted consequence (2026-08-07): after a remap, the row
+    moves to the NEW department's grid entirely — "ย้ายฝ่ายแล้วก็ควรย้ายทั้งตัว
+    ไม่ใช่ครึ่งตัว"."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT_OLD")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    cc_dims = {"CC1": {"department": "DEPT_NEW", "division": None, "c_level": None}}
+
+    rows_under_new = merge_budget_rows(join_rows, {}, scope, cc_dims=cc_dims, department_filter="DEPT_NEW")
+    rows_under_old = merge_budget_rows(join_rows, {}, scope, cc_dims=cc_dims, department_filter="DEPT_OLD")
+
+    assert [r.cost_center for r in rows_under_new] == ["CC1"]
+    assert rows_under_old == []
+
+
+def test_cc_missing_from_cc_dims_falls_back_to_snapshot_unchanged_from_today():
+    """A cost_center absent from the live `cc_dims` dict (e.g. deleted from
+    `dbo.cc_filler_map`, or simply not looked up for this request) must fall
+    back to the row's own snapshot department — same result as before this
+    fix, for a CC the live master has nothing to say about."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    cc_dims = {"CC9": {"department": "SOME_OTHER_DEPT", "division": None, "c_level": None}}  # no entry for CC1
+
+    rows = merge_budget_rows(join_rows, {}, scope, cc_dims=cc_dims, locked_departments=frozenset({"DEPT1"}))
+
+    assert rows[0].editable is False
+
+
+def test_cc_dims_none_lock_resolution_identical_to_today_regression_guard():
+    """`cc_dims=None` (the caller never fetched it) must resolve the lock
+    decision exactly as before this fix — via the row's own snapshot."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, cc_dims=None, locked_departments=frozenset({"DEPT1"}))
+
+    assert rows[0].editable is False
+
+
+def test_department_filter_last_resort_fallback_still_works_for_sap_led_row():
+    """Regression guard (pre-existing behavior, unaffected by the D2
+    reorder): a SAP-led row (no board/pending snapshot) that survives the
+    `department_filter` narrowing purely via `cc_dims` still resolves the
+    SAME department for the lock decision — the trailing `or
+    department_filter` term in the lock's resolution chain stays a harmless
+    last resort, never contradicting a row that already matched the
+    filter."""
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    sap_actuals = {("CC1", "GL1"): {"m01": 100.0}}
+    cc_dims = {"CC1": {"department": "DEPT1", "division": None, "c_level": None}}
+
+    rows = merge_budget_rows(
+        [], sap_actuals, scope,
+        department_filter="DEPT1", cc_dims=cc_dims,
+        locked_departments=frozenset({"DEPT1"}),
+    )
+
+    assert len(rows) == 1
+    assert rows[0].pending.department is None  # no board/pending row -> no snapshot of its own
+    assert rows[0].editable is False
+
+
 def test_admin_view_enabled_bypasses_cc_restriction_and_is_editable_for_admin():
     join_rows = [
         _blank_join_row("CC1", "GL1", pending_cost_center="CC1"),

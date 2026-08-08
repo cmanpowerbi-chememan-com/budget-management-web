@@ -1,22 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-07T22:54:53+0700",
+  "updated": "2026-08-07T23:25:03+0700",
   "tasks": [
     {
-      "id": "log-9b4b2aa",
+      "id": "gate-d2-live-department-resolution",
       "state": "done",
-      "created": "2026-08-07T22:54:53+0700",
-      "updated": "2026-08-07T22:54:53+0700",
-      "agent": "autolog",
-      "ai": "test(sit): PDPA decision, traveller-PII evidence, and a zero baseline for UAT [commit 9b4b2aa]"
+      "created": "2026-08-07T23:22:28+0700",
+      "updated": "2026-08-07T23:22:44+0700",
+      "ai": "Fixed. New shared helper _resolve_live_department(cc,row,cc_dims) in backend/app/read_model.py: live cc_dims first, then pending.department, then board.department (lock decision also appends department_filter as harmless last resort). Both merge_budget_rows consumers (department_filter grouping + editable-lock) now call it -- can never disagree. cc_dims fetch condition in get_budget_grid left unchanged (verified sufficient, reasoning in plan.md). Docstrings corrected in read_model.py (merge_budget_rows, fetch_locked_departments) + approval.py (LOCKED_APPROVAL_STATUSES comment) -- no longer describe snapshot-first order, name the one remaining theoretical edge (CC deleted entirely from cc_filler_map, matches write path's own accepted fail-open policy). 6 new tests in test_read_model.py (2 actually went RED pre-fix reproducing both divergence directions proven live on prod 2026-08-07 w/ CC 10IT012000; 4 are regression guards that already passed). Backend 869 passed/48 deselected (was 863). Frontend vitest 590/590, next build clean. Write path untouched. Not committed, not deployed per instructions.",
+      "agent": "claude"
     },
     {
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
-      "updated": "2026-08-07T22:52:44+0700",
-      "ai": "[STALE TEST DATA PURGED 2026-08-07] jakkaritw approved after seeing the full row list. Every row was authored by jakkaritw@chememan.com on 2026-08-05 between 17:00 and 18:26 - i.e. predating today's SIT run, whose own writes had already been cleaned and verified. Deleted child-first with one commit: budget.pending_budget_detail 11 rows, budget.budget_trip 1 row (trip_id 32 on 10IT011300 FY2027, purpose 'test'), budget.pending_budget 11 rows (10 on 10IT011300 + 1 on 10AC020000, all FY2027). Full-column snapshot with IDENTITY_INSERT saved to plan/sit/restore_stale_testdata_2026-08-07.sql. VERIFIED AFTER: pending_budget 0, pending_budget_detail 0, budget_trip 0, approval_status 0, approval_log 0 - every transactional table in the budget schema is now EMPTY system-wide. Consequence for UAT on 17 Aug: testers start from a genuine zero, no fake numbers mixed into their work, and the UAT opening control total is 0 across every table, which makes the closing reconcile trivially checkable - any row found afterwards belongs to a tester. Recorded in run log section 23."
+      "updated": "2026-08-07T23:00:09+0700",
+      "ai": "[ITEM 13 SCHEDULED for Mon 2026-08-10] jakkaritw: use นิภาพร's cookie ALONE - wave 0 measured her personal See scope as byte-identical to วราพร's (7 CC / 5 departments), so one identity settles it. Prepared: .gitignore widened to setup/_auth_cookie*.tmp.txt (verified ignored), target file setup/_auth_cookie_nipaporn.tmp.txt, safest capture is her logging in on the tester's machine so no credential is transmitted. Test procedure recorded in run log section 24 and it is READ-ONLY for her identity: (1) GET her scope, (2) the tester's OWN service principal inserts the approval_status row that locks one of her fill departments - never her identity, so approval_log/_user never falsely says she acted, (3) GET grid with admin_view_enabled=false -> the locked department's rows must be editable=false, (4) GET with admin_view_enabled=true -> same rows editable=true, (5) service principal deletes the lock row and verifies 0. Delete the cookie file and have her log out immediately afterwards. Commits today: 48ebacb (consolidated plan + run, old plans deleted), 9b4b2aa (PDPA decision + zero baseline), bbb1bae (cookie-file gitignore + Monday plan). TALLY 15/16."
     },
     {
       "id": "sit-plan-authoring",
@@ -101,8 +101,8 @@
       "id": "adr0013-readonly-lock-port",
       "state": "done",
       "created": "2026-08-05T11:00:51+0700",
-      "updated": "2026-08-05T11:35:47+0700",
-      "ai": "GATE fix pass (06+07+08 combined, APPROVE-WITH-SUGGESTIONS, security PASS 8/8) applied same day: (1) dropped dead PENDING_STATUSES import write_model.py; (2) corrected overclaimed can-never-drift-apart docstrings in approval.py/read_model.py/plan.md -> only the status SET is shared, dept resolution still snapshot(read) vs live(write), flagged D2 for jakkaritw; (3) BudgetGrid.test.tsx +4 tests closing zero-coverage on readOnly wiring line, RED-first confirmed by inverting; (4) closed gate D1 - get_budget_grid now fetches cc_dims when locked_departments non-empty even without department_filter (was fail-open bug for SAP-led rows on plain grid load), RED-first confirmed, +2 tests; (5) added fetch_locked_departments query-shape test (was fully monkeypatched/unverified), +3 tests; optional admin_wide skip applied +1 test. Backend 863 passed/48 deselected (was 857). Frontend 585 passed/33 files (was 581). next build clean, oxlint clean, checks.sh clean. Explicitly NOT touched: D2 resolution order itself (needs jakkaritw), flaky BudgetGrid.test.tsx:261/279 toHaveBeenCalledTimes(1) (pre-existing, separate ticket), traveller-PII question. Still not committed.",
+      "updated": "2026-08-07T23:25:02+0700",
+      "ai": "[CROSS-SESSION UPDATE gate-d2-live-department-resolution 2026-08-07] D2 is now CLOSED - see task gate-d2-live-department-resolution. jakkaritw decided option A (fix both read-path consumers). read_model.merge_budget_rows now resolves department live-first via new _resolve_live_department(cc,row,cc_dims) helper (cc_dims -> pending.department -> board.department, matching write_model._lookup_cc_dims exactly), used by both the department_filter grouping and the editable-lock decision. Docstrings in read_model.py/approval.py corrected accordingly. Backend 869 passed (was 863, +6). Original entry preserved below.\n\nGATE fix pass (06+07+08 combined, APPROVE-WITH-SUGGESTIONS, security PASS 8/8) applied same day: (1) dropped dead PENDING_STATUSES import write_model.py; (2) corrected overclaimed can-never-drift-apart docstrings in approval.py/read_model.py/plan.md -> only the status SET is shared, dept resolution still snapshot(read) vs live(write), flagged D2 for jakkaritw; (3) BudgetGrid.test.tsx +4 tests closing zero-coverage on readOnly wiring line, RED-first confirmed by inverting; (4) closed gate D1 - get_budget_grid now fetches cc_dims when locked_departments non-empty even without department_filter (was fail-open bug for SAP-led rows on plain grid load), RED-first confirmed, +2 tests; (5) added fetch_locked_departments query-shape test (was fully monkeypatched/unverified), +3 tests; optional admin_wide skip applied +1 test. Backend 863 passed/48 deselected (was 857). Frontend 585 passed/33 files (was 581). next build clean, oxlint clean, checks.sh clean. Explicitly NOT touched (AT THE TIME): D2 resolution order itself (needs jakkaritw), flaky BudgetGrid.test.tsx:261/279 toHaveBeenCalledTimes(1) (pre-existing, separate ticket), traveller-PII question. Still not committed.",
       "agent": "claude"
     },
     {

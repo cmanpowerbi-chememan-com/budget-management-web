@@ -143,15 +143,16 @@ def fetch_locked_departments(conn: pyodbc.Connection, fiscal_year: int) -> froze
     2026-08-05) — the read-side counterpart of
     `write_model._ensure_department_not_locked`, sharing the SAME
     `app.approval.LOCKED_APPROVAL_STATUSES` set so the two paths can never
-    disagree about WHICH STATUSES are locked. They can still disagree about
-    WHICH DEPARTMENT a given cost_center resolves to (write resolves it live
-    from `dbo.cc_filler_map`; the read side calling `merge_budget_rows`
-    prefers the department SNAPSHOT stored on the row and only falls back to
-    a live lookup when that snapshot is absent) — see the longer note beside
-    `app.approval.LOCKED_APPROVAL_STATUSES` (known residual, gate finding
-    2026-08-05 D2, not fixed here). One query per grid request (not per
-    row) — `get_budget_grid` calls this once and `merge_budget_rows`
-    consults the returned set per row, in memory."""
+    disagree about WHICH STATUSES are locked. WHICH DEPARTMENT a given
+    cost_center resolves to is now ALSO shared (gate finding D2, fixed
+    2026-08-07): both paths resolve it live from `dbo.cc_filler_map` first —
+    the read side via `merge_budget_rows`'s `_resolve_live_department`
+    helper, only falling back to the row's own snapshot for a cost_center
+    `cc_dims` has nothing to say about (see the longer note beside
+    `app.approval.LOCKED_APPROVAL_STATUSES` for the one remaining
+    theoretical edge). One query per grid request (not per row) —
+    `get_budget_grid` calls this once and `merge_budget_rows` consults the
+    returned set per row, in memory."""
     placeholders = ", ".join("?" for _ in LOCKED_APPROVAL_STATUSES)
     cursor = conn.cursor()
     try:
@@ -345,6 +346,24 @@ def _pending_layer(jr: dict) -> PendingLayer:
     )
 
 
+def _resolve_live_department(
+    cc: str, row: BudgetRow, cc_dims: dict[str, dict[str, str | None]] | None
+) -> str | None:
+    """ONE resolution order shared by BOTH `merge_budget_rows` consumers —
+    the department-filter grouping and the editable-lock decision (D2 fix,
+    2026-08-07) — so they can never disagree with each other, and so the
+    read path can never disagree with the write path
+    (`write_model._ensure_department_not_locked`, which resolves live from
+    `dbo.cc_filler_map` and nothing else).
+
+    Live `cc_dims` first (matches the write path), then the row's own
+    `pending`/`board` snapshot as a fallback ONLY for a cost_center `cc_dims`
+    has nothing to say about (absent entirely, or `cc_dims=None` because the
+    caller never fetched it) — never the other way around, so a stale
+    snapshot can no longer outrank the live master after a CC->ฝ่าย remap."""
+    return (cc_dims and cc_dims.get(cc, {}).get("department")) or row.pending.department or row.board.department
+
+
 def merge_budget_rows(
     join_rows: list[dict],
     sap_actuals: dict[tuple[str, str], dict[str, float]],
@@ -362,12 +381,16 @@ def merge_budget_rows(
     visible/editable row list. No I/O (aside from the optional pre-fetched
     `cc_dims` dict, itself I/O-free here) — fully unit-testable.
 
-    `cc_dims` (D10 fix): a SAP-led row (no board/pending layer) has no
-    department of its own — when `department_filter` is applied, fall back
-    to `cc_dims[cost_center]["department"]` (from `dbo.cc_filler_map`, fetched
-    by the caller via `fetch_cc_dims`) instead of silently dropping the row.
-    `None` (the default) preserves the old behavior for callers that don't
-    need the department filter at all.
+    `cc_dims` (D10 fix, reordered D2 fix 2026-08-07 — see
+    `_resolve_live_department`): the LIVE `cost_center -> department` lookup
+    (from `dbo.cc_filler_map`, fetched by the caller via `fetch_cc_dims`),
+    now consulted FIRST — ahead of the row's own `pending`/`board` snapshot —
+    for both the `department_filter` grouping and the editable-lock decision
+    below. Originally added only to stop a SAP-led row (no board/pending
+    layer, so no department of its own) from being silently dropped by
+    `department_filter`; still serves that role as the sole source for such
+    a row. `None` (the default) preserves the old behavior for callers that
+    don't need the department filter at all.
 
     RLS (ADR-0019, honoring A3's `admin_view_enabled` hook): a non-admin (or
     an admin with the toggle off) only sees rows whose cost_center is in their
@@ -415,24 +438,45 @@ def merge_budget_rows(
     visibility is deliberately untouched).
 
     `locked_departments` (ADR-0013 read-only lock, UI parity port with
-    `write_model._ensure_department_not_locked`, 2026-08-05): departments
-    whose `(department, fiscal_year)` approval record is mid-chain
-    (PENDING_APPROVER1/2/3) or fully signed off (APPROVED) — a Fill-scope
-    cost_center in one of these departments is no longer `editable`, because
-    a write there would be rejected by that same write-side gate; opening the
-    special-GL subform on such a row now opens READ-ONLY instead of failing
-    late on save. Resolved per row: `row.pending.department`, falling back to
-    `row.board.department`, then `cc_dims[cost_center]["department"]` (when
-    supplied), then `department_filter` itself — legitimate as a last resort
-    because the `department_filter is not None` block above already dropped
-    every row that does not belong to that department, so any row reaching
-    this point necessarily belongs to it. An unresolvable department (all
-    four sources `None`) stays fail-OPEN (editable), mirroring
-    `_ensure_department_not_locked`'s own documented policy for a department
-    that resolves to `None`. `admin_wide` always bypasses this check (ADR-0012
-    — admin edits any Pending freely, including a locked department). `None`
-    (the default) preserves old behavior for callers that don't pass it
-    (e.g. existing tests) — identical to today.
+    `write_model._ensure_department_not_locked`, 2026-08-05; department
+    RESOLUTION fixed to match the write path, gate finding D2, 2026-08-07):
+    departments whose `(department, fiscal_year)` approval record is
+    mid-chain (PENDING_APPROVER1/2/3) or fully signed off (APPROVED) — a
+    Fill-scope cost_center in one of these departments is no longer
+    `editable`, because a write there would be rejected by that same
+    write-side gate; opening the special-GL subform on such a row now opens
+    READ-ONLY instead of failing late on save. Resolved per row via
+    `_resolve_live_department` (live `cc_dims` first, then
+    `row.pending.department`, then `row.board.department`), falling back to
+    `department_filter` itself only when none of those three resolve —
+    harmless as a last resort because the `department_filter is not None`
+    block above already dropped every row that does not belong to that
+    department via the SAME live-first chain, so any row reaching this point
+    necessarily already resolved (or was never filtered at all). An
+    unresolvable department (all sources `None`) stays fail-OPEN (editable),
+    mirroring `_ensure_department_not_locked`'s own documented policy for a
+    department that resolves to `None`. `admin_wide` always bypasses this
+    check (ADR-0012 — admin edits any Pending freely, including a locked
+    department). `None` (the default) preserves old behavior for callers
+    that don't pass it (e.g. existing tests) — identical to today.
+
+    D2 fix (2026-08-07): before this fix, the read path preferred the row's
+    SNAPSHOT department (`pending.department`/`board.department`) and only
+    fell back to live `cc_dims` when that snapshot was absent — so after a
+    CC->ฝ่าย remap, a stale snapshot could outrank the live master and the
+    read path would disagree with the write path in either direction (proven
+    live against production 2026-08-07, CC 10IT012000). Both `merge_budget_rows`
+    consumers now resolve live-first via the shared `_resolve_live_department`
+    helper, matching the write path's own live-only resolution exactly. What
+    still, in principle, differs: the write path has NO snapshot concept at
+    all — a cost_center entirely REMOVED from `dbo.cc_filler_map` (not merely
+    remapped) resolves `department=None` there and stays fail-OPEN, whereas
+    the read path would still fall back to a stale snapshot for that same row
+    if one exists, which could resolve to a locked department. `write_model`'s
+    own docstring already notes this cannot currently be reached by a
+    non-admin (their Fill scope is itself derived from `dbo.cc_filler_map`,
+    so any cost_center they may address already has a department row there)
+    — not fixed further here, same accepted edge as the write path's.
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
@@ -486,17 +530,10 @@ def merge_budget_rows(
         if cost_center_filter is not None and cc != cost_center_filter:
             continue
         if department_filter is not None:
-            dept = row.pending.department or row.board.department
-            if dept is None and cc_dims is not None:
-                dept = cc_dims.get(cc, {}).get("department")
+            dept = _resolve_live_department(cc, row, cc_dims)
             if dept != department_filter:
                 continue
-        row_dept = (
-            row.pending.department
-            or row.board.department
-            or (cc_dims and cc_dims.get(cc, {}).get("department"))
-            or department_filter
-        )
+        row_dept = _resolve_live_department(cc, row, cc_dims) or department_filter
         row_locked = bool(locked_departments) and row_dept in locked_departments
         row.editable = admin_wide or (cc in fill_ccs and not row_locked)
         result.append(row)
