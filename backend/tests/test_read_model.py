@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.approval import LOCKED_APPROVAL_STATUSES
+from app.deadline import YEAR_NOT_OPEN, YEAR_OPEN
 from app.read_model import (
     JOIN_ROW_COLUMNS,
     fetch_board_pending_rows,
@@ -64,6 +65,17 @@ def _default_sap_coverage(monkeypatch):
     exactly what they were written for; the ADR-0026 tests below override this
     with their own coverage."""
     monkeypatch.setattr("app.read_model.resolve_sap_coverage_cached", lambda conn, fiscal_year: _coverage(fiscal_year))
+
+
+@pytest.fixture(autouse=True)
+def _default_year_open(monkeypatch):
+    """2026-08-08 3-state extension: `get_budget_grid` resolves
+    `fiscal_year_state` from the (mocked) fabric connection, which would
+    raise (comparing a real date against a MagicMock) against an
+    unconfigured MagicMock. Default every test in this module to OPEN — the
+    pre-existing wiring/RLS tests keep asserting exactly what they were
+    written for; the NOT_OPEN-specific tests below override this."""
+    monkeypatch.setattr("app.read_model.fiscal_year_state", lambda conn, fiscal_year: YEAR_OPEN)
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +409,46 @@ def test_admin_wide_bypasses_the_department_lock():
     rows = merge_budget_rows(
         join_rows, {}, scope, admin_view_enabled=True, locked_departments=frozenset({"DEPT1"})
     )
+
+    assert rows[0].editable is True
+
+
+# ---------------------------------------------------------------------------
+# merge_budget_rows — 2026-08-08 3-state extension (`year_not_open`): a
+# fiscal_year with no `dbo.submission_deadline` row at all is NOT_OPEN, so a
+# Fill-scope cost_center in it is no longer editable — same write-side gate
+# `write_model._ensure_year_open_for_write` would refuse, ported to the read
+# side so the special-GL subform opens READ-ONLY instead of failing late.
+# ---------------------------------------------------------------------------
+
+def test_year_not_open_makes_fill_cc_not_editable():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, year_not_open=True)
+
+    assert rows[0].editable is False
+
+
+def test_year_open_leaves_fill_cc_editable_unchanged():
+    """`year_not_open=False` (the default) preserves old behavior exactly —
+    regression guard so the new parameter can never accidentally narrow the
+    OPEN case."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, year_not_open=False)
+
+    assert rows[0].editable is True
+
+
+def test_admin_wide_bypasses_year_not_open():
+    """ADR-0012 (extended 2026-08-08): admin-wide always edits, even a
+    fiscal_year nobody configured a deadline for."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(join_rows, {}, scope, admin_view_enabled=True, year_not_open=True)
 
     assert rows[0].editable is True
 
@@ -1364,6 +1416,64 @@ def test_get_budget_grid_admin_wide_skips_the_locked_departments_fetch(monkeypat
     monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
     monkeypatch.setattr("app.read_model.fetch_locked_departments", fake_fetch_locked_departments)
+
+    admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, admin_view_enabled=True)
+
+    assert calls["n"] == 0
+
+
+# ---------------------------------------------------------------------------
+# get_budget_grid — 2026-08-08 3-state extension (year_not_open), mirroring
+# the locked_departments wiring tests just above.
+# ---------------------------------------------------------------------------
+
+def test_get_budget_grid_fetches_year_state_for_the_planning_year(monkeypatch):
+    captured = {}
+
+    def fake_fiscal_year_state(conn, fiscal_year):
+        captured["fiscal_year"] = fiscal_year
+        return YEAR_OPEN
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
+    monkeypatch.setattr("app.read_model.fiscal_year_state", fake_fiscal_year_state)
+
+    get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+
+    assert captured["fiscal_year"] == 2027  # the PENDING year, not board_year
+
+
+def test_get_budget_grid_not_open_year_ends_up_not_editable_end_to_end(monkeypatch):
+    """End-to-end: get_budget_grid actually applies the fetched year state,
+    not just calls the fetch function."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
+    monkeypatch.setattr("app.read_model.fiscal_year_state", lambda conn, fiscal_year: YEAR_NOT_OPEN)
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    rows = get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=scope)
+
+    assert rows[0].editable is False
+
+
+def test_get_budget_grid_admin_wide_skips_the_year_state_fetch(monkeypatch):
+    """Same 'never consulted' perf reasoning as the locked_departments skip
+    above: admin_wide bypasses `year_not_open` unconditionally inside
+    `merge_budget_rows`, so skip the query entirely for that caller."""
+    calls = {"n": 0}
+
+    def fake_fiscal_year_state(conn, fiscal_year):
+        calls["n"] += 1
+        return YEAR_NOT_OPEN
+
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
+    monkeypatch.setattr("app.read_model.fiscal_year_state", fake_fiscal_year_state)
 
     admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, admin_view_enabled=True)

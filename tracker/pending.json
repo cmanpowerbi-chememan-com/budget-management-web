@@ -1,15 +1,15 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-08T18:33:07+0700",
+  "updated": "2026-08-08T22:03:24+0700",
   "tasks": [
     {
-      "id": "log-63ae83e",
+      "id": "fiscal-year-3state",
       "state": "done",
-      "created": "2026-08-08T18:33:07+0700",
-      "updated": "2026-08-08T18:33:07+0700",
-      "agent": "autolog",
-      "ai": "fix(approval): refuse submitting a department that has no budget rows [commit 63ae83e]"
+      "created": "2026-08-08T22:03:09+0700",
+      "updated": "2026-08-08T22:03:24+0700",
+      "ai": "Backend: app/deadline.py fiscal_year_state()+YearNotOpenError; write_model._ensure_year_open_for_write (renamed, 6 call sites); approval._submit_normal_chain now checks year state; read_model.merge_budget_rows/get_budget_grid gained year_not_open; routers/approval.py locked-departments gained year_not_open field. Frontend: types.ts/model.ts/AddTransactionForm.tsx/BudgetGrid.tsx threaded yearNotOpen through the existing lock-awareness feature. Tests: backend 899 passed (was 887, +12), frontend vitest 612 passed (was 606, +6), next build clean. plan.md updated. NOT committed, NOT deployed per task instructions. Fillable years on prod the moment this ships (table has only FY2027 row): 2027=OPEN, everything else NOT_OPEN=admin-only.",
+      "agent": "claude"
     },
     {
       "id": "submit-empty-department-guard",
@@ -18,14 +18,6 @@
       "updated": "2026-08-08T18:29:09+0700",
       "ai": "backend/app/approval.py: new DepartmentEmptyError (400/department_empty) + _department_has_pending_rows (live-CC scoped, snapshot fallback when orphan) + guard at top of submit_department, before filler/admin branch split. Backend +6 tests (874->880 passing, 48 deselected). Frontend: verified describeApiError's existing non-409 fallback already surfaces the Thai detail -- 0 production frontend code changed, +1 regression test (605->606 passing). next build clean. Not committed per instructions.",
       "agent": "claude"
-    },
-    {
-      "id": "log-1101989",
-      "state": "done",
-      "created": "2026-08-08T17:29:52+0700",
-      "updated": "2026-08-08T17:29:52+0700",
-      "agent": "autolog",
-      "ai": "fix(grid): make \"+ เพิ่ม Transaction\" lock-aware instead of failing on save [commit 1101989]"
     },
     {
       "id": "addtxn-lock-awareness",
@@ -47,8 +39,8 @@
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
-      "updated": "2026-08-08T11:36:55+0700",
-      "ai": "[BUG 2 FIXED 2026-08-08, uncommitted] '+ เพิ่ม Transaction' is now lock-aware, option ข per jakkaritw (control stays visible, disabled with a Thai reason when every fill CC is locked; per-CC rejection with the department name when only some are locked - the multi-department filler keeps working). Source of truth = NEW GET /approval/locked-departments wrapping read_model.fetch_locked_departments scoped to the caller's fill_cost_centers => cannot drift from the grid's own editable rule, no leakage beyond /scope/departments. Also fixed BudgetGrid.tsx handleAddTransaction hardcoded editable:true -> derived via isCostCenterLocked. Verified INDEPENDENTLY in main session: backend 874 passed (was 869, +5 endpoint tests), frontend 605 passed (was 590, +15). Subagent also ran 8/8 headless Playwright scenarios vs the real static export. jakkaritw also asked + was answered: APPROVED depts block new transactions too (LOCKED = PENDING_1/2/3 + APPROVED, open = DRAFT + REJECTED, admin bypasses per ADR-0012). D2 fix committed earlier as f71fc15. NEXT after compact: commit bug-2 fix, then bug 3 (submit with 0 rows guard), bug 4 (413 Thai message), bug 5 ('(ไม่พบชื่อ)' fallback in the step-override mail)."
+      "updated": "2026-08-08T20:36:50+0700",
+      "ai": "[PER-DIEM ZERO-RATE: SKIPPED IN CODE 2026-08-08] jakkaritw: 'skip, admin revise at src excel' - it is a source-data gap, not a code defect. Admin edits ค่าเบี้ยเลี้ยง.xlsx (SharePoint > Budgeting and Management) and the normal sync carries it into dbo.per_diem_rate. Reference figures recorded in plan/sit/sit-test-plan.md for whoever fills the rates: 190 employees get 0 in all three columns (Operator 1 = 93, Operator 2 = 55, Operator 3 = 29, Driver 7, Maid 5, Department Head 1); 28 get 0 only on the domestic column while asian/other are populated (VP MGR 12, Assistant VP MGR 11, C-Level 3, CEO 2); 2 employees on job level 'N/A' have NO rate row at all. STILL UNDECIDED and flagged in the plan: those last 2 do NOT get a 0 - their trip save FAILS with MissingPerDiemRateError, and that failure mode returns for every future job level absent from the file. Filling the Excel fixes today's instance but not the class; making the app degrade with a Thai message that names the fix would need a separate decision from jakkaritw. Not raised as a blocker."
     },
     {
       "id": "sit-plan-authoring",

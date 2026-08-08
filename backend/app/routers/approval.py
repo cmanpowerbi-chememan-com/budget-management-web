@@ -32,6 +32,7 @@ from app.approval import (
 from app.auth import get_current_user_email
 from app.config import get_settings
 from app.db import get_fabric_conn
+from app.deadline import YEAR_NOT_OPEN, fiscal_year_state
 from app.read_model import fetch_locked_departments
 from app.reference_data import fetch_departments
 from app.rls import resolve_scope
@@ -177,9 +178,18 @@ class LockedDepartmentsResponse(BaseModel):
     endpoint can never grow a second, drifting definition of "locked".
     Scoped to `scope.fill_cost_centers` only (never all-company): a caller
     only ever learns about departments they could already see via
-    `GET /scope/departments`, so this adds no new leakage."""
+    `GET /scope/departments`, so this adds no new leakage.
+
+    `year_not_open` (2026-08-08 3-state extension): `True` when `fiscal_year`
+    has no `dbo.submission_deadline` row at all (see `app.deadline`'s module
+    docstring) AND the caller is not admin — a year-wide signal, not
+    per-department, from the SAME `app.deadline.fiscal_year_state` the write
+    path and A6's submit gate consult, so this control can never offer to
+    add a row into a year the server would then 403. Always `False` for an
+    admin caller (admin may always add)."""
 
     departments: list[str]
+    year_not_open: bool = False
 
 
 def _run(action: Callable[[], _T]) -> _T:
@@ -274,17 +284,24 @@ def locked_departments(fiscal_year: int = Query(...), email: str = Depends(get_c
     their own Fill cost centers belongs to (`GET /scope/departments`) — this
     only adds whether that department is currently locked, so the Add form
     can reject a locked pick with a reason before ever calling
-    `PUT /budget/rows` (the late-403 UX ADR-0013 exists to eliminate)."""
+    `PUT /budget/rows` (the late-403 UX ADR-0013 exists to eliminate).
+
+    `year_not_open` (2026-08-08 3-state extension): a year-wide sibling of
+    the per-department `locked` set — `fiscal_year` has no
+    `dbo.submission_deadline` row at all, so EVERY department (not just the
+    ones already mid-approval) is closed to a non-admin add. Always `False`
+    for admin (admin may always add — same bypass as the write path)."""
 
     def _action():
         with get_fabric_conn() as conn:
             scope = resolve_scope(email, conn)
+            year_not_open = not scope.is_admin and fiscal_year_state(conn, fiscal_year) == YEAR_NOT_OPEN
             if not scope.fill_cost_centers:
-                return LockedDepartmentsResponse(departments=[])
+                return LockedDepartmentsResponse(departments=[], year_not_open=year_not_open)
             dept_rows = fetch_departments(conn, scope.fill_cost_centers)
             own_departments = {row["department"] for row in dept_rows if row["department"]}
             locked = fetch_locked_departments(conn, fiscal_year)
-            return LockedDepartmentsResponse(departments=sorted(own_departments & locked))
+            return LockedDepartmentsResponse(departments=sorted(own_departments & locked), year_not_open=year_not_open)
 
     return _run(_action)
 

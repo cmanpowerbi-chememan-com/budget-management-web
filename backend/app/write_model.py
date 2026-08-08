@@ -42,9 +42,13 @@ Design (see final report for the full rationale):
   (403 forbidden, 400 validation-after-parsing, 409 conflict). The two
   layers check different things: 422 = "not a well-formed request",
   4xx-from-here = "well-formed but violates a budget rule".
-- **Deadline lock:** every write entry point rejects non-admin writes to a
-  past-deadline `fiscal_year` via the shared check in `app/deadline.py`,
-  raising `past_deadline` (403).
+- **Fiscal-year-state lock (extended 2026-08-08):** every write entry point
+  rejects a non-admin write to a `fiscal_year` that is not OPEN, via the
+  shared `app.deadline.fiscal_year_state` — either NOT_OPEN (no
+  `dbo.submission_deadline` row configured at all, `year_not_open`, 403 — a
+  year nobody opened for web entry) or PAST_DEADLINE (a row exists and its
+  date has passed, `past_deadline`, 403, unchanged ADR-0012 semantics). The
+  two are deliberately distinct codes/messages, never collapsed into one.
 - **Department-approval lock (A10 gap close, ADR-0006/0008/0012/0013):** every
   write entry point also rejects non-admin writes to a `(department,
   fiscal_year)` that is mid-approval (`PENDING_APPROVER1/2/3`) or already
@@ -65,7 +69,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.approval import LOCKED_APPROVAL_STATUSES
 from app.config import Settings, get_settings
-from app.deadline import PastDeadlineError, is_post_deadline
+from app.deadline import YEAR_NOT_OPEN, YEAR_PAST_DEADLINE, PastDeadlineError, YearNotOpenError, fiscal_year_state
 from app.gl_access import normalize_edit_by
 from app.per_diem import MissingFxRateError, MissingPerDiemRateError, derive_per_diem
 from app.rls import Scope
@@ -234,6 +238,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "conflict": 409,
     "data_overflow": 400,
     "past_deadline": 403,
+    "year_not_open": 403,
     "department_locked": 403,
     "missing_per_diem_rate": 500,
     "missing_fx_rate": 500,
@@ -257,6 +262,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     RowConflictError: "conflict",
     DataOverflowError: "data_overflow",
     PastDeadlineError: "past_deadline",
+    YearNotOpenError: "year_not_open",
     DepartmentLockedError: "department_locked",
 }
 _CAUGHT_PER_ITEM = tuple(_ERROR_CODE_BY_EXCEPTION)  # never includes the per_diem fail-loud errors — those propagate
@@ -324,19 +330,32 @@ def _ensure_not_excluded(cost_center: str) -> None:
         raise ExcludedCostCenterError(f"{cost_center} is an excluded cost center — never valid for budget entry")
 
 
-def _ensure_not_post_deadline(conn: pyodbc.Connection, fiscal_year: int, scope: Scope) -> None:
-    """A5 gap close (flagged twice by the A6 gate, 2026-07-16): A6's Submit
-    enforces the submission deadline, but editing via /budget/rows|detail|trip
-    did not — a normal user could keep editing a closed fiscal_year forever.
-    ADR-0012: after the deadline the cycle is closed to normal users, only
-    admin may keep editing. Reuses `app.deadline.is_post_deadline` (the exact
-    same Bangkok-anchored, deadline-day-inclusive, missing-row-is-OPEN check
-    A6's `submit_department` already applies) so the two gates can never
-    silently disagree. Called as the LAST check before the first DB write in
-    each write path — reads (dims/GL/trip lookups) are unaffected."""
+def _ensure_year_open_for_write(conn: pyodbc.Connection, fiscal_year: int, scope: Scope) -> None:
+    """A5 gap close (flagged twice by the A6 gate, 2026-07-16), extended
+    2026-08-08 to the 3-state model: A6's Submit enforces the same rule, but
+    editing via /budget/rows|detail|trip did not — a normal user could keep
+    editing a fiscal_year the admin never opened, or one whose deadline had
+    already passed, forever. Reuses `app.deadline.fiscal_year_state` (the
+    ONE shared query — Bangkok-anchored, deadline-day-inclusive) so this gate
+    can never silently disagree with A6's `submit_department` or the
+    read-side editable lock (`read_model.merge_budget_rows`) about which
+    state a given fiscal_year is in.
+
+    NOT_OPEN (no `dbo.submission_deadline` row at all) and PAST_DEADLINE (a
+    row exists and its date has passed) raise DIFFERENT errors/codes —
+    `YearNotOpenError`/`year_not_open` vs `PastDeadlineError`/`past_deadline`
+    — a year nobody configured is not "past its deadline" and must not read
+    that way to the caller. Admin bypasses both entirely (ADR-0012 for
+    PAST_DEADLINE; NOT_OPEN follows the same "admin imports other years'
+    data" policy, 2026-08-08 jakkaritw decision). Called as the LAST check
+    before the first DB write in each write path — reads (dims/GL/trip
+    lookups) are unaffected."""
     if scope.is_admin:
         return
-    if is_post_deadline(conn, fiscal_year):
+    state = fiscal_year_state(conn, fiscal_year)
+    if state == YEAR_NOT_OPEN:
+        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ")
+    if state == YEAR_PAST_DEADLINE:
         raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
 
 
@@ -593,7 +612,7 @@ def _save_one_pending_row(
     now = _now()
 
     _ensure_department_not_locked(conn, row.cost_center, row.fiscal_year, scope, department=dims["department"])
-    _ensure_not_post_deadline(conn, row.fiscal_year, scope)
+    _ensure_year_open_for_write(conn, row.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -953,7 +972,7 @@ def _save_one_detail_line(
     meta_json_str = json.dumps(cleaned_meta, ensure_ascii=False) if cleaned_meta else None
 
     _ensure_department_not_locked(conn, line.cost_center, line.fiscal_year, scope, department=dims["department"])
-    _ensure_not_post_deadline(conn, line.fiscal_year, scope)
+    _ensure_year_open_for_write(conn, line.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1352,7 +1371,7 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
     # this point), so a blocked past-deadline/locked-department trip never
     # touches the DB.
     _ensure_department_not_locked(conn, trip.cost_center, trip.fiscal_year, scope)
-    _ensure_not_post_deadline(conn, trip.fiscal_year, scope)
+    _ensure_year_open_for_write(conn, trip.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1591,7 +1610,7 @@ def _delete_one_detail_line(
     _ensure_not_excluded(cost_center)
     _ensure_write_scope(cost_center, scope, conn)
     _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_not_post_deadline(conn, fiscal_year, scope)
+    _ensure_year_open_for_write(conn, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1659,7 +1678,7 @@ def _delete_one_trip(
     _ensure_not_excluded(cost_center)
     _ensure_write_scope(cost_center, scope, conn)
     _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_not_post_deadline(conn, fiscal_year, scope)
+    _ensure_year_open_for_write(conn, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1746,7 +1765,7 @@ def _delete_one_pending_row(
     _ensure_not_excluded(cost_center)
     _ensure_write_scope(cost_center, scope, conn)
     _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_not_post_deadline(conn, fiscal_year, scope)
+    _ensure_year_open_for_write(conn, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:

@@ -35,6 +35,7 @@ from app.approval import (
     NotFillerOfDepartmentError,
     PastDeadlineError,
     StepNotOverridableError,
+    YearNotOpenError,
     _active_positions,
     _bangkok_today,
     _current_step_started_at,
@@ -55,6 +56,15 @@ from app.rls import Scope
 
 DEPT = "Accounting"
 FY = 2027
+
+# 2026-08-08 3-state extension: `_submit_normal_chain` now checks
+# `_fiscal_year_state` (NOT_OPEN when no dbo.submission_deadline row exists
+# at all) BEFORE the pre-existing PAST_DEADLINE check — every "happy path"
+# fixture below that used to mock `None` (the old "no row = OPEN" policy)
+# for that position now needs a real, not-yet-passed deadline row instead,
+# or it would trip the new `YearNotOpenError` refusal. Same convention as
+# `test_write_model.py`'s own `_OPEN_DEADLINE`.
+_OPEN_DEADLINE = (date(2099, 1, 1),)
 
 
 def _scope(**overrides) -> Scope:
@@ -163,7 +173,7 @@ def test_submit_first_time_full_chain():
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline -> no deadline row configured
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN (row exists, not yet passed)
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
@@ -201,7 +211,7 @@ def test_submit_admin_filler_routes_normal_chain_admin_gl_rows_never_block_it():
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline -> no deadline row configured
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN (row exists, not yet passed)
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
@@ -222,7 +232,7 @@ def test_submit_non_admin_filler_routes_normal_chain_unaffected():
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline -> no deadline row configured
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN (row exists, not yet passed)
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
@@ -243,7 +253,7 @@ def test_submit_first_time_concurrent_insert_race_raises_conflict_not_raw_502():
     cursor.fetchone.side_effect = [
         None,             # _fetch_row -> no existing record (both racers see this)
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline -> no deadline row configured
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN (row exists, not yet passed)
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers
@@ -286,7 +296,7 @@ def test_submit_allowed_after_reject_resubmit_restarts_chain():
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
         (1,),             # _department_has_pending_rows -> still has rows
-        None,             # _is_post_deadline
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]
@@ -308,7 +318,7 @@ def test_resubmit_update_is_conditioned_on_status_rejected():
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]
@@ -333,7 +343,7 @@ def test_resubmit_concurrent_status_change_raises_conflict():
     cursor.fetchone.side_effect = [
         _status_row(status=REJECTED, reject_reason="fix numbers", rejected_by_empcode="200"),
         (1,),             # _department_has_pending_rows -> has rows
-        None,             # _is_post_deadline
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN
         ("999", "200"),   # resolve_submitter
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]
@@ -356,6 +366,46 @@ def test_submit_past_deadline_blocks_normal_user():
 
     with pytest.raises(PastDeadlineError):
         submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+
+def test_submit_year_not_open_blocks_normal_user():
+    """2026-08-08 product decision: a fiscal_year nobody may fill should not
+    be submittable by a filler either — same normal-chain gate as
+    PastDeadlineError above, but a DIFFERENT machine error/code (the two
+    must never collapse into one, distinct from `test_submit_past_deadline_
+    blocks_normal_user` above which pins a row that EXISTS and has passed)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row -> no existing record
+        (1,),   # _department_has_pending_rows -> has rows
+        None,   # _fiscal_year_state -> no dbo.submission_deadline row at all -> NOT_OPEN
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    with pytest.raises(YearNotOpenError):
+        submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+    conn.commit.assert_not_called()
+
+
+def test_submit_year_not_open_also_blocks_an_admin_who_fills_the_department():
+    """Same decision, admin-filler side: an admin who ALSO Fills this
+    department routes through the identical normal-chain gate (Nipaporn/
+    Waraporn's own dual role, ADR-0006) — the 3 admin-ONLY doors
+    (Template-2/orphan/post-deadline-override) are a separate branch, only
+    reachable when the caller does NOT Fill the department at all."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row -> no existing record
+        (1,),   # _department_has_pending_rows -> has rows
+        None,   # _fiscal_year_state -> NOT_OPEN
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    with pytest.raises(YearNotOpenError):
+        submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope(fill_cost_centers=["CC1"]))
+    conn.commit.assert_not_called()
 
 
 def test_submit_forbidden_for_non_filler_non_admin():
@@ -452,7 +502,7 @@ def test_admin_cannot_submit_normal_in_cycle_department_they_do_not_fill():
         None,             # _fetch_row
         (1,),             # _department_has_pending_rows -> has rows
         None,             # _department_has_admin_template_rows -> none
-        None,             # _is_post_deadline -> not passed
+        None,             # _is_post_deadline -> not passed (admin branch, unaffected by the 2026-08-08 change)
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # has real CCs -- not orphan
 
@@ -558,7 +608,7 @@ def test_nipaporn_dual_role_submits_her_own_department_uses_normal_chain_not_adm
     cursor.fetchone.side_effect = [
         None,                              # _fetch_row
         (1,),                              # _department_has_pending_rows -> has rows
-        None,                              # _is_post_deadline
+        _OPEN_DEADLINE,                    # _fiscal_year_state -> OPEN
         (NIPAPORN_EMPCODE, WARAPORN_EMPCODE),  # resolve_submitter(nipaporn) -> her manager is Waraporn
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]

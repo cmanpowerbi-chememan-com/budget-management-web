@@ -35,6 +35,7 @@ import pyodbc
 
 from app.approval import LOCKED_APPROVAL_STATUSES
 from app.config import Settings, get_settings
+from app.deadline import YEAR_NOT_OPEN, fiscal_year_state
 from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
 from app.rls import Scope
 from app.sap import MONTH_COLUMNS, fetch_sap_actuals_cached, resolve_sap_coverage_cached
@@ -376,6 +377,7 @@ def merge_budget_rows(
     master_gl_codes: frozenset[str] | None = None,
     visible_sap_months: frozenset[int] | None = None,
     locked_departments: frozenset[str] | None = None,
+    year_not_open: bool = False,
 ) -> list[BudgetRow]:
     """Pure merge: board+pending join rows + SAP dict + RLS scope -> the final
     visible/editable row list. No I/O (aside from the optional pre-fetched
@@ -477,6 +479,24 @@ def merge_budget_rows(
     non-admin (their Fill scope is itself derived from `dbo.cc_filler_map`,
     so any cost_center they may address already has a department row there)
     — not fixed further here, same accepted edge as the write path's.
+
+    `year_not_open` (2026-08-08 3-state extension, jakkaritw): `planning_year`
+    has NO `dbo.submission_deadline` row at all (see `app.deadline`'s module
+    docstring for the 3-state table) — a normal write to it would be
+    rejected by `write_model._ensure_year_open_for_write`'s SAME
+    `app.deadline.fiscal_year_state` check, so a Fill-scope cost_center in
+    that year is no longer `editable` here either; opening a special-GL
+    subform on such a row now opens READ-ONLY instead of failing late on
+    save (the exact late-403 pattern ADR-0013 exists to eliminate).
+    Deliberately scoped narrower than `locked_departments`: it does NOT
+    also cover PAST_DEADLINE (a row exists but its date has passed) — that
+    remains a pre-existing, separate gap between the read and write paths
+    (the read side has never modeled `is_post_deadline` at all), left
+    untouched here per the task's own scope; only the NOT_OPEN case was
+    asked for. Bypassed by `admin_wide` exactly like `locked_departments`
+    (admin edits any Pending freely, ADR-0012). `False` (the default)
+    preserves old behavior for callers that don't pass it (e.g. existing
+    tests) — identical to today.
     """
     admin_wide = scope.is_admin and admin_view_enabled
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
@@ -535,7 +555,7 @@ def merge_budget_rows(
                 continue
         row_dept = _resolve_live_department(cc, row, cc_dims) or department_filter
         row_locked = bool(locked_departments) and row_dept in locked_departments
-        row.editable = admin_wide or (cc in fill_ccs and not row_locked)
+        row.editable = admin_wide or (cc in fill_ccs and not row_locked and not year_not_open)
         result.append(row)
 
     return sorted(result, key=lambda r: (r.cost_center, r.gl_account))
@@ -583,7 +603,15 @@ def get_budget_grid(
     row (no board/pending layer) has no department of its own, and without
     `cc_dims` it resolves to an unresolvable (fail-OPEN) department even when
     its real department IS locked, silently re-opening the exact defect this
-    task exists to close for that row shape."""
+    task exists to close for that row shape.
+
+    3-state year model (2026-08-08, jakkaritw): fetches whether
+    `planning_year` is NOT_OPEN (no `dbo.submission_deadline` row at all)
+    via the SAME `app.deadline.fiscal_year_state` the write path's
+    `_ensure_year_open_for_write` and A6's `submit_department` consult — one
+    query, one source of truth, so this can never independently drift from
+    either of those. Skipped entirely for admin-wide, same "never consulted"
+    reasoning as `locked_departments` just above."""
     settings = settings or get_settings()
     board_year = planning_year - 1
     admin_wide = scope.is_admin and admin_view_enabled
@@ -607,6 +635,11 @@ def get_budget_grid(
     locked_departments: frozenset[str] = (
         frozenset() if admin_wide else fetch_locked_departments(fabric_conn, fiscal_year=planning_year)
     )
+
+    # 2026-08-08 3-state extension: skipped entirely for admin-wide (nothing
+    # would consult it — merge_budget_rows bypasses it unconditionally for
+    # admin_wide, same pattern as locked_departments above).
+    year_not_open = False if admin_wide else fiscal_year_state(fabric_conn, planning_year) == YEAR_NOT_OPEN
 
     # D10 + gate finding D1 (2026-08-05): fetch cc_dims when the department
     # filter is in use (D10's original reason) OR when something is actually
@@ -637,4 +670,5 @@ def get_budget_grid(
         master_gl_codes=master_gl_codes,
         visible_sap_months=frozenset(sap_coverage.visible_months),
         locked_departments=locked_departments,
+        year_not_open=year_not_open,
     )

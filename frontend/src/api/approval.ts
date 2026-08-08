@@ -64,7 +64,9 @@ export function fetchPendingForMe(fiscalYear: number): Promise<PendingForMeRespo
 
 /** `GET /approval/locked-departments` — "+ เพิ่ม Transaction" lock-awareness
  * (2026-08-08 bug fix): every one of the caller's OWN Fill-scope departments
- * that is currently mid-approval or APPROVED for `fiscalYear`. */
+ * that is currently mid-approval or APPROVED for `fiscalYear`, plus the
+ * year-wide `year_not_open` flag (2026-08-08 3-state extension) — `true`
+ * when `fiscalYear` has no configured submission deadline at all. */
 export function fetchLockedDepartments(fiscalYear: number): Promise<LockedDepartmentsResponse> {
   return apiFetch<LockedDepartmentsResponse>(`/approval/locked-departments?fiscal_year=${fiscalYear}`)
 }

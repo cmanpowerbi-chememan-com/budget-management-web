@@ -98,6 +98,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // (the live CC->department mapping already fetched for the ฝ่าย picker)
   // in `lockedCostCenters` below.
   const [lockedDepartments, setLockedDepartments] = useState<Set<string>>(new Set())
+  // 2026-08-08 3-state extension: `year` has no `dbo.submission_deadline` row
+  // at all — a YEAR-wide lock (every department, not just the ones already
+  // mid-approval), fetched from the SAME `GET /approval/locked-departments`
+  // call as `lockedDepartments` above (its `year_not_open` field) so this can
+  // never drift from what the server would actually refuse on write. Always
+  // `false` for admin (the endpoint itself reports `false` for an admin
+  // caller) and for admin-wide (skipped entirely below, same reasoning as
+  // `lockedDepartments`).
+  const [yearNotOpen, setYearNotOpen] = useState(false)
 
   // Pure admins (ADR-0014: no base actor role, so no toggle — always
   // admin-wide). Dual-role admins (is_admin AND some Fill/See scope, e.g.
@@ -187,13 +196,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   async function loadLockedDepartments() {
     if (hasNoScope || adminViewEnabled) {
       setLockedDepartments(new Set())
+      setYearNotOpen(false)
       return
     }
     try {
       const result = await fetchLockedDepartments(year)
       setLockedDepartments(new Set(result.departments))
+      setYearNotOpen(result.year_not_open)
     } catch {
       setLockedDepartments(new Set()) // fail-open — never blocks "+ เพิ่ม Transaction" on a fetch error
+      setYearNotOpen(false)
     }
   }
 
@@ -470,6 +482,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           existingRows={rows}
           onAdd={handleAddTransaction}
           lockedCostCenters={lockedCostCenters}
+          yearNotOpen={yearNotOpen}
         />
         {department && (
           <button type="button" className="btn btn-attach" onClick={() => setAttachmentsOpen(true)}>

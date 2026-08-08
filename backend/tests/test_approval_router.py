@@ -20,6 +20,7 @@ from app.approval import (
     StepNotOverridableError,
 )
 from app.auth import get_current_user_email
+from app.deadline import YEAR_NOT_OPEN
 from app.main import app
 
 DEPT = "Accounting"
@@ -579,7 +580,7 @@ def test_locked_departments_returns_only_the_callers_own_locked_departments(clie
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
-    assert response.json() == {"departments": ["Accounting"]}
+    assert response.json() == {"departments": ["Accounting"], "year_not_open": False}
 
 
 def test_locked_departments_no_fill_scope_returns_empty_and_skips_the_extra_queries(client):
@@ -595,7 +596,7 @@ def test_locked_departments_no_fill_scope_returns_empty_and_skips_the_extra_quer
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
-    assert response.json() == {"departments": []}
+    assert response.json() == {"departments": [], "year_not_open": False}
     mock_fetch_departments.assert_not_called()
     mock_fetch_locked.assert_not_called()
 
@@ -611,7 +612,48 @@ def test_locked_departments_none_locked_returns_empty_list(client):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
-    assert response.json() == {"departments": []}
+    assert response.json() == {"departments": [], "year_not_open": False}
+
+
+def test_locked_departments_year_not_open_for_a_non_admin_filler(client):
+    """2026-08-08 3-state extension: a year-wide signal (not per-department)
+    from the SAME `app.deadline.fiscal_year_state` the write path and A6's
+    submit gate consult — feeds "+ เพิ่ม Transaction"'s pre-emptive check."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope",
+        return_value=MagicMock(fill_cost_centers=["CC1"], is_admin=False),
+    ), patch(
+        "app.routers.approval.fetch_departments",
+        return_value=[{"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None}],
+    ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()), patch(
+        "app.routers.approval.fiscal_year_state", return_value=YEAR_NOT_OPEN
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json() == {"departments": [], "year_not_open": True}
+
+
+def test_locked_departments_year_not_open_is_always_false_for_admin(client):
+    """Admin may always add, in every fiscal_year state — `fiscal_year_state`
+    is never even consulted for an admin caller (short-circuited by `not
+    scope.is_admin`)."""
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope",
+        return_value=MagicMock(fill_cost_centers=["CC1"], is_admin=True),
+    ), patch(
+        "app.routers.approval.fetch_departments",
+        return_value=[{"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None}],
+    ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()), patch(
+        "app.routers.approval.fiscal_year_state"
+    ) as mock_fiscal_year_state:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json() == {"departments": [], "year_not_open": False}
+    mock_fiscal_year_state.assert_not_called()
 
 
 def test_locked_departments_db_failure_maps_to_502(client):

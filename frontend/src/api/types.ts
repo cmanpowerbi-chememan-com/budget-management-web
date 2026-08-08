@@ -334,9 +334,15 @@ export interface PendingForMeResponse {
 /** `GET /approval/locked-departments` (`routers/approval.LockedDepartmentsResponse`)
  * — "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix): every
  * department, among the CALLER's OWN Fill-scope departments, whose approval
- * status is currently locked (ADR-0013) for one fiscal_year. */
+ * status is currently locked (ADR-0013) for one fiscal_year.
+ *
+ * `year_not_open` (2026-08-08 3-state extension): `true` when the fiscal_year
+ * has no `dbo.submission_deadline` row at all — a year-wide signal (not
+ * per-department) that closes "+ เพิ่ม Transaction" for every Cost Center at
+ * once. Always `false` for an admin caller. */
 export interface LockedDepartmentsResponse {
   departments: string[]
+  year_not_open: boolean
 }
 
 /** `GET/POST /attachments*` (`routers/attachments.py`) — SharePoint file

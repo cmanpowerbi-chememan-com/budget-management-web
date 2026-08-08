@@ -40,6 +40,7 @@ import {
   subtotalLabelColSpan,
   validateNewTransaction,
   visibleSapMonths,
+  YEAR_NOT_OPEN_ADD_REASON_TH,
 } from './model'
 import { blankLayer, makeRow as row, sapLayer } from './testUtils'
 
@@ -287,6 +288,25 @@ describe('validateNewTransaction', () => {
   })
 
   it('lockedCostCenters is optional — omitting it entirely behaves like "nothing is locked"', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  // 2026-08-08 3-state extension: a YEAR-wide lock, checked FIRST — ahead of
+  // the Cost Center/GL picks, since nothing about the pick matters once the
+  // whole fiscal_year is closed.
+  it('rejects everything with the year-not-open reason when yearNotOpen is true, even a valid pick', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+      yearNotOpen: true,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe(YEAR_NOT_OPEN_ADD_REASON_TH)
+  })
+
+  it('yearNotOpen is optional — omitting it entirely behaves like "the year is open"', () => {
     const result = validateNewTransaction({
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
     })

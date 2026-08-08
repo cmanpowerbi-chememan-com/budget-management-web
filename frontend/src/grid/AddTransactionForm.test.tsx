@@ -273,4 +273,56 @@ describe('AddTransactionForm', () => {
       expect(onAdd).not.toHaveBeenCalled()
     })
   })
+
+  // 2026-08-08 3-state extension: a YEAR-wide lock (every department, not
+  // just the ones already mid-approval) — distinct from the per-department
+  // lockedCostCenters above.
+  describe('year-not-open awareness (2026-08-08 3-state extension)', () => {
+    it('yearNotOpen — the button is visible but disabled, with the year-wide Thai reason on screen, even though no Cost Center is individually locked', () => {
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={vi.fn()}
+          yearNotOpen
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).toBeInTheDocument() // visible, not hidden
+      expect(trigger).toBeDisabled() // not actionable
+      expect(screen.getByText(/ไม่เปิดให้กรอกในเว็บ/)).toBeInTheDocument()
+    })
+
+    it('yearNotOpen takes precedence over the per-department reason when both happen to be true', () => {
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={vi.fn()}
+          lockedCostCenters={{ CC1: 'Accounting' }}
+          yearNotOpen
+        />,
+      )
+      expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeDisabled()
+      expect(screen.getByText(/ไม่เปิดให้กรอกในเว็บ/)).toBeInTheDocument()
+      expect(screen.queryByText(/ถูกล็อกไว้/)).not.toBeInTheDocument()
+    })
+
+    it('yearNotOpen is optional — omitting it entirely behaves like "the year is open" (unchanged)', async () => {
+      const onAdd = vi.fn().mockResolvedValue({ ok: true })
+      render(
+        <AddTransactionForm fillCostCenters={['CC1']} glRef={GL_REF} existingRows={[]} onAdd={onAdd} />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).not.toBeDisabled()
+      fireEvent.click(trigger)
+      pickCcOption('CC1')
+      pickGlOption(/5211800030/)
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC1', '5211800030'))
+    })
+  })
 })

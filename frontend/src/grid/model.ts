@@ -604,6 +604,15 @@ export function lockedAddReasonTh(department: string): string {
 export const ALL_COST_CENTERS_LOCKED_REASON_TH =
   'Cost Center ที่คุณกรอกงบได้ทั้งหมดถูกล็อกไว้ (ฝ่ายอยู่ระหว่างอนุมัติหรืออนุมัติแล้ว) ไม่สามารถเพิ่มรายการใหม่ได้ในสถานะนี้'
 
+/** Thai reason shown next to "+ เพิ่ม Transaction" when the whole fiscal_year
+ * is NOT_OPEN (2026-08-08 3-state extension, jakkaritw) — a year-wide lock,
+ * not a per-department one, so it takes precedence over
+ * `ALL_COST_CENTERS_LOCKED_REASON_TH` (see `AddTransactionForm`). Same
+ * wording as the server's `year_not_open` detail (`app.deadline.YearNotOpenError`)
+ * so the pre-emptive client message and the (never-reached, since the button
+ * is disabled) server error would read identically. */
+export const YEAR_NOT_OPEN_ADD_REASON_TH = 'ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ'
+
 /** Builds `lockedCostCenters` (cost_center -> department, LOCKED entries
  * only) for every cost_center in `costCenters` — one CC->department lookup
  * (`departmentRows`, the caller's OWN live `dbo.cc_filler_map` mapping,
@@ -637,6 +646,11 @@ export interface NewTransactionInput {
    * above). Optional — omitted/empty means "nothing is locked", same as
    * before this feature existed. */
   lockedCostCenters?: Record<string, string>
+  /** `true` when the whole fiscal_year is NOT_OPEN (2026-08-08 3-state
+   * extension) — checked FIRST, ahead of the Cost Center/GL picks, since a
+   * year-wide lock makes any pick irrelevant. Optional/defaults to `false` —
+   * "the year is open", the pre-existing behavior. */
+  yearNotOpen?: boolean
 }
 
 export interface ValidationResult {
@@ -652,6 +666,7 @@ export interface ValidationResult {
  * one routes straight into its own subform on save, same as any special-GL
  * row (see `BudgetGrid.handleAddTransaction`). */
 export function validateNewTransaction(input: NewTransactionInput): ValidationResult {
+  if (input.yearNotOpen) return { ok: false, errorTh: YEAR_NOT_OPEN_ADD_REASON_TH }
   if (!input.costCenter) return { ok: false, errorTh: 'กรุณาเลือก Cost Center' }
   if (!input.glAccount) return { ok: false, errorTh: 'กรุณาเลือก GL Code' }
   if (!input.fillCostCenters.includes(input.costCenter)) {

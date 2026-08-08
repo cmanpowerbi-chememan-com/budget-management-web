@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { BudgetRow, GlAccount } from '../api/types'
-import { ALL_COST_CENTERS_LOCKED_REASON_TH, validateNewTransaction } from './model'
+import { ALL_COST_CENTERS_LOCKED_REASON_TH, YEAR_NOT_OPEN_ADD_REASON_TH, validateNewTransaction } from './model'
 
 export interface AddResult {
   ok: boolean
@@ -30,6 +30,14 @@ export interface AddTransactionFormProps {
    * is locked; a specific locked pick is rejected the same way a
    * duplicate-row pick already is. */
   lockedCostCenters?: Record<string, string>
+  /** `true` when the whole fiscal_year is NOT_OPEN (2026-08-08 3-state
+   * extension) — from `GET /approval/locked-departments`'s `year_not_open`,
+   * the SAME fetch that already feeds `lockedCostCenters`. A year-wide lock
+   * takes precedence over the per-department `allLocked` reason below: the
+   * button is disabled and shows this reason regardless of which Cost
+   * Centers are individually locked. Optional/defaults to `false` — "the
+   * year is open", the pre-existing behavior. */
+  yearNotOpen?: boolean
 }
 
 /** "+ เพิ่ม transaction" — picks a Cost Center + a GL code (Fill scope
@@ -42,7 +50,7 @@ export interface AddTransactionFormProps {
  * rows, 400+ Fill-scope cost centers): type to filter, Enter picks the
  * first match, Esc closes, click also picks. */
 export function AddTransactionForm({
-  fillCostCenters, glRef, existingRows, onAdd, lockedCostCenters = {},
+  fillCostCenters, glRef, existingRows, onAdd, lockedCostCenters = {}, yearNotOpen = false,
 }: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
   const [costCenter, setCostCenter] = useState('')
@@ -96,7 +104,7 @@ export function AddTransactionForm({
   }
 
   async function handleSubmit() {
-    const validation = validateNewTransaction({ costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters })
+    const validation = validateNewTransaction({ costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters, yearNotOpen })
     if (!validation.ok) {
       setError(validation.errorTh ?? 'ข้อมูลไม่ถูกต้อง')
       return
@@ -117,14 +125,19 @@ export function AddTransactionForm({
   // with the Thai reason shown right beside it — same "say why on screen"
   // tone as the subform's own 🔒 ดูรายละเอียด lock affordance.
   const allLocked = fillCostCenters.length > 0 && fillCostCenters.every((cc) => cc in lockedCostCenters)
+  // `yearNotOpen` is a YEAR-wide lock (every department, not just the ones
+  // already mid-approval) — checked first, so its reason wins over the
+  // per-department `allLocked` one whenever both happen to be true.
+  const disabled = yearNotOpen || allLocked
+  const disabledReason = yearNotOpen ? YEAR_NOT_OPEN_ADD_REASON_TH : allLocked ? ALL_COST_CENTERS_LOCKED_REASON_TH : null
 
   if (!open) {
     return (
       <div className="add-txn-trigger">
-        <button type="button" className="btn btn-add" onClick={() => setOpen(true)} disabled={allLocked}>
+        <button type="button" className="btn btn-add" onClick={() => setOpen(true)} disabled={disabled}>
           + เพิ่ม Transaction
         </button>
-        {allLocked && <span className="act-status">{ALL_COST_CENTERS_LOCKED_REASON_TH}</span>}
+        {disabledReason && <span className="act-status">{disabledReason}</span>}
       </div>
     )
   }

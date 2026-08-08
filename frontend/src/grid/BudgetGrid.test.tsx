@@ -47,7 +47,7 @@ describe('BudgetGrid', () => {
     // unconditionally on every mount/year change, same as fetchPendingForMe
     // above; most tests are not testing this feature and just need it to
     // resolve quietly with "nothing locked".
-    vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [] })
+    vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
     // Trip Manager loads these reference masters whenever it opens — the two
     // trip tests here only need them to resolve quietly.
     vi.mocked(referenceApi.fetchTravelers).mockResolvedValue([])
@@ -449,7 +449,7 @@ describe('BudgetGrid', () => {
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
       vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
       vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
-      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'] })
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'], year_not_open: false })
 
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
 
@@ -458,11 +458,27 @@ describe('BudgetGrid', () => {
       expect(screen.getByText(/ถูกล็อกไว้/)).toBeInTheDocument()
     })
 
+    // 2026-08-08 3-state extension: a YEAR-wide lock (from the SAME
+    // GET /approval/locked-departments fetch, its `year_not_open` field) —
+    // every department is closed, not just the ones already mid-approval.
+    it('the fiscal_year is NOT_OPEN — the Add button is visible but disabled, with the year-wide Thai reason on screen', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: true })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+      expect(screen.getByText(/ไม่เปิดให้กรอกในเว็บ/)).toBeInTheDocument()
+    })
+
     it('the department is open (DRAFT, nothing locked) — unchanged: Add button works and the new row renders editable (derived, not hardcoded)', async () => {
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
       vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
       vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
-      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [] })
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
       vi.mocked(budgetApi.saveRow).mockResolvedValue({
         cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
         m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
@@ -496,7 +512,7 @@ describe('BudgetGrid', () => {
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
       vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
       vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
-      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'] })
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'], year_not_open: false })
       vi.mocked(budgetApi.saveRow).mockResolvedValue({
         cost_center: 'CC2', gl_account: '5211800030', fiscal_year: 2027,
         m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,

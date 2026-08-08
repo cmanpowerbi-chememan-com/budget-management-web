@@ -32,7 +32,15 @@ from datetime import datetime, timezone
 import pyodbc
 from pydantic import BaseModel
 
-from app.deadline import PastDeadlineError, bangkok_today as _bangkok_today, is_post_deadline as _is_post_deadline
+from app.deadline import (
+    YEAR_NOT_OPEN,
+    YEAR_PAST_DEADLINE,
+    PastDeadlineError,
+    YearNotOpenError,
+    bangkok_today as _bangkok_today,
+    fiscal_year_state as _fiscal_year_state,
+    is_post_deadline as _is_post_deadline,
+)
 from app.rls import Scope
 
 logger = logging.getLogger(__name__)
@@ -228,6 +236,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "admin_cannot_submit_in_cycle": 403,
     "mid_chain_admin_overwrite": 409,
     "past_deadline": 403,
+    "year_not_open": 403,
     "department_empty": 400,
     "invalid_approval_state": 409,
     "approval_record_not_found": 404,
@@ -243,6 +252,7 @@ ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     AdminCannotSubmitInCycleError: "admin_cannot_submit_in_cycle",
     MidChainAdminOverwriteError: "mid_chain_admin_overwrite",
     PastDeadlineError: "past_deadline",
+    YearNotOpenError: "year_not_open",
     DepartmentEmptyError: "department_empty",
     InvalidApprovalStateError: "invalid_approval_state",
     ApprovalRecordNotFoundError: "approval_record_not_found",
@@ -608,7 +618,20 @@ def submit_department(
     approve, so this refuses EVERY caller identically (jakkaritw, option ก) —
     a plain filler, and an admin via any of the three doors below. This is
     intentionally checked ahead of even `NotFillerOfDepartmentError` — data
-    validity is a more fundamental precondition than who is asking."""
+    validity is a more fundamental precondition than who is asking.
+
+    2026-08-08 3-state extension (jakkaritw): a `fiscal_year` with no
+    `dbo.submission_deadline` row (NOT_OPEN — see `app.deadline`'s module
+    docstring) is not submittable via the normal chain either — checked
+    inside `_submit_normal_chain` below, which BOTH a plain non-admin filler
+    and an admin-who-also-Fills go through identically (same reasoning as
+    the admin-GL paragraph above). The 3 admin-only doors below
+    (Template-2/orphan/post-deadline-override) are UNCHANGED: they still
+    consult `_is_post_deadline` only, so a NOT_OPEN, non-orphan,
+    non-Template-2 department still falls through to
+    `AdminCannotSubmitInCycleError` exactly as before — data for such a year
+    is expected to arrive via the future admin-import feature, not through
+    this endpoint."""
     existing = _fetch_row(conn, department, fiscal_year)
     dept_ccs = _department_cost_centers(conn, department)
     if not _department_has_pending_rows(conn, department, dept_ccs, fiscal_year):
@@ -681,7 +704,22 @@ def _submit_normal_chain(
             f"{department}/{fiscal_year} is {existing['status']} — cannot submit "
             "(PENDING_* has no recall; APPROVED needs no re-submission, ADR-0013)"
         )
-    if _is_post_deadline(conn, fiscal_year):
+    # 2026-08-08 3-state extension (jakkaritw): a year nobody may fill should
+    # not be submittable by a filler either — a plain non-admin filler AND an
+    # admin who also Fills this department (Nipaporn/Waraporn's own dual
+    # role, ADR-0006) both route through THIS function identically (see the
+    # module docstring above `submit_department`), so both are refused the
+    # same way here, mirroring exactly how the pre-existing PAST_DEADLINE
+    # check below already treats an admin-filler as a plain filler for
+    # deadline purposes (no `scope` is even threaded into this function).
+    # The 3 admin-only doors in `submit_department` (Template-2, orphan,
+    # post-deadline override) are UNCHANGED by this — data for a NOT_OPEN
+    # year is expected to arrive via the future admin-import feature, not
+    # through a normal-chain submit.
+    year_state = _fiscal_year_state(conn, fiscal_year)
+    if year_state == YEAR_NOT_OPEN:
+        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ")
+    if year_state == YEAR_PAST_DEADLINE:
         raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
 
     submitter_empcode, approver1_empcode, active = resolve_chain(conn, submitter_email)
