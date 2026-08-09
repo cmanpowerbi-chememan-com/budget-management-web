@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-08T22:03:24+0700",
+  "updated": "2026-08-09T23:25:50+0700",
   "tasks": [
+    {
+      "id": "notif-audit-cc-shared-admin",
+      "state": "done",
+      "created": "2026-08-09T22:15:29+0700",
+      "updated": "2026-08-09T23:25:22+0700",
+      "ai": "DONE+DEPLOYED-TO-STG. Commits 89148ef (see-overlay ADR-0029) + 5b60740 (audit cc + shared-admin + non-prod mail marking). Tests 925 pass. Image budget-web:5b60740 built (ACR run cm10) live on stg rev 0000032 Healthy/100. stg env: NOTIFICATIONS_DRY_RUN=false, NOTIFICATIONS_REDIRECT_ALL_TO=jakkaritw@chememan.com, NOTIFICATIONS_ENVIRONMENT_LABEL='ทดสอบ on stg server'. PRD UNTOUCHED (still 1bbddcb). AZ CLI TRAP: az mangles Thai BOTH ways - --set-env-vars drops it on WRITE, and az containerapp show / az rest get drops it on READ (fooled a raw-bytes check because bytes came from az stdout). Working write = requests.patch to ARM with az account get-access-token token; template must be key-whitelisted (ARM rejects imageType, customMetricsSettings). Mail proof rendered: subject '*** ทดสอบ on stg server *** รอการอนุมัติ...', To=jakkaritw only, banner prints real to/cc.",
+      "agent": "claude"
+    },
+    {
+      "id": "stg-manual-test-pornthipp",
+      "state": "doing",
+      "created": "2026-08-09T21:58:17+0700",
+      "updated": "2026-08-09T23:25:50+0700",
+      "ai": "SUBMIT-BUTTON SIT ON STG: 16/16 PASS via real HTTP API (image 5b60740, rev 0000032), identity spoofed by x-ms-client-principal-name which BEATS DEV_AUTH_EMAIL (auth.py:27) so approver steps needed no restart; the tester's browser sends no header so their session stays pornthipp. T1 empty dept 400 'ยังไม่มีข้อมูลงบประมาณ' (checked BEFORE who-is-asking, proven by aiming at a dept she also does not fill). T2 not-filler 403. T3 FY2028 no deadline row 403 'ไม่เปิดให้กรอกในเว็บ'. T4 past-deadline 403 (temp FY2028 deadline row added+removed; INSERT needs _load_dt+_load_dttm). T5 submit 200 PENDING_APPROVER1 approver1=101431 laddawank. T6 double submit 409. T7 all 5 rows editable=False. T8 PUT 403 'mid-approval or approved, editing is locked' - FIRST attempt measured nothing because rows[0] is a special GL and the subform guard answers first; had to aim at ordinary GL 6211100110. T9 locked-departments=['Data & Analytic']. T10 laddawank pending-for-me sees it (ADR-0029 overlay live). T11 out-of-turn approve by step-2 403. T12 reject 200 + rows editable=True again. T13 resubmit 200 + log has SUBMIT/REJECT/RESUBMIT. Cleanup: 2 probe rows + temp deadline removed, tester's 5 rows intact. LEFT AT PENDING_APPROVER1 so the lock is visible in the browser. Status constant is PENDING_APPROVER1 not PENDING_1.",
+      "agent": "claude"
+    },
+    {
+      "id": "approver-see-overlay",
+      "state": "done",
+      "created": "2026-08-08T23:29:04+0700",
+      "updated": "2026-08-08T23:30:17+0700",
+      "ai": "DONE 2026-08-08. Implementation was already present in working tree when this pass started (rls.py _pending_approval_overlay + approval.py departments_pending_for_empcode/cost_centers_for_departments + tests in test_rls.py/test_approval.py/test_read_model.py/test_scope.py) - verified all required test scenarios already covered, wrote docs/adr/0029-approver-see-overlay.md (was missing), synced .claude/plan.md Current Phase. Backend 914 passed/48 deselected (was 899, +15). Frontend vitest 612/612 unchanged (zero frontend code touched, verified not assumed). next build clean. checks.sh clean. Not committed, not deployed (per instructions) - files still uncommitted in working tree: backend/app/rls.py, backend/app/approval.py, backend/tests/test_rls.py, backend/tests/test_approval.py, backend/tests/test_read_model.py, backend/tests/test_scope.py, docs/adr/0029-approver-see-overlay.md, .claude/plan.md.",
+      "agent": "claude"
+    },
     {
       "id": "fiscal-year-3state",
       "state": "done",
@@ -39,8 +63,8 @@
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
-      "updated": "2026-08-08T20:36:50+0700",
-      "ai": "[PER-DIEM ZERO-RATE: SKIPPED IN CODE 2026-08-08] jakkaritw: 'skip, admin revise at src excel' - it is a source-data gap, not a code defect. Admin edits ค่าเบี้ยเลี้ยง.xlsx (SharePoint > Budgeting and Management) and the normal sync carries it into dbo.per_diem_rate. Reference figures recorded in plan/sit/sit-test-plan.md for whoever fills the rates: 190 employees get 0 in all three columns (Operator 1 = 93, Operator 2 = 55, Operator 3 = 29, Driver 7, Maid 5, Department Head 1); 28 get 0 only on the domestic column while asian/other are populated (VP MGR 12, Assistant VP MGR 11, C-Level 3, CEO 2); 2 employees on job level 'N/A' have NO rate row at all. STILL UNDECIDED and flagged in the plan: those last 2 do NOT get a 0 - their trip save FAILS with MissingPerDiemRateError, and that failure mode returns for every future job level absent from the file. Filling the Excel fixes today's instance but not the class; making the app degrade with a Thai message that names the fix would need a separate decision from jakkaritw. Not raised as a blocker."
+      "updated": "2026-08-08T22:43:02+0700",
+      "ai": "[DEPLOYED TO BOTH ENVS 2026-08-08, jakkaritw-directed] Image budget-web:1b37afd (digest sha256:3d52ce77...) built via az acr build from a clean detached worktree at HEAD 1b37afd (run cmy Succeeded; the CLI's own UnicodeEncodeError exit is the known cp1252 glyph trap, judged by list-runs per the recipe). STAGING rev 0000030 Running/Healthy/100 + Easy Auth FULLY DISABLED (platform.enabled=false - AllowAnonymous alone was NOT enough, the sidecar still stripped forged headers exactly as security test P1-06 proved; full disable is the documented spoof-window technique). Spoof verified live: /me as phanuwate 200, /scope as pornthipp 200 with fill=['10IT011300','10IT0130000']. PRD rev 0000016 RunningAtMaxScale/Healthy/100 with THE SAME image; Easy Auth prd UNTOUCHED (RedirectToLoginPage, anonymous /health -> 401 PASS). VERIFY-DEPLOY-LANDED behavioral proof on stg: locked-departments year_not_open true@2026/false@2027 PASS-PASS; grid as filler year 2026 -> 3 rows editable=0 PASS (year lock live); year 2027 as pornthipp -> 0 rows = DATA-EMPTY not a bug (her CCs have no FY2026 SAP activity and pending is empty after the purge - same suchanyay probe returns 7 rows editable=7 PASS, so the 2027 path works); prd behavioral check blocked because jakkaritw's Easy Auth cookie EXPIRED (14h, captured 2026-08-07 afternoon -> /me 401) - prd proof rests on same-digest + Healthy revision + stg behavior; a fresh cookie would close it fully. OPEN RISKS now live: (1) STAGING URL IS WIDE OPEN writing prod data until Easy Auth is re-enabled - jakkaritw accepted, MUST re-enable after his eyeball review: az containerapp auth update -n cman-budget-web-stg -g CMAN-BUDGET-MNGT-WEB-RG --enabled true; (2) pornthipp's UAT dept still has no typeable data at 2027 - the known UAT-prep gap. Eyeball guide for jakkaritw: stg URL + header extension x-ms-client-principal-name to impersonate; on screen pick 'Year 2026' (=system 2027) to type, 'Year 2025' (=2026) shows the year lock."
     },
     {
       "id": "sit-plan-authoring",
@@ -2297,23 +2321,6 @@
         "20-grill-with-docs"
       ],
       "ai": "Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center<->Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item)."
-    },
-    {
-      "id": "employee-budget-view",
-      "state": "done",
-      "created": "2026-07-09T22:39:04+0700",
-      "updated": "2026-07-09T22:39:04+0700",
-      "agent": "main",
-      "skills": [
-        "19-fast-mode"
-      ],
-      "files": [
-        {
-          "path": "setup/sync_employees.py",
-          "label": "filter logic source"
-        }
-      ],
-      "ai": "FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data's compact names (empcode/orgcode/joblevelnameen). Applied the project's 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status='Active', employee_code NOT LIKE '4%' (Gritsman), org_code NOT LIKE '117%' (Vietnam/Office of Affiliate), job_level_name_en NOT IN ('Operator 1','Operator 2','Operator 3','Driver','Maid') (L5). Added record_status='active' as forward-proofing (user probe: only value present is 'active', 649 rows; Fabric Warehouse collation is case-sensitive so 'active' lower vs 'Active' upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW."
     },
     {
       "id": "sap-actuals-view",

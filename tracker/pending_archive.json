@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-07-18T23:10:17+0700",
+  "updated": "2026-08-08T22:43:02+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -145,6 +145,37 @@
         }
       ],
       "ai": "Added two figures under §15 (Master FX read-only) of Spec A main web app sign-off spec. (1) Tight Playwright crop of the read-only Master FX chip — anchored via #fxDisplay.closest('.admin-zone-note') because #fxDisplay is only the number and there are two .admin-zone-note spans. (2) Full screenshot of the Master Currency edit page (Module 09, main.wrap of 03-edit-master-table/.../master-currency.html, self-contained demo data FY2025=35.00). Wired both into build_main_web_app_spec.py: new fx_only + mc_page captures, MC_PAGE constant, order list entries, image_para calls under item 15; rebuilt docx (2.97 MB). Uncommitted. Times exact (this session)."
+    },
+    {
+      "id": "emp-ingest-to-dw-prompt",
+      "state": "done",
+      "created": "2026-07-09T15:27:31+0700",
+      "updated": "2026-07-09T15:27:31+0700",
+      "agent": "main",
+      "files": [
+        {
+          "path": "tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md",
+          "label": "Cross-project prompt"
+        }
+      ],
+      "ai": "Generated a self-contained cross-project handoff prompt to migrate mas_employee_data ingestion (C-POP HR REST API) from the external Python sync (sync_employees.py DELETE+INSERT into budget_management_web Fabric SQL DB, GitHub Action 06:00 BKK) INTO the cman-dw-ws (adeb7108) medallion master lane. Recon via Fabric MCP: cman-dw-ws is a mature registry-driven medallion DW with an existing master lane (pl_daily_master -> pl_copy_landing_master + pl_batch_ingest_master/NB_batch_orchestrator 'loop over source specs' -> 02_NB_land_to_bronze_master_{sap,non_sap} -> 03_NB_bronze_to_silver_master_{sap,non_sap} -> gold via 04_NB_vendor/NB_gold_asset_costcenter), Lakehouse modern_lh_cman_dw (bronze_src/silver_master/gold_master schemas) + in-ws fabric_sql_database, varlib_env VariableLibrary, env_spark Environment. Employee = new source KIND rest_api (existing kinds: gateway-copy SAP master, SharePoint xlsx MNL_M_ non-SAP). Prompt file tasks/employee-ingest-to-dw/CROSS_PROJECT_PROMPT.md embeds: API contract (POST keyDate/empCode, Authorization header, employeeList, 'hr status' key w/ space, empty->NULL, date fields), 4 filters applied at SILVER (Active, drop empcode 4*, drop orgcode 117*, drop L5 Operator/Driver/Maid), full ~80-col gold contract == current mas_employee_data, build steps (register source -> land JSON -> bronze -> silver+filter+dedup -> gold_master.employee -> optional fabric_sql_database mirror -> ride pl_daily_master, retire GitHub Action), secrets in varlib_env/KeyVault not GitHub, SP cman-fabric-write needs Contributor on cman-dw-ws + Spark egress, fabric-deploy-gotchas + TDD. User answered Q1=generate a copy-paste prompt for the other project, Q2=app reads from the new ws. Actual Fabric build happens in the DW project (not this repo)."
+    },
+    {
+      "id": "employee-budget-view",
+      "state": "done",
+      "created": "2026-07-09T22:39:04+0700",
+      "updated": "2026-07-09T22:39:04+0700",
+      "agent": "main",
+      "skills": [
+        "19-fast-mode"
+      ],
+      "files": [
+        {
+          "path": "setup/sync_employees.py",
+          "label": "filter logic source"
+        }
+      ],
+      "ai": "FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data's compact names (empcode/orgcode/joblevelnameen). Applied the project's 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status='Active', employee_code NOT LIKE '4%' (Gritsman), org_code NOT LIKE '117%' (Vietnam/Office of Affiliate), job_level_name_en NOT IN ('Operator 1','Operator 2','Operator 3','Driver','Maid') (L5). Added record_status='active' as forward-proofing (user probe: only value present is 'active', 649 rows; Fabric Warehouse collation is case-sensitive so 'active' lower vs 'Active' upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW."
     }
   ]
 }
