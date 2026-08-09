@@ -1,7 +1,7 @@
 """Unit tests for app.config — env-driven settings, no live DB."""
 import logging
 
-from app.config import Settings, get_settings
+from app.config import SHARED_ADMIN_MAILBOX, Settings, get_settings
 
 
 def test_default_app_env_is_production_fail_closed(monkeypatch):
@@ -35,14 +35,35 @@ def test_dev_auth_email_defaults_to_none():
     assert settings.dev_auth_email is None
 
 
-def test_admin_emails_defaults_to_empty_set():
+def test_admin_emails_defaults_to_the_shared_mailbox_alone():
+    """No ADMIN_EMAILS set is NOT "nobody is admin" (jakkaritw, 2026-08-09):
+    the shared reporting mailbox is an admin in every environment by
+    construction, so a deploy that forgets the env var still has one."""
     settings = Settings(_env_file=None)
-    assert settings.admin_emails_set == set()
+    assert settings.admin_emails_set == {SHARED_ADMIN_MAILBOX.lower()}
 
 
 def test_admin_emails_parses_comma_separated_lowercased_and_trimmed():
     settings = Settings(_env_file=None, admin_emails=" Jakkaritw@Chememan.com, nipapornt@chememan.com ,,")
-    assert settings.admin_emails_set == {"jakkaritw@chememan.com", "nipapornt@chememan.com"}
+    assert settings.admin_emails_set == {
+        "jakkaritw@chememan.com", "nipapornt@chememan.com", SHARED_ADMIN_MAILBOX.lower(),
+    }
+
+
+def test_admin_emails_union_never_duplicates_the_shared_mailbox():
+    """Listing the shared mailbox in the env too must be a no-op, not a second
+    entry — the union is by set, and the env value is lowercased first so a
+    differently-cased spelling still collapses onto the same member."""
+    settings = Settings(_env_file=None, admin_emails=f"jakkaritw@chememan.com,{SHARED_ADMIN_MAILBOX.upper()}")
+    assert settings.admin_emails_set == {"jakkaritw@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
+
+
+def test_shared_mailbox_is_sender_and_audit_cc_and_admin():
+    """All three roles read the ONE constant, so they can never drift apart."""
+    settings = Settings(_env_file=None)
+    assert settings.notifications_sender_email == SHARED_ADMIN_MAILBOX
+    assert settings.notifications_audit_cc_email == SHARED_ADMIN_MAILBOX
+    assert SHARED_ADMIN_MAILBOX.lower() in settings.admin_emails_set
 
 
 def test_notifications_dry_run_defaults_true():

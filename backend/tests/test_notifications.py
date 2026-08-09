@@ -3,12 +3,13 @@
 monkeypatched at the module level, matching the never-cut safety rule (no
 test may send a real email). DB lookups are always a mocked pyodbc connection.
 """
+import logging
 from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
 
-from app.config import Settings
+from app.config import SHARED_ADMIN_MAILBOX, Settings
 from app.notifications import (
     NotificationError,
     build_deep_link,
@@ -20,6 +21,12 @@ from app.notifications import (
     notify_turn_reminder,
     send_mail,
 )
+
+
+def _never_called(*args, **kwargs):
+    """Guard for dry-run tests: a dry run must make ZERO HTTP calls, so any
+    call to this raises instead of quietly returning a mock."""
+    raise AssertionError("httpx.post must never be called on a dry run")
 
 
 def _settings(**overrides) -> Settings:
@@ -203,12 +210,16 @@ def test_send_mail_includes_cc_recipients_when_cc_given(monkeypatch):
     assert result.sent is True
     message = posts[1][1]["json"]["message"]
     cc_addresses = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
-    assert cc_addresses == ["vp@chememan.com", "boss@chememan.com"]
+    # The caller's cc order is preserved and the audit mailbox is APPENDED, so a
+    # reader of the mail still sees the business cc (approver1) first.
+    assert cc_addresses == ["vp@chememan.com", "boss@chememan.com", SHARED_ADMIN_MAILBOX]
 
 
-def test_send_mail_omits_cc_recipients_key_when_no_cc(monkeypatch):
-    """No cc -> the key must be ABSENT entirely (Graph treats an empty
-    ccRecipients array differently from a missing one on some tenants)."""
+def test_send_mail_omits_cc_recipients_key_when_audit_cc_is_switched_off(monkeypatch):
+    """No cc AND no audit cc -> the key must be ABSENT entirely (Graph treats
+    an empty ccRecipients array differently from a missing one on some
+    tenants). Blanking `notifications_audit_cc_email` is the documented way to
+    switch the audit copy off without a code change."""
     posts = []
 
     def _fake_post(url, **kwargs):
@@ -222,14 +233,197 @@ def test_send_mail_omits_cc_recipients_key_when_no_cc(monkeypatch):
         return resp
 
     monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+    off = _settings(notifications_audit_cc_email="")
 
-    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
-    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=[], dry_run=False, settings=_settings())
+    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=off)
+    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=[], dry_run=False, settings=off)
 
     # posts = [token1, sendMail1, sendMail2] — the token is cached (§7.3.1),
     # so the second send has no token POST of its own.
     assert "ccRecipients" not in posts[1][1]["json"]["message"]
     assert "ccRecipients" not in posts[2][1]["json"]["message"]
+
+
+def test_send_mail_audit_cc_is_added_when_there_is_no_business_cc(monkeypatch):
+    """The whole point of the 2026-08-09 change: even a plain To-only mail
+    (turn notice, submitted notice) leaves a copy in the shared inbox."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
+
+    cc = [r["emailAddress"]["address"] for r in posts[1][1]["json"]["message"]["ccRecipients"]]
+    assert cc == [SHARED_ADMIN_MAILBOX]
+
+
+def test_send_mail_audit_cc_suppressed_when_it_is_the_recipient(monkeypatch):
+    """Mail addressed TO the shared mailbox must not also cc it — one copy,
+    not two. Matched case-insensitively, since empcode->email lookups and env
+    values do not agree on casing."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+    send_mail(SHARED_ADMIN_MAILBOX.upper(), "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
+
+    assert "ccRecipients" not in posts[1][1]["json"]["message"]
+
+
+def test_send_mail_audit_cc_not_duplicated_when_already_in_business_cc(monkeypatch):
+    """A caller that already cc'd the shared mailbox (approver1 resolving to
+    it) must not end up with it twice."""
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+    send_mail(
+        "someone@chememan.com", "subject", "<p>body</p>",
+        cc=[SHARED_ADMIN_MAILBOX.title()], dry_run=False, settings=_settings(),
+    )
+
+    cc = [r["emailAddress"]["address"] for r in posts[1][1]["json"]["message"]["ccRecipients"]]
+    assert cc == [SHARED_ADMIN_MAILBOX.title()]
+
+
+# ---------------------------------------------------------------------------
+# Non-production marking + mail catcher (2026-08-09)
+# ---------------------------------------------------------------------------
+
+STG_LABEL = "ทดสอบ on stg server"
+
+
+def _capture(monkeypatch) -> list:
+    posts = []
+
+    def _fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        resp = MagicMock()
+        if "oauth2" in url:
+            resp.status_code = 200
+            resp.json.return_value = {"access_token": "tok-123"}
+        else:
+            resp.status_code = 202
+        return resp
+
+    monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
+    return posts
+
+
+def test_no_environment_label_leaves_production_mail_untouched(monkeypatch):
+    """Blank label is the default, so forgetting to set it in prd is the SAFE
+    direction: subject and body come out byte-identical to before."""
+    posts = _capture(monkeypatch)
+    send_mail("someone@chememan.com", "รอการอนุมัติ", "<p>body</p>", dry_run=False, settings=_settings())
+
+    message = posts[1][1]["json"]["message"]
+    assert message["subject"] == "รอการอนุมัติ"
+    assert message["body"]["content"] == "<p>body</p>"
+
+
+def test_environment_label_shouts_in_subject_and_banners_the_body(monkeypatch):
+    posts = _capture(monkeypatch)
+    send_mail(
+        "someone@chememan.com", "รอการอนุมัติ", "<p>body</p>",
+        dry_run=False, settings=_settings(notifications_environment_label=STG_LABEL),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    assert message["subject"] == f"*** {STG_LABEL} *** รอการอนุมัติ"
+    body = message["body"]["content"]
+    assert body.index(STG_LABEL) < body.index("<p>body</p>")  # banner sits ABOVE the real content
+    assert "ไม่ใช่คำขออนุมัติจริง" in body
+    assert "font-size:30px" in body  # big, per jakkaritw's "ตัวใหญ่ๆ"
+
+
+def test_redirect_delivers_to_the_catcher_only_and_drops_every_cc(monkeypatch):
+    """The whole point: staging may run with real sends on, without emailing a
+    single live colleague. Business cc AND the audit cc are both live people,
+    so both must go."""
+    posts = _capture(monkeypatch)
+    send_mail(
+        "laddawank@chememan.com", "รอการอนุมัติ", "<p>body</p>", cc=["boss@chememan.com"],
+        dry_run=False,
+        settings=_settings(
+            notifications_environment_label=STG_LABEL,
+            notifications_redirect_all_to="jakkaritw@chememan.com",
+        ),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    assert [r["emailAddress"]["address"] for r in message["toRecipients"]] == ["jakkaritw@chememan.com"]
+    assert "ccRecipients" not in message
+
+
+def test_redirect_banner_still_names_the_real_recipients(monkeypatch):
+    """A redirected mail is useless as a test unless it says who the app
+    actually resolved — that IS the thing under test."""
+    posts = _capture(monkeypatch)
+    send_mail(
+        "laddawank@chememan.com", "รอการอนุมัติ", "<p>body</p>", cc=["boss@chememan.com"],
+        dry_run=False,
+        settings=_settings(
+            notifications_environment_label=STG_LABEL,
+            notifications_redirect_all_to="jakkaritw@chememan.com",
+        ),
+    )
+
+    body = posts[1][1]["json"]["message"]["body"]["content"]
+    assert "laddawank@chememan.com" in body
+    assert "boss@chememan.com" in body
+    assert SHARED_ADMIN_MAILBOX in body  # the audit cc it would have carried
+
+
+def test_redirect_without_a_label_still_reroutes(monkeypatch):
+    """The two settings are independent — a redirect with no label must not
+    silently deliver to the real recipient just because the banner is off."""
+    posts = _capture(monkeypatch)
+    send_mail(
+        "laddawank@chememan.com", "s", "<p>b</p>", dry_run=False,
+        settings=_settings(notifications_redirect_all_to="jakkaritw@chememan.com"),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    assert [r["emailAddress"]["address"] for r in message["toRecipients"]] == ["jakkaritw@chememan.com"]
+    assert message["subject"] == "s"
+
+
+def test_dry_run_log_shows_the_audit_cc_a_real_send_would_carry(monkeypatch, caplog):
+    """A dry run that hid the audit cc would be a misleading rehearsal — the
+    preview must list exactly what a real send posts."""
+    monkeypatch.setattr("app.notifications.httpx.post", _never_called)
+    with caplog.at_level(logging.INFO, logger="app.notifications"):
+        result = send_mail("someone@chememan.com", "s", "<p>b</p>", dry_run=True, settings=_settings())
+
+    assert result.sent is False and result.dry_run is True
+    assert SHARED_ADMIN_MAILBOX in caplog.text
 
 
 # ---------------------------------------------------------------------------

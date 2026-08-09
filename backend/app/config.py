@@ -27,6 +27,17 @@ _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 # the exact same value as the field default, never a duplicated literal.
 _DEFAULT_APP_BASE_URL = "https://budget.chememan.com"
 
+# The shared reporting mailbox. jakkaritw, 2026-08-09: it plays THREE roles at
+# once, and they must never drift apart, so all three read this one constant:
+#   1. the mailbox every notification is sent AS (`notifications_sender_email`),
+#   2. the mailbox cc'd on EVERY notification (`notifications_audit_cc_email`),
+#      so the whole mail trail is searchable in one inbox — not only in Sent Items,
+#   3. a full admin, in EVERY environment (`admin_emails_set` below).
+# Role 3 is deliberately code-level, not env-level: ADMIN_EMAILS is set per
+# container, so an env-only grant would silently exist on staging and be missing
+# on production (or vice versa) the first time someone edits one and not the other.
+SHARED_ADMIN_MAILBOX = "cmanpowerbi@chememan.com"
+
 
 class Settings(BaseSettings):
     """Env-driven settings. Unknown env vars (e.g. the repo-root .env's legacy
@@ -69,7 +80,32 @@ class Settings(BaseSettings):
     # instead of his own (the old value was jakkaritw@chememan.com). Mail.Send is
     # an APPLICATION role, so no per-mailbox grant is needed — sending as
     # cmanpowerbi verified live (Graph 202) the same day.
-    notifications_sender_email: str = "cmanpowerbi@chememan.com"
+    notifications_sender_email: str = SHARED_ADMIN_MAILBOX
+
+    # Non-production mail marking (jakkaritw, 2026-08-09: "หัวเมลทดสอบที่ stg
+    # ระบุว่า ทดสอบตัวใหญ่ๆ"). When set, EVERY notification gets this label
+    # shouted in the subject line and a full-width red banner at the top of the
+    # body, so a real colleague who receives a staging mail cannot mistake it
+    # for a live approval request. Blank (the default) = production behaviour,
+    # no marking at all — so forgetting to set it in prd is the safe direction.
+    notifications_environment_label: str = ""
+
+    # Mail catcher for non-production (same 2026-08-09 change). When set, EVERY
+    # notification is delivered to this ONE address instead of the recipient the
+    # app resolved, and all cc is dropped; the banner then prints the real To/cc
+    # it WOULD have used. This is what makes it safe to run staging with
+    # `notifications_dry_run=False`: the full Graph send path is exercised for
+    # real, but no live colleague is emailed by a test. Blank = deliver normally.
+    notifications_redirect_all_to: str = ""
+
+    # Blind-copy-style audit trail (jakkaritw, 2026-08-09): EVERY notification
+    # cc's this mailbox, on top of whatever cc the individual mail already
+    # carries (reject/final-approve cc the frozen approver1, reminders cc the
+    # derived approver1). Sent Items alone was not enough — a cc'd copy lands in
+    # the Inbox where it is searchable and shareable. Set to "" to switch the
+    # audit copy off without a code change; `notifications.send_mail` also drops
+    # it when it would duplicate the To or an existing cc.
+    notifications_audit_cc_email: str = SHARED_ADMIN_MAILBOX
 
     # §7.3 bulk-send hardening (jobs/send_reminders.py only — event mails
     # from the router never sleep): pacing between reminder mails so one
@@ -150,7 +186,13 @@ class Settings(BaseSettings):
 
     @property
     def admin_emails_set(self) -> set[str]:
-        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+        """The env allowlist PLUS the shared reporting mailbox, which is an
+        admin in every environment by construction (jakkaritw, 2026-08-09) —
+        see `SHARED_ADMIN_MAILBOX`. Union, never replace: a deploy that forgets
+        ADMIN_EMAILS still leaves the shared mailbox able to act, and a deploy
+        that lists it explicitly does not end up with a duplicate."""
+        env_admins = {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+        return env_admins | {SHARED_ADMIN_MAILBOX.lower()}
 
     def _warn_if_production_placeholder_base_url(self) -> None:
         """Misconfiguration guard: `app_base_url` is meant to be overridden

@@ -258,6 +258,74 @@ def _post_send_mail(
     raise NotificationError("Graph sendMail failed: exhausted attempts")  # unreachable, defensive
 
 
+def _with_audit_cc(cc: list[str] | None, to_email: str, settings: Settings) -> list[str] | None:
+    """Append the shared-mailbox audit cc (jakkaritw, 2026-08-09: every mail
+    keeps a copy in cmanpowerbi's Inbox, not just the sender's Sent Items) to
+    whatever cc the caller already resolved. Two suppressions, both so nobody
+    receives the same mail twice: the audit address is dropped when it IS the
+    To, and when it is already in the caller's cc (compared case-insensitively).
+    A blank `notifications_audit_cc_email` turns the whole thing off. Returns
+    None rather than [] for "no cc", because `_post_send_mail` keys off
+    falsiness to omit `ccRecipients` entirely."""
+    merged = [addr for addr in (cc or []) if addr]
+    audit = (settings.notifications_audit_cc_email or "").strip()
+    if audit:
+        already = {addr.strip().lower() for addr in merged} | {(to_email or "").strip().lower()}
+        if audit.lower() not in already:
+            merged.append(audit)
+    return merged or None
+
+
+def _mark_test_environment(
+    subject: str, html_body: str, to_email: str, cc: list[str] | None, settings: Settings,
+) -> tuple[str, str]:
+    """Shout the environment label in the subject and stamp a red banner on the
+    body (jakkaritw, 2026-08-09). No label configured -> both strings come back
+    untouched, so production mail is byte-identical to before. The banner also
+    prints the REAL To/cc when `notifications_redirect_all_to` rerouted the
+    mail, because that is the only place a reader can still see who the app
+    actually picked."""
+    label = (settings.notifications_environment_label or "").strip()
+    if not label:
+        return subject, html_body
+    marked_subject = f"*** {label} *** {subject}"
+    routing = ""
+    if (settings.notifications_redirect_all_to or "").strip():
+        cc_text = ", ".join(cc) if cc else "(ไม่มี)"
+        routing = (
+            '<div style="background:#FEF2F2;color:#7F1D1D;font-size:13px;padding:8px 12px;'
+            'border-bottom:1px solid #FCA5A5;text-align:center;">'
+            f"ผู้รับจริงในระบบ: <b>{to_email}</b> · CC: <b>{cc_text}</b>"
+            "</div>"
+        )
+    banner = (
+        '<div style="background:#B91C1C;color:#FFFFFF;font-size:30px;font-weight:700;'
+        'text-align:center;padding:20px 12px;letter-spacing:2px;">'
+        f"{label}"
+        "</div>"
+        '<div style="background:#FEF2F2;color:#7F1D1D;font-size:15px;font-weight:600;'
+        'text-align:center;padding:10px 12px;border-bottom:1px solid #FCA5A5;">'
+        "อีเมลฉบับนี้ส่งจากระบบทดสอบ — ไม่ใช่คำขออนุมัติจริง ไม่ต้องดำเนินการ"
+        "</div>"
+        f"{routing}"
+    )
+    return marked_subject, banner + html_body
+
+
+def _apply_redirect(to_email: str, cc: list[str] | None, settings: Settings) -> tuple[str, list[str] | None]:
+    """Reroute a non-production mail to the single catcher mailbox and drop ALL
+    cc — including the audit cc, since every cc address is a live colleague too.
+    Returns the address pair actually handed to Graph. Blank setting = no
+    change, which is what production runs with."""
+    redirect = (settings.notifications_redirect_all_to or "").strip()
+    if not redirect:
+        return to_email, cc
+    logger.info(
+        "notifications[REDIRECT]: real to=%s cc=%s -> delivering to %s only", to_email, cc or [], redirect
+    )
+    return redirect, None
+
+
 def send_mail(
     to_email: str, subject: str, html_body: str, cc: list[str] | None = None,
     *, dry_run: bool, settings: Settings | None = None, sleep: Callable[[float], None] = time.sleep,
@@ -268,10 +336,23 @@ def send_mail(
     both calls go through `httpx.post` (the seam every test in this module
     monkeypatches). `cc` is an optional list of cc addresses (2026-07-31
     revamp) — falsy/empty means the payload carries no ccRecipients key at
-    all. `sleep` is injectable so retry tests never really wait."""
+    all. `sleep` is injectable so retry tests never really wait.
+
+    Non-production marking/redirect (2026-08-09) is applied HERE, in the one
+    seam, so no caller can forget it and no notify_* function needs to know
+    which environment it is running in."""
     if not to_email:
         logger.warning("notifications: no recipient email resolved, subject=%r — skipping", subject)
         return NotificationResult(sent=False, to_email="", subject=subject, dry_run=dry_run, detail="no recipient")
+
+    # Resolved BEFORE the dry-run branch so the preview log shows the exact cc
+    # list a real send would carry — a dry run that hid the audit cc would be a
+    # misleading rehearsal.
+    settings = settings or get_settings()
+    cc = _with_audit_cc(cc, to_email, settings)
+    # Marking reads the pre-redirect To/cc (it prints them), so it runs FIRST.
+    subject, html_body = _mark_test_environment(subject, html_body, to_email, cc, settings)
+    to_email, cc = _apply_redirect(to_email, cc, settings)
 
     if dry_run:
         logger.info(
@@ -279,7 +360,6 @@ def send_mail(
         )
         return NotificationResult(sent=False, to_email=to_email, subject=subject, dry_run=True, detail="dry_run")
 
-    settings = settings or get_settings()
     token = _get_graph_token_cached(settings)
     retries = _post_send_mail(
         token, to_email, subject, html_body, cc, sleep=sleep,
