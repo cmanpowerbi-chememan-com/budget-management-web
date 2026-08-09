@@ -1,8 +1,23 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-09T23:25:50+0700",
+  "updated": "2026-08-09T23:48:05+0700",
   "tasks": [
+    {
+      "id": "stg-easyauth-deleted-ip-lock",
+      "state": "done",
+      "created": "2026-08-09T23:48:05+0700",
+      "updated": "2026-08-09T23:48:05+0700",
+      "ai": "jakkaritw 2026-08-09: 'delete Easy Auth ถาวร' at STAGING; I flagged that stg shares the PRODUCTION DB + APP_ENV=local + DEV_AUTH_EMAIL=pornthipp so a bare deletion exposes real writes to anyone with the URL; jakkaritw chose 'ลบ + จำกัด IP'. DONE: ARM DELETE authConfigs/current -> 204, re-GET 404 (gone for good); backup at scratchpad/stg_authconfig_backup.json. Replaced with ingress access-restriction 'allow-jakkaritw' 49.229.177.23/32 Allow = 1 rule = default-deny every other source. Verified GET /health from that machine -> 200. PRD PROVEN UNTOUCHED: Easy Auth present enabled=True RedirectToLoginPage, 0 IP rules, anonymous /health -> 401. CORRECTION: prd image is 1b37afd (2026-08-08 both-envs deploy), NOT 1bbddcb as I stated earlier; plan.md fixed. Item 12 PDPA was ALREADY decided by jakkaritw 2026-08-08 (option ก, no code change) - I had wrongly listed it as pending; run log section 22.5 + 25 corrected, now 15 PASS / 1 parked (only item 13 D3 Monday 10 Aug). Run log section 26 records the whole change incl. the ISP-IP-may-change recovery command and that other UAT testers cannot reach stg until their IP is added."
+    },
+    {
+      "id": "log-8dfdc6c",
+      "state": "done",
+      "created": "2026-08-09T23:34:48+0700",
+      "updated": "2026-08-09T23:34:48+0700",
+      "agent": "autolog",
+      "ai": "docs(sit): record the 16-item status in the run log, not just in chat [commit 8dfdc6c]"
+    },
     {
       "id": "notif-audit-cc-shared-admin",
       "state": "done",
