@@ -9,6 +9,12 @@ from app.rls import Scope
 def _mock_conn(fill_rows: list[tuple], manager_add_rows: list[tuple]) -> MagicMock:
     cursor = MagicMock()
     cursor.fetchall.side_effect = [fill_rows, manager_add_rows]
+    # ADR-0029 approver see-overlay: `resolve_scope` now also resolves the
+    # caller's empcode (`resolve_submitter`'s `fetchone()`) to check for a
+    # pending department. `None` = "not in the employee view" -> overlay
+    # short-circuits with no further `fetchall()` calls, matching this
+    # test's pre-ADR-0029 fixture (2 rows queried, nothing more).
+    cursor.fetchone.return_value = None
     conn = MagicMock()
     conn.cursor.return_value = cursor
     return conn

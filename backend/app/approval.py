@@ -28,6 +28,7 @@ no special-cased branches needed for "invalid approver1" vs "self-submit".
 """
 import logging
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import pyodbc
 from pydantic import BaseModel
@@ -41,7 +42,14 @@ from app.deadline import (
     fiscal_year_state as _fiscal_year_state,
     is_post_deadline as _is_post_deadline,
 )
-from app.rls import Scope
+
+if TYPE_CHECKING:
+    # Type-only: `app.rls` now imports FROM this module (the See-overlay,
+    # ADR-0029) so a runtime import here would be a circular import. `Scope`
+    # is only ever used as a parameter annotation below (duck-typed at
+    # runtime, never instantiated or isinstance-checked in this module), so
+    # deferring it to type-checking time only is safe.
+    from app.rls import Scope
 
 logger = logging.getLogger(__name__)
 
@@ -385,6 +393,28 @@ def _department_cost_centers(conn: pyodbc.Connection, department: str) -> set[st
     return {r[0] for r in rows}
 
 
+def cost_centers_for_departments(conn: pyodbc.Connection, departments: list[str]) -> set[str]:
+    """Live `dbo.cc_filler_map` cost centers for a BATCH of department names —
+    the plural sibling of `_department_cost_centers` above (one department at
+    a time). Added for `rls.resolve_scope`'s See-overlay (ADR-0029), which may
+    need several currently-pending departments' worth of CCs in a single
+    call. `departments=[]` short-circuits to an empty set, no query (an empty
+    SQL `IN ()` is invalid syntax and there is nothing to fetch anyway)."""
+    if not departments:
+        return set()
+    cursor = conn.cursor()
+    try:
+        placeholders = ", ".join("?" for _ in departments)
+        cursor.execute(
+            f"SELECT DISTINCT cost_center FROM dbo.cc_filler_map WHERE department IN ({placeholders})",
+            *departments,
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    return {r[0] for r in rows}
+
+
 def _department_has_pending_rows(
     conn: pyodbc.Connection, department: str, cost_centers: set[str], fiscal_year: int
 ) -> bool:
@@ -499,7 +529,7 @@ def get_approval_status(
     return _to_state(row, department, fiscal_year, caller_empcode)
 
 
-def authorize_status_view(conn: pyodbc.Connection, department: str, scope: Scope) -> None:
+def authorize_status_view(conn: pyodbc.Connection, department: str, scope: "Scope") -> None:
     """B1 gate fix: `GET /approval/status` must not be readable by just any
     authenticated caller (submitter email/empcode, rejecter, reject_reason
     are sensitive). Admin may view any department; otherwise the caller must
@@ -587,7 +617,7 @@ def _ensure_admin_overwrite_allowed(existing: dict | None, department: str, fisc
 
 
 def submit_department(
-    conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, scope: Scope,
+    conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, scope: "Scope",
 ) -> ApprovalStatusState:
     """Submit `(department, fiscal_year)`.
 
@@ -1079,22 +1109,59 @@ def current_turn_info(row: dict) -> tuple[datetime, str | None]:
     return _current_step_started_at(row), _occupant_for_position(position, row["approver1_empcode"])
 
 
-def fetch_pending_rows(conn: pyodbc.Connection, fiscal_year: int) -> list[dict]:
-    """Every `(department, fiscal_year)` row currently in a PENDING_* status
-    for `fiscal_year`, keyed the same shape as `_fetch_row`. Read-only —
-    `jobs/send_reminders.py` Phase A (turn reminders) is the consumer,
-    filtering via `current_turn_info`."""
+def fetch_pending_rows(conn: pyodbc.Connection, fiscal_year: int | None = None) -> list[dict]:
+    """Every `(department, fiscal_year)` row currently in a PENDING_* status,
+    keyed the same shape as `_fetch_row`. Read-only — `jobs/send_reminders.py`
+    Phase A (turn reminders) is the consumer, filtering via `current_turn_info`.
+
+    `fiscal_year=None` (added for `rls.resolve_scope`'s See-overlay,
+    ADR-0029) drops the year filter entirely — "is it currently this
+    person's turn" must not depend on which fiscal_year happens to be open
+    for web entry. Every pre-existing caller still passes a real
+    `fiscal_year` and is unaffected."""
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            f"SELECT {', '.join(_STATUS_COLUMNS)} FROM budget.approval_status "
-            "WHERE fiscal_year = ? AND status IN (?, ?, ?)",
-            fiscal_year, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3,
-        )
+        if fiscal_year is None:
+            cursor.execute(
+                f"SELECT {', '.join(_STATUS_COLUMNS)} FROM budget.approval_status "
+                "WHERE status IN (?, ?, ?)",
+                PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3,
+            )
+        else:
+            cursor.execute(
+                f"SELECT {', '.join(_STATUS_COLUMNS)} FROM budget.approval_status "
+                "WHERE fiscal_year = ? AND status IN (?, ?, ?)",
+                fiscal_year, PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3,
+            )
         rows = cursor.fetchall()
     finally:
         cursor.close()
     return [dict(zip(_STATUS_COLUMNS, row)) for row in rows]
+
+
+def departments_pending_for_empcode(
+    conn: pyodbc.Connection, caller_empcode: str, fiscal_year: int | None = None
+) -> list[str]:
+    """Departments whose CURRENT PENDING_* step is frozen to `caller_empcode`
+    — the ONE definition of "is it currently this person's turn", shared by:
+
+    - `list_departments_pending_my_approval` below (A10 รออนุมัติ badge,
+      one `fiscal_year` at a time, resolved from an email); and
+    - `rls.resolve_scope`'s See-overlay (ADR-0029, jakkaritw decision ก,
+      2026-08-08), called with `fiscal_year=None` — a department pending on
+      its approver must be visible regardless of which fiscal_year it landed
+      in, since `resolve_scope` itself is year-agnostic.
+
+    Built from `fetch_pending_rows` (query shape) + `_to_state`'s `can_act`
+    (the "is this empcode the frozen occupant of the CURRENT step" check) —
+    neither is duplicated here, so the two callers can never silently
+    disagree on who may currently act."""
+    rows = fetch_pending_rows(conn, fiscal_year)
+    return [
+        row["department"]
+        for row in rows
+        if _to_state(row, row["department"], row["fiscal_year"], caller_empcode).can_act
+    ]
 
 
 def list_departments_pending_my_approval(
@@ -1102,21 +1169,16 @@ def list_departments_pending_my_approval(
 ) -> list[str]:
     """A10 รออนุมัติ badge data source (`GET /approval/pending-for-me`):
     every department whose CURRENT PENDING_* step, for `fiscal_year`, is
-    frozen to `caller_email`. Reuses `fetch_pending_rows` + `_to_state`'s
-    `can_act` computation — one extra `resolve_submitter` lookup for the
-    caller's own empcode, no new SQL shape. A caller not found in the
-    employee view (no empcode) can never be a frozen approver, so it
-    short-circuits to an empty list without even querying
-    `approval_status`."""
+    frozen to `caller_email`. A caller not found in the employee view (no
+    empcode) can never be a frozen approver, so it short-circuits to an
+    empty list without even querying `approval_status`. Thin email→empcode
+    wrapper around `departments_pending_for_empcode` (shared with
+    `rls.resolve_scope`'s See-overlay, ADR-0029) — see that function for the
+    "current approver" logic itself."""
     caller_empcode, _ = resolve_submitter(conn, caller_email)
     if caller_empcode is None:
         return []
-    rows = fetch_pending_rows(conn, fiscal_year)
-    return [
-        row["department"]
-        for row in rows
-        if _to_state(row, row["department"], row["fiscal_year"], caller_empcode).can_act
-    ]
+    return departments_pending_for_empcode(conn, caller_empcode, fiscal_year)
 
 
 def reject_department(

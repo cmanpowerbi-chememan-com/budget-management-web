@@ -17,6 +17,7 @@ from app.approval import (
     ACTION_ADMIN_STEP_OVERRIDE,
     ACTION_AUTO_SUBMIT,
     APPROVED,
+    DRAFT,
     NIPAPORN_EMPCODE,
     PENDING_APPROVER1,
     PENDING_APPROVER2,
@@ -45,6 +46,8 @@ from app.approval import (
     approve_department,
     authorize_status_view,
     auto_submit_department,
+    cost_centers_for_departments,
+    departments_pending_for_empcode,
     fetch_pending_rows,
     get_approval_status,
     list_departments_pending_my_approval,
@@ -1381,3 +1384,91 @@ def test_pending_for_me_matches_nipaporn_on_position_2_regardless_of_approver1()
     result = list_departments_pending_my_approval(conn, FY, "nipapornt@chememan.com")
 
     assert result == [DEPT]
+
+
+def test_pending_for_me_still_scoped_to_the_given_fiscal_year_after_refactor():
+    """`list_departments_pending_my_approval` now delegates to
+    `departments_pending_for_empcode` (shared with `rls.resolve_scope`'s
+    ADR-0029 See-overlay, which deliberately spans ANY year) — this pins that
+    the A10 badge itself must stay scoped to ONE `fiscal_year` at the SQL
+    layer, unaffected by that sharing."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = ("200", None)
+    cursor.fetchall.return_value = []
+
+    list_departments_pending_my_approval(conn, FY, "manager@chememan.com")
+
+    query = cursor.execute.call_args_list[-1].args[0]
+    assert "fiscal_year = ?" in query
+
+
+# ---------------------------------------------------------------------------
+# departments_pending_for_empcode / cost_centers_for_departments — shared
+# helpers behind BOTH list_departments_pending_my_approval (A10, one year)
+# and rls.resolve_scope's See-overlay (ADR-0029, any year)
+# ---------------------------------------------------------------------------
+
+def test_departments_pending_for_empcode_any_year_has_no_year_filter_in_sql():
+    """`fiscal_year=None` (the overlay's call shape) must not scope the query
+    to a single year -- a department pending in ANY fiscal_year is picked up."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.return_value = [_status_row(status=PENDING_APPROVER1, approver1_empcode="200")]
+
+    result = departments_pending_for_empcode(conn, "200")
+
+    assert result == [DEPT]
+    query = cursor.execute.call_args.args[0]
+    assert "WHERE status IN (?, ?, ?)" in query
+    assert "fiscal_year = ?" not in query
+
+
+def test_departments_pending_for_empcode_a_row_pending_in_a_different_year_still_matches():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    row = list(_status_row(status=PENDING_APPROVER1, approver1_empcode="200"))
+    row[1] = 2099  # fiscal_year -- deliberately not FY (2027)
+    cursor.fetchall.return_value = [tuple(row)]
+
+    assert departments_pending_for_empcode(conn, "200") == [DEPT]
+
+
+@pytest.mark.parametrize("status", [APPROVED, REJECTED, DRAFT])
+def test_departments_pending_for_empcode_excludes_non_pending_statuses(status):
+    """Belt-and-braces: even if a non-PENDING_* row somehow reached this
+    function (the real SQL already filters `status IN PENDING_STATUSES`),
+    `_to_state` resolves no current_position for it, so `can_act` is False."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_status_row(status=status, approver1_empcode="200")]
+
+    assert departments_pending_for_empcode(conn, "200") == []
+
+
+def test_departments_pending_for_empcode_excludes_someone_elses_turn():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="999999"),
+    ]
+
+    assert departments_pending_for_empcode(conn, "200") == []
+
+
+def test_cost_centers_for_departments_empty_input_makes_no_query():
+    conn = MagicMock()
+
+    assert cost_centers_for_departments(conn, []) == set()
+    conn.cursor.assert_not_called()
+
+
+def test_cost_centers_for_departments_queries_live_cc_filler_map():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.return_value = [("CC1",), ("CC2",)]
+
+    result = cost_centers_for_departments(conn, ["Solution Delivery", "IT"])
+
+    assert result == {"CC1", "CC2"}
+    query = cursor.execute.call_args.args[0]
+    assert "cc_filler_map" in query
+    assert "IN (?, ?)" in query

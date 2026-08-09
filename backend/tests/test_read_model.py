@@ -373,6 +373,23 @@ def test_fill_cost_center_is_editable():
     assert rows[0].editable is True
 
 
+def test_adr0029_approver_overlay_cost_center_is_visible_but_not_editable():
+    """ADR-0029 approver see-overlay: a department PENDING on the caller
+    lands its CCs in `scope.see_cost_centers` only, never `fill_cost_centers`
+    (`rls._pending_approval_overlay`). From `merge_budget_rows`'s point of
+    view an overlay CC is indistinguishable from any other See-only CC (the
+    manager-add case above) — the pre-existing fill-only editable rule
+    already produces the right answer with zero code change here; this pins
+    that guarantee for the overlay specifically, per the task's own request."""
+    join_rows = [_blank_join_row("10IT011300", "GL1", pending_cost_center="10IT011300")]
+    scope = _scope(fill_cost_centers=[], see_cost_centers=["10IT011300"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert len(rows) == 1
+    assert rows[0].editable is False
+
+
 # ---------------------------------------------------------------------------
 # merge_budget_rows — ADR-0013 read-only lock (UI parity port with
 # write_model._ensure_department_not_locked, 2026-08-05)
