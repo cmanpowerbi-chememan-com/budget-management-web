@@ -5,7 +5,14 @@ mocked — no real Graph/SharePoint call, no live DB.
 """
 from unittest.mock import MagicMock, patch
 
-from app.attachments import MAX_ATTACHMENT_BYTES, AttachmentInfo, FolderNotFoundError
+from app.attachments import (
+    MAX_ATTACHMENT_BYTES,
+    AttachmentInfo,
+    AttachmentNotInFolderError,
+    disallowed_type_message,
+    DisallowedFileTypeError,
+    FolderNotFoundError,
+)
 from app.auth import get_current_user_email
 from app.main import app
 from app.rls import Scope
@@ -299,3 +306,109 @@ def test_download_url_forbidden_outside_scope(client):
         )
 
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# DELETE /attachments (2026-08-10) — gated on Fill-or-admin, same as upload
+# ---------------------------------------------------------------------------
+
+def test_delete_401_without_auth(client):
+    response = client.delete("/attachments", params={"department": DEPT, "fiscal_year": FY, "item_id": "item-1"})
+    assert response.status_code == 401
+
+
+def test_delete_success_for_a_filler_of_the_department(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope", return_value=_scope()
+    ), patch("app.routers.attachments._department_cost_centers", return_value={"CC1"}), patch(
+        "app.routers.attachments.delete_attachment", return_value="budget.pdf"
+    ) as mock_delete:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.delete("/attachments", params={"department": DEPT, "fiscal_year": FY, "item_id": "item-1"})
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True, "name": "budget.pdf"}
+    mock_delete.assert_called_once_with(DEPT, FY, "item-1")
+
+
+def test_delete_forbidden_for_a_see_only_caller(client):
+    """A manager or approver who can READ the department's documents must not
+    be able to delete them — delete uses the Fill gate, like upload, not the
+    broader See gate that list/download use."""
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope",
+        return_value=_scope(fill_cost_centers=[], see_cost_centers=["CC1"]),
+    ), patch("app.routers.attachments._department_cost_centers", return_value={"CC1"}), patch(
+        "app.routers.attachments.delete_attachment"
+    ) as mock_delete:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.delete("/attachments", params={"department": DEPT, "fiscal_year": FY, "item_id": "item-1"})
+
+    assert response.status_code == 403
+    mock_delete.assert_not_called()
+
+
+def test_delete_admin_bypasses_scope_check(client):
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope", return_value=_admin_scope()
+    ), patch("app.routers.attachments._department_cost_centers", return_value={"CC1"}), patch(
+        "app.routers.attachments.delete_attachment", return_value="budget.pdf"
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.delete("/attachments", params={"department": DEPT, "fiscal_year": FY, "item_id": "item-1"})
+
+    assert response.status_code == 200
+
+
+def test_delete_unknown_department_is_404(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope", return_value=_scope()
+    ), patch("app.routers.attachments._department_cost_centers", return_value=set()), patch(
+        "app.routers.attachments.delete_attachment"
+    ) as mock_delete:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.delete("/attachments", params={"department": "Nope", "fiscal_year": FY, "item_id": "item-1"})
+
+    assert response.status_code == 404
+    mock_delete.assert_not_called()
+
+
+def test_delete_item_from_another_folder_maps_to_404_with_thai_detail(client):
+    """`AttachmentNotInFolderError` -> 404 (not 403): the caller IS authorized
+    for this department, the id simply is not one of its files, and a 403 would
+    confirm the id exists elsewhere in the library."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope", return_value=_scope()
+    ), patch("app.routers.attachments._department_cost_centers", return_value={"CC1"}), patch(
+        "app.routers.attachments.delete_attachment",
+        side_effect=AttachmentNotInFolderError("ไม่พบไฟล์นี้ในเอกสารของฝ่าย Accounting ปี 2027"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.delete("/attachments", params={"department": DEPT, "fiscal_year": FY, "item_id": "elsewhere"})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "ไม่พบไฟล์นี้ในเอกสารของฝ่าย Accounting ปี 2027"
+
+
+def test_upload_disallowed_type_detail_is_thai(client):
+    """The message a filler hits most often must be Thai (2026-08-10)."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.attachments.get_fabric_conn") as mock_conn, patch(
+        "app.routers.attachments.resolve_scope", return_value=_scope()
+    ), patch("app.routers.attachments._department_cost_centers", return_value={"CC1"}), patch(
+        "app.routers.attachments.upload_attachment",
+        side_effect=DisallowedFileTypeError(disallowed_type_message("txt")),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/attachments/upload", data={"department": DEPT, "fiscal_year": str(FY)},
+                               files={"file": ("note.txt", b"x", "text/plain")})
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail.startswith("ไฟล์ชนิด .txt อัปโหลดไม่ได้")
+    assert "not allowed" not in detail

@@ -20,6 +20,7 @@ from app.attachments import (
     ERROR_CODE_BY_EXCEPTION,
     ERROR_HTTP_STATUS,
     MAX_ATTACHMENT_BYTES,
+    delete_attachment,
     get_download_url,
     list_attachments,
     too_large_message,
@@ -44,6 +45,14 @@ class AttachmentInfoResponse(BaseModel):
 
 class DownloadUrlResponse(BaseModel):
     url: str
+
+
+class DeleteAttachmentResponse(BaseModel):
+    """`name` is echoed back so the UI can name the file it just removed
+    without having to keep its own copy of the row."""
+
+    deleted: bool
+    name: str
 
 
 def _department_cost_centers(conn: pyodbc.Connection, department: str) -> set[str]:
@@ -134,6 +143,35 @@ def upload(
         content = file.file.read()
         item = upload_attachment(department, fiscal_year, file.filename, content)
         return AttachmentInfoResponse(**vars(item))
+
+    return _run(_action)
+
+
+@router.delete("", response_model=DeleteAttachmentResponse)
+def delete(
+    department: str = Query(...),
+    fiscal_year: int = Query(...),
+    item_id: str = Query(...),
+    email: str = Depends(get_current_user_email),
+):
+    """Removes one attachment. Gated on **Fill**-or-admin, the same as upload
+    (`require_fill=True`) — a See-only manager or an approver reviewing the
+    department may read the documents but must not be able to delete them.
+
+    Added 2026-08-10: before this, nothing in the app could remove an
+    attachment, so a filler who uploaded the wrong file had to ask an admin to
+    delete it from SharePoint by hand (found during the SIT attachment run).
+    `app.attachments.delete_attachment` verifies the item really belongs to
+    this department/year folder before deleting — the department-level
+    authorization here cannot do that on its own."""
+
+    def _action():
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            _authorize(conn, department, scope, require_fill=True)
+        name = delete_attachment(department, fiscal_year, item_id)
+        logger.info("attachments: %s deleted %r from %s/%s", email, name, department, fiscal_year)
+        return DeleteAttachmentResponse(deleted=True, name=name)
 
     return _run(_action)
 

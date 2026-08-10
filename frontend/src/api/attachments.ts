@@ -27,3 +27,14 @@ export function fetchDownloadUrl(department: string, fiscalYear: number, itemId:
   const params = new URLSearchParams({ department, fiscal_year: String(fiscalYear), item_id: itemId })
   return apiFetch<{ url: string }>(`/attachments/download-url?${params.toString()}`).then((r) => r.url)
 }
+
+/** `DELETE /attachments` — removes one file from `<ฝ่าย>/<year>/` and returns
+ * its name. Requires Fill-or-admin on the department (a See-only reviewer may
+ * read the documents but not delete them), and the server refuses any item_id
+ * that does not actually live in that folder. */
+export function deleteAttachment(department: string, fiscalYear: number, itemId: string): Promise<string> {
+  const params = new URLSearchParams({ department, fiscal_year: String(fiscalYear), item_id: itemId })
+  return apiFetch<{ deleted: boolean; name: string }>(`/attachments?${params.toString()}`, {
+    method: 'DELETE',
+  }).then((r) => r.name)
+}

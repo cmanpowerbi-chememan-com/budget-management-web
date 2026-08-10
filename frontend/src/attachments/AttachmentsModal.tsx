@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchAttachments, fetchDownloadUrl, uploadAttachment } from '../api/attachments'
+import { deleteAttachment, fetchAttachments, fetchDownloadUrl, uploadAttachment } from '../api/attachments'
 import { ApiError } from '../api/client'
 import type { AttachmentInfo } from '../api/types'
 
@@ -34,6 +34,7 @@ export function AttachmentsModal({ department, fiscalYear, canUpload, onClose }:
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function load() {
@@ -75,6 +76,23 @@ export function AttachmentsModal({ department, fiscalYear, canUpload, onClose }:
       window.open(url, '_blank', 'noopener,noreferrer')
     } catch (err) {
       setActionError(describeError(err, 'เปิดไฟล์ไม่สำเร็จ'))
+    }
+  }
+
+  /** Deleting a file is not reversible from this app (SharePoint keeps its own
+   * recycle bin, which a filler cannot reach), so it always asks first and
+   * names the file in the question. */
+  async function handleDelete(item: AttachmentInfo) {
+    if (!window.confirm(`ลบไฟล์ "${item.name}" ออกจากโฟลเดอร์นี้?`)) return
+    setDeletingId(item.item_id)
+    setActionError(null)
+    try {
+      await deleteAttachment(department, fiscalYear, item.item_id)
+      await load()
+    } catch (err) {
+      setActionError(describeError(err, 'ลบไฟล์ไม่สำเร็จ'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -159,6 +177,20 @@ export function AttachmentsModal({ department, fiscalYear, canUpload, onClose }:
                       <button type="button" className="btn" onClick={() => handleDownload(item)}>
                         เปิด/ดาวน์โหลด
                       </button>
+                      {/* Same Fill-scope gate as the upload control — a See-only
+                          reviewer sees the file and can open it, but has no
+                          delete button (the server enforces this too). */}
+                      {canUpload && (
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={deletingId === item.item_id}
+                          data-testid={`attachments-delete-${item.item_id}`}
+                          onClick={() => handleDelete(item)}
+                        >
+                          {deletingId === item.item_id ? 'กำลังลบ…' : 'ลบ'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

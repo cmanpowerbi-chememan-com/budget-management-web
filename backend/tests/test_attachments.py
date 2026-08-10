@@ -9,8 +9,11 @@ import pytest
 from app.attachments import (
     ALLOWED_EXTENSIONS,
     MAX_ATTACHMENT_BYTES,
+    AttachmentNotInFolderError,
     AttachmentsNotConfiguredError,
     AttachmentTransportError,
+    delete_attachment,
+    disallowed_type_message,
     DisallowedFileTypeError,
     FileTooLargeError,
     FolderNotFoundError,
@@ -25,6 +28,8 @@ from app.attachments import (
 from app.config import Settings
 
 TOKEN_JSON = {"access_token": "tok-123"}
+# What Graph returns for a file that really sits in เอกสาร ฝ่าย/Accounting/2027.
+IN_FOLDER_PATH = "/drives/drive-1/root:/เอกสาร ฝ่าย/Accounting/2027"
 SITE_JSON = {"id": "site-1"}
 DRIVES_JSON = {"value": [{"id": "drive-1", "name": "Budgeting and Management"}]}
 
@@ -385,7 +390,8 @@ def test_get_download_url_returns_the_graph_download_url(monkeypatch):
             return _resp(200, SITE_JSON)
         if url.endswith("/drives"):
             return _resp(200, DRIVES_JSON)
-        return _resp(200, {"@microsoft.graph.downloadUrl": "https://download.example/x"})
+        return _resp(200, {"@microsoft.graph.downloadUrl": "https://download.example/x",
+                           "parentReference": {"path": IN_FOLDER_PATH}})
 
     monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
     monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
@@ -395,7 +401,7 @@ def test_get_download_url_returns_the_graph_download_url(monkeypatch):
     assert url == "https://download.example/x"
 
 
-def test_get_download_url_missing_item_raises_folder_not_found(monkeypatch):
+def test_get_download_url_missing_item_raises_not_in_folder(monkeypatch):
     def _fake_get(url, **kwargs):
         if "/drives" not in url and "/sites/" in url:
             return _resp(200, SITE_JSON)
@@ -406,7 +412,7 @@ def test_get_download_url_missing_item_raises_folder_not_found(monkeypatch):
     monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
     monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
 
-    with pytest.raises(FolderNotFoundError):
+    with pytest.raises(AttachmentNotInFolderError):
         get_download_url("Accounting", 2027, "missing-item", settings=_settings())
 
 
@@ -416,10 +422,158 @@ def test_get_download_url_missing_url_field_raises_transport_error(monkeypatch):
             return _resp(200, SITE_JSON)
         if url.endswith("/drives"):
             return _resp(200, DRIVES_JSON)
-        return _resp(200, {"id": "item-1"})  # no downloadUrl field
+        return _resp(200, {"id": "item-1", "parentReference": {"path": IN_FOLDER_PATH}})  # no downloadUrl
 
     monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
     monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
 
     with pytest.raises(AttachmentTransportError):
         get_download_url("Accounting", 2027, "item-1", settings=_settings())
+
+
+# ---------------------------------------------------------------------------
+# Thai file-type copy (2026-08-10) — the size message was already Thai since
+# bug 4, this one was still English and is the commoner mistake.
+# ---------------------------------------------------------------------------
+
+def test_disallowed_type_message_is_thai_and_names_the_extension_and_the_allowed_list():
+    msg = disallowed_type_message("txt")
+    assert msg == "ไฟล์ชนิด .txt อัปโหลดไม่ได้ — อัปโหลดได้เฉพาะ .jpeg, .jpg, .pdf, .png, .xls, .xlsx"
+    assert "not allowed" not in msg  # the old English wording must be gone
+
+
+def test_disallowed_type_message_handles_a_file_with_no_extension():
+    assert disallowed_type_message("") == (
+        "ไฟล์ชนิด (ไม่มีนามสกุล) อัปโหลดไม่ได้ — อัปโหลดได้เฉพาะ .jpeg, .jpg, .pdf, .png, .xls, .xlsx"
+    )
+
+
+def test_validate_upload_raises_the_thai_type_message():
+    with pytest.raises(DisallowedFileTypeError) as exc:
+        validate_upload("note.txt", 10)
+    assert str(exc.value) == disallowed_type_message("txt")
+
+
+def test_disallowed_type_message_lists_exactly_the_allowed_extensions():
+    """Guard against the message and the whitelist drifting apart."""
+    msg = disallowed_type_message("txt")
+    for ext in ALLOWED_EXTENSIONS:
+        assert f".{ext}" in msg
+
+
+def test_sanitize_rejects_reserved_and_empty_names_in_thai():
+    with pytest.raises(DisallowedFileTypeError) as exc1:
+        sanitize_attachment_filename("CON.pdf")
+    assert "ชื่อสงวน" in str(exc1.value)
+    with pytest.raises(DisallowedFileTypeError) as exc2:
+        sanitize_attachment_filename("...")
+    assert "ชื่อไฟล์ใช้ไม่ได้" in str(exc2.value)
+
+
+# ---------------------------------------------------------------------------
+# delete_attachment (2026-08-10) — new, and the folder-membership guard that
+# makes a caller-supplied drive-item id safe on a destructive call.
+# ---------------------------------------------------------------------------
+
+def _graph_stub(monkeypatch, item_json, delete_status=204, calls=None):
+    def _fake_get(url, **kwargs):
+        if "/drives" not in url and "/sites/" in url:
+            return _resp(200, SITE_JSON)
+        if url.endswith("/drives"):
+            return _resp(200, DRIVES_JSON)
+        return _resp(200, item_json) if item_json is not None else _resp(404, {}, text="not found")
+
+    def _fake_delete(url, **kwargs):
+        if calls is not None:
+            calls.append(url)
+        return _resp(delete_status, {})
+
+    monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
+    monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
+    monkeypatch.setattr("app.attachments.httpx.delete", _fake_delete)
+
+
+def test_delete_attachment_removes_a_file_in_the_departments_own_folder(monkeypatch):
+    calls = []
+    _graph_stub(monkeypatch, {"id": "item-1", "name": "invoice.pdf",
+                              "parentReference": {"path": IN_FOLDER_PATH}}, calls=calls)
+
+    name = delete_attachment("Accounting", 2027, "item-1", settings=_settings())
+
+    assert name == "invoice.pdf"
+    assert calls and calls[0].endswith("/drives/drive-1/items/item-1")
+
+
+def test_delete_attachment_refuses_an_item_from_another_departments_folder(monkeypatch):
+    """The whole point of the guard: the caller is authorized for Accounting,
+    but the id they passed belongs to Warehouse — nothing may be deleted."""
+    calls = []
+    _graph_stub(monkeypatch, {"id": "item-9", "name": "someone-elses.pdf",
+                              "parentReference": {"path": "/drives/drive-1/root:/เอกสาร ฝ่าย/Warehouse/2027"}},
+                calls=calls)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "item-9", settings=_settings())
+
+    assert calls == []  # no DELETE was ever issued
+
+
+def test_delete_attachment_refuses_an_item_outside_the_root_folder(monkeypatch):
+    """An admin master workbook sitting at the library root must be
+    unreachable — the tail match requires the full <root>/<ฝ่าย>/<year>."""
+    calls = []
+    _graph_stub(monkeypatch, {"id": "master", "name": "gl group_gl th name.xlsx",
+                              "parentReference": {"path": "/drives/drive-1/root:"}}, calls=calls)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "master", settings=_settings())
+    assert calls == []
+
+
+def test_delete_attachment_refuses_a_sibling_folder_with_a_prefix_name(monkeypatch):
+    """"2027-old" must not satisfy the check for "2027" — the tail match is
+    exact, not a prefix/substring test."""
+    _graph_stub(monkeypatch, {"id": "item-2", "name": "old.pdf",
+                              "parentReference": {"path": "/drives/drive-1/root:/เอกสาร ฝ่าย/Accounting/2027-old"}})
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "item-2", settings=_settings())
+
+
+def test_delete_attachment_accepts_a_percent_encoded_parent_path(monkeypatch):
+    """Graph may return the Thai root folder percent-encoded; the check
+    unquotes before comparing, so this is the same folder."""
+    encoded = "/drives/drive-1/root:/%E0%B9%80%E0%B8%AD%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%A3%20%E0%B8%9D%E0%B9%88%E0%B8%B2%E0%B8%A2/Accounting/2027"
+    _graph_stub(monkeypatch, {"id": "item-3", "name": "ok.pdf", "parentReference": {"path": encoded}})
+
+    assert delete_attachment("Accounting", 2027, "item-3", settings=_settings()) == "ok.pdf"
+
+
+def test_delete_attachment_missing_item_raises_not_in_folder(monkeypatch):
+    _graph_stub(monkeypatch, None)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "gone", settings=_settings())
+
+
+def test_delete_attachment_treats_a_graph_404_on_delete_as_success(monkeypatch):
+    """Someone else deleted it between the check and the call — the desired
+    end state is already true, so this is not an error."""
+    _graph_stub(monkeypatch, {"id": "item-4", "name": "raced.pdf",
+                              "parentReference": {"path": IN_FOLDER_PATH}}, delete_status=404)
+
+    assert delete_attachment("Accounting", 2027, "item-4", settings=_settings()) == "raced.pdf"
+
+
+def test_delete_attachment_raises_transport_error_on_an_unexpected_status(monkeypatch):
+    _graph_stub(monkeypatch, {"id": "item-5", "name": "x.pdf",
+                              "parentReference": {"path": IN_FOLDER_PATH}}, delete_status=500)
+
+    with pytest.raises(AttachmentTransportError):
+        delete_attachment("Accounting", 2027, "item-5", settings=_settings())
+
+
+def test_delete_attachment_requires_configuration(monkeypatch):
+    with pytest.raises(AttachmentsNotConfiguredError):
+        delete_attachment("Accounting", 2027, "item-1",
+                          settings=_settings(attachments_site_hostname="", attachments_site_name=""))

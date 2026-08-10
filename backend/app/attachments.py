@@ -19,7 +19,7 @@ caller should trigger pulling both into one `graph_auth` module.
 import logging
 import re
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import httpx
 
@@ -69,6 +69,20 @@ class FileTooLargeError(ValueError):
     """File exceeds `MAX_ATTACHMENT_BYTES`."""
 
 
+class AttachmentNotInFolderError(ValueError):
+    """The `item_id` given by the caller does not live in the
+    `<ฝ่าย>/<year>` folder they were authorized for.
+
+    Why this exists (2026-08-10): the caller supplies a raw Graph drive-item
+    id, and the router's `_authorize` only proves they may act on THAT
+    DEPARTMENT — it cannot know whether the id belongs to that department's
+    folder. Without this check, any authorized filler could pass any id in
+    the whole `Budgeting and Management` library and reach another
+    department's file, or one of the admin master workbooks. Harmless-ish for
+    a download, unacceptable for the delete added the same day, so BOTH
+    item-id paths now verify folder membership first."""
+
+
 def _format_attachment_mb(num_bytes: int) -> str:
     """`num_bytes` -> `"<N[.d]> MB"`, base 1024*1024 (MiB) -- matches how
     `MAX_ATTACHMENT_BYTES` is defined above (`10 * 1024 * 1024`), so the
@@ -95,6 +109,24 @@ def too_large_message(actual_bytes: int) -> str:
     return f"ไฟล์ใหญ่เกินกำหนด ({_format_attachment_mb(actual_bytes)}) — อัปโหลดได้ไม่เกิน {_format_attachment_mb(MAX_ATTACHMENT_BYTES)}"
 
 
+def allowed_extensions_text() -> str:
+    """The allowed list as the user should read it: dotted, comma-separated,
+    stable order (`.jpeg, .jpg, .pdf, .png, .xls, .xlsx`). One source for
+    every message that has to name the list."""
+    return ", ".join(f".{ext}" for ext in sorted(ALLOWED_EXTENSIONS))
+
+
+def disallowed_type_message(ext: str) -> str:
+    """Thai copy for a rejected extension (2026-08-10: the size message was
+    already Thai since bug 4, but this one was still English —
+    `"file type '.txt' is not allowed — allowed: jpeg, jpg, ..."` — which is
+    what a filler actually hits most often, since a wrong file type is a far
+    commoner mistake than a 10 MB file). Names the offending extension AND
+    the allowed list, so the user does not have to guess what to convert to."""
+    got = f".{ext}" if ext else "(ไม่มีนามสกุล)"
+    return f"ไฟล์ชนิด {got} อัปโหลดไม่ได้ — อัปโหลดได้เฉพาะ {allowed_extensions_text()}"
+
+
 class AttachmentTransportError(RuntimeError):
     """A Graph call failed for a reason other than the folder being missing
     (auth, network, unexpected status) — always surfaced loudly, never
@@ -106,6 +138,10 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "folder_not_found": 502,
     "disallowed_file_type": 400,
     "file_too_large": 400,
+    # 404, not 403: the caller IS authorized for this department, the id just
+    # is not one of its files — telling them "forbidden" would confirm the id
+    # exists somewhere else in the library.
+    "attachment_not_in_folder": 404,
     "attachment_transport_error": 502,
 }
 
@@ -114,6 +150,7 @@ ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     FolderNotFoundError: "folder_not_found",
     DisallowedFileTypeError: "disallowed_file_type",
     FileTooLargeError: "file_too_large",
+    AttachmentNotInFolderError: "attachment_not_in_folder",
     AttachmentTransportError: "attachment_transport_error",
 }
 
@@ -153,10 +190,12 @@ def sanitize_attachment_filename(filename: str) -> str:
     """
     name = _ILLEGAL_CHARS.sub("-", filename).strip(" .")
     if not name:
-        raise DisallowedFileTypeError(f"filename {filename!r} is empty after removing illegal characters")
+        raise DisallowedFileTypeError("ชื่อไฟล์ใช้ไม่ได้ — กรุณาเปลี่ยนชื่อไฟล์แล้วอัปโหลดใหม่")
     basename = name.rsplit(".", 1)[0] if "." in name else name
     if basename.upper() in _RESERVED_DEVICE_NAMES:
-        raise DisallowedFileTypeError(f"filename {filename!r} uses a reserved device name ({basename.upper()})")
+        raise DisallowedFileTypeError(
+            f"ชื่อไฟล์ '{basename}' เป็นชื่อสงวนของระบบ ใช้ไม่ได้ — กรุณาเปลี่ยนชื่อไฟล์แล้วอัปโหลดใหม่"
+        )
     return name
 
 
@@ -185,9 +224,7 @@ def validate_upload(filename: str, size: int) -> str:
     safe_filename = sanitize_attachment_filename(filename)
     ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise DisallowedFileTypeError(
-            f"file type '.{ext}' is not allowed — allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
-        )
+        raise DisallowedFileTypeError(disallowed_type_message(ext))
     if size > MAX_ATTACHMENT_BYTES:
         raise FileTooLargeError(too_large_message(size))
     return safe_filename
@@ -306,26 +343,89 @@ def upload_attachment(
     return _item_to_info(resp.json())
 
 
-def get_download_url(department: str, fiscal_year: int, item_id: str, *, settings: Settings | None = None) -> str:
-    """Returns a pre-authenticated, time-limited Graph download URL
-    (`@microsoft.graph.downloadUrl`) for one item — the frontend opens it
-    directly, no file bytes stream through this backend."""
-    settings = settings or get_settings()
-    _require_configured(settings)
-    token = _get_graph_token(settings)
-    _site_id, drive_id = _resolve_site_and_drive(token, settings)
+def _fetch_item_in_folder(
+    token: str, drive_id: str, department: str, fiscal_year: int, item_id: str, settings: Settings
+) -> dict:
+    """Fetches one drive item AND proves it sits directly inside
+    `<root>/<ฝ่าย>/<year>/` before the caller is allowed to do anything with
+    it (`AttachmentNotInFolderError` otherwise).
 
+    The membership test compares Graph's `parentReference.path` — which comes
+    back shaped like `/drives/<id>/root:/เอกสาร ฝ่าย/Data & Analytic/2027`
+    and MAY be percent-encoded — against the folder this department/year
+    resolves to. `unquote` first, then require the path to END WITH
+    `root:/<expected>`: an exact tail match, so a sibling folder whose name
+    merely starts the same ("2027-old") cannot pass, and a file nested one
+    level deeper does not either."""
     resp = httpx.get(
         f"{GRAPH_BASE}/drives/{drive_id}/items/{item_id}",
         headers={"Authorization": f"Bearer {token}"},
         timeout=30,
     )
     if resp.status_code == 404:
-        raise FolderNotFoundError(f"attachment {item_id!r} not found for ฝ่าย {department!r}, year {fiscal_year}")
+        raise AttachmentNotInFolderError(f"ไม่พบไฟล์นี้ในเอกสารของฝ่าย {department} ปี {fiscal_year}")
     if resp.status_code != 200:
         raise AttachmentTransportError(f"Graph item lookup failed: {resp.status_code} {resp.text}")
 
-    url = resp.json().get("@microsoft.graph.downloadUrl")
+    item = resp.json()
+    expected = _folder_path(department, fiscal_year, settings)
+    parent_path = unquote(item.get("parentReference", {}).get("path") or "")
+    if not parent_path.endswith(f"root:/{expected}"):
+        logger.warning(
+            "attachments: item %r lives in %r, not in %r — refusing (department=%r, year=%s)",
+            item_id, parent_path, expected, department, fiscal_year,
+        )
+        raise AttachmentNotInFolderError(f"ไม่พบไฟล์นี้ในเอกสารของฝ่าย {department} ปี {fiscal_year}")
+    return item
+
+
+def get_download_url(department: str, fiscal_year: int, item_id: str, *, settings: Settings | None = None) -> str:
+    """Returns a pre-authenticated, time-limited Graph download URL
+    (`@microsoft.graph.downloadUrl`) for one item — the frontend opens it
+    directly, no file bytes stream through this backend. The item must belong
+    to this department/year folder (`_fetch_item_in_folder`)."""
+    settings = settings or get_settings()
+    _require_configured(settings)
+    token = _get_graph_token(settings)
+    _site_id, drive_id = _resolve_site_and_drive(token, settings)
+
+    item = _fetch_item_in_folder(token, drive_id, department, fiscal_year, item_id, settings)
+    url = item.get("@microsoft.graph.downloadUrl")
     if not url:
         raise AttachmentTransportError(f"Graph item {item_id!r} has no download URL")
     return url
+
+
+def delete_attachment(
+    department: str, fiscal_year: int, item_id: str, *, settings: Settings | None = None
+) -> str:
+    """Deletes one attachment from `<root>/<ฝ่าย>/<year>/` and returns the
+    deleted file's name (so the caller can name it in a confirmation).
+
+    Added 2026-08-10 after the SIT attachment run: there was no delete path at
+    all, so a filler who uploaded the wrong file had to ask an admin to remove
+    it through SharePoint by hand. Folder membership is verified FIRST
+    (`_fetch_item_in_folder`) — never trust a caller-supplied drive-item id on
+    a destructive call. Graph answers 204 on success; a 404 at this point means
+    someone else deleted it between the check and the call, which is the
+    desired end state, so it is treated as success rather than an error."""
+    settings = settings or get_settings()
+    _require_configured(settings)
+    token = _get_graph_token(settings)
+    _site_id, drive_id = _resolve_site_and_drive(token, settings)
+
+    item = _fetch_item_in_folder(token, drive_id, department, fiscal_year, item_id, settings)
+    name = item.get("name", item_id)
+
+    resp = httpx.delete(
+        f"{GRAPH_BASE}/drives/{drive_id}/items/{item_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30,
+    )
+    if resp.status_code not in (200, 204, 404):
+        raise AttachmentTransportError(f"Graph delete failed: {resp.status_code} {resp.text}")
+    logger.info(
+        "attachments: deleted %r from %s/%s (item_id=%s, graph_status=%s)",
+        name, department, fiscal_year, item_id, resp.status_code,
+    )
+    return name

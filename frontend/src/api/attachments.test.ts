@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchAttachments, fetchDownloadUrl, uploadAttachment } from './attachments'
+import { deleteAttachment, fetchAttachments, fetchDownloadUrl, uploadAttachment } from './attachments'
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -66,5 +66,24 @@ describe('fetchDownloadUrl', () => {
 
     expect(String(fetchSpy.mock.calls[0][0])).toContain('/attachments/download-url?')
     expect(url).toBe('https://download.example/x')
+  })
+})
+
+describe('deleteAttachment', () => {
+  it('sends DELETE /attachments with the item_id and returns the deleted name', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ deleted: true, name: 'budget.pdf' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(deleteAttachment('Accounting', 2027, 'item-1')).resolves.toBe('budget.pdf')
+
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(String(url)).toContain('/attachments?')
+    expect(String(url)).toContain('item_id=item-1')
+    expect(init?.method).toBe('DELETE')
+    fetchSpy.mockRestore()
   })
 })

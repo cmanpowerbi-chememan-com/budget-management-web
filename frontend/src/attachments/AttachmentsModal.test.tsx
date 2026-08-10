@@ -95,4 +95,60 @@ describe('AttachmentsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
     expect(onClose).toHaveBeenCalled()
   })
+
+  it('deletes a file after the user confirms, then reloads the list', async () => {
+    vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValueOnce([ITEM]).mockResolvedValueOnce([])
+    vi.mocked(attachmentsApi.deleteAttachment).mockResolvedValue('budget.pdf')
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('budget.pdf')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('attachments-delete-item-1'))
+
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีไฟล์/)).toBeInTheDocument())
+    expect(confirmSpy).toHaveBeenCalledWith('ลบไฟล์ "budget.pdf" ออกจากโฟลเดอร์นี้?')
+    expect(attachmentsApi.deleteAttachment).toHaveBeenCalledWith('Accounting', 2027, 'item-1')
+    confirmSpy.mockRestore()
+  })
+
+  it('does not delete anything when the user cancels the confirm', async () => {
+    vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([ITEM])
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('budget.pdf')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('attachments-delete-item-1'))
+
+    expect(attachmentsApi.deleteAttachment).not.toHaveBeenCalled()
+    expect(screen.getByText('budget.pdf')).toBeInTheDocument()
+    confirmSpy.mockRestore()
+  })
+
+  it('hides the delete button from a caller who cannot upload (See-only reviewer)', async () => {
+    vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([ITEM])
+    render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload={false} onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('budget.pdf')).toBeInTheDocument())
+    expect(screen.queryByTestId('attachments-delete-item-1')).not.toBeInTheDocument()
+    expect(screen.getByText('เปิด/ดาวน์โหลด')).toBeInTheDocument()
+  })
+
+  it("shows the server's Thai reason when a delete fails", async () => {
+    vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([ITEM])
+    vi.mocked(attachmentsApi.deleteAttachment).mockRejectedValue(
+      new ApiError(404, 'ไม่พบข้อมูล', 'ไม่พบไฟล์นี้ในเอกสารของฝ่าย Accounting ปี 2027'),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('budget.pdf')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('attachments-delete-item-1'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('attachments-action-error').textContent).toContain(
+        'ไม่พบไฟล์นี้ในเอกสารของฝ่าย Accounting ปี 2027',
+      ),
+    )
+    confirmSpy.mockRestore()
+  })
 })
