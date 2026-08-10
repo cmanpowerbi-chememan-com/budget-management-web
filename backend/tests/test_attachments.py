@@ -9,6 +9,7 @@ import pytest
 from app.attachments import (
     ALLOWED_EXTENSIONS,
     MAX_ATTACHMENT_BYTES,
+    PROTECTED_MASTER_FILENAMES,
     AttachmentNotInFolderError,
     AttachmentsNotConfiguredError,
     AttachmentTransportError,
@@ -594,3 +595,70 @@ def test_delete_attachment_malformed_item_id_is_not_in_folder_not_a_transport_er
 
     with pytest.raises(AttachmentNotInFolderError):
         delete_attachment("Accounting", 2027, "not-a-real-id", settings=_settings())
+
+
+# ---------------------------------------------------------------------------
+# Protected admin master workbooks (jakkaritw 2026-08-10: "ห้ามยุ่งเด็ดขาด")
+# ---------------------------------------------------------------------------
+
+def test_the_four_admin_masters_are_the_protected_set():
+    """Pinned by name: these are the workbooks that drive RLS, approval
+    routing, the GL whitelist, the closing date and the per-diem rates. If a
+    fifth master is ever added at the library root it must be added here too."""
+    assert PROTECTED_MASTER_FILENAMES == frozenset({
+        "cc dept.xlsx",
+        "gl group_gl th name.xlsx",
+        "วันปิดรับข้อมูลงบประมาณ.xlsx",
+        "ค่าเบี้ยเลี้ยง.xlsx",
+    })
+
+
+@pytest.mark.parametrize("master", sorted({
+    "cc dept.xlsx", "gl group_gl th name.xlsx", "วันปิดรับข้อมูลงบประมาณ.xlsx", "ค่าเบี้ยเลี้ยง.xlsx",
+}))
+def test_delete_refuses_every_protected_master_even_from_inside_the_folder(monkeypatch, master):
+    """The name check runs BEFORE the folder check, so even a master somehow
+    sitting inside a department folder is untouchable — the rule is about the
+    file, not only about where it happens to be."""
+    calls = []
+    _graph_stub(monkeypatch, {"id": "m", "name": master,
+                              "parentReference": {"path": IN_FOLDER_PATH}}, calls=calls)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "m", settings=_settings())
+    assert calls == []  # no DELETE issued
+
+
+def test_download_url_refuses_a_protected_master(monkeypatch):
+    """The web app must not even hand out a download link for a master."""
+    def _fake_get(url, **kwargs):
+        if "/drives" not in url and "/sites/" in url:
+            return _resp(200, SITE_JSON)
+        if url.endswith("/drives"):
+            return _resp(200, DRIVES_JSON)
+        return _resp(200, {"id": "m", "name": "cc dept.xlsx",
+                           "@microsoft.graph.downloadUrl": "https://download.example/master",
+                           "parentReference": {"path": IN_FOLDER_PATH}})
+
+    monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
+    monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        get_download_url("Accounting", 2027, "m", settings=_settings())
+
+
+def test_protected_master_match_is_case_insensitive(monkeypatch):
+    _graph_stub(monkeypatch, {"id": "m", "name": "CC Dept.XLSX",
+                              "parentReference": {"path": IN_FOLDER_PATH}})
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "m", settings=_settings())
+
+
+def test_a_normal_department_file_is_unaffected_by_the_protection(monkeypatch):
+    """Regression guard: the master protection must not accidentally swallow
+    ordinary attachments (a name merely CONTAINING a master's words is fine)."""
+    _graph_stub(monkeypatch, {"id": "ok", "name": "cc dept summary 2027.xlsx",
+                              "parentReference": {"path": IN_FOLDER_PATH}})
+
+    assert delete_attachment("Accounting", 2027, "ok", settings=_settings()) == "cc dept summary 2027.xlsx"
