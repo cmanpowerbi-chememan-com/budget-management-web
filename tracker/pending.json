@@ -1,8 +1,46 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-10T11:57:52+0700",
+  "updated": "2026-08-10T15:20:18+0700",
   "tasks": [
+    {
+      "id": "board-orphan-cc-rowskip",
+      "state": "doing",
+      "created": "2026-08-10T15:20:04+0700",
+      "updated": "2026-08-10T15:20:04+0700",
+      "ai": "POLICY CHANGE (jakkaritw 2026-08-10): board_budget orphan CC = skip ROW (loud: warning w/ per-CC THB totals + rows_rejected in run log), rows w/ CC in master load normally. Supersedes whole-file reject for orphan CC only; blank-key-with-value + non-numeric + bad filename stay whole-file rejects. Effect: FY2026 new file loads w/o waiting for Nipaporn master fix (12k THB row skipped until CC added, auto-restored next Replace-by-Year). Impl dispatched to 04-agent in 19.dw. Next: delta gate -> jakkaritw push approval -> rerun -> verify FY2026 landed (expect 744-1 raw rows, warning '10OS014000: 12,000.00 THB'). Related task fy2026-orphan-cc-nipaporn now NON-blocking (restores 12k row when done).",
+      "agent": "claude"
+    },
+    {
+      "id": "fy2026-orphan-cc-nipaporn",
+      "state": "willdo",
+      "created": "2026-08-10T15:17:45+0700",
+      "updated": "2026-08-10T15:20:04+0700",
+      "ai": "[CROSS-SESSION UPDATE 2026-08-10] NO LONGER BLOCKING: jakkaritw changed policy to orphan-CC row-skip (task board-orphan-cc-rowskip) -> FY2026 loads without this fix; adding the CC row later just restores the skipped 12,000 THB row (10OS014000/GL 5210600010) on the next sync. Original ask unchanged: Nipaporn adds row to cc dept.xlsx: Cost Ctr=10OS014000, Description=Facility Management, C Level=Chief People Officer, สายงาน=People Experience, ฝ่าย=Facility Management, คนกรอกข้อมูล=nitip@chememan.com.",
+      "agent": "claude"
+    },
+    {
+      "id": "attachments-delete-and-thai-copy",
+      "state": "done",
+      "created": "2026-08-10T12:43:36+0700",
+      "updated": "2026-08-10T15:20:18+0700",
+      "ai": "[PRD DEPLOY 2026-08-10, jakkaritw-approved 'ขึ้น prd'] prd rev 0000020 image budget-web:4cb9e8f RunningAtMaxScale/Healthy traffic 100%, provisioningState Succeeded. Diff ea23d64->4cb9e8f = 5 commits, backend+frontend, NO .sql/migration. Posture re-verified: Easy Auth ON (anonymous 401 AND spoofed x-ms-client-principal-name 401 -> prd cannot be impersonated the way stg can, so live functional probing of prd is impossible from here BY DESIGN; behaviour proven on stg with the identical image content), 0 ingress IP rules, REDIRECT/LABEL/DEV_AUTH_EMAIL absent, APP_ENV=production, NOTIFICATIONS_DRY_RUN=false carried over. ROLLBACK = --image cmanbudgetacr.azurecr.io/budget-web:ea23d64 (prior rev 0000019). Fixed my verify_prd_deploy.py which had a hardcoded expected image tag and printed a false '<<< MISMATCH' - now takes the expected sha as argv[1]. jakkaritw can now hard-refresh prd and delete his 2.0MB test PNG in เอกสาร ฝ่าย/Data & Analytic/2027/ himself."
+    },
+    {
+      "id": "sit-attachments-both-cases",
+      "state": "done",
+      "created": "2026-08-10T12:10:42+0700",
+      "updated": "2026-08-10T12:10:42+0700",
+      "ai": "Attachments tested on stg (image ea23d64) as pornthipp, BOTH cases, 6/6 PASS after fixing my own oracle error. CASE A (normal file): first attempt used .txt -> HTTP 400 'file type .txt is not allowed - allowed: jpeg, jpg, pdf, png, xls, xlsx' = MY error not an app bug; retried with a generated minimal valid 594-byte PDF -> HTTP 200, appears in GET /attachments, download-url issued, and the bytes fetched back from chememan.sharepoint.com are BYTE-IDENTICAL to what was sent. Landed at site CMANDWPRD / library 'Budgeting and Management' / เอกสาร ฝ่าย/Data & Analytic/2027/ - so the SharePoint attachment path is proven end-to-end for the first time. CASE B (oversize): 12.5 MB -> HTTP 413 with the exact Thai message 'ไฟล์ใหญ่เกินกำหนด (12.5 MB) — อัปโหลดได้ไม่เกิน 10 MB' (bug-4 fix seen live for the first time) and the file did NOT land. CLEANED UP as jakkaritw asked: no DELETE endpoint exists in the API (upload/list/download only) so removal went via Graph on drive b!yMQKs8rOc0CSyxosit6gVJ... -> 204, and the app's own listing re-read shows 0 items. TWO GAPS FOUND, neither fixed: (1) NO delete-attachment endpoint at all - a filler who uploads a wrong file cannot remove it from the web; (2) the file-TYPE refusal message is still ENGLISH ('file type .txt is not allowed...') while the SIZE message is Thai."
+    },
+    {
+      "id": "log-d9f4ea8",
+      "state": "done",
+      "created": "2026-08-10T11:58:38+0700",
+      "updated": "2026-08-10T11:58:38+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record the NOT_OPEN-locks-admin decision and both deploys [commit d9f4ea8]"
+    },
     {
       "id": "notopen-year-locks-admin",
       "state": "done",
@@ -12,10 +50,10 @@
     },
     {
       "id": "approved-budget-3part-sync-proof",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-10T11:50:13+0700",
-      "updated": "2026-08-10T11:50:13+0700",
-      "ai": "Prove 3-part approved-budget chain: (1) src SharePoint approved_budget_2023..2026.xlsx (Nipaporn uploaded ~2-3h ago incl NEW 2023), (2) dbo.board_budget in fabric_sql_database synced?, (3) web stg+prd read live. Also answer: is sync schedule job LIVE now. ADR-0021 = Sync-now button + daily auto-sync decided; backend only READS board_budget -> sync lives in DW ws (NB_budget_masters_sync pattern). Next: fabric MCP check DW notebook+schedule, DB probe by fiscal_year, web env proof.",
+      "updated": "2026-08-10T14:05:22+0700",
+      "ai": "SHIPPED + VERIFIED (except FY2026 data-blocked). Fixes in 19.dw: 42d9d09 ghost-row skip + c9052ff quantize 2dp ROUND_HALF_UP per-cell (delta gate APPROVE; suites 111+87 green; test-only ae19fe2/a061bfb). Deployed via deploy_notebooks.py --live: budget_masters_lib+NB_budget_masters_sync (run1) then budget_masters_lib (run2). Manual run 07f94b6e: rows_in=2694 (ALL 4 files read, ghost+quantize both proven), FY2023 LOADED 687r/107cc/SUM 287,177,280.80, FY2024 609r/95cc/221,798,618.19, FY2025 626r/103cc/245,282,692.38 — reconcile exact-pass, committed per-file. FY2026 file REJECTED: orphan CC 10OS014000 (1 row, excel row 437, GL 5210600010, 12,000 THB/yr) not in cc_filler_map (master has 10OS014010/14020/...); old FY2026 (364r/205,307,324.11, loaded 08-08) intact in DB by design (validate-before-DELETE). Both doomed retry loops cancelled (47049288, 07f94b6e). LEFTOVER: Nipaporn adds CC 10OS014000 to cc dept.xlsx OR fixes row 437 typo -> next 06:30 run (or manual) loads new FY2026. Schedule enabled daily 06:30 BKK. Web stg+prd read live -> 2023-2025 visible NOW.",
       "agent": "claude"
     },
     {
