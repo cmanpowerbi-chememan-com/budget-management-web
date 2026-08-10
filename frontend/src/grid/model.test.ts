@@ -501,13 +501,15 @@ describe('identityColSpan / fullRowColSpan / subtotalLabelColSpan (compact-mode 
 
 describe('formatThb', () => {
   it('formats a number with thousands separators', () => {
-    expect(formatThb(1234567)).toBe('1,234,567')
+    expect(formatThb(1234567)).toBe('1,234,567.00')
   })
   it('formats zero as a dash placeholder', () => {
     expect(formatThb(0)).toBe('—')
   })
-  it('formats a whole number with no decimal places', () => {
-    expect(formatThb(450000)).toBe('450,000')
+  it('shows 2 decimal places on a whole number too (jakkaritw 2026-08-10)', () => {
+    // Was '450,000'. The three layers of one row have to read the same way:
+    // SAP 1,209,793.46 next to a typed Pending 9 was unreadable as a pair.
+    expect(formatThb(450000)).toBe('450,000.00')
   })
   it('shows 2 decimal places when there is a fraction', () => {
     expect(formatThb(416.66)).toBe('416.66')
@@ -521,8 +523,13 @@ describe('formatThb', () => {
   it('pads a sub-1 fraction to 2 places', () => {
     expect(formatThb(0.4)).toBe('0.40')
   })
-  it('rounds float noise to 2dp before deciding whole-vs-fraction', () => {
-    expect(formatThb(100.000001)).toBe('100')
+  it('rounds float noise away instead of showing it', () => {
+    expect(formatThb(100.000001)).toBe('100.00')
+  })
+  it('formats a small typed amount the same way as a large SAP amount', () => {
+    // The exact pair from jakkaritw's screenshot.
+    expect(formatThb(9)).toBe('9.00')
+    expect(formatThb(1209793.46)).toBe('1,209,793.46')
   })
 })
 

@@ -5,7 +5,7 @@ import { MonthCell } from './MonthCell'
 describe('MonthCell', () => {
   it('renders a formatted read-only value when not editable', () => {
     render(<MonthCell value={1234} editable={false} onCommit={vi.fn()} label="Jan pending" />)
-    expect(screen.getByText('1,234')).toBeInTheDocument()
+    expect(screen.getByText('1,234.00')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 

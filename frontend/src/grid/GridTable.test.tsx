@@ -307,13 +307,13 @@ describe('GridTable', () => {
 
       const cost = screen.getByTestId('side-section-COST')
       const sapTotal = within(cost).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement
-      expect(within(sapTotal).getByText('110')).toBeInTheDocument() // m01: 100 + 10
-      expect(within(sapTotal).getByText('1')).toBeInTheDocument() // m02: 1 + 0
+      expect(within(sapTotal).getByText('110.00')).toBeInTheDocument() // m01: 100 + 10
+      expect(within(sapTotal).getByText('1.00')).toBeInTheDocument() // m02: 1 + 0
       const boardTotal = within(cost).getByText('รวมทั้งหมด · Approved · งบ').closest('tr') as HTMLElement
-      expect(within(boardTotal).getByText('220')).toBeInTheDocument()
+      expect(within(boardTotal).getByText('220.00')).toBeInTheDocument()
       const pendingTotal = within(cost).getByText('รวมทั้งหมด · Pending · รออนุมัติ').closest('tr') as HTMLElement
-      expect(within(pendingTotal).getByText('330')).toBeInTheDocument()
-      expect(within(pendingTotal).queryByText('110')).not.toBeInTheDocument() // layers must not bleed into each other
+      expect(within(pendingTotal).getByText('330.00')).toBeInTheDocument()
+      expect(within(pendingTotal).queryByText('110.00')).not.toBeInTheDocument() // layers must not bleed into each other
 
       const sga = screen.getByTestId('side-section-SGA')
       const sgaSapTotal = within(sga).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement

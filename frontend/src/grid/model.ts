@@ -685,14 +685,18 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   return { ok: true }
 }
 
-/** THB display formatting matching the mockup's `fmt()`: thousands
- * separators, zero shown as an em-dash placeholder (never a bare "0").
- * Decimals (up to 2dp) are shown only when the value actually has a
- * fraction — a whole-baht value never grows a spurious ".00". */
+/** THB display formatting: thousands separators, ALWAYS two decimal places,
+ * zero shown as an em-dash placeholder (never a bare "0").
+ *
+ * jakkaritw, 2026-08-10: the three layers of one row must read the same way.
+ * The mockup's `fmt()` (and this function until now) dropped the decimals on a
+ * whole-baht value, so a single row showed SAP as `1,209,793.46` next to
+ * Pending as `9` — the eye cannot compare those, and a typed `9` looked like a
+ * different KIND of number from the SAP figure beside it. Two decimals
+ * everywhere, always. */
 export function formatThb(value: number): string {
   if (!value) return '—'
   const rounded = Math.round(value * 100) / 100
-  if (Number.isInteger(rounded)) return rounded.toLocaleString('en-US')
   return rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 

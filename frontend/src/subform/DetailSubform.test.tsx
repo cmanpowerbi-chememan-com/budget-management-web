@@ -263,8 +263,8 @@ describe('DetailSubform', () => {
       expect(screen.getByText('Jan')).toBeInTheDocument()
       expect(screen.getByText('Dec')).toBeInTheDocument()
       expect(screen.getByText('Monthly total')).toBeInTheDocument()
-      expect(screen.getByText('5,000')).toBeInTheDocument() // m01 column total
-      expect(screen.getByText('฿5,250')).toBeInTheDocument() // footer year total
+      expect(screen.getByText('5,000.00')).toBeInTheDocument() // m01 column total
+      expect(screen.getByText('฿5,250.00')).toBeInTheDocument() // footer year total
       expect(screen.getByText(/Rows:/)).toBeInTheDocument()
     })
   })

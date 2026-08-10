@@ -389,7 +389,7 @@ export function DetailSubform({
                       <span className="month-value pending-readonly">{formatThb(monthlyTotals[i])}</span>
                     </td>
                   ))}
-                  <td className="month-cell grand">{grandTotal.toLocaleString('en-US')}</td>
+                  <td className="month-cell grand">{formatThb(grandTotal)}</td>
                   <td />
                 </tr>
               </tbody>
@@ -411,7 +411,7 @@ export function DetailSubform({
 
         <div className="modal-foot">
           <div className="modal-foot-info">
-            Rows: <b>{rows.length}</b> · Year total: <b>฿{grandTotal.toLocaleString('en-US')}</b>
+            Rows: <b>{rows.length}</b> · Year total: <b>฿{formatThb(grandTotal)}</b>
           </div>
           <div className="modal-actions">
             <button type="button" className="btn" disabled={loading || saving} onClick={onClose}>
