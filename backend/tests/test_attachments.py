@@ -9,7 +9,6 @@ import pytest
 from app.attachments import (
     ALLOWED_EXTENSIONS,
     MAX_ATTACHMENT_BYTES,
-    PROTECTED_MASTER_FILENAMES,
     AttachmentNotInFolderError,
     AttachmentsNotConfiguredError,
     AttachmentTransportError,
@@ -598,39 +597,47 @@ def test_delete_attachment_malformed_item_id_is_not_in_folder_not_a_transport_er
 
 
 # ---------------------------------------------------------------------------
-# Protected admin master workbooks (jakkaritw 2026-08-10: "ห้ามยุ่งเด็ดขาด")
+# The whole-library rule (jakkaritw 2026-08-10): the app may touch เอกสาร ฝ่าย
+# and NOTHING else in `Budgeting and Management`. Enforced structurally — an
+# earlier attempt used a filename deny-list and was wrong within the hour
+# (4 of the 8 masters, and "ค่าเบี้ยเลี้ยง" misspelled vs the real
+# "ค่าเบี่ยเลี้ยง"), which is exactly why this is a path test now.
 # ---------------------------------------------------------------------------
 
-def test_the_four_admin_masters_are_the_protected_set():
-    """Pinned by name: these are the workbooks that drive RLS, approval
-    routing, the GL whitelist, the closing date and the per-diem rates. If a
-    fifth master is ever added at the library root it must be added here too."""
-    assert PROTECTED_MASTER_FILENAMES == frozenset({
-        "cc dept.xlsx",
-        "gl group_gl th name.xlsx",
-        "วันปิดรับข้อมูลงบประมาณ.xlsx",
-        "ค่าเบี้ยเลี้ยง.xlsx",
-    })
+ROOT_MASTERS = [
+    "cc dept.xlsx", "cc orgcode.xlsx", "country.xlsx", "gl group_gl th name.xlsx",
+    "ค่าเบี่ยเลี้ยง.xlsx", "ซ่อนเอกสาร.xlsx", "วันปิดรับข้อมูลงบประมาณ.xlsx",
+    "อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx",
+]
 
 
-@pytest.mark.parametrize("master", sorted({
-    "cc dept.xlsx", "gl group_gl th name.xlsx", "วันปิดรับข้อมูลงบประมาณ.xlsx", "ค่าเบี้ยเลี้ยง.xlsx",
-}))
-def test_delete_refuses_every_protected_master_even_from_inside_the_folder(monkeypatch, master):
-    """The name check runs BEFORE the folder check, so even a master somehow
-    sitting inside a department folder is untouchable — the rule is about the
-    file, not only about where it happens to be."""
+@pytest.mark.parametrize("master", ROOT_MASTERS)
+def test_delete_refuses_every_master_workbook_at_the_library_root(monkeypatch, master):
+    """All EIGHT of them — the real inventory, not the 4 the first attempt knew."""
     calls = []
     _graph_stub(monkeypatch, {"id": "m", "name": master,
-                              "parentReference": {"path": IN_FOLDER_PATH}}, calls=calls)
+                              "parentReference": {"path": "/drives/drive-1/root:"}}, calls=calls)
 
     with pytest.raises(AttachmentNotInFolderError):
         delete_attachment("Accounting", 2027, "m", settings=_settings())
-    assert calls == []  # no DELETE issued
+    assert calls == []  # nothing was deleted
 
 
-def test_download_url_refuses_a_protected_master(monkeypatch):
-    """The web app must not even hand out a download link for a master."""
+@pytest.mark.parametrize("area", ["approved budget", "pending budget"])
+def test_delete_refuses_the_sibling_budget_folders(monkeypatch, area):
+    """`approved budget/` and `pending budget/` hold the yearly import
+    workbooks — same library, still off limits."""
+    calls = []
+    _graph_stub(monkeypatch, {"id": "f", "name": "approved_budget_2026.xlsx",
+                              "parentReference": {"path": f"/drives/drive-1/root:/{area}"}}, calls=calls)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "f", settings=_settings())
+    assert calls == []
+
+
+def test_download_url_refuses_a_master_workbook(monkeypatch):
+    """The app must not even hand out a download link for one."""
     def _fake_get(url, **kwargs):
         if "/drives" not in url and "/sites/" in url:
             return _resp(200, SITE_JSON)
@@ -638,7 +645,7 @@ def test_download_url_refuses_a_protected_master(monkeypatch):
             return _resp(200, DRIVES_JSON)
         return _resp(200, {"id": "m", "name": "cc dept.xlsx",
                            "@microsoft.graph.downloadUrl": "https://download.example/master",
-                           "parentReference": {"path": IN_FOLDER_PATH}})
+                           "parentReference": {"path": "/drives/drive-1/root:"}})
 
     monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
     monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
@@ -647,17 +654,27 @@ def test_download_url_refuses_a_protected_master(monkeypatch):
         get_download_url("Accounting", 2027, "m", settings=_settings())
 
 
-def test_protected_master_match_is_case_insensitive(monkeypatch):
-    _graph_stub(monkeypatch, {"id": "m", "name": "CC Dept.XLSX",
-                              "parentReference": {"path": IN_FOLDER_PATH}})
+def test_a_file_directly_under_the_attachments_root_is_still_refused(monkeypatch):
+    """Inside เอกสาร ฝ่าย but not inside a <ฝ่าย>/<year> — the inner check
+    catches what the outer one lets through."""
+    _graph_stub(monkeypatch, {"id": "x", "name": "stray.pdf",
+                              "parentReference": {"path": "/drives/drive-1/root:/เอกสาร ฝ่าย"}})
 
     with pytest.raises(AttachmentNotInFolderError):
-        delete_attachment("Accounting", 2027, "m", settings=_settings())
+        delete_attachment("Accounting", 2027, "x", settings=_settings())
 
 
-def test_a_normal_department_file_is_unaffected_by_the_protection(monkeypatch):
-    """Regression guard: the master protection must not accidentally swallow
-    ordinary attachments (a name merely CONTAINING a master's words is fine)."""
+def test_a_master_NAME_inside_the_correct_folder_is_allowed(monkeypatch):
+    """Documents the deliberate trade: the rule is about the PATH, not the
+    name. A department's own file called "cc dept.xlsx" is that department's
+    file — it is not the master, which lives at the root and is unreachable."""
+    _graph_stub(monkeypatch, {"id": "own", "name": "cc dept.xlsx",
+                              "parentReference": {"path": IN_FOLDER_PATH}})
+
+    assert delete_attachment("Accounting", 2027, "own", settings=_settings()) == "cc dept.xlsx"
+
+
+def test_a_normal_department_file_is_unaffected(monkeypatch):
     _graph_stub(monkeypatch, {"id": "ok", "name": "cc dept summary 2027.xlsx",
                               "parentReference": {"path": IN_FOLDER_PATH}})
 

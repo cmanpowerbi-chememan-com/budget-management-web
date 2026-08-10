@@ -33,27 +33,33 @@ GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset({"pdf", "xlsx", "xls", "png", "jpg", "jpeg"})
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10 MB
 
-# The admin master workbooks. They sit at the ROOT of the same
-# `Budgeting and Management` library the attachment folders live in, so an
-# attachment endpoint handed the right drive-item id could otherwise reach them.
+# The web app may touch ONE area of the `Budgeting and Management` library and
+# nothing else. jakkaritw, 2026-08-10: "ทุกไฟล์บน Path ห้ามยุ่ง ยกเว้นเอกสารฝ่าย
+# ... ถ้าจะแก้ไขต้องเข้าไปหลังบ้าน sharepoint หน้าเวปเข้าถึงไฟล์พวกนี้ไม่ได้".
 #
-# jakkaritw, 2026-08-10, verbatim: "ห้ามยุ่งเด็ดขาด ... ถ้าจะแก้ไขต้องเข้าไป
-# หลังบ้าน sharepoint หน้าเวปเข้าถึงไฟล์พวกนี้ไม่ได้" — the web app must never
-# read, download or delete them; the only way to change one is through
-# SharePoint itself, by the admin. The daily sync then reads them into `dbo.*`.
+# What else lives in that library (mapped 2026-08-10):
+#   approved budget/   4 workbooks, the board-approved budget per year
+#   pending budget/    the per-year pending-budget import file
+#   (root)             EIGHT admin master workbooks — cc dept, cc orgcode,
+#                      country, gl group_gl th name, ค่าเบี่ยเลี้ยง,
+#                      ซ่อนเอกสาร, วันปิดรับข้อมูลงบประมาณ,
+#                      อัตราแลกเปลี่ยนเฉลี่ยรายปี
+#   เอกสาร ฝ่าย/       114 department folders — the ONLY area this app writes
 #
-# `_fetch_item_in_folder`'s folder check ALREADY excludes the library root, so
-# this name list is deliberate belt-and-braces: it states the rule where a
-# future reader will see it, and keeps holding if the folder logic is ever
-# loosened. Matched case-insensitively on the file name alone (a copy of one of
-# these placed anywhere is refused too — cheaper than being clever, and no
-# legitimate department attachment needs one of these exact names).
-PROTECTED_MASTER_FILENAMES: frozenset[str] = frozenset({
-    "cc dept.xlsx",
-    "gl group_gl th name.xlsx",
-    "วันปิดรับข้อมูลงบประมาณ.xlsx",
-    "ค่าเบี้ยเลี้ยง.xlsx",
-})
+# This is enforced STRUCTURALLY (a path test), deliberately NOT as a list of
+# protected filenames. A first attempt did use a name list and it was wrong
+# within the hour: it named 4 of the 8 masters, and misspelled the per-diem one
+# ("ค่าเบี้ยเลี้ยง" vs the real "ค่าเบี่ยเลี้ยง"), so it would have matched
+# nothing. A deny-list of names has to be maintained forever and rots silently;
+# an allow-list of ONE path cannot.
+def _is_inside_attachments_root(parent_path: str, settings: Settings) -> bool:
+    """True only when `parent_path` (Graph's `parentReference.path`, already
+    unquoted) sits under `<attachments_root_folder>/` — i.e. inside
+    `เอกสาร ฝ่าย/`. Everything else in the library (both sibling folders and
+    every master workbook at the root) is outside, by construction and without
+    naming a single file."""
+    root = settings.attachments_root_folder.strip("/")
+    return f"root:/{root}/" in f"{parent_path}/"
 
 # SharePoint-illegal path characters (spec §4b, confirmed 2026-07-13) —
 # replaced with '-'. Only one real ฝ่าย needed this ("Global Demand/supply
@@ -395,19 +401,21 @@ def _fetch_item_in_folder(
         raise AttachmentTransportError(f"Graph item lookup failed: {resp.status_code} {resp.text}")
 
     item = resp.json()
-    name = item.get("name") or ""
-    if name.strip().lower() in {n.lower() for n in PROTECTED_MASTER_FILENAMES}:
-        # Second, explicit line of defence — see PROTECTED_MASTER_FILENAMES.
-        # Logged at WARNING because reaching this means something asked the web
-        # app for a master workbook, which no legitimate flow ever does.
+    parent_path = unquote(item.get("parentReference", {}).get("path") or "")
+    expected = _folder_path(department, fiscal_year, settings)
+
+    # Two independent structural checks, outer first. The outer one is the whole
+    # library rule ("only เอกสาร ฝ่าย"), the inner one is this caller's own
+    # folder. Either alone would refuse a master workbook; keeping both means
+    # loosening one does not silently open the other.
+    if not _is_inside_attachments_root(parent_path, settings):
         logger.warning(
-            "attachments: REFUSED access to protected master %r (item_id=%s, department=%r, year=%s)",
-            name, item_id, department, fiscal_year,
+            "attachments: REFUSED %r — %r is outside %r, the only area this app may touch "
+            "(item_id=%s, department=%r, year=%s)",
+            item.get("name"), parent_path, settings.attachments_root_folder, item_id, department, fiscal_year,
         )
         raise AttachmentNotInFolderError(f"ไม่พบไฟล์นี้ในเอกสารของฝ่าย {department} ปี {fiscal_year}")
 
-    expected = _folder_path(department, fiscal_year, settings)
-    parent_path = unquote(item.get("parentReference", {}).get("path") or "")
     if not parent_path.endswith(f"root:/{expected}"):
         logger.warning(
             "attachments: item %r lives in %r, not in %r — refusing (department=%r, year=%s)",
