@@ -1,4 +1,12 @@
-# Current Phase (2026-08-09)
+# Current Phase (2026-08-10)
+
+## NOT_OPEN year refuses everyone, admin included (jakkaritw 2026-08-10, backend only, COMMITTED ea23d64, LIVE ON BOTH ENVS)
+- [x] **Decision (reverses the 2026-08-08 admin bypass for NOT_OPEN):** a fiscal year with no `dbo.submission_deadline` row is **file-import-only** — nobody types into it via the web, admin included; the future ส่วน ข import (1 raw file/year on SharePoint, same concept as the approved-budget file) writes to the DB directly and is unaffected. **PAST_DEADLINE deliberately unchanged**: admin still bypasses it (ADR-0012's current-cycle adjust/submit-on-behalf override is a designed feature, not a data import).
+- [x] Three surfaces changed in lockstep so read/write/Add-button can never disagree: `write_model._ensure_year_open_for_write` checks the year state BEFORE the `is_admin` return; `read_model.merge_budget_rows` applies `year_not_open` to admin_wide too (`editable = (admin_wide or fill-and-unlocked) and not year_not_open`) and `get_budget_grid` fetches the state for every caller; `GET /approval/locked-departments` reports `year_not_open` to admin as well. Refusal message now names the mechanism ("นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ"), aligned across write + submit paths.
+- [x] Tests: backend **925 passed** (4 admin-bypass tests reversed to the new contract, 6 admin fixtures gained the now-unconditional year-state row); frontend **612 untouched** — the flag flows through the existing `LockedDepartmentsResponse` field, zero frontend code changed.
+- [x] **Deployed both envs (jakkaritw-directed):** stg rev `0000033`, prd rev `0000019` — both Healthy/100%, prd anonymous probe still 401 (Easy Auth intact). Live verify on stg 8/8: `year_not_open=True` for both roles @2026 and `False` @2027; ADMIN grid 1,374 rows ALL read-only @2026 vs 1,084 rows ALL writable @2027; admin `PUT` @2026 → 403 with the file-import message; filler write+revert @2027 both 200.
+- [x] Same day, earlier: **prd caught up to stg** (rev 0000017/0000018, image `5b60740` — see-overlay + mail changes) and **real mail sends enabled on prd** (`NOTIFICATIONS_DRY_RUN=false`; no redirect/label vars, so prd mails real recipients with no test banner; nightly GitHub job unaffected — its own DRY_RUN gate is separate; deadline reminders dormant until 2026-10-15).
+
 
 ## Mail audit-cc + shared-mailbox admin + non-production mail marking (2026-08-09, backend only, TDD, COMMITTED 5b60740, LIVE ON STAGING)
 - [x] **jakkaritw, 2026-08-09**: (a) every notification cc's `cmanpowerbi@chememan.com`, (b) that mailbox can do everything an admin does, (c) staging mail must shout `ทดสอบ on stg server` in the subject.

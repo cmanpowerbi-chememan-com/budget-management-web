@@ -1,8 +1,38 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-10T11:15:32+0700",
+  "updated": "2026-08-10T11:57:52+0700",
   "tasks": [
+    {
+      "id": "notopen-year-locks-admin",
+      "state": "done",
+      "created": "2026-08-10T11:57:24+0700",
+      "updated": "2026-08-10T11:57:24+0700",
+      "ai": "jakkaritw 2026-08-10: NOT_OPEN year (no dbo.submission_deadline row) now refuses EVERYONE incl. admin - other years' pending data arrives ONLY via raw-file import (ส่วน ข, concept = approved-budget yearly file); import writes DB directly so unaffected. Commit ea23d64. 3 surfaces changed in lockstep: write_model._ensure_year_open_for_write checks state BEFORE is_admin return (PAST_DEADLINE keeps admin bypass = ADR-0012 current-cycle override, deliberately NOT changed); read_model editable=(admin_wide or fill-and-unlocked) AND NOT year_not_open + get_budget_grid now fetches year state for every caller; /approval/locked-departments reports year_not_open to admin too. Refusal message now says 'นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ' aligned write+submit paths. Tests: backend 925 pass (4 admin-bypass tests REVERSED, 6 admin fixtures +year-state row), frontend 612 untouched (flag flows through existing field). DEPLOYED BOTH ENVS jakkaritw-directed: stg rev 0000033 + prd rev 0000019 (RunningAtMaxScale/Healthy 100%, anon 401 = Easy Auth intact). LIVE VERIFY on stg 8/8: year_not_open=True both roles @2026 / False @2027; ADMIN grid 1374 rows ALL editable=False @2026; 1084 rows ALL editable=True @2027; admin PUT @2026 -> 403 file-import message; filler write+revert @2027 200/200. NOTE: probe param is admin_view_enabled (not admin_view)."
+    },
+    {
+      "id": "approved-budget-3part-sync-proof",
+      "state": "doing",
+      "created": "2026-08-10T11:50:13+0700",
+      "updated": "2026-08-10T11:50:13+0700",
+      "ai": "Prove 3-part approved-budget chain: (1) src SharePoint approved_budget_2023..2026.xlsx (Nipaporn uploaded ~2-3h ago incl NEW 2023), (2) dbo.board_budget in fabric_sql_database synced?, (3) web stg+prd read live. Also answer: is sync schedule job LIVE now. ADR-0021 = Sync-now button + daily auto-sync decided; backend only READS board_budget -> sync lives in DW ws (NB_budget_masters_sync pattern). Next: fabric MCP check DW notebook+schedule, DB probe by fiscal_year, web env proof.",
+      "agent": "claude"
+    },
+    {
+      "id": "prd-deploy-5b60740",
+      "state": "done",
+      "created": "2026-08-10T11:21:55+0700",
+      "updated": "2026-08-10T11:57:52+0700",
+      "ai": "[CROSS-SESSION UPDATE ea23d64] prd has moved on: now rev 0000019 image ea23d64 (NOT_OPEN-locks-admin change, jakkaritw-directed 2026-08-10), superseding rev 0000018/5b60740 recorded here. NOTIFICATIONS_DRY_RUN=false carried over (env changes persist across image updates). Everything else in this entry still accurate."
+    },
+    {
+      "id": "log-724585d",
+      "state": "done",
+      "created": "2026-08-10T11:15:35+0700",
+      "updated": "2026-08-10T11:15:35+0700",
+      "agent": "autolog",
+      "ai": "chore(stg): widen the ingress allowlist after the /32 broke in hours [commit 724585d]"
+    },
     {
       "id": "log-20507ec",
       "state": "done",
