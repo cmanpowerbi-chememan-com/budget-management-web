@@ -362,7 +362,12 @@ def _fetch_item_in_folder(
         headers={"Authorization": f"Bearer {token}"},
         timeout=30,
     )
-    if resp.status_code == 404:
+    # 400 as well as 404: the id comes from the caller, so a MALFORMED one is
+    # just as much "no such file here" as a well-formed-but-missing one. Graph
+    # answers 400 invalidRequest for a garbage id, and letting that through as a
+    # transport error would report 502 "server problem" for what is really bad
+    # input (seen live on staging 2026-08-10 while testing this guard).
+    if resp.status_code in (400, 404):
         raise AttachmentNotInFolderError(f"ไม่พบไฟล์นี้ในเอกสารของฝ่าย {department} ปี {fiscal_year}")
     if resp.status_code != 200:
         raise AttachmentTransportError(f"Graph item lookup failed: {resp.status_code} {resp.text}")

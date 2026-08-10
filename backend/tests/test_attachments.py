@@ -577,3 +577,20 @@ def test_delete_attachment_requires_configuration(monkeypatch):
     with pytest.raises(AttachmentsNotConfiguredError):
         delete_attachment("Accounting", 2027, "item-1",
                           settings=_settings(attachments_site_hostname="", attachments_site_name=""))
+
+def test_delete_attachment_malformed_item_id_is_not_in_folder_not_a_transport_error(monkeypatch):
+    """The id comes from the caller, so Graph's 400 invalidRequest for a garbage
+    id must read as "no such file here" (404), not as a 502 server problem —
+    observed live on staging 2026-08-10 while testing the folder guard."""
+    def _fake_get(url, **kwargs):
+        if "/drives" not in url and "/sites/" in url:
+            return _resp(200, SITE_JSON)
+        if url.endswith("/drives"):
+            return _resp(200, DRIVES_JSON)
+        return _resp(400, {"error": {"code": "invalidRequest"}}, text="Invalid request")
+
+    monkeypatch.setattr("app.attachments.httpx.post", lambda url, **k: _resp(200, TOKEN_JSON))
+    monkeypatch.setattr("app.attachments.httpx.get", _fake_get)
+
+    with pytest.raises(AttachmentNotInFolderError):
+        delete_attachment("Accounting", 2027, "not-a-real-id", settings=_settings())
