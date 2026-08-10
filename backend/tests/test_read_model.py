@@ -459,15 +459,17 @@ def test_year_open_leaves_fill_cc_editable_unchanged():
     assert rows[0].editable is True
 
 
-def test_admin_wide_bypasses_year_not_open():
-    """ADR-0012 (extended 2026-08-08): admin-wide always edits, even a
-    fiscal_year nobody configured a deadline for."""
+def test_admin_wide_refused_by_year_not_open():
+    """REVERSED by jakkaritw 2026-08-10 (was: admin-wide always edits): a
+    NOT_OPEN year is file-import-only, so even the admin-wide grid renders it
+    read-only — matching the write path, which now refuses admin too. Within
+    an OPEN year admin_wide still bypasses the approval lock (tested above)."""
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
     scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
 
     rows = merge_budget_rows(join_rows, {}, scope, admin_view_enabled=True, year_not_open=True)
 
-    assert rows[0].editable is True
+    assert rows[0].editable is False
 
 
 def test_locked_department_resolved_via_department_filter_fallback_when_row_has_no_own_department():
@@ -1477,10 +1479,12 @@ def test_get_budget_grid_not_open_year_ends_up_not_editable_end_to_end(monkeypat
     assert rows[0].editable is False
 
 
-def test_get_budget_grid_admin_wide_skips_the_year_state_fetch(monkeypatch):
-    """Same 'never consulted' perf reasoning as the locked_departments skip
-    above: admin_wide bypasses `year_not_open` unconditionally inside
-    `merge_budget_rows`, so skip the query entirely for that caller."""
+def test_get_budget_grid_admin_wide_also_fetches_the_year_state(monkeypatch):
+    """REVERSED by jakkaritw 2026-08-10 (was: skip the query for admin-wide):
+    since NOT_OPEN now locks admin too, `merge_budget_rows` consults
+    `year_not_open` for every caller, so `get_budget_grid` must fetch it for
+    every caller — an admin-wide grid over a NOT_OPEN year that skipped the
+    fetch would wrongly render writable cells."""
     calls = {"n": 0}
 
     def fake_fiscal_year_state(conn, fiscal_year):
@@ -1495,7 +1499,7 @@ def test_get_budget_grid_admin_wide_skips_the_year_state_fetch(monkeypatch):
     admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=admin_scope, admin_view_enabled=True)
 
-    assert calls["n"] == 0
+    assert calls["n"] == 1
 
 
 # ---------------------------------------------------------------------------

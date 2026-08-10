@@ -555,7 +555,11 @@ def merge_budget_rows(
                 continue
         row_dept = _resolve_live_department(cc, row, cc_dims) or department_filter
         row_locked = bool(locked_departments) and row_dept in locked_departments
-        row.editable = admin_wide or (cc in fill_ccs and not row_locked and not year_not_open)
+        # year_not_open outranks even admin (jakkaritw 2026-08-10): a NOT_OPEN
+        # year is file-import-only, so no web identity — admin included — gets
+        # a writable cell there. Within an OPEN year, admin_wide still bypasses
+        # the per-department approval lock (ADR-0012) exactly as before.
+        row.editable = (admin_wide or (cc in fill_ccs and not row_locked)) and not year_not_open
         result.append(row)
 
     return sorted(result, key=lambda r: (r.cost_center, r.gl_account))
@@ -636,10 +640,11 @@ def get_budget_grid(
         frozenset() if admin_wide else fetch_locked_departments(fabric_conn, fiscal_year=planning_year)
     )
 
-    # 2026-08-08 3-state extension: skipped entirely for admin-wide (nothing
-    # would consult it — merge_budget_rows bypasses it unconditionally for
-    # admin_wide, same pattern as locked_departments above).
-    year_not_open = False if admin_wide else fiscal_year_state(fabric_conn, planning_year) == YEAR_NOT_OPEN
+    # 2026-08-08 3-state extension, revised 2026-08-10 (jakkaritw): computed
+    # for EVERY caller now, admin included — a NOT_OPEN year is file-import-
+    # only, so even the admin-wide grid must render it read-only. (This no
+    # longer follows locked_departments' skip-for-admin pattern on purpose.)
+    year_not_open = fiscal_year_state(fabric_conn, planning_year) == YEAR_NOT_OPEN
 
     # D10 + gate finding D1 (2026-08-05): fetch cc_dims when the department
     # filter is in use (D10's original reason) OR when something is actually

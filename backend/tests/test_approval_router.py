@@ -20,7 +20,7 @@ from app.approval import (
     StepNotOverridableError,
 )
 from app.auth import get_current_user_email
-from app.deadline import YEAR_NOT_OPEN
+from app.deadline import YEAR_NOT_OPEN, YEAR_OPEN
 from app.main import app
 
 DEPT = "Accounting"
@@ -576,7 +576,7 @@ def test_locked_departments_returns_only_the_callers_own_locked_departments(clie
     ), patch(
         "app.routers.approval.fetch_locked_departments",
         return_value=frozenset({"Accounting", "Some Other Department"}),
-    ):
+    ), patch("app.routers.approval.fiscal_year_state", return_value=YEAR_OPEN):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
@@ -592,7 +592,7 @@ def test_locked_departments_no_fill_scope_returns_empty_and_skips_the_extra_quer
         "app.routers.approval.resolve_scope", return_value=MagicMock(fill_cost_centers=[])
     ), patch("app.routers.approval.fetch_departments") as mock_fetch_departments, patch(
         "app.routers.approval.fetch_locked_departments"
-    ) as mock_fetch_locked:
+    ) as mock_fetch_locked, patch("app.routers.approval.fiscal_year_state", return_value=YEAR_OPEN):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
@@ -608,7 +608,9 @@ def test_locked_departments_none_locked_returns_empty_list(client):
     ), patch(
         "app.routers.approval.fetch_departments",
         return_value=[{"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None}],
-    ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()):
+    ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()), patch(
+        "app.routers.approval.fiscal_year_state", return_value=YEAR_OPEN
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
@@ -635,10 +637,11 @@ def test_locked_departments_year_not_open_for_a_non_admin_filler(client):
     assert response.json() == {"departments": [], "year_not_open": True}
 
 
-def test_locked_departments_year_not_open_is_always_false_for_admin(client):
-    """Admin may always add, in every fiscal_year state — `fiscal_year_state`
-    is never even consulted for an admin caller (short-circuited by `not
-    scope.is_admin`)."""
+def test_locked_departments_year_not_open_applies_to_admin_too(client):
+    """REVERSED by jakkaritw 2026-08-10 (was: always False for admin): a
+    NOT_OPEN year is file-import-only, so the Add button must disable for an
+    admin as well — the router consults `fiscal_year_state` for every
+    caller."""
     _override_auth("admin@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.resolve_scope",
@@ -647,13 +650,13 @@ def test_locked_departments_year_not_open_is_always_false_for_admin(client):
         "app.routers.approval.fetch_departments",
         return_value=[{"cost_center": "CC1", "department": "Accounting", "division": None, "c_level": None}],
     ), patch("app.routers.approval.fetch_locked_departments", return_value=frozenset()), patch(
-        "app.routers.approval.fiscal_year_state"
+        "app.routers.approval.fiscal_year_state", return_value=YEAR_NOT_OPEN
     ) as mock_fiscal_year_state:
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/locked-departments", params={"fiscal_year": FY})
     assert response.status_code == 200
-    assert response.json() == {"departments": [], "year_not_open": False}
-    mock_fiscal_year_state.assert_not_called()
+    assert response.json() == {"departments": [], "year_not_open": True}
+    mock_fiscal_year_state.assert_called_once()
 
 
 def test_locked_departments_db_failure_maps_to_502(client):

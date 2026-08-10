@@ -286,16 +286,17 @@ def locked_departments(fiscal_year: int = Query(...), email: str = Depends(get_c
     can reject a locked pick with a reason before ever calling
     `PUT /budget/rows` (the late-403 UX ADR-0013 exists to eliminate).
 
-    `year_not_open` (2026-08-08 3-state extension): a year-wide sibling of
-    the per-department `locked` set — `fiscal_year` has no
-    `dbo.submission_deadline` row at all, so EVERY department (not just the
-    ones already mid-approval) is closed to a non-admin add. Always `False`
-    for admin (admin may always add — same bypass as the write path)."""
+    `year_not_open` (2026-08-08 3-state extension, revised 2026-08-10):
+    a year-wide sibling of the per-department `locked` set — `fiscal_year`
+    has no `dbo.submission_deadline` row at all, so EVERY department (not
+    just the ones already mid-approval) is closed to adds. Applies to admin
+    too since 2026-08-10 (jakkaritw): a NOT_OPEN year is file-import-only,
+    matching the write path's revised guard."""
 
     def _action():
         with get_fabric_conn() as conn:
             scope = resolve_scope(email, conn)
-            year_not_open = not scope.is_admin and fiscal_year_state(conn, fiscal_year) == YEAR_NOT_OPEN
+            year_not_open = fiscal_year_state(conn, fiscal_year) == YEAR_NOT_OPEN
             if not scope.fill_cost_centers:
                 return LockedDepartmentsResponse(departments=[], year_not_open=year_not_open)
             dept_rows = fetch_departments(conn, scope.fill_cost_centers)

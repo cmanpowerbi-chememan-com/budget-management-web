@@ -345,16 +345,24 @@ def _ensure_year_open_for_write(conn: pyodbc.Connection, fiscal_year: int, scope
     row exists and its date has passed) raise DIFFERENT errors/codes —
     `YearNotOpenError`/`year_not_open` vs `PastDeadlineError`/`past_deadline`
     — a year nobody configured is not "past its deadline" and must not read
-    that way to the caller. Admin bypasses both entirely (ADR-0012 for
-    PAST_DEADLINE; NOT_OPEN follows the same "admin imports other years'
-    data" policy, 2026-08-08 jakkaritw decision). Called as the LAST check
-    before the first DB write in each write path — reads (dims/GL/trip
-    lookups) are unaffected."""
-    if scope.is_admin:
-        return
+    that way to the caller.
+
+    Who may write what (revised by jakkaritw 2026-08-10, superseding the
+    2026-08-08 admin bypass for NOT_OPEN):
+    - NOT_OPEN: NOBODY types via the web, admin included — other years'
+      pending data arrives ONLY via the raw-file import (ส่วน ข, same
+      concept as the approved-budget yearly file). The import writes to the
+      DB directly, not through these endpoints, so it is unaffected.
+    - PAST_DEADLINE: admin still bypasses (ADR-0012, never-cut) — that is
+      the CURRENT cycle after closing day, where the admin adjust-and
+      -submit-on-behalf flow is a designed feature, not a data import.
+    Called as the LAST check before the first DB write in each write path —
+    reads (dims/GL/trip lookups) are unaffected."""
     state = fiscal_year_state(conn, fiscal_year)
     if state == YEAR_NOT_OPEN:
-        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ")
+        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ")
+    if scope.is_admin:
+        return
     if state == YEAR_PAST_DEADLINE:
         raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
 

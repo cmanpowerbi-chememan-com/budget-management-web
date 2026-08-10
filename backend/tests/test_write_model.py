@@ -108,6 +108,7 @@ def test_admin_bypasses_fill_scope_restriction():
     cursor.fetchone.side_effect = [
         (1,),                                    # CC-existence check (admin bypass still validates the CC exists)
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        _OPEN_DEADLINE,  # year-state gate queries for everyone since 2026-08-10
     ]
     scope = _admin_scope()
     results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
@@ -209,7 +210,7 @@ def test_pending_row_admin_only_gl_allowed_for_admin_when_flag_enabled():
         (1,),  # CC-existence check (admin bypass)
         ("Insurance Premium", "ค่าเบี้ยประกันภัย", "admin"),
         ("deptA", "divA", "clA"),
-        None, None,
+        _OPEN_DEADLINE,  # year-state gate queries for everyone since 2026-08-10
     ]
     scope = _admin_scope()
     results = save_pending_rows(
@@ -437,17 +438,22 @@ def test_pending_row_rejected_when_deadline_has_passed_no_db_write():
     assert not any("INSERT INTO budget.pending_budget" in s or "UPDATE budget.pending_budget" in s for s in executed_sql)
 
 
-def test_pending_row_admin_bypasses_deadline_check_and_never_queries_it():
-    """ADR-0012: admin may keep editing after the deadline — and the gate is
-    skipped entirely for admin (no dbo.submission_deadline query at all)."""
+def test_pending_row_admin_bypasses_past_deadline_but_the_state_is_queried():
+    """ADR-0012: admin may keep editing after the deadline. Since the
+    2026-08-10 revision the year-state IS queried for everyone (NOT_OPEN must
+    refuse admin too, so the guard can no longer return before looking), but a
+    PAST_DEADLINE result still lets admin through."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [(1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [
+        (1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        (date(2020, 1, 1),),  # dbo.submission_deadline -> already passed; admin proceeds anyway
+    ]
     scope = _admin_scope()
     results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
     assert results[0].ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
-    assert not any("submission_deadline" in s for s in executed_sql)
+    assert any("submission_deadline" in s for s in executed_sql)
 
 
 def test_pending_row_missing_deadline_row_is_refused_year_not_open():
@@ -463,23 +469,27 @@ def test_pending_row_missing_deadline_row_is_refused_year_not_open():
     results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
     assert results[0].ok is False
     assert results[0].error == "year_not_open"
-    assert results[0].detail == "ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ"
+    assert results[0].detail == "ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ"
     conn.commit.assert_not_called()
 
 
-def test_pending_row_admin_write_accepted_when_year_not_open():
-    """The other half of the same decision: admin keeps writing in every
-    state, NOT_OPEN included — imports for an unconfigured year are exactly
-    admin's job (2026-08-08). No dbo.submission_deadline query at all (same
-    admin bypass as the past-deadline case)."""
+def test_pending_row_admin_refused_when_year_not_open():
+    """REVERSED by jakkaritw 2026-08-10 (was: admin keeps writing in every
+    state): a NOT_OPEN year is file-import-only — the import script writes to
+    the DB directly, so the WEB write path refuses everyone, admin included.
+    Replaces `test_pending_row_admin_write_accepted_when_year_not_open`,
+    which encoded the exact policy this reverses."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [(1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [
+        (1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        None,  # dbo.submission_deadline -> no row -> NOT_OPEN
+    ]
     scope = _admin_scope()
     results = save_pending_rows(conn, [_row(cost_center="ANY-CC", fiscal_year=2020, m01=100)], "admin@chememan.com", scope)
-    assert results[0].ok is True
-    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
-    assert not any("submission_deadline" in s for s in executed_sql)
+    assert results[0].ok is False
+    assert results[0].error == "year_not_open"
+    conn.commit.assert_not_called()
 
 
 def test_pending_row_filler_write_accepted_when_year_is_open():
@@ -1419,6 +1429,7 @@ def test_delete_detail_line_admin_bypasses_deadline_and_scope():
     cursor.fetchone.side_effect = [
         ("ANY-CC", "5211900030", 2027),                                     # owner lookup
         (1,),                                                                # admin CC-existence check
+        _OPEN_DEADLINE,                                                      # year-state gate (everyone, 2026-08-10)
         ("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"),  # dims for recompute
     ]
     cursor.rowcount = 1
@@ -1426,7 +1437,7 @@ def test_delete_detail_line_admin_bypasses_deadline_and_scope():
     result = delete_detail_line(conn, 5, STALE, "admin@chememan.com", scope)
     assert result.ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
-    assert not any("submission_deadline" in s for s in executed_sql)
+    assert any("submission_deadline" in s for s in executed_sql)
 
 
 def test_delete_detail_line_commit_happens_after_delete_and_recompute():
@@ -1723,7 +1734,10 @@ def test_pending_row_allowed_when_department_status_is_rejected():
 def test_pending_row_admin_bypasses_department_lock_and_never_queries_it():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [(1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")]
+    cursor.fetchone.side_effect = [
+        (1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        _OPEN_DEADLINE,  # year-state gate queries for everyone since 2026-08-10
+    ]
     scope = _admin_scope()
     results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
     assert results[0].ok is True
@@ -1871,6 +1885,7 @@ def test_delete_trip_admin_bypasses_department_lock_and_never_queries_it():
     one_off = iter([
         ("ANY-CC", "COST", 2027),  # trip lookup
         (1,),                       # admin CC-existence check (_ensure_write_scope's admin branch)
+        _OPEN_DEADLINE,             # year-state gate (everyone, 2026-08-10)
     ])
     dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
 
@@ -1887,7 +1902,7 @@ def test_delete_trip_admin_bypasses_department_lock_and_never_queries_it():
     assert result.ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("approval_status" in s for s in executed_sql)
-    assert not any("submission_deadline" in s for s in executed_sql)
+    assert any("submission_deadline" in s for s in executed_sql)  # queried for everyone since 2026-08-10
 
 
 # ---------------------------------------------------------------------------
@@ -2382,11 +2397,14 @@ def test_delete_pending_row_rejected_when_department_is_locked(locked_status):
 def test_delete_pending_row_admin_bypasses_deadline_and_department_lock():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [(1,)]  # admin CC-existence check only (_ensure_write_scope)
+    cursor.fetchone.side_effect = [
+        (1,),           # admin CC-existence check (_ensure_write_scope)
+        _OPEN_DEADLINE,  # year-state gate (everyone, 2026-08-10)
+    ]
     cursor.rowcount = 1
     scope = _admin_scope()
     result = delete_pending_row(conn, "ANY-CC", "GL1", 2027, STALE, "admin@chememan.com", scope)
     assert result.ok is True
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("approval_status" in s for s in executed_sql)
-    assert not any("submission_deadline" in s for s in executed_sql)
+    assert any("submission_deadline" in s for s in executed_sql)
