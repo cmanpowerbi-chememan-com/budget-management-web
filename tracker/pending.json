@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-10T15:42:37+0700",
+  "updated": "2026-08-10T15:50:55+0700",
   "tasks": [
+    {
+      "id": "log-944a4a8",
+      "state": "done",
+      "created": "2026-08-10T15:50:40+0700",
+      "updated": "2026-08-10T15:50:40+0700",
+      "agent": "autolog",
+      "ai": "fix(deadline): align the submit-path NOT_OPEN wording with the write path [commit 944a4a8]"
+    },
     {
       "id": "stg-prd-parity-check",
       "state": "done",
@@ -27,18 +35,18 @@
     },
     {
       "id": "board-orphan-cc-rowskip",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-10T15:20:04+0700",
-      "updated": "2026-08-10T15:20:04+0700",
-      "ai": "POLICY CHANGE (jakkaritw 2026-08-10): board_budget orphan CC = skip ROW (loud: warning w/ per-CC THB totals + rows_rejected in run log), rows w/ CC in master load normally. Supersedes whole-file reject for orphan CC only; blank-key-with-value + non-numeric + bad filename stay whole-file rejects. Effect: FY2026 new file loads w/o waiting for Nipaporn master fix (12k THB row skipped until CC added, auto-restored next Replace-by-Year). Impl dispatched to 04-agent in 19.dw. Next: delta gate -> jakkaritw push approval -> rerun -> verify FY2026 landed (expect 744-1 raw rows, warning '10OS014000: 12,000.00 THB'). Related task fy2026-orphan-cc-nipaporn now NON-blocking (restores 12k row when done).",
+      "updated": "2026-08-10T15:50:55+0700",
+      "ai": "SHIPPED + VERIFIED LIVE. ac49872 (19.dw): orphan CC = per-row skip w/ per-CC THB warning + rows_rejected; blank-key/non-numeric/bad-filename stay whole-file rejects; gate #3 APPROVE (113+87 green). Deployed both notebooks --live, run 5cd3a10e Completed ~3min. FINAL DB: fy2023 687r/107cc/287,177,280.80; fy2024 609r/95cc/221,798,618.19; fy2025 626r/103cc/245,282,692.38; fy2026 697r/107cc/254,877,891.95 — ALL loaded 15:46:51, web stg+prd live. BONUS: Nipaporn added CC 10OS014000 to cc dept.xlsx BEFORE the run -> 12,000 THB row loaded normally (verified in board_budget + master, dims=People Experience/Facility Management/CPO/nitip) — skip path shipped as future-proofing, 0 rows actually skipped. ADR-0021 amendment added (04 repo). Leftover: 19.dw 10 commits not pushed to GitHub (local only); run-log lakehouse endpoint lag noted.",
       "agent": "claude"
     },
     {
       "id": "fy2026-orphan-cc-nipaporn",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-10T15:17:45+0700",
-      "updated": "2026-08-10T15:20:04+0700",
-      "ai": "[CROSS-SESSION UPDATE 2026-08-10] NO LONGER BLOCKING: jakkaritw changed policy to orphan-CC row-skip (task board-orphan-cc-rowskip) -> FY2026 loads without this fix; adding the CC row later just restores the skipped 12,000 THB row (10OS014000/GL 5210600010) on the next sync. Original ask unchanged: Nipaporn adds row to cc dept.xlsx: Cost Ctr=10OS014000, Description=Facility Management, C Level=Chief People Officer, สายงาน=People Experience, ฝ่าย=Facility Management, คนกรอกข้อมูล=nitip@chememan.com.",
+      "updated": "2026-08-10T15:50:55+0700",
+      "ai": "DONE BY NIPAPORN 2026-08-10 (before run 5cd3a10e): cc dept.xlsx row added exactly as proposed (10OS014000/Facility Management/CPO/People Experience/nitip) -> synced into cc_filler_map same run, FY2026 loaded FULL 697 rows incl the 12,000 THB row. Nothing left.",
       "agent": "claude"
     },
     {

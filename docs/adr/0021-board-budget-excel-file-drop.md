@@ -72,6 +72,18 @@ filename.
 - The inspected workbook is a 13-row / 3-CC **test artifact**: the structure is
   confirmed, production scale is not. Validate performance assumptions when the real
   file arrives.
+- **Amendment 2026-08-10 (jakkaritw, after the first real 4-file load):** three ingest
+  behaviors changed in the DW lane (`budget_masters_lib`, repo 19.dw, commits
+  42d9d09/c9052ff/ac49872): (1) fully-empty Excel "ghost rows" are skipped with a
+  counted warning instead of tripping the blank-key reject (the 2023 file carried 262
+  such rows and blocked ALL years for 2 nights); (2) every month cell is quantized to
+  2dp ROUND_HALF_UP at ingest so the exact-equality SUM reconcile matches DECIMAL(18,2)
+  storage (sub-satang Excel float artifacts otherwise fail the whole file); (3) a row
+  whose cost_center is missing from the cc_filler_map master is now skipped PER-ROW
+  with its exact THB total in the run-log warning + `rows_rejected`, instead of
+  rejecting the whole file — blank-key-with-value, non-numeric amounts, and bad
+  filename year remain whole-file rejects. "Validate ALL rows first / any bad row
+  rejects the whole file" above is amended accordingly.
 - Mockup `0002.2budget-export.html` updated 2026-07-12: import/export buttons removed,
   read-only "Approved comes from SharePoint" note added, and the ADR-0014 admin-mode
   toggle (accidentally dropped with the v2.2 nav-bar rewrite) restored in the page-head.
