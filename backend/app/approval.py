@@ -748,7 +748,7 @@ def _submit_normal_chain(
     # through a normal-chain submit.
     year_state = _fiscal_year_state(conn, fiscal_year)
     if year_state == YEAR_NOT_OPEN:
-        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ")
+        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ")
     if year_state == YEAR_PAST_DEADLINE:
         raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
 

@@ -1,8 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-10T15:20:18+0700",
+  "updated": "2026-08-10T15:42:37+0700",
   "tasks": [
+    {
+      "id": "stg-prd-parity-check",
+      "state": "done",
+      "created": "2026-08-10T15:42:37+0700",
+      "updated": "2026-08-10T15:42:37+0700",
+      "ai": "jakkaritw 2026-08-10: 'make sure what edited on stg must be = to prd also'. Built scratchpad/compare_stg_prd.py - reusable: compares image + every env var + Easy Auth + ingress IP rules, and classifies each env difference as by-design (INTENDED_DIFFS: APP_ENV, DEV_AUTH_EMAIL, NOTIFICATIONS_REDIRECT_ALL_TO, NOTIFICATIONS_ENVIRONMENT_LABEL, NOTIFICATIONS_DRY_RUN, APP_BASE_URL) vs UNINTENDED DRIFT. Result after the 9110837 deploy: image IDENTICAL on both, zero unintended drift, 10 env vars identical (incl. both DB endpoints + ADMIN_EMAILS + NOTIFICATIONS_DRY_RUN=false). Deliberate security split intact: stg = Easy Auth DELETED + ingress allowlist 49.229.0.0/16; prd = Easy Auth on, RedirectToLoginPage, 0 IP rules. GOTCHA: the tool prints NOTIFICATIONS_ENVIRONMENT_LABEL as ' on stg server' - that is az MANGLING THAI ON READ, not drift; the real stored value has the Thai (proven earlier via requests against ARM). Run this after every deploy."
+    },
+    {
+      "id": "grid-two-decimals-everywhere",
+      "state": "done",
+      "created": "2026-08-10T15:42:37+0700",
+      "updated": "2026-08-10T15:42:37+0700",
+      "ai": "jakkaritw 2026-08-10: 'SAP ใช้จริง / Approved งบ / Pending รออนุมัติ ปรับให้เป็น 2 digit เหมือนกัน'. Commit 9110837. formatThb (frontend/src/grid/model.ts) no longer drops decimals on a whole-baht value - ALWAYS 2dp; zero still em-dash, ADR-0026 hidden-SAP en-dash untouched. Also switched DetailSubform's row-grand cell + footer year total from raw toLocaleString to formatThb (the last 2 direct callers, would have shown 5,250 next to 5,000.00). Propagates to every money display via MonthCell + GridTable + subform. 12 expectations updated across 4 test files; frontend 618 pass, next build clean. DEPLOYED TO BOTH ENVS same image budget-web:9110837 - stg rev 0000038, prd rev 0000021. Verified served bundle carries the change (chunk 2p-lvwrn0yetm.js, stg/local asset sets identical)."
+    },
+    {
+      "id": "log-5a9200c",
+      "state": "done",
+      "created": "2026-08-10T15:20:22+0700",
+      "updated": "2026-08-10T15:20:22+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record the attachments work and the prd deploy of 4cb9e8f [commit 5a9200c]"
+    },
     {
       "id": "board-orphan-cc-rowskip",
       "state": "doing",
