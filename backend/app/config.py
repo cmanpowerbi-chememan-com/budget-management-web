@@ -50,6 +50,17 @@ class Settings(BaseSettings):
     # Local-only Easy Auth override — honored ONLY when app_env == "local".
     dev_auth_email: str | None = None
 
+    # SIT/UAT test aid (2026-08-10): rewrites one resolved Easy Auth identity
+    # to another, e.g. "jakkaritw@chememan.com:pornthipp@chememan.com", so a
+    # tester with no employee row can act as a real approver on staging,
+    # where header spoofing no longer works against real Easy Auth. Format is
+    # a single "from_email:to_email" pair. Honored ONLY in non-production:
+    # `app.auth._apply_sit_impersonation` first HARD-guards on
+    # `app_env != "production"` (dead on PRD, which runs app_env=production),
+    # then additionally requires a non-blank `notifications_environment_label`
+    # — three independent conditions must all hold. Never set this on PRD.
+    sit_impersonate: str = ""
+
     # Fabric SQL Database — ONE DB, budget.* (transactional) + dbo.* (masters/employee) schemas.
     fabric_sql_server: str | None = None
     fabric_sql_database: str | None = None

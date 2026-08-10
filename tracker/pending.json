@@ -1,15 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-10T15:50:55+0700",
+  "updated": "2026-08-10T21:13:05+0700",
   "tasks": [
     {
-      "id": "log-944a4a8",
+      "id": "sp-testcase-email-alert",
       "state": "done",
-      "created": "2026-08-10T15:50:40+0700",
-      "updated": "2026-08-10T15:50:40+0700",
-      "agent": "autolog",
-      "ai": "fix(deadline): align the submit-path NOT_OPEN wording with the write path [commit 944a4a8]"
+      "created": "2026-08-10T20:45:14+0700",
+      "updated": "2026-08-10T20:55:57+0700",
+      "ai": "DONE 4b5ba29. Added 6 email-alert cases No 38-43 (TC-038..TC-043, module 'Email Alert / Notification') to sheet '2. Test Cases' of SharePoint Budget_SIT_Test_Cases_10.08.2026.xlsx (03_SIT folder, CMANDigitalTechnology). Cases mirror the 6 real notify_* fns in backend/app/notifications.py: turn / reject / approved / step_overridden / turn_reminder(7d grouped) / deadline_reminder(grouped). ALSO fixed silent breakage: Summary formulas + autofilter + 3 dropdown validations all stopped at row 40 -> extended to 46, added Summary module breakdown row B25. Verified live re-download: max_row 46, TC-043 present, rows 1-40 byte-identical. Backup of pre-edit file in requirement_spec/4_sit/*_before_email_alert.xlsx. Reusable script setup/update_sit_test_cases.py (--upload guards on lastModifiedDateTime). NOTE prerequisite for running these cases: NOTIFICATIONS_DRY_RUN must be false on the env under test (config default True).",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-approver23-jakkaritw",
+      "state": "done",
+      "created": "2026-08-10T16:07:26+0700",
+      "updated": "2026-08-10T21:13:05+0700",
+      "ai": "CODE DONE + GATED, NOT deployed, NOT committed (2026-08-10). Files (backend-only, 3): app/auth.py _apply_sit_impersonation, app/config.py sit_impersonate field, tests/test_auth.py (17 pass). Guard HARDENED after a security-weaken warning on the first cut: now THREE all-required conditions - (1) HARD app_env!='production' (dead on PRD which runs app_env=production; stg runs app_env=local, verified via az) (2) non-blank notifications_environment_label (3) sit_impersonate set. Alias runs ONLY on the real-header path, never manufactures identity (no-header still 401). Combined gate 06+07+08: 07 PASS (staging-safe + provably PRD-inert, file:line evidence read not comment), 06 Approve-w-suggestions (1 comment fix applied), 08 PASS 17 tests incl the copy-pasted-env disaster case. LEFTOVER before SIT can run: build image (clean worktree) -> deploy stg (AWAIT jakkaritw explicit deploy go) -> re-enable Easy Auth on stg + REMOVE ip allowlist (Easy Auth replaces the IP lock) -> SIT run needs a MID-SIT env FLIP: step2 SIT_IMPERSONATE=jakkaritw:nipapornt then step3 =jakkaritw:warapornt (jakkarit impersonates the 2 fixed budget-dept slots; laddawan=pornthip's real manager acts as pos1 herself). Cast confirmed: pornthipp@(101917, fills Data&Analytic, FY2027=5 rows) / laddawank@(101431) / jakkarit. REVERT after = unset SIT_IMPERSONATE + delete SIT approval rows. CAVEAT: stg+prd share ONE DB so SIT writes land in the shared approval tables (currently 0 rows, clean).",
+      "agent": "claude"
+    },
+    {
+      "id": "push-27-commits",
+      "state": "done",
+      "created": "2026-08-10T15:54:29+0700",
+      "updated": "2026-08-10T15:54:29+0700",
+      "ai": "jakkaritw 2026-08-10: 'commit, push 27 ตัว'. PUSHED: origin/main is now 944a4a8, all 27 commits on the remote (verified d0672fc, the oldest, and 944a4a8, the newest, both contained in origin/main). CI green on the push: run 31371939537 conclusion success - Backend pytest 3.14, Backend type check, Frontend vitest 20.x, Test Summary all success. Before pushing I found and committed ONE uncommitted change: backend/app/approval.py's YearNotOpenError message was edited when ea23d64 aligned the write/submit wording but never STAGED, so the submit gate still says 'นำเข้าโดยผู้ดูแลระบบ' while the write gate says 'นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ' - no test asserts approval.py's string, which is how it passed 3 green suites. Committed as 944a4a8; NOTE every deployed image up to 9110837 still carries the OLDER submit-path wording (text only, needs a rebuild to land). PARALLEL SESSION: a commit 2fd7b44 'docs(adr-0021): amend board_budget ingest' appeared on local main AFTER my push - NOT mine, deliberately left unpushed. Also removed the 8 temporary build worktrees from scratchpad; only the main tree remains. Left untouched (not mine, pre-existing): M frontend/next-env.d.ts, M setup/phase2_harness_dkl.py, D requirement_spec/.../Spec B ...docx, and the untracked .next/ + tests_data_sync xlsx + monthly_update files."
     },
     {
       "id": "stg-prd-parity-check",
@@ -134,10 +149,10 @@
     },
     {
       "id": "stg-manual-test-pornthipp",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-09T21:58:17+0700",
-      "updated": "2026-08-10T00:10:18+0700",
-      "ai": "[CROSS-SESSION UPDATE] UNLOCKED FY2027 2026-08-10: deleted 1 budget.approval_status row (was PENDING_APPROVER2 from the mail repro) + 2 approval_log rows. Proven writable again via API: 5 rows editable=True, /approval/locked-departments returns [] with year_not_open=False, and a real PUT /budget/rows accepted 200. MY OWN SLIP + FIX: the writability probe added 1 THB to Mar on 6211100110 and its revert was skipped because I guarded on a response key 'ok' that PUT /budget/rows does NOT return - it returns the ROW OBJECT itself (cost_center/gl_account/m01..m12/total_year/remark/template/gl_name), no envelope. Reverted: 6211100110 back to Feb=9 Mar=0 total=9; FY2027 grand total 2,676.00 THB across 5 rows (6210400010=2640, three x 9, 6211100110=9). Dept now has NO approval row = fully open for adding sample GL. SUBMIT-MAIL QUESTION RESOLVED: submit DOES mail the step-1 approver - repro returned 200 with notification_warning=null; the mail was simply older (16:20) than the three approve mails (16:58-16:59). UAT mail-test procedure written to plan/sit/sit-run-log.md section 27, commit 8a148ca.",
+      "updated": "2026-08-10T15:59:36+0700",
+      "ai": "SESSION CLOSED 2026-08-10. Everything jakkaritw asked in this session shipped to BOTH envs on identical image and is pushed (origin/main 944a4a8, CI green run 31371939537). Delivered: ADR-0013 read-only lock verified by jakkaritw's own eyes on the browser; submit-button SIT 16/16 through the real API; full 3-step approval chain walked with real Graph mail; mail audit-cc to cmanpowerbi + shared-mailbox admin + non-prod TEST label/redirect; NOT_OPEN year now locks admin too; attachments delete button + Thai type copy + whole-library path guard; two-decimal amounts on all three layers. Env posture: stg = Easy Auth DELETED + ingress allowlist 49.229.0.0/16 + APP_ENV=local + DEV_AUTH_EMAIL=pornthipp + mail redirected to jakkaritw with the Thai TEST banner; prd = Easy Auth ON (header spoofing 401), 0 IP rules, real mail to real recipients, NOTIFICATIONS_DRY_RUN=false. Data left clean: FY2027 has ONLY jakkaritw's/pornthipp's own rows, no approval_status row (unlocked), attachment folder 0 files on stg. LEFTOVERS for the next session: (1) 944a4a8's submit-path Thai wording is committed but NOT in any built image - fold into the next deploy; (2) item 13 D3 admin-toggle test still needs นิภาพร's cookie; (3) 5 special GL groups + row-delete + browser inline-edit still untested on stg; (4) prd still holds jakkaritw's 2.0MB test PNG in เอกสาร ฝ่าย/Data & Analytic/2027 (he can now delete it himself); (5) a parallel session's commit 2fd7b44 sits unpushed on local main - not mine to push.",
       "agent": "claude"
     },
     {
@@ -2416,32 +2431,6 @@
       "created": "2026-07-12T00:07:59+0700",
       "updated": "2026-07-12T00:20:50+0700",
       "ai": "DONE: spec docs/specs/budget-transactional-data-model.md reconciled to ADR-0008 (approval unit dept,year), ADR-0019 (CC-Filler RLS), new ADR-0020 (SAP read-through fact_gl_trans DW ws 302668d3), new ADR-0021 (board_budget yearly Excel drop, 14-col A-N, year-from-filename strict). CONTEXT.md 4 spots fixed. ADR-0003/0010 got amended-by backlinks. GATE (06 combined, docs-only): initial REQUEST CHANGES — 1 blocker (spec line ~291 stale 'Lakehouse gold_sap_gl_trans' in section-3 intro) + 3 suggestions (1a lifecycle wording, remark DBML comment, ADR backlinks); ALL 4 fixed same session -> effectively APPROVE. Follow-up candidates (out of scope, not done): .claude/project-context.md, docs/reference/data-platform-map.md + data-sources.md still say gold_sap_gl_trans; mockup 0002.2 + signoff doc 01 still show import/export buttons; fact_gl_trans exact col names verify-at-build; sync trigger (Sync-now btn vs daily poll) open."
-    },
-    {
-      "id": "specC-signoff-v2-excel",
-      "state": "done",
-      "created": "2026-07-11T19:16:55+0700",
-      "updated": "2026-07-11T19:16:55+0700",
-      "agent": "01-sa-doc-writer",
-      "skills": [
-        "09-doc-templates"
-      ],
-      "files": [
-        {
-          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/laddawan/Spec C การจัดการตารางข้อมูลหลัก_V2.0.docx"
-        }
-      ],
-      "ai": "Rewrote laddawan Spec C sign-off docx to Excel-on-SharePoint reality (V2.0). New generator _build/build_spec_c_master_tables.py builds fresh no-install OOXML docx; dropped all 31 screenshots + UI-walkthrough/cfg_master/Entra/DEMO content; 6 sections (C-1..C-6) each = Context+admins(SharePoint perms)+Excel file(link+column table)+rules+Data sync(cman-dw-ws/modern_lh_cman_dw). C-3 reframed to org-reference only (RLS moved to C-6 per ADR-0019). C-6 new Filler map. Preserved ADR-0012 lock, ADR-0015 FX impact table, C-4 downstream filters. Signature block preserved, prep date 11/07/2026, reviewer/approver blank. Verified: XML well-formed, python-docx opens (135 paras/8 tables), 50 required tokens present, 0 forbidden. V1.0 untouched. Not committed."
-    },
-    {
-      "id": "mastertables-excel-migration",
-      "state": "done",
-      "created": "2026-07-11T18:37:25+0700",
-      "updated": "2026-07-11T18:44:30+0700",
-      "skills": [
-        "20-grill-with-docs"
-      ],
-      "ai": "Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center<->Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item)."
     },
     {
       "id": "sap-actuals-view",

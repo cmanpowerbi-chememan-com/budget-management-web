@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-08T22:43:02+0700",
+  "updated": "2026-08-10T20:45:14+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -176,6 +176,32 @@
         }
       ],
       "ai": "FAST-MODE (skill 19): generated CREATE OR ALTER VIEW dbo.vw_employee_budget over [fabric_sql_database].[dbo].[employee_master] (the mirrored-warehouse employee table at ws adeb7108 / mirroredwarehouse 01749833, user-mandated single source — NOT dbo.mas_employee_data). Verified target columns first via user-pasted INFORMATION_SCHEMA/TOP-100: employee_master uses snake_case (employee_code, org_code, job_level_name_en, hr_status) vs mas_employee_data's compact names (empcode/orgcode/joblevelnameen). Applied the project's 4 sync-time filters (from sync_employees.py:6-10) IN the view since the mirror is unfiltered: hr_status='Active', employee_code NOT LIKE '4%' (Gritsman), org_code NOT LIKE '117%' (Vietnam/Office of Affiliate), job_level_name_en NOT IN ('Operator 1','Operator 2','Operator 3','Driver','Maid') (L5). Added record_status='active' as forward-proofing (user probe: only value present is 'active', 649 rows; Fabric Warehouse collation is case-sensitive so 'active' lower vs 'Active' upper are exact-as-stored). Delivered as slim no-PII column list (drops id_card/religion_name/personal_email/address_* and pipeline metadata _load_dt/_load_dttm/record_status; keeps manager_employee_code for approval chain) with a SELECT * alternative offered. User ran it. Verify pass: SELECT COUNT(*) FROM dbo.vw_employee_budget = 344 (from 649 active), consistent with sync filter magnitude. View is DDL-only, human-executed; NOT persisted to a repo .sql file (offered). Reversible via DROP VIEW."
+    },
+    {
+      "id": "specC-signoff-v2-excel",
+      "state": "done",
+      "created": "2026-07-11T19:16:55+0700",
+      "updated": "2026-07-11T19:16:55+0700",
+      "agent": "01-sa-doc-writer",
+      "skills": [
+        "09-doc-templates"
+      ],
+      "files": [
+        {
+          "path": "requirement_spec/1_software_dev/1.1_frontend/signoff_spec/laddawan/Spec C การจัดการตารางข้อมูลหลัก_V2.0.docx"
+        }
+      ],
+      "ai": "Rewrote laddawan Spec C sign-off docx to Excel-on-SharePoint reality (V2.0). New generator _build/build_spec_c_master_tables.py builds fresh no-install OOXML docx; dropped all 31 screenshots + UI-walkthrough/cfg_master/Entra/DEMO content; 6 sections (C-1..C-6) each = Context+admins(SharePoint perms)+Excel file(link+column table)+rules+Data sync(cman-dw-ws/modern_lh_cman_dw). C-3 reframed to org-reference only (RLS moved to C-6 per ADR-0019). C-6 new Filler map. Preserved ADR-0012 lock, ADR-0015 FX impact table, C-4 downstream filters. Signature block preserved, prep date 11/07/2026, reviewer/approver blank. Verified: XML well-formed, python-docx opens (135 paras/8 tables), 50 required tokens present, 0 forbidden. V1.0 untouched. Not committed."
+    },
+    {
+      "id": "mastertables-excel-migration",
+      "state": "done",
+      "created": "2026-07-11T18:37:25+0700",
+      "updated": "2026-07-11T18:44:30+0700",
+      "skills": [
+        "20-grill-with-docs"
+      ],
+      "ai": "Grilled+decided 2026-07-11: master-tables (5 web editors) retire, replaced by admin-edited Excel on SharePoint site CMANDWPRD, synced to Fabric ws cman-dw-ws/lakehouse modern_lh_cman_dw. New 6th dataset: Cost Center<->Filler map (cc dept.xlsx, already populated) replaces orgcode-chain RLS entirely (See+Fill) per new ADR-0019 (supersedes ADR-0001, amends ADR-0007). Confirmed: Fill access = listed in Filler map only, no HR-level/role gate on top. Approval routing/unit (ADR-0006/0008) unaffected. ADR-0018 covers Excel-editing-surface decision. All docs written (ADR-0018/0019, CONTEXT.md, project-context.md, plan.md), not committed yet. Next: 02-data-modeler+04-data-engineer design the sync job (separate plan.md item)."
     }
   ]
 }
