@@ -1,14 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-09T23:48:05+0700",
+  "updated": "2026-08-10T11:15:32+0700",
   "tasks": [
+    {
+      "id": "log-20507ec",
+      "state": "done",
+      "created": "2026-08-09T23:48:49+0700",
+      "updated": "2026-08-09T23:48:49+0700",
+      "agent": "autolog",
+      "ai": "chore(stg): delete staging Easy Auth, replace it with an ingress IP allowlist [commit 20507ec]"
+    },
     {
       "id": "stg-easyauth-deleted-ip-lock",
       "state": "done",
       "created": "2026-08-09T23:48:05+0700",
-      "updated": "2026-08-09T23:48:05+0700",
-      "ai": "jakkaritw 2026-08-09: 'delete Easy Auth ถาวร' at STAGING; I flagged that stg shares the PRODUCTION DB + APP_ENV=local + DEV_AUTH_EMAIL=pornthipp so a bare deletion exposes real writes to anyone with the URL; jakkaritw chose 'ลบ + จำกัด IP'. DONE: ARM DELETE authConfigs/current -> 204, re-GET 404 (gone for good); backup at scratchpad/stg_authconfig_backup.json. Replaced with ingress access-restriction 'allow-jakkaritw' 49.229.177.23/32 Allow = 1 rule = default-deny every other source. Verified GET /health from that machine -> 200. PRD PROVEN UNTOUCHED: Easy Auth present enabled=True RedirectToLoginPage, 0 IP rules, anonymous /health -> 401. CORRECTION: prd image is 1b37afd (2026-08-08 both-envs deploy), NOT 1bbddcb as I stated earlier; plan.md fixed. Item 12 PDPA was ALREADY decided by jakkaritw 2026-08-08 (option ก, no code change) - I had wrongly listed it as pending; run log section 22.5 + 25 corrected, now 15 PASS / 1 parked (only item 13 D3 Monday 10 Aug). Run log section 26 records the whole change incl. the ISP-IP-may-change recovery command and that other UAT testers cannot reach stg until their IP is added."
+      "updated": "2026-08-10T11:15:32+0700",
+      "ai": "[CROSS-SESSION UPDATE] IP RULE WIDENED 2026-08-10: the /32 allowlist broke within hours - jakkaritw's browser got 'RBAC: access denied' (that string IS Container Apps' Envoy response for an ingress IP-restriction denial, not an Azure RBAC/permission problem). Cause: dynamic ISP IP moved 49.229.177.23 -> 49.229.165.231 (third octet differs), so the rule now reads 49.229.0.0/16, verified reachable 200. TRADE-OFF STATED TO jakkaritw: /16 admits ~65k other subscribers of that Thai ISP range, so the gate is genuinely weaker than the /32 was; stg still has NO Easy Auth and still writes the PRODUCTION DB. Tighter options offered and NOT yet chosen: (a) office static egress IP instead of a mobile ISP range, (b) give staging its own database so exposure stops mattering. Recovery command + the whole trade-off recorded in plan/sit/sit-run-log.md section 26 note 1."
     },
     {
       "id": "log-8dfdc6c",
@@ -30,8 +38,8 @@
       "id": "stg-manual-test-pornthipp",
       "state": "doing",
       "created": "2026-08-09T21:58:17+0700",
-      "updated": "2026-08-09T23:25:50+0700",
-      "ai": "SUBMIT-BUTTON SIT ON STG: 16/16 PASS via real HTTP API (image 5b60740, rev 0000032), identity spoofed by x-ms-client-principal-name which BEATS DEV_AUTH_EMAIL (auth.py:27) so approver steps needed no restart; the tester's browser sends no header so their session stays pornthipp. T1 empty dept 400 'ยังไม่มีข้อมูลงบประมาณ' (checked BEFORE who-is-asking, proven by aiming at a dept she also does not fill). T2 not-filler 403. T3 FY2028 no deadline row 403 'ไม่เปิดให้กรอกในเว็บ'. T4 past-deadline 403 (temp FY2028 deadline row added+removed; INSERT needs _load_dt+_load_dttm). T5 submit 200 PENDING_APPROVER1 approver1=101431 laddawank. T6 double submit 409. T7 all 5 rows editable=False. T8 PUT 403 'mid-approval or approved, editing is locked' - FIRST attempt measured nothing because rows[0] is a special GL and the subform guard answers first; had to aim at ordinary GL 6211100110. T9 locked-departments=['Data & Analytic']. T10 laddawank pending-for-me sees it (ADR-0029 overlay live). T11 out-of-turn approve by step-2 403. T12 reject 200 + rows editable=True again. T13 resubmit 200 + log has SUBMIT/REJECT/RESUBMIT. Cleanup: 2 probe rows + temp deadline removed, tester's 5 rows intact. LEFT AT PENDING_APPROVER1 so the lock is visible in the browser. Status constant is PENDING_APPROVER1 not PENDING_1.",
+      "updated": "2026-08-10T00:10:18+0700",
+      "ai": "[CROSS-SESSION UPDATE] UNLOCKED FY2027 2026-08-10: deleted 1 budget.approval_status row (was PENDING_APPROVER2 from the mail repro) + 2 approval_log rows. Proven writable again via API: 5 rows editable=True, /approval/locked-departments returns [] with year_not_open=False, and a real PUT /budget/rows accepted 200. MY OWN SLIP + FIX: the writability probe added 1 THB to Mar on 6211100110 and its revert was skipped because I guarded on a response key 'ok' that PUT /budget/rows does NOT return - it returns the ROW OBJECT itself (cost_center/gl_account/m01..m12/total_year/remark/template/gl_name), no envelope. Reverted: 6211100110 back to Feb=9 Mar=0 total=9; FY2027 grand total 2,676.00 THB across 5 rows (6210400010=2640, three x 9, 6211100110=9). Dept now has NO approval row = fully open for adding sample GL. SUBMIT-MAIL QUESTION RESOLVED: submit DOES mail the step-1 approver - repro returned 200 with notification_warning=null; the mail was simply older (16:20) than the three approve mails (16:58-16:59). UAT mail-test procedure written to plan/sit/sit-run-log.md section 27, commit 8a148ca.",
       "agent": "claude"
     },
     {
