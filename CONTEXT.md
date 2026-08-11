@@ -165,6 +165,12 @@ Once a row exists in ANY layer it **persists** and reappears on later opens (els
 imported budget would vanish). "No SAP actual" is just one reason a GL must be added by hand —
 not the whole rule. RLS still applies to every source (a user sees only their own CCs).
 
+"Has a SAP actual" means **at least one individual month is non-zero** (per-month rule,
+2026-08-11, ADR-0010 amendment). A key where every month nets to exactly 0.00 — e.g. an
+accrual and its reversal posted in the same month — is noise and stays hidden (unless an
+Approved/Pending row exists). A pair that crosses months (e.g. accrual +13,150 in March,
+reversal −13,150 in April) shows BOTH legs, matching SAP's posting-period view.
+
 ### Detail line (subform line)
 One row a user enters inside a Special-GL subform — its own monthly amounts plus
 group-specific metadata. The main-page Pending cell for that GL is the read-only SUM

@@ -552,15 +552,24 @@ def section_j(client: httpx.Client, baseline: dict) -> None:
     board_keys = {tuple(r) for r in sql_all(
         "SELECT cost_center, gl_account FROM dbo.board_budget WHERE fiscal_year=2026")}
     non_master = {k for k in sap if k[1] not in master}
-    net_zero = {k for k, months in sap.items()
-                if k in master and float(months.get("total_year", 0.0)) == 0.0
-                and any(float(months.get(m, 0.0)) != 0.0 for m in MONTHS)}
-    hidden_net_zero = {k for k in net_zero if k not in board_keys}  # pending empty for real years
+    # PER-MONTH hide rule (2026-08-11, jakkaritw — supersedes the old
+    # full-year-net rule): hidden only when EVERY month rounds to 0.00 (2dp).
+    all_zero = {k for k, months in sap.items()
+                if k in master and all(round(float(months.get(m, 0.0)), 2) == 0.0 for m in MONTHS)}
+    hidden_all_zero = {k for k in all_zero if k not in board_keys}  # pending empty for real years
+    # Reversal pairs (year nets to 0 but a month is individually nonzero,
+    # e.g. SAP doc 1110001154) are now VISIBLE, not hidden — reported
+    # separately so this check doesn't miscount them as hidden.
+    reversal_visible = {k for k, months in sap.items()
+                        if k in master and float(months.get("total_year", 0.0)) == 0.0
+                        and any(round(float(months.get(m, 0.0)), 2) != 0.0 for m in MONTHS)}
     check("P2-J5", True,
-          f"intentionally hidden on the 2027 grid (SAP FY2026): {len(hidden_net_zero)} net-zero (cc,gl) keys "
-          f"(reversal pairs, no board/pending row — contribute 0 to every subtotal, plan/hide-netzero-gl-rows.md) "
+          f"intentionally hidden on the 2027 grid (SAP FY2026): {len(hidden_all_zero)} all-zero (cc,gl) keys "
+          f"(every month 0.00, no board/pending row — contribute 0 to every subtotal, ADR-0010 amendment) "
           f"+ {len(non_master)} keys whose GL is absent from the gl master (hidden for EVERY caller incl. admin, "
-          f"read_model.py GL-master rule). These are NOT missing money — do not re-open as a bug.")
+          f"read_model.py GL-master rule). {len(reversal_visible)} reversal-pair keys (year nets to 0, a month "
+          f"does not) are VISIBLE under the per-month rule, not hidden. These are NOT missing money — do not "
+          f"re-open as a bug.")
 
 
 # ---------------------------------------------------------------------------

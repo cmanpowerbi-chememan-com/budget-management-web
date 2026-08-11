@@ -424,13 +424,20 @@ def merge_budget_rows(
     `None` (the default) preserves old behavior for callers that don't
     pass it (e.g. existing tests).
 
-    Net-zero GL row hiding (plan/hide-netzero-gl-rows.md, 2026-07-24
-    decision by jakkaritw): a `(cost_center, gl_account)` row is dropped
-    when its SAP layer nets to zero (a reversal-style posting, or no SAP
-    row at all) AND neither a board NOR a pending row exists for it —
-    presence, not value, so a genuinely all-zero board/pending row still
-    shows (WIP safeguard: a blank "+ เพิ่ม Transaction" row must never
-    vanish). Not flag-gated, not role-based; always applied.
+    Net-zero GL row hiding, PER-MONTH rule (2026-08-11, jakkaritw —
+    supersedes the 2026-07-24 full-year-net rule; `plan/hide-netzero-gl-rows.md`
+    is deleted, canonical spec = the ADR-0010 amendment): a
+    `(cost_center, gl_account)` row is dropped when EVERY individual SAP
+    month rounds to 0.00 (2dp) — i.e. no SAP row at all, or a same-month
+    +/- pair that cancels within one month — AND neither a board NOR a
+    pending row exists for it. A cross-month reversal (a reversed accrual
+    posting +X in one month and -X in a later month, e.g. SAP doc
+    1110001154, CC 10CS010000/GL 6210900999: m03 +13,150 / m04 -13,150)
+    nets to zero for the year but each month is individually nonzero, so
+    it now STAYS VISIBLE — same-month +/- pairs (every month 0.00) remain
+    hidden as noise. Presence, not value: a genuinely all-zero board/pending
+    row still shows (WIP safeguard: a blank "+ เพิ่ม Transaction" row must
+    never vanish). Not flag-gated, not role-based; always applied.
 
     `visible_sap_months` (ADR-0026): month numbers whose SAP actuals are
     complete enough to display — every other month of the SAP layer is nulled
@@ -502,13 +509,21 @@ def merge_budget_rows(
     visible_ccs = None if admin_wide else set(scope.see_cost_centers)
     fill_ccs = set(scope.fill_cost_centers)
 
-    # Full-year SAP net per key, computed BEFORE any month masking and before
+    # PER-MONTH SAP nonzero check per key (2026-08-11, jakkaritw — supersedes
+    # the full-year-net rule), computed BEFORE any month masking and before
     # `remaining_sap` is drained — the net-zero row-hide rule must not change
     # its answer just because some months are hidden from display (ADR-0026).
+    # A key counts as nonzero if ANY individual month rounds to nonzero at
+    # 2dp, even if the months sum to zero for the year (a reversed accrual
+    # posts +X in one month and -X in another — SAP doc 1110001154, CC
+    # 10CS010000/GL 6210900999: m03 +13,150 / m04 -13,150 — and must show
+    # per posting period like SAP does, not disappear because the year nets
+    # to zero). A same-month +/- pair, where every month is individually
+    # 0.00, still counts as zero and is hidden as noise.
     sap_nonzero_keys = {
         key
         for key, months in sap_actuals.items()
-        if round(sum(months.get(col, 0.0) for col in MONTH_COLUMNS), 2) != 0
+        if any(round(months.get(col, 0.0), 2) != 0 for col in MONTH_COLUMNS)
     }
 
     # Presence (not value) of a board/pending row per key, from the join
@@ -546,7 +561,7 @@ def merge_budget_rows(
         if admin_gl_codes is not None and gl in admin_gl_codes and not scope.is_admin:
             continue
         if (cc, gl) not in sap_nonzero_keys and (cc, gl) not in board_present and (cc, gl) not in pending_present:
-            continue  # net-zero GL row hide (2026-07-24, plan/hide-netzero-gl-rows.md)
+            continue  # net-zero GL row hide, per-month rule (2026-08-11, ADR-0010 amendment)
         if cost_center_filter is not None and cc != cost_center_filter:
             continue
         if department_filter is not None:

@@ -271,9 +271,10 @@ def test_pending_layer_carries_updated_at_optimistic_lock_token():
 
 def test_pending_layer_updated_at_is_none_when_no_pending_row_exists():
     join_rows: list[dict] = []
-    # Non-zero m01 (not net-zero) keeps this SAP-only row visible under the
-    # 2026-07-24 net-zero-hide rule (see below) — an all-zero SAP total here
-    # would now be hidden, which is orthogonal to what this test checks.
+    # m01 rounds to a nonzero 2dp value, so this SAP-only row stays visible
+    # under the per-month hide rule (2026-08-11, see below) — an all-zero
+    # SAP row here would be hidden instead, which is orthogonal to what
+    # this test checks.
     sap_actuals = {("CC1", "GL1"): {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]} | {"m01": 100.0, "total_year": 100.0}}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
@@ -834,8 +835,9 @@ def test_master_gl_from_sap_only_row_kept():
     still render — the master filter must not accidentally require a
     board/pending presence."""
     # The monthly cells carry the value, not just `total_year`: since ADR-0026
-    # the net-zero row-hide sums the 12 months itself (a month can be nulled
-    # for display, so the stored total is no longer the input to that rule).
+    # the per-month hide rule (2026-08-11) checks each of the 12 months
+    # itself (a month can be nulled for display, so the stored total is no
+    # longer the input to that rule).
     # `fetch_sap_actuals` always keeps the two in sync, so this is the only
     # shape that can occur live.
     months = {c: 0.0 for c in [f"m{m:02d}" for m in range(1, 13)]}
@@ -910,20 +912,29 @@ def test_master_filter_subtotal_excludes_dropped_row_no_double_count():
 
 
 # ---------------------------------------------------------------------------
-# merge_budget_rows — hide net-zero GL rows (plan/hide-netzero-gl-rows.md,
-# 2026-07-24 decision by jakkaritw). A (cc,gl) row whose SAP months net to
-# zero (e.g. a posting + its reversal, or simply no SAP row) is hidden ONLY
-# when NEITHER a board NOR a pending row exists for it. Presence, not value:
-# an all-zero board/pending row must still show (WIP safeguard) — see
-# `_ALL_ZERO_MONTHS` fixture rows below.
+# merge_budget_rows — hide net-zero GL rows, PER-MONTH rule (2026-08-11,
+# jakkaritw; supersedes the 2026-07-24 full-year-net rule —
+# `plan/hide-netzero-gl-rows.md` is deleted, canonical spec = the ADR-0010
+# amendment). A (cc,gl) row is hidden ONLY when EVERY individual SAP month
+# rounds to 0.00 (2dp) AND neither a board NOR a pending row exists for it.
+# A cross-month reversal (e.g. +X posted in one month, -X reversed in a
+# later month — SAP doc 1110001154, CC 10CS010000/GL 6210900999: m03
+# +13,150 / m04 -13,150) nets to zero for the year but each leg is
+# individually nonzero, so it now STAYS VISIBLE, same as SAP shows it. A
+# same-month +/- pair (every month individually 0.00) remains hidden as
+# noise — see `_all_zero_sap_months` below. Presence, not value: an
+# all-zero board/pending row must still show (WIP safeguard).
 # ---------------------------------------------------------------------------
 
 _ALL_MONTHS = [f"m{m:02d}" for m in range(1, 13)]
 
 
 def _net_zero_sap_months() -> dict[str, float]:
-    """+1,648.13 in m01 / -1,648.13 in m02 -> total_year == 0.0 — the
-    reversal-style case from the trigger finding (10GE000000/6210500010)."""
+    """+1,648.13 in m01 / -1,648.13 in m02 -> total_year == 0.0 but EACH
+    month is individually nonzero — the cross-month reversal case from the
+    trigger finding (10GE000000/6210500010, and the doc-1110001154 case in
+    the module docstring above). Under the per-month hide rule this key is
+    VISIBLE, not hidden — see `test_net_zero_cross_month_reversal_key_is_visible_with_both_legs_intact`."""
     months = {c: 0.0 for c in _ALL_MONTHS}
     months["m01"] = 1648.13
     months["m02"] = -1648.13
@@ -931,9 +942,18 @@ def _net_zero_sap_months() -> dict[str, float]:
     return months
 
 
+def _all_zero_sap_months() -> dict[str, float]:
+    """Every month exactly 0.00 (no postings at all, or a same-month +/-
+    pair that cancels within one month) — the ONLY shape the per-month hide
+    rule now hides."""
+    months = {c: 0.0 for c in _ALL_MONTHS}
+    months["total_year"] = 0.0
+    return months
+
+
 def test_net_zero_sap_key_no_board_no_pending_is_excluded():
     join_rows: list[dict] = []
-    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
@@ -941,11 +961,55 @@ def test_net_zero_sap_key_no_board_no_pending_is_excluded():
     assert rows == []
 
 
+def test_net_zero_cross_month_reversal_key_is_visible_with_both_legs_intact():
+    """Business reason (2026-08-11): a reversed accrual posts +X in one
+    month and -X in another (SAP doc 1110001154 shape). SAP shows both
+    postings per period, so the app must too — the per-month rule keeps
+    this key visible even with no board/pending row at all."""
+    join_rows: list[dict] = []
+    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL1"]
+    assert rows[0].sap.m01 == 1648.13
+    assert rows[0].sap.m02 == -1648.13
+    assert rows[0].sap.total_year == 0.0
+
+
+def test_per_month_rule_uses_2dp_rounding_per_month():
+    """Boundary: the per-month hide rule rounds each month to 2dp before
+    checking non-zero. A sub-cent residue (m01=+0.004 / m02=-0.004) rounds
+    to 0.00 in every month, so that key is hidden — but a single month that
+    rounds to a real 0.01 keeps its key visible."""
+    join_rows: list[dict] = []
+    hidden_months = {c: 0.0 for c in _ALL_MONTHS}
+    hidden_months["m01"] = 0.004
+    hidden_months["m02"] = -0.004
+    hidden_months["total_year"] = 0.0
+    visible_months = {c: 0.0 for c in _ALL_MONTHS}
+    visible_months["m01"] = 0.01
+    visible_months["total_year"] = 0.01
+    sap_actuals = {
+        ("CC1", "GL-HIDDEN"): hidden_months,
+        ("CC1", "GL-VISIBLE"): visible_months,
+    }
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, sap_actuals, scope)
+
+    assert [r.gl_account for r in rows] == ["GL-VISIBLE"]
+
+
 def test_net_zero_sap_key_with_pending_row_is_included_safeguard():
     """Safeguard: even an all-zero pending row (blank "+ เพิ่ม Transaction"
-    row, or a deliberately-zeroed one) must never vanish."""
+    row, or a deliberately-zeroed one) must never vanish. Uses an all-zero
+    SAP key (every month rounds to 0.00) so `sap_nonzero_keys` cannot be the
+    reason the row survives — only `pending_present` can make it show,
+    proving the presence-safeguard branch actually runs."""
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]  # all pending amounts 0/None
-    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
@@ -957,9 +1021,12 @@ def test_net_zero_sap_key_with_pending_row_is_included_safeguard():
 
 def test_net_zero_sap_key_with_board_row_is_included():
     """Presence, not value: an all-zero Approved (board) row must still
-    show — same safeguard as pending, on the board side."""
+    show — same safeguard as pending, on the board side. Uses an all-zero
+    SAP key (every month rounds to 0.00) so `sap_nonzero_keys` cannot be the
+    reason the row survives — only `board_present` can make it show,
+    proving the presence-safeguard branch actually runs."""
     join_rows = [_blank_join_row("CC1", "GL1", board_cost_center="CC1")]  # all board amounts 0/None
-    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
@@ -988,9 +1055,10 @@ def test_net_zero_join_row_with_both_presence_markers_null_is_excluded():
     being non-null on the join row — NOT from mere membership in
     `join_rows` — a degenerate join row with both markers null (should not
     occur from the real FULL OUTER JOIN, but guards the presence-detection
-    logic itself) is treated the same as a pure-SAP key: hidden if net-zero."""
+    logic itself) is treated the same as a pure-SAP key: hidden if every
+    month is 0.00."""
     join_rows = [_blank_join_row("CC1", "GL1")]  # board_cost_center=None, pending_cost_center=None
-    sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
@@ -999,34 +1067,39 @@ def test_net_zero_join_row_with_both_presence_markers_null_is_excluded():
 
 
 def test_net_zero_hidden_row_contributes_nothing_to_grid_totals():
-    """TOTALS PARITY: the hidden net-zero row's layers are all exactly
-    zero (sap net-zero by construction, board/pending absent -> default
+    """TOTALS PARITY: the hidden all-zero row's layers are all exactly
+    zero (sap all-zero by construction, board/pending absent -> default
     zero) -- so the grid-wide total is identical whether or not the row
-    is (would be) included."""
+    is (would be) included. Also proves a VISIBLE cross-month reversal row
+    (GL-REVERSAL, per-month rule keeps it) still nets to 0 in the total,
+    since its two legs cancel — visibility changed, arithmetic did not."""
     join_rows = [
         _blank_join_row(
             "CC1", "GL-VISIBLE", pending_cost_center="CC1",
             pending_m01=500.0, pending_total_year=500.0,
         ),
     ]
-    netzero_months = _net_zero_sap_months()
+    allzero_months = _all_zero_sap_months()
+    reversal_months = _net_zero_sap_months()
     sap_actuals = {
         ("CC1", "GL-VISIBLE"): {c: 0.0 for c in _ALL_MONTHS} | {"total_year": 0.0},
-        ("CC1", "GL-NETZERO"): netzero_months,
+        ("CC1", "GL-ALLZERO"): allzero_months,
+        ("CC1", "GL-REVERSAL"): reversal_months,
     }
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     rows = merge_budget_rows(join_rows, sap_actuals, scope)
 
-    assert [r.gl_account for r in rows] == ["GL-VISIBLE"]  # GL-NETZERO hidden
+    # GL-ALLZERO hidden; GL-REVERSAL visible under the new per-month rule.
+    assert sorted(r.gl_account for r in rows) == ["GL-REVERSAL", "GL-VISIBLE"]
 
     def _layer_total(r):
         return r.sap.total_year + r.board.total_year + r.pending.total_year
 
     total_returned = sum(_layer_total(r) for r in rows)
     # The hidden row's own total (all 3 layers) — proven zero by
-    # construction (net-zero SAP, no board, no pending row for it).
-    hidden_row_total = netzero_months["total_year"]  # board/pending default to 0.0
+    # construction (all-zero SAP, no board, no pending row for it).
+    hidden_row_total = allzero_months["total_year"]  # board/pending default to 0.0
     assert hidden_row_total == 0.0
     assert total_returned == 500.0
     assert total_returned + hidden_row_total == 500.0  # including it changes nothing
@@ -1109,10 +1182,27 @@ def test_row_whose_only_actual_falls_in_a_hidden_month_still_appears():
     assert rows[0].sap.total_year == 0.0
 
 
-def test_net_zero_sap_key_is_still_hidden_when_its_months_are_all_hidden():
-    """The other direction of the same rule: masking must not RESURRECT a
-    net-zero row (its full-year total is what decides, not the visible sum)."""
+def test_net_zero_reversal_key_stays_visible_when_all_months_masked():
+    """The hide decision is computed PRE-MASK on the full year (ADR-0026):
+    a cross-month reversal key is visible because EACH of its months is
+    individually nonzero — masking every month for display (`visible_sap_months
+    =frozenset()`) must not flip that decision, since the per-month check
+    reads the raw `sap_actuals` dict, never the masked display layer."""
     sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=frozenset())
+
+    assert [r.gl_account for r in rows] == ["GL1"]
+    assert rows[0].sap.m01 is None and rows[0].sap.m02 is None  # masked for display
+    assert rows[0].sap.total_year == 0.0  # masked total, but the row itself stays
+
+
+def test_all_zero_sap_key_is_still_hidden_when_its_months_are_all_hidden():
+    """The other direction of the same rule: masking must not RESURRECT an
+    all-zero row (the full-year, per-month check is what decides, not the
+    visible sum)."""
+    sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
     assert merge_budget_rows([], sap_actuals, scope, visible_sap_months=frozenset()) == []
@@ -1627,9 +1717,11 @@ def test_board_year_empty_returns_zero_filled_pending_and_sap_layers():
         ),
     ]
     # SAP data passed separately (ADR-0020: cross-store merge)
-    # total_year included (not net-zero) — matches the real SAP query, which
-    # always carries its own pre-computed total_year column; a fixture
-    # without it would look net-zero under the 2026-07-24 hide rule.
+    # total_year included to mirror the real SAP query shape, which always
+    # carries its own pre-computed total_year column. Row visibility itself
+    # is driven by the per-month values (2026-08-11 rule), not by
+    # total_year — under the superseded full-year-net rule (pre-2026-08-11)
+    # a fixture without total_year would have looked net-zero here instead.
     sap_actuals = {
         ("CC1", "GL2"): {"m01": 50.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
                         "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,
@@ -1658,7 +1750,8 @@ def test_board_year_partial_missing_cost_center_still_renders():
     CC still appear with zero-filled board layer — never lost."""
     join_rows = []  # No join row yet (board empty for CC_NEW)
     # But SAP has a row for CC_NEW
-    # total_year included (not net-zero) — see same note above.
+    # total_year included — see same note above (per-month rule, 2026-08-11;
+    # total_year itself no longer drives row visibility).
     sap_actuals = {
         ("CC_NEW", "GL1"): {"m01": 200.0, "m02": 0.0, "m03": 0.0, "m04": 0.0,
                            "m05": 0.0, "m06": 0.0, "m07": 0.0, "m08": 0.0,

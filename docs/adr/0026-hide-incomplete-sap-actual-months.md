@@ -79,7 +79,8 @@ visible(year Y, month M)  ⟺  watermark  >=  last_day(Y, M) + 23 days
   inside `fetch_sap_actuals`. Two reasons: the DB→web parity harness reads that fetch month by
   month and needs it to stay a complete mirror of gold, and `merge_budget_rows` needs the FULL
   year to decide row visibility — `sap_nonzero_keys` is computed *before* any masking so the
-  net-zero row-hide rule cannot change its answer just because months are hidden.
+  net-zero row-hide rule (per-month since 2026-08-11 — see the ADR-0010 amendment, its
+  canonical spec) cannot change its answer just because months are hidden.
 - **The mask applies even to a key with no SAP row at all** — rendering "0.00" in an incomplete
   month is a claim about that month too.
 - `SapLayer` re-declares its 12 months as `float | None` (Approved/Pending never can be
