@@ -642,7 +642,10 @@ def get_budget_grid(
     # Both gold reads below are TTL-cached (perf fix — prod first-load
     # 10-11s -> 2-3s, `Settings.sap_cache_ttl_seconds`): the answer only
     # changes when new SAP data lands, not on every grid request.
-    sap_actuals = fetch_sap_actuals_cached(gold_conn, fiscal_year=board_year)
+    # ADR-0020 amendment 2026-08-11: `fabric_conn` is also threaded through
+    # here so the cached loader can read `dbo.hide_document` (transactional
+    # DB) and anti-join hidden documents out of the SUM.
+    sap_actuals = fetch_sap_actuals_cached(gold_conn, fabric_conn, fiscal_year=board_year)
     # ADR-0026: one extra gold read (~1.2s live, uncached) resolves which
     # months of the SAP layer are complete enough to show. Any failure
     # raises SapActualsFetchError -> 502: fail closed, never "show everything".

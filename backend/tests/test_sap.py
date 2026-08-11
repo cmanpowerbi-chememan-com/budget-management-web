@@ -13,10 +13,12 @@ import pytest
 
 from app.config import Settings
 from app.sap import (
+    HIDE_DOCUMENT_SQL,
     SAP_ACTUALS_SQL,
     SAP_ENTRY_DAYS_SQL,
     SapActualsFetchError,
     entry_day_watermark,
+    fetch_hidden_doc_periods,
     fetch_sap_actuals,
     fetch_sap_actuals_cached,
     fetch_sap_entry_days,
@@ -185,6 +187,164 @@ def test_fetch_sap_actuals_never_masks_months_itself():
     months = fetch_sap_actuals(conn, fiscal_year=2026)[("CC1", "GL1")]
     assert months["m04"] == 22_008_580.0
     assert months["total_year"] == 22_008_580.0
+
+
+# ---------------------------------------------------------------------------
+# ADR-0020 amendment 2026-08-11 — dbo.hide_document anti-join
+# ---------------------------------------------------------------------------
+
+def test_fetch_hidden_doc_periods_reads_hide_document_for_the_fiscal_year():
+    conn = _make_conn(rows=[("1234567890", 1), ("2345678901", 4)])
+    result = fetch_hidden_doc_periods(conn, fiscal_year=2026)
+    args = conn.cursor.return_value.execute.call_args.args
+    assert args[0] == HIDE_DOCUMENT_SQL
+    assert args[1] == 2026
+    assert result == [("1234567890", 1), ("2345678901", 4)]
+
+
+def test_fetch_hidden_doc_periods_raises_on_a_malformed_document_number():
+    """Loud, never skipped: a bad row must not silently drop out of the hide
+    list -- a partial hide list still un-hides money it should not."""
+    conn = _make_conn(rows=[("not-a-doc", 1)])
+    with pytest.raises(SapActualsFetchError):
+        fetch_hidden_doc_periods(conn, fiscal_year=2026)
+
+
+def test_fetch_hidden_doc_periods_raises_on_a_document_number_of_the_wrong_length():
+    for bad_doc in ("123456789", "12345678901"):
+        conn = _make_conn(rows=[(bad_doc, 1)])
+        with pytest.raises(SapActualsFetchError):
+            fetch_hidden_doc_periods(conn, fiscal_year=2026)
+
+
+def test_fetch_hidden_doc_periods_raises_on_an_out_of_range_month():
+    """Loud, never skipped: a bad month must not silently drop out of the hide
+    list -- same contract as a malformed document_number."""
+    for bad_month in (0, 13):
+        conn = _make_conn(rows=[("1234567890", bad_month)])
+        with pytest.raises(SapActualsFetchError):
+            fetch_hidden_doc_periods(conn, fiscal_year=2026)
+
+
+def test_fetch_hidden_doc_periods_raises_on_a_non_int_month():
+    for bad_month in (None, "x"):
+        conn = _make_conn(rows=[("1234567890", bad_month)])
+        with pytest.raises(SapActualsFetchError):
+            fetch_hidden_doc_periods(conn, fiscal_year=2026)
+
+
+def test_fetch_hidden_doc_periods_raises_loud_error_on_query_failure_not_silent_empty():
+    """Never-cut: a broken hide-list read must NEVER silently mean 'nothing
+    hidden' -- that would un-hide up to ~1.3B THB of previously-hidden
+    postings back into the grid (ADR-0020 amendment, 2026-08-11)."""
+    conn = _make_conn(rows=[])
+    conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    with pytest.raises(SapActualsFetchError):
+        fetch_hidden_doc_periods(conn, fiscal_year=2026)
+
+
+def test_fetch_sap_actuals_with_hidden_doc_periods_builds_the_anti_join_variant():
+    """Non-empty hide list: the SQL grows a `NOT EXISTS (... VALUES ...)`
+    predicate, params are `fiscal_year` followed by the flattened (doc,
+    month) pairs in order, and the (mocked) row already reflects what the
+    DB-side anti-join would have excluded."""
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 800.0)])
+    hidden = [("1234567890", 1), ("2345678901", 4)]
+
+    result = fetch_sap_actuals(conn, fiscal_year=2026, hidden_doc_periods=hidden)
+
+    args = conn.cursor.return_value.execute.call_args.args
+    sql_text = args[0]
+    assert "NOT EXISTS" in sql_text
+    assert "VALUES (?,?),(?,?)" in sql_text
+    assert "accounting_doc_number" in sql_text
+    assert "CAST(period_month AS INT)" in sql_text
+    assert args[1:] == (2026, "1234567890", 1, "2345678901", 4)
+    assert result[("CC1", "GL1")]["m01"] == 800.0
+
+
+def test_fetch_sap_actuals_raises_on_too_many_hidden_doc_periods():
+    """1001 hide rows means params = 1 + 2*1001 = 2003 -- close enough to SQL
+    Server's 2100-parameter cap that this must refuse loudly instead of
+    letting pyodbc raise an opaque driver error (today's max is 172 rows;
+    this is a safety rail, not a real-world case -- chunking is NOT
+    implemented)."""
+    conn = _make_conn(rows=[])
+    hidden = [(f"{1000000000 + i:010d}", 1) for i in range(1001)]
+
+    with pytest.raises(SapActualsFetchError, match="1001"):
+        fetch_sap_actuals(conn, fiscal_year=2026, hidden_doc_periods=hidden)
+
+
+def test_fetch_sap_actuals_with_hidden_doc_periods_leaves_the_five_frozen_predicates_intact():
+    conn = _make_conn(rows=[])
+    fetch_sap_actuals(conn, fiscal_year=2026, hidden_doc_periods=[("1234567890", 1)])
+    sql_text = conn.cursor.return_value.execute.call_args.args[0]
+    assert "company_code='1000'" in sql_text
+    assert "doc_type<>'CO'" in sql_text
+    assert (
+        "cost_center NOT IN ('CMRY01','CMKK01','CMPB01','MNLB00','MNLB01','MNLB02','MNLB03','MNLB04')"
+        in sql_text
+    )
+    assert "cost_center IS NOT NULL" in sql_text
+    assert "assignment_number IS NULL OR assignment_number<>'TFRS16'" in sql_text
+    assert "GROUP BY cost_center, gl_account_number, fiscal_year, period_month" in sql_text
+
+
+def test_fetch_sap_actuals_with_none_hidden_doc_periods_runs_the_frozen_sql_byte_identical():
+    """None (the default -- every existing caller, including the DB->web
+    parity harness) must run `SAP_ACTUALS_SQL` verbatim: zero params
+    difference from before this amendment."""
+    conn = _make_conn(rows=[])
+    fetch_sap_actuals(conn, fiscal_year=2026, hidden_doc_periods=None)
+    args = conn.cursor.return_value.execute.call_args.args
+    assert args[0] == SAP_ACTUALS_SQL
+    assert args[1:] == (2026,)
+
+
+def test_fetch_sap_actuals_with_empty_hidden_doc_periods_runs_the_frozen_sql_byte_identical():
+    conn = _make_conn(rows=[])
+    fetch_sap_actuals(conn, fiscal_year=2026, hidden_doc_periods=[])
+    args = conn.cursor.return_value.execute.call_args.args
+    assert args[0] == SAP_ACTUALS_SQL
+    assert args[1:] == (2026,)
+
+
+def test_fetch_sap_actuals_default_hidden_doc_periods_is_none():
+    """A caller that never passes `hidden_doc_periods` at all must still get
+    the byte-identical frozen SQL (not some other truthy default)."""
+    conn = _make_conn(rows=[])
+    fetch_sap_actuals(conn, fiscal_year=2026)
+    args = conn.cursor.return_value.execute.call_args.args
+    assert args[0] == SAP_ACTUALS_SQL
+
+
+def test_fetch_sap_actuals_cached_threads_fabric_conn_into_the_hide_list_read():
+    """`fetch_sap_actuals_cached`'s loader must read `dbo.hide_document` from
+    `fabric_conn` (never `conn`, the gold connection) on every cache miss."""
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[("1234567890", 1)])
+    settings = _cached_settings(ttl=600)
+
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
+
+    fabric_args = fabric_conn.cursor.return_value.execute.call_args.args
+    assert fabric_args[0] == HIDE_DOCUMENT_SQL
+    assert fabric_args[1] == 2026
+    gold_sql = conn.cursor.return_value.execute.call_args.args[0]
+    assert "NOT EXISTS" in gold_sql
+
+
+def test_fetch_sap_actuals_cached_raises_when_the_hide_list_read_fails():
+    """A broken `fabric_conn` read must fail the whole cached call loud --
+    never fall back to 'nothing hidden' (ADR-0020 amendment)."""
+    conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
+    fabric_conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    settings = _cached_settings(ttl=600)
+
+    with pytest.raises(SapActualsFetchError):
+        fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
 
 # ---------------------------------------------------------------------------
@@ -380,10 +540,11 @@ def _cached_settings(ttl: int) -> Settings:
 
 def test_fetch_sap_actuals_cached_second_call_within_ttl_does_not_requery():
     conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=600)
 
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     assert conn.cursor.return_value.execute.call_count == 1
 
@@ -402,11 +563,12 @@ def test_fetch_sap_actuals_cached_reloads_after_ttl_expiry(monkeypatch):
     fake_now = {"t": 0.0}
     monkeypatch.setattr("app.cache.time.monotonic", lambda: fake_now["t"])
     conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=10)
 
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
     fake_now["t"] += 20  # past TTL
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     assert conn.cursor.return_value.execute.call_count == 2
 
@@ -426,11 +588,12 @@ def test_resolve_sap_coverage_cached_reloads_after_ttl_expiry(monkeypatch):
 
 def test_fetch_sap_actuals_cached_ttl_zero_always_queries():
     conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=0)
 
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     assert conn.cursor.return_value.execute.call_count == 3
 
@@ -447,12 +610,13 @@ def test_resolve_sap_coverage_cached_ttl_zero_always_queries():
 
 def test_fetch_sap_actuals_cached_different_fiscal_years_do_not_collide():
     conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=600)
 
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)
-    fetch_sap_actuals_cached(conn, 2027, settings=settings)
-    fetch_sap_actuals_cached(conn, 2026, settings=settings)  # still cached
-    fetch_sap_actuals_cached(conn, 2027, settings=settings)  # still cached
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2027, settings=settings)
+    fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)  # still cached
+    fetch_sap_actuals_cached(conn, fabric_conn, 2027, settings=settings)  # still cached
 
     assert conn.cursor.return_value.execute.call_count == 2
 
@@ -460,16 +624,17 @@ def test_fetch_sap_actuals_cached_different_fiscal_years_do_not_collide():
 def test_fetch_sap_actuals_cached_exception_is_not_cached_next_call_requeries():
     conn = _make_conn(rows=[])
     conn.cursor.return_value.execute.side_effect = pyodbc.Error("HYT00", "timeout")
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=600)
 
     with pytest.raises(SapActualsFetchError):
-        fetch_sap_actuals_cached(conn, 2026, settings=settings)
+        fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     # A revoked-grant style failure must never poison the cache — the very
     # next call must actually re-query (never a stale/empty green result).
     conn.cursor.return_value.execute.side_effect = None
     conn.cursor.return_value.fetchall.return_value = [("CC1", "GL1", 2026, "01", 100.0)]
-    result = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    result = fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     assert conn.cursor.return_value.execute.call_count == 2
     assert result[("CC1", "GL1")]["m01"] == 100.0
@@ -497,13 +662,14 @@ def test_fetch_sap_actuals_cached_returns_a_defensive_copy():
     """A caller mutating the returned dict must never corrupt the next
     request's cached figures."""
     conn = _make_conn(rows=[("CC1", "GL1", 2026, "01", 100.0)])
+    fabric_conn = _make_conn(rows=[])
     settings = _cached_settings(ttl=600)
 
-    first = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    first = fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
     first[("CC1", "GL1")]["m01"] = 999_999.0
     first[("HACKED", "GL9")] = {"m01": 1.0}
 
-    second = fetch_sap_actuals_cached(conn, 2026, settings=settings)
+    second = fetch_sap_actuals_cached(conn, fabric_conn, 2026, settings=settings)
 
     assert second[("CC1", "GL1")]["m01"] == 100.0
     assert ("HACKED", "GL9") not in second

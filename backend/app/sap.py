@@ -47,10 +47,22 @@ watermark is a second, small read (`SAP_ENTRY_DAYS_SQL`) and the month
 masking itself is applied where the display layer is built
 (`read_model._sap_layer`), never inside `fetch_sap_actuals` — the DB->web
 parity harness depends on that fetch staying a complete mirror of gold.
+
+ADR-0020 amendment 2026-08-11 (hide_document anti-join): the admin-maintained
+`dbo.hide_document` list (transactional Fabric SQL DB) was previously
+consumed by NOTHING — hidden documents' amounts still flowed into the web
+actuals. `fetch_hidden_doc_periods` reads that list per fiscal year and
+`fetch_sap_actuals` anti-joins it out via a query-time `NOT EXISTS` predicate
+appended AFTER the five frozen predicates above (never edited). Empty/no
+hide list runs `SAP_ACTUALS_SQL` byte-identical. Same loud-failure contract:
+a broken hide-list read must NEVER silently mean "nothing hidden" (that
+would un-hide up to ~1.3B THB of previously-hidden postings, see ADR-0020's
+amendment section for the measured leak).
 """
 import calendar
 import copy
 import logging
+import re
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
@@ -91,19 +103,120 @@ class SapActualsFetchError(RuntimeError):
     (ADR-0020 Consequences: a revoked grant must not look like "no actuals")."""
 
 
+# ---------------------------------------------------------------------------
+# ADR-0020 amendment 2026-08-11 — dbo.hide_document anti-join
+# ---------------------------------------------------------------------------
+
+# Read from the TRANSACTIONAL Fabric SQL DB (the same connection read_model
+# calls `fabric_conn`) — `dbo.hide_document` cannot be cross-store joined
+# into the gold query (same reason as the core read-through design), so its
+# rows are fetched separately and applied to the gold query as a
+# parameterized anti-join. Grain = (document_number, year, month): a SAP
+# document number repeats across fiscal years, so year+month must always be
+# part of the match, never document_number alone.
+HIDE_DOCUMENT_SQL = """
+SELECT document_number, [month]
+FROM dbo.hide_document
+WHERE [year] = ?
+"""
+
+# `document_number` is a 10-digit SAP accounting document number, always.
+DOC_NUMBER_PATTERN = re.compile(r"^[0-9]{10}$")
+
+
+def fetch_hidden_doc_periods(conn: pyodbc.Connection, fiscal_year: int) -> list[tuple[str, int]]:
+    """Read the admin-maintained hide list for one fiscal year.
+
+    Returns `[(document_number, month), ...]` for every `dbo.hide_document`
+    row matching `fiscal_year`, to be anti-joined out of `fetch_sap_actuals`.
+
+    Same loud-failure contract as the other SAP fetches: a broken read or a
+    malformed `document_number` raises `SapActualsFetchError` rather than
+    being skipped — a hide row silently dropped here would un-hide real
+    money, never "just" lose a filter (see module docstring)."""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(HIDE_DOCUMENT_SQL, fiscal_year)
+        rows = cursor.fetchall()
+    except pyodbc.Error as exc:
+        raise SapActualsFetchError(
+            f"hide_document read failed for fiscal_year={fiscal_year}: {exc}"
+        ) from exc
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+    hidden: list[tuple[str, int]] = []
+    for document_number, month in rows:
+        doc = str(document_number).strip()
+        if not DOC_NUMBER_PATTERN.match(doc):
+            raise SapActualsFetchError(
+                f"malformed document_number {document_number!r} in dbo.hide_document "
+                f"(fiscal_year={fiscal_year}) — refusing to build the hide filter"
+            )
+        if not isinstance(month, int) or not (1 <= month <= 12):
+            raise SapActualsFetchError(
+                f"invalid month {month!r} for document_number {doc!r} in dbo.hide_document "
+                f"(fiscal_year={fiscal_year}) — must be an int 1..12, refusing to build the "
+                "hide filter"
+            )
+        hidden.append((doc, month))
+    return hidden
+
+
+def _build_hidden_doc_sql(hidden_doc_periods: list[tuple[str, int]]) -> str:
+    """Variant of `SAP_ACTUALS_SQL` with one extra predicate inserted before
+    `GROUP BY` — ADR-0020 amendment 2026-08-11 (hide_document anti-join). The
+    5 frozen predicates above are NEVER edited; this only ever appends one
+    more, parameterized `NOT EXISTS (... VALUES ...)` predicate, one `(?,?)`
+    pair per hidden (document_number, month)."""
+    if len(hidden_doc_periods) > 1000:
+        raise SapActualsFetchError(
+            f"hidden_doc_periods has {len(hidden_doc_periods)} rows — over the 1000-row "
+            "safety limit (params = 1 + 2*N must stay well under SQL Server's 2100-parameter "
+            "cap); chunking is required above this size and is not implemented"
+        )
+    values_sql = ",".join("(?,?)" for _ in hidden_doc_periods)
+    predicate = (
+        "  AND NOT EXISTS (SELECT 1 FROM (VALUES "
+        f"{values_sql}) AS h(doc, mo) "
+        "WHERE h.doc = accounting_doc_number AND h.mo = CAST(period_month AS INT))\n"
+    )
+    # SAP_ACTUALS_SQL is frozen with exactly one GROUP BY; assert + replace(..., 1)
+    # keep this substitution deliberate if the frozen SQL ever grows a subquery.
+    assert SAP_ACTUALS_SQL.count("GROUP BY") == 1, "SAP_ACTUALS_SQL must contain exactly one GROUP BY"
+    return SAP_ACTUALS_SQL.replace("GROUP BY", predicate + "GROUP BY", 1)
+
+
 def fetch_sap_actuals(
-    conn: pyodbc.Connection, fiscal_year: int
+    conn: pyodbc.Connection,
+    fiscal_year: int,
+    hidden_doc_periods: list[tuple[str, int]] | None = None,
 ) -> dict[tuple[str, str], dict[str, float]]:
     """Fetch + pivot one fiscal year of SAP actuals.
 
     Returns `{(cost_center, gl_account): {"m01":.., ..., "m12":.., "total_year":..}}`.
     Different `gl_account` values for the same `cost_center` are always kept
     as separate keys — COST (5xxx) and SG&A (6xxx) totals never cross.
+
+    `hidden_doc_periods` (ADR-0020 amendment 2026-08-11, see
+    `fetch_hidden_doc_periods`): when non-empty, the query is a VARIANT of
+    `SAP_ACTUALS_SQL` with an extra `NOT EXISTS` anti-join predicate; when
+    None/empty, `SAP_ACTUALS_SQL` runs byte-identical (zero params
+    difference) — the DB->web parity harness depends on this fallback.
     """
+    sql = SAP_ACTUALS_SQL
+    params: tuple = (fiscal_year,)
+    if hidden_doc_periods:
+        sql = _build_hidden_doc_sql(hidden_doc_periods)
+        flattened = tuple(value for pair in hidden_doc_periods for value in pair)
+        params = (fiscal_year, *flattened)
+
     cursor = None
     try:
         cursor = conn.cursor()
-        cursor.execute(SAP_ACTUALS_SQL, fiscal_year)
+        cursor.execute(sql, *params)
         rows = cursor.fetchall()
     except pyodbc.Error as exc:
         # `conn.cursor()` itself can raise (closed connection, dropped
@@ -300,16 +413,30 @@ _sap_coverage_cache: TTLCache[SapCoverage] = TTLCache()
 
 
 def fetch_sap_actuals_cached(
-    conn: pyodbc.Connection, fiscal_year: int, settings: Settings | None = None
+    conn: pyodbc.Connection,
+    fabric_conn: pyodbc.Connection,
+    fiscal_year: int,
+    settings: Settings | None = None,
 ) -> dict[tuple[str, str], dict[str, float]]:
     """TTL-cached `fetch_sap_actuals`. Always returns a deep copy — the
     dict stored in the cache is never handed to a caller directly, so one
     caller mutating its result can never corrupt the next request's
-    figures (or the next cache read within the same TTL window)."""
+    figures (or the next cache read within the same TTL window).
+
+    ADR-0020 amendment 2026-08-11: `fabric_conn` (the transactional
+    connection, same one `read_model` calls `fabric_conn`) reads the
+    `dbo.hide_document` list INSIDE this same cached loader — not cached
+    separately — so one cache entry for `fiscal_year` is always internally
+    consistent between "which docs are hidden" and the SUM that already
+    excludes them. `fabric_conn` is only ever touched on a cache miss/
+    expiry, same as `conn` (the gold connection) already was."""
     settings = settings or get_settings()
-    result = _sap_actuals_cache.get_or_load(
-        fiscal_year, settings.sap_cache_ttl_seconds, lambda: fetch_sap_actuals(conn, fiscal_year)
-    )
+
+    def _load() -> dict[tuple[str, str], dict[str, float]]:
+        hidden_doc_periods = fetch_hidden_doc_periods(fabric_conn, fiscal_year)
+        return fetch_sap_actuals(conn, fiscal_year, hidden_doc_periods=hidden_doc_periods)
+
+    result = _sap_actuals_cache.get_or_load(fiscal_year, settings.sap_cache_ttl_seconds, _load)
     return copy.deepcopy(result)
 
 

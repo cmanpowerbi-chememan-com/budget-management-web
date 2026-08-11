@@ -62,8 +62,11 @@ def _run_warmup() -> None:
 
         step_start = time.monotonic()
         board_year = date.today().year
-        with get_gold_conn() as conn:
-            fetch_sap_actuals_cached(conn, fiscal_year=board_year)
+        # ADR-0020 amendment 2026-08-11: fetch_sap_actuals_cached also needs
+        # the transactional connection (dbo.hide_document read) — opened
+        # here alongside gold_conn, priming both pools together.
+        with get_fabric_conn() as fabric_conn, get_gold_conn() as conn:
+            fetch_sap_actuals_cached(conn, fabric_conn, fiscal_year=board_year)
             resolve_sap_coverage_cached(conn, fiscal_year=board_year)
         logger.info(
             "warmup: SAP caches primed for fiscal_year=%s in %.2fs",

@@ -53,7 +53,11 @@ def test_warmup_happy_path_opens_conns_and_primes_both_sap_caches(monkeypatch):
 
     main._run_warmup()
 
-    fabric_mock.assert_called_once()
+    # ADR-0020 amendment 2026-08-11: fetch_sap_actuals_cached now also needs
+    # fabric_conn (dbo.hide_document read), so fabric_conn is opened twice —
+    # once for pool warm-up alone, once alongside gold_conn for cache
+    # priming — same tolerant-count pattern already used for gold_mock.
+    assert fabric_mock.call_count >= 1
     assert gold_mock.call_count >= 1
 
     board_year = date.today().year

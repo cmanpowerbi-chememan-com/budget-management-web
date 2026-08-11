@@ -256,7 +256,11 @@ def test_web_actuals_match_sap_export() -> None:
     keys = sorted({(cc, gl) for cc, gl, _month in sums})
 
     with _gold_connection_or_skip() as conn:
-        data = fetch_sap_actuals(conn, FISCAL_YEAR)
+        # hidden_doc_periods=None (explicit): this harness tests the MIRROR
+        # property of the frozen SAP_ACTUALS_SQL against the SAP export —
+        # hide_document filtering (ADR-0020 amendment 2026-08-11) has its
+        # own tests in test_sap.py and must not participate here.
+        data = fetch_sap_actuals(conn, FISCAL_YEAR, hidden_doc_periods=None)
 
         mismatches: list[str] = []
         compared = 0

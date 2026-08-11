@@ -1256,7 +1256,7 @@ def test_get_budget_grid_uses_planning_year_minus_1_for_board_and_sap(monkeypatc
         captured["pending_year"] = pending_year
         return []
 
-    def fake_fetch_sap_actuals(conn, fiscal_year):
+    def fake_fetch_sap_actuals(conn, fabric_conn, fiscal_year):
         captured["sap_year"] = fiscal_year
         return {}
 
@@ -1278,7 +1278,7 @@ def test_get_budget_grid_propagates_sap_failure_not_silent_empty(monkeypatch):
         lambda conn, board_year, pending_year, cost_centers=None: [],
     )
 
-    def raise_sap_error(conn, fiscal_year):
+    def raise_sap_error(conn, fabric_conn, fiscal_year):
         raise SapActualsFetchError("DW unreachable")
 
     monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", raise_sap_error)
@@ -1297,7 +1297,7 @@ def test_get_budget_grid_admin_wide_passes_no_cost_center_filter(monkeypatch):
         return []
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
@@ -1316,7 +1316,7 @@ def test_get_budget_grid_non_admin_passes_see_cost_centers_as_filter(monkeypatch
         return []
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"])
@@ -1335,7 +1335,7 @@ def test_get_budget_grid_fetches_cc_dims_only_when_department_filter_given(monke
         return {}
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_cc_dims", fake_fetch_cc_dims)
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
@@ -1357,7 +1357,7 @@ def test_get_budget_grid_admin_without_toggle_still_passes_see_cost_centers_filt
         return []
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", fake_fetch_board_pending_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
     scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
@@ -1379,7 +1379,7 @@ def test_get_budget_grid_always_fetches_master_gl_codes_non_admin(monkeypatch):
         return frozenset({"GL1"})
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", fake_fetch_master_gl_codes)
 
     get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
@@ -1396,7 +1396,7 @@ def test_get_budget_grid_always_fetches_master_gl_codes_admin(monkeypatch):
         return frozenset({"GL1"})
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", fake_fetch_master_gl_codes)
 
     admin_scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
@@ -1412,7 +1412,7 @@ def test_get_budget_grid_master_filter_drops_non_master_row_end_to_end(monkeypat
         _blank_join_row("CC1", "GL-NOT-IN-MASTER", pending_cost_center="CC1"),
     ]
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL-MASTER"}))
 
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
@@ -1433,7 +1433,7 @@ def test_get_budget_grid_fetches_locked_departments_for_the_planning_year(monkey
         return frozenset({"DEPT1"})
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
     monkeypatch.setattr("app.read_model.fetch_locked_departments", fake_fetch_locked_departments)
 
@@ -1447,7 +1447,7 @@ def test_get_budget_grid_locked_department_ends_up_not_editable_end_to_end(monke
     not just calls the fetch function."""
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
     monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
 
@@ -1475,7 +1475,7 @@ def test_get_budget_grid_fetches_cc_dims_when_something_is_locked_even_without_d
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr(
         "app.read_model.fetch_sap_actuals_cached",
-        lambda conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
+        lambda conn, fabric_conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
     )
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
     monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
@@ -1499,7 +1499,7 @@ def test_get_budget_grid_unresolvable_department_stays_fail_open_even_when_somet
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr(
         "app.read_model.fetch_sap_actuals_cached",
-        lambda conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
+        lambda conn, fabric_conn, fiscal_year: {("CC1", "GL1"): {"m01": 100.0}},
     )
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
     monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset({"DEPT1"}))
@@ -1522,7 +1522,7 @@ def test_get_budget_grid_admin_wide_skips_the_locked_departments_fetch(monkeypat
         return frozenset()
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
     monkeypatch.setattr("app.read_model.fetch_locked_departments", fake_fetch_locked_departments)
 
@@ -1545,7 +1545,7 @@ def test_get_budget_grid_fetches_year_state_for_the_planning_year(monkeypatch):
         return YEAR_OPEN
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
     monkeypatch.setattr("app.read_model.fiscal_year_state", fake_fiscal_year_state)
 
@@ -1559,7 +1559,7 @@ def test_get_budget_grid_not_open_year_ends_up_not_editable_end_to_end(monkeypat
     not just calls the fetch function."""
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
     monkeypatch.setattr("app.read_model.fiscal_year_state", lambda conn, fiscal_year: YEAR_NOT_OPEN)
 
@@ -1582,7 +1582,7 @@ def test_get_budget_grid_admin_wide_also_fetches_the_year_state(monkeypatch):
         return YEAR_NOT_OPEN
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
     monkeypatch.setattr("app.read_model.fiscal_year_state", fake_fiscal_year_state)
 
@@ -1606,7 +1606,7 @@ def test_get_budget_grid_flag_off_never_fetches_admin_gl_codes(monkeypatch):
         return frozenset()
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
@@ -1624,7 +1624,7 @@ def test_get_budget_grid_flag_on_non_admin_fetches_admin_gl_codes(monkeypatch):
         return frozenset({"GL-ADMIN"})
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
@@ -1645,7 +1645,7 @@ def test_get_budget_grid_flag_on_admin_caller_never_fetches_admin_gl_codes(monke
         return frozenset()
 
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
     monkeypatch.setattr("app.read_model.fetch_admin_gl_codes", fake_fetch_admin_gl_codes)
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
 
@@ -1670,7 +1670,7 @@ def test_get_budget_grid_resolves_sap_coverage_for_the_board_year_and_masks(monk
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr(
         "app.read_model.fetch_sap_actuals_cached",
-        lambda conn, fiscal_year: {("CC1", "GL1"): _sap_months(m01=10.0, m04=99.0)},
+        lambda conn, fabric_conn, fiscal_year: {("CC1", "GL1"): _sap_months(m01=10.0, m04=99.0)},
     )
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
     monkeypatch.setattr("app.read_model.resolve_sap_coverage_cached", fake_resolve)
@@ -1690,7 +1690,7 @@ def test_get_budget_grid_propagates_a_watermark_failure_never_shows_everything(m
     loud 502 — never a grid that quietly shows every (possibly incomplete)
     month."""
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fiscal_year: {})
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
 
     def raise_coverage_error(conn, fiscal_year):
         raise SapActualsFetchError("watermark undeterminable")
@@ -1699,6 +1699,63 @@ def test_get_budget_grid_propagates_a_watermark_failure_never_shows_everything(m
 
     with pytest.raises(SapActualsFetchError):
         get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+
+
+# ---------------------------------------------------------------------------
+# get_budget_grid — ADR-0020 amendment 2026-08-11 (hide_document anti-join)
+# ---------------------------------------------------------------------------
+
+def test_get_budget_grid_threads_its_own_fabric_conn_into_fetch_sap_actuals_cached(monkeypatch):
+    """`fetch_sap_actuals_cached` now needs the transactional connection too
+    (to read `dbo.hide_document`) — `get_budget_grid` must pass its OWN
+    `fabric_conn`, not `gold_conn` twice and not `None`."""
+    captured = {}
+
+    def fake_fetch_sap_actuals_cached(conn, fabric_conn, fiscal_year):
+        captured["conn"] = conn
+        captured["fabric_conn"] = fabric_conn
+        return {}
+
+    fabric_conn, gold_conn = MagicMock(name="fabric"), MagicMock(name="gold")
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
+    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", fake_fetch_sap_actuals_cached)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset())
+
+    get_budget_grid(fabric_conn, gold_conn, planning_year=2027, scope=_scope())
+
+    assert captured["conn"] is gold_conn
+    assert captured["fabric_conn"] is fabric_conn
+
+
+def test_get_budget_grid_grid_cell_excludes_hidden_document_amount_end_to_end(monkeypatch):
+    """End-to-end wiring proof (ADR-0020 amendment 2026-08-11): runs the REAL
+    `fetch_sap_actuals_cached` (only the two pyodbc connections are mocked,
+    not the function itself) so the test fails if `get_budget_grid` ever
+    stops threading `fabric_conn` all the way through to the hide-list read.
+    A mocked cursor cannot execute real SQL, so "hidden amount excluded" is
+    expressed the same way `fetch_sap_actuals` tests express it: the gold
+    cursor's mocked row already reflects what the DB-side anti-join would
+    have produced (800.0, not the pre-hide 1000.0)."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: join_rows)
+    monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
+    monkeypatch.setattr("app.read_model.fetch_locked_departments", lambda conn, fiscal_year: frozenset())
+
+    fabric_conn, gold_conn = MagicMock(name="fabric"), MagicMock(name="gold")
+    # dbo.hide_document (fabric_conn): doc 1234567890 hidden for month 1.
+    fabric_conn.cursor.return_value.fetchall.return_value = [("1234567890", 1)]
+    # gold.fact_gl_trans (gold_conn): the row the DB-side anti-join would
+    # already have produced once the hidden doc's amount is excluded.
+    gold_conn.cursor.return_value.fetchall.return_value = [("CC1", "GL1", 2026, "01", 800.0)]
+
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    rows = get_budget_grid(fabric_conn, gold_conn, planning_year=2027, scope=scope)
+
+    assert rows[0].sap.m01 == 800.0
+    assert rows[0].sap.total_year == 800.0
+    executed_sql = gold_conn.cursor.return_value.execute.call_args.args[0]
+    assert "NOT EXISTS" in executed_sql
+    assert "VALUES" in executed_sql
 
 
 # =========================================================================

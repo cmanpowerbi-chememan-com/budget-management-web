@@ -6,6 +6,8 @@ Amends: ADR-0010 — corrects the actuals **source table** and defines the **rea
 mechanism**; the row-visibility rule itself (SAP-actual-led union of 3 sources) is
 unchanged. Also corrects CONTEXT.md "SAP / Actuals" and the transactional-model spec,
 which referred to `gold_sap_gl_trans` in the app's own Lakehouse.
+Amended 2026-08-11: a SIXTH mandatory filter — the `dbo.hide_document` anti-join —
+added to the read-through (see "Amendment — hide_document anti-join" at the end).
 
 ## Context
 
@@ -101,3 +103,39 @@ Two options were grilled 2026-07-11:
 - Phase-2 dashboard may instead read the Fabric SQL DB OneLake mirror + a shortcut
   UNION view entirely inside OneLake — out of scope here; this ADR governs the live
   app read path only.
+
+## Amendment — `hide_document` anti-join (2026-08-11)
+
+**Defect closed:** the admin hide-document master was consumed by NOTHING. The sign-off
+spec (hide-document v0.3, 2026-06-14) defined hide rules as a **query-time filter** on the
+actuals SUM — but that intent predated this ADR and was dropped when the filter contract
+above was frozen without it. Found via a real-user report (doc `1110000365`, GL
+`5120300020`: 14 cost-center cells in fy2026 m01 whose ENTIRE value was the hidden doc,
+e.g. KKCA01 +17,398.93). SIT case NEW-A6-26 had already documented the gap but was never
+run. Grain-matched leak measured live 2026-08-11 (app-filtered, doc+year+month):
+fy2023 344,564,787.13 / fy2024 415,188,454.99 / fy2025 **429,217,094.58** (grid-2026
+reference) / fy2026 **106,698,916.11** (grid-2027 reference) — total 16,561 rows /
+1,295,669,252.81 THB. Approved by jakkaritw 2026-08-11: filter in the APP layer (option A)
+— the DW gold warehouse stays unfiltered so BI/other consumers keep full accounting truth.
+
+**Rule (6th mandatory filter, same never-cut status as the five above):**
+
+- Source: `dbo.hide_document` (transactional Fabric SQL DB; synced daily ~06:31 from
+  SharePoint `ซ่อนเอกสาร.xlsx` per ADR-0022/0023). Grain = `(document_number, year,
+  month)` — SAP doc numbers repeat across fiscal years, so the year+month match is
+  load-bearing, never hide by doc number alone.
+- Mechanism: the hide rows for the queried `fiscal_year` are fetched from the
+  transactional connection (cross-store join is impossible — same reason as this ADR's
+  core design) and applied to the gold query as a parameterized
+  `NOT EXISTS (... VALUES ...)` anti-join on
+  `(accounting_doc_number, CAST(period_month AS INT))`.
+- **Empty hide list ⇒ the original frozen SQL runs byte-identical.** The five existing
+  predicates are never edited.
+- **Fails loud:** a broken hide-list read raises `SapActualsFetchError` → 502. A silent
+  fallback to "nothing hidden" would un-hide ~1.3B THB and must never happen.
+- **Watermark/coverage (`SAP_ENTRY_DAYS_SQL`, ADR-0026) is NOT filtered** — hidden docs
+  still count as loaded entry-days; hiding is a display-amount concern, not freshness.
+- The DB→web parity harness pins `hidden_doc_periods=None` — it verifies the frozen-SQL
+  mirror property; hide-filtering has its own tests.
+- TTL cache (600 s) applies to the filtered result; a hide-list edit becomes visible
+  within ≤ 10 minutes + the daily SharePoint sync cadence — accepted.

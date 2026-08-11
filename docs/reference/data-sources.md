@@ -83,8 +83,12 @@ side of the dashboard. Decisions (the *why*) live in `docs/adr/`; this file is d
 ## Actuals Filter Rule (apply ตอน query — ใน Lakehouse/Warehouse ไม่ใช่ตอน load)
 
 - Exclude rows where **Document type** = `CO`
-- Exclude rows where **Cost Center** = `10SC012000`, `CMRY01`, `CMKK01`, `CMPB01`, `MNLB00-04`, หรือ *(Blanks)*
-- Exclude rows where **Assignment** = `TFRS16`
+- Exclude rows where **Cost Center** = `CMRY01`, `CMKK01`, `CMPB01`, `MNLB00-04`, หรือ *(Blanks)*
+  (`10SC012000` ถูกถอดออกจาก exclusion 2026-07-14 — เป็น CC ที่ใช้จริง, ADR-0020)
+- Exclude rows where **Assignment** = `TFRS16` (NULL-safe — แถวที่ Assignment ว่างต้องเก็บไว้, ADR-0020 D2)
+- Exclude rows ที่ตรงกับ **`dbo.hide_document`** ที่ grain `(document_number, year, month)`
+  — เอกสารที่ฝ่ายบัญชีสั่งซ่อนผ่าน SharePoint `ซ่อนเอกสาร.xlsx` (ADR-0020 amendment 2026-08-11;
+  เลข doc ซ้ำข้ามปีได้ ต้อง match ปี+เดือนเสมอ)
 
 ---
 
