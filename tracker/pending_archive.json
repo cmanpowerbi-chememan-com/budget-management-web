@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-11T12:28:30+0700",
+  "updated": "2026-08-12T23:28:25+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -216,6 +216,53 @@
       "created": "2026-07-12T01:38:48+0700",
       "updated": "2026-07-12T01:38:48+0700",
       "ai": "RESOLVED ADR-0019 open item via real-data grilling: See-manager + approver1 = managerempcode from Filler's PRIMARY row only (Acting ignored). Tested+rejected 2 alt rules: org_code equality (90.4% zero-match, structural parent-child), CC-orgcode tie-break via cc orgcode.xlsx (many-to-many, 47% unresolved, redundant where it works). Key insight: 3/4 'multi-manager' Fillers had self-manager Acting rows; real case taweesaks -> Bunpot (user confirmed). Fallbacks: warapornkh not in master -> ADR-0006 Nipaporn fallback + sync WARN; lookup source must be unfiltered (thanakorny only in stg 649 not mas 344). ADR-0019 + spec updated. NOT committed yet."
+    },
+    {
+      "id": "perdiem-master-inspect",
+      "state": "done",
+      "created": "2026-07-13T21:16:20+0700",
+      "updated": "2026-07-13T21:16:53+0700",
+      "agent": "04-data-engineer",
+      "skills": [
+        "04-etl-patterns"
+      ],
+      "files": [
+        {
+          "path": "design/mockups/0002claude design/0002.2budget-export.html"
+        }
+      ],
+      "ai": "Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don't assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates."
+    },
+    {
+      "id": "spec-a-v2",
+      "state": "done",
+      "created": "2026-07-13T15:15:12+0700",
+      "updated": "2026-07-13T16:32:01+0700",
+      "agent": "01-sa-doc-writer",
+      "ai": "Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K'laddawan pending user approval."
+    },
+    {
+      "id": "mockup-0002.2-admin-reconcile",
+      "state": "done",
+      "created": "2026-07-13T14:00:12+0700",
+      "updated": "2026-07-13T14:23:35+0700",
+      "ai": "DONE + user-confirmed screenshot 2026-07-12. 05-software-developer applied 3 edits to 0002.2: (1) restored admin-mode toggle in page-head (ADR-0014 regression fix; toggle shows for dual-role admins only, jakkaritw pure-admin always-on by design), (2) removed Import Approved button+importCSV()+file input, added read-only SharePoint note, (3) deleted Export Approved button+exportApprovedCSV() 21-col. Bonus: 'CSV'->'Excel' wording fix. Verify headless Playwright 5/5 PASS (toggle wired+flips adminMode+overlay CC count increases; import/export gone; 0 console errors). Diff +5/-69, mockup only. ADR-0021 updated (export=deleted, library 'Budgeting and Management' confirmed). Follow-up open: regenerate signoff doc 01 (still shows old buttons); doc-sweep gold_sap_gl_trans in project-context/data-platform-map/data-sources."
+    },
+    {
+      "id": "gridgeist-0002-3",
+      "state": "done",
+      "created": "2026-07-13T23:05:45+0700",
+      "updated": "2026-07-13T23:16:37+0700",
+      "agent": "05-software-developer",
+      "skills": [
+        "gridgeist"
+      ],
+      "files": [
+        {
+          "path": "design/mockups/0002claude design/0002.3budget-export.html"
+        }
+      ],
+      "ai": "DONE + COMMITTED 0e562c3 (main). Gridgeist redesign 0002.2->0002.3budget-export.html, CSS-only restyle, behavior preserved. Removed AI-slop (glassSweep/twinkle/rainbow/addGlow=0), unified button set (rust=Submit/Save only), --r:6px token, grid-forward ledger table (hairline rules/mono tabular-nums/status swatch), Newsreader headers, prefers-reduced-motion. Light+dark themes kept; light approved by jakkaritw. SET AS PROJECT DEFAULT main-app mockup (CLAUDE.md pointer 0002.2->0002.3; 0002.2 retained as prior). Ref PNGs 0002_3_light/dark.png committed in design/mockups/."
     }
   ]
 }

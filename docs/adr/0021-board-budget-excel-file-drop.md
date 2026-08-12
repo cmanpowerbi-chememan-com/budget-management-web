@@ -84,6 +84,30 @@ filename.
   rejecting the whole file — blank-key-with-value, non-numeric amounts, and bad
   filename year remain whole-file rejects. "Validate ALL rows first / any bad row
   rejects the whole file" above is amended accordingly.
+- **Amendment 2026-08-12 (jakkaritw, after the second real-file incident):** Nipaporn's
+  2026-08-11 file updates carried two human-entry artifacts that the lane rejected:
+  Excel accounting-format dashes stored as TEXT (`' -   '`, 2024 file row 628, 10 cells)
+  and truly blank month cells in a data row (2025 file row 644, 9 cells). The 06:30 run
+  + 3 retries failed; because the reject raised out of the file loop, clean 2025/2026
+  files were never attempted (web served new FY2023 + stale FY2024–26). Four behaviors
+  changed in the DW lane (repo 19.dw, commit 3e32488):
+  (1) **dash/blank month cells coerce to `0.00`** — accounting-dash text (incl. unicode
+  dash variants, NBSP padding) and blank cells in a non-ghost row parse as
+  `Decimal("0.00")`, counted per file in a run-log warning (`cells_coerced_zero`); any
+  OTHER non-numeric value still whole-file-rejects (typo guard unchanged);
+  (2) **per-file isolation** — each `approved_budget_<year>.xlsx` is processed in its
+  own try/except; a rejected file no longer blocks later files (per-file
+  DELETE→INSERT→exact-reconcile→commit and validate-before-DELETE unchanged);
+  (3) **defect scan-all** — a rejected file reports ALL defect rows (cap 20) with excel
+  row numbers, not just the first, so the admin fixes everything in one round-trip;
+  (4) **admin alert email** — on any file reject the notebook emails the budget admins
+  from `cmanpowerbi@chememan.com` (subject "Approved budget file ไม่สามารถนำเข้า
+  onelake ได้ — <file>"), 04-repo notification table style: File ที่ตาย / จุดที่ต้องการแก้ไข
+  (excel row, CC, GL, Thai month columns, offending value, "พิมพ์ 0 แทน") / แก้ไขก่อน
+  <next day 06:00> / เนื่องจาก daily 06:30 auto-sync / SharePoint file link. Deduped to
+  one mail per 12h per identical defect signature (marker written first in
+  `config.ingest_run_log.error_msg`); rollout probe-first (`BOARD_ALERT_MODE`:
+  off|probe|live). Teams-card alert + pipeline-red behavior unchanged.
 - Mockup `0002.2budget-export.html` updated 2026-07-12: import/export buttons removed,
   read-only "Approved comes from SharePoint" note added, and the ADR-0014 admin-mode
   toggle (accidentally dropped with the v2.2 nav-bar rewrite) restored in the page-head.

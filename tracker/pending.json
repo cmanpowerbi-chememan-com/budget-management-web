@@ -1,14 +1,46 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-11T16:08:23+0700",
+  "updated": "2026-08-13T00:36:37+0700",
   "tasks": [
+    {
+      "id": "board-lane-tolerant-ingest-email-alert",
+      "state": "done",
+      "created": "2026-08-12T23:08:43+0700",
+      "updated": "2026-08-13T00:36:37+0700",
+      "ai": "SHIPPED + VERIFIED LIVE end-to-end 2026-08-13 ~00:30 BKK. 19.dw commits: 3e32488 (tolerant ingest: dash/blank->0.00 coerced+counted, per-file isolation, scan-all defects cap20 w/ excel rows, email alert builder+transport+12h dedupe marker-first, 80 new tests) + 98b0cc6 (BOARD_ALERT_MODE probe->live after jakkaritw 'email ok'). Gate wf_d359a0fd-22b all 3 legs APPROVE_WITH_SUGGESTIONS, 0 HIGH/MED, 7 LOW logged. Deployed deploy_notebooks.py --live x2, getDefinition verified (6 symbols + mode=live). Probe email 202 -> jakkaritw, format confirmed ok, Mail.Send role True. Manual run pl_budget_daily Completed 17:27-17:30 UTC: ALL 4 FY reloaded same batch (loaded 2026-08-13 00:28:44): fy2023 687r/345,053,396.01 fy2024 626r/273,576,137.45 fy2025 642r/297,287,871.03 fy2026 715r/299,438,655.95 — Nipaporn's 08-11 files ALL in, zero file edits needed; incident row 10SC012000/6211800040 m01=0.00 fy2024(total 34,000)+fy2025(total 62,000) verified in DB. ADR-0021 amendment 2026-08-12 in 04 repo. Alert email now LIVE to nipapornt+warapornt+jakkaritw. LEFTOVERS: 7 LOW suggestions unfixed (incl fail-open unknown mode, cc/gl length cap); 19.dw commits local-only not pushed; 19.dw post-commit lane-tracker warning obsolete (lh_tracker.py deleted by parallel session); 2 pre-existing unrelated test fails in other lanes (registry parity).",
+      "agent": "claude"
+    },
+    {
+      "id": "board-sync-0812-partial-fail",
+      "state": "done",
+      "created": "2026-08-12T22:46:38+0700",
+      "updated": "2026-08-13T00:36:37+0700",
+      "ai": "[CROSS-SESSION UPDATE 3e32488/98b0cc6] RESOLVED 2026-08-13 by #board-lane-tolerant-ingest-email-alert: lane now coerces dash/blank->0.00, per-file isolation, live email alert. Manual run 00:28 loaded ALL 4 FY new sums (345.05M/273.58M/297.29M/299.44M) — Nipaporn never edited the files; the zero-fill recommendation below is OBSOLETE. Original probe record: ROOT CAUSE FOUND (read-only): run log modern_lh_cman_dw.config.ingest_run_log 08-12 = non-numeric ' -   ' cc=10SC012000 gl=6211800040 file approved_budget_2024.xlsx rejected; 2024 r628 text-dash x10 + 2025 r644 blank x9; loop died at 2024 so 2025/2026 never attempted; fy2023 committed 345,053,396.01.",
+      "agent": "claude"
+    },
+    {
+      "id": "push-fdc6f6e",
+      "state": "done",
+      "created": "2026-08-12T01:41:05+0700",
+      "updated": "2026-08-12T01:41:05+0700",
+      "ai": "jakkaritw-ordered push: fdc6f6e -> origin/main (ebce6ba..fdc6f6e), branch in sync. Session fully closed: both defects (net-zero per-month ebce6ba + hide_document filter fdc6f6e) committed, deployed stg+prd, pushed",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-fdc6f6e-stg-prd",
+      "state": "done",
+      "created": "2026-08-11T16:35:30+0700",
+      "updated": "2026-08-11T16:39:55+0700",
+      "ai": "DEPLOYED+VERIFIED: budget-web:fdc6f6e (acr cm19 Succeeded) -> stg rev 0000042 + prd rev 0000023, both Running/Healthy/traffic 100, image confirmed. Hidden docs now excluded from web actuals live (fy2026 -106,698,916.11 / fy2025 -429,217,094.58; doc 1110000365 cells -> 0.00 after TTL <=600s). NOT pushed to GitHub yet",
+      "agent": "claude"
+    },
     {
       "id": "hide-document-not-applied",
       "state": "done",
       "created": "2026-08-11T15:27:55+0700",
-      "updated": "2026-08-11T16:08:23+0700",
-      "ai": "Backend impl of ADR-0020 hide_document anti-join (jakkaritw-approved 2026-08-11). app/sap.py: HIDE_DOCUMENT_SQL + fetch_hidden_doc_periods(conn,fiscal_year) reads dbo.hide_document from fabric_conn, validates ^[0-9]{10}$ doc format, raises SapActualsFetchError loud on malformed row or pyodbc.Error. fetch_sap_actuals(conn,fiscal_year,hidden_doc_periods=None) builds a NOT EXISTS/VALUES anti-join variant on (accounting_doc_number,CAST(period_month AS INT)) only when list non-empty; empty/None runs frozen SAP_ACTUALS_SQL byte-identical, 5 frozen predicates untouched. fetch_sap_actuals_cached(conn,fabric_conn,fiscal_year,settings=None) now required fabric_conn param -- hide list fetched INSIDE the cached loader (cache key unchanged: fiscal_year only). Threaded through read_model.get_budget_grid (passes its own fabric_conn, not gold_conn twice) and main.py warmup (opens fabric_conn alongside gold_conn for cache priming). tests_data_sync/test_sap_actuals_parity.py pinned hidden_doc_periods=None (mirror-property harness unaffected). TDD: confirmed RED via git stash of app/{sap,read_model,main}.py (ImportError HIDE_DOCUMENT_SQL + 24 read_model failures), then GREEN. 16 new tests in test_sap.py (hide-list read/malformed-doc/query-fail/anti-join SQL+params/frozen-SQL-passthrough/cached-wrapper-threading), 2 new in test_read_model.py (wiring proof + real-fetch_sap_actuals_cached E2E cell-exclusion). Mechanical signature-migration: ~20 fetch_sap_actuals_cached mock call sites in test_read_model.py + 13 in test_sap.py updated to the new (conn,fabric_conn,fiscal_year) shape; test_warmup.py fabric_mock assertion relaxed from assert_called_once to call_count>=1 (fabric_conn now legitimately opened twice: pool-warm + cache-priming, same pattern as gold_mock). Full suite: 982 passed / 47 deselected (integration) in backend/tests --ignore=tests_data_sync; tests_data_sync unit-only 5 passed/1 deselected. NOT committed (per instructions). docs/adr/0020...md + docs/reference/data-sources.md show modified in git status but were pre-written by the coordinator before this session -- not touched by this agent (Read-only).",
+      "updated": "2026-08-11T16:24:02+0700",
+      "ai": "SHIPPED fdc6f6e: dbo.hide_document anti-join wired into SAP actuals (6th never-cut filter, ADR-0020 amendment). fetch_hidden_doc_periods (doc regex + month 1..12 + >1000-row guard, all loud 502) + parameterized NOT EXISTS VALUES on (doc, month); empty list = frozen SQL byte-identical; cached loader takes fabric_conn; watermark NOT filtered; parity pinned None. Gate APPROVE-W-SUGG 985/985; LIVE reconcile EXACT: fy2026 -106,698,916.11 (454,455,854.76->347,756,938.65) / fy2025 -429,217,094.58; KKCA01/PBKK02 x 5120300020 m01 -> 0.00. Docs: ADR-0020 amendment, data-sources.md, SIT NEW-A6-26 rewritten positive. NOT deployed, NOT pushed - await jakkaritw",
       "agent": "claude"
     },
     {
@@ -55,8 +87,8 @@
       "id": "sit-human-round-setup",
       "state": "doing",
       "created": "2026-08-11T00:47:41+0700",
-      "updated": "2026-08-11T13:38:31+0700",
-      "ai": "[CROSS-SESSION UPDATE ebce6ba] STG image advanced mid-round 568701a -> ebce6ba (jakkaritw-approved deploy 2026-08-11): adds per-month net-zero row-hide (grid rows +12 on year-2027 view; totals unchanged; SIT alias seam untouched, additive commit). 43 workbook cases unaffected (none test net-zero); NEW-A2-11 in sit-test-plan.md rewritten for the new rule. ORIGINAL: jakkaritw-approved 2026-08-10: STG configured for human SIT round. (1) Easy Auth ENABLED via az containerapp auth micros",
+      "updated": "2026-08-12T01:31:15+0700",
+      "ai": "[LOGIN-READINESS PROVEN 2026-08-11, jakkaritw asked 'prove it'] Evidence: (1) stg Entra app cman-budget-web-stg 7035aa47 appRoleAssignmentRequired=FALSE + accountEnabled=true + signInAudience=AzureADMyOrg — IDENTICAL to prd app 61d5d556 which all staff use today, so no per-user app assignment needed. (2) THE KNOWN TRAP CLEARED: oauth2PermissionGrants on stg SP 7b6a00c6 shows consentType=AllPrincipals scope=User.Read — tenant-wide admin consent already granted, byte-identical to prd's grant; this is the exact thing that caused the earlier 'Need admin approval' lockout of non-admin users. (3) All 4 accounts verified in Graph: pornthipp/laddawank/nipapornt/jakkaritw all accountEnabled=true userType=Member. (4) /.auth/login/aad -> 302 to login.windows.net tenant 13c85daf w/ correct stg callback; real chromium nav to root lands on 'Sign in to your account'. (5) ingress ipSecurityRestrictions=[] so any network reaches it. REMAINING UNPROVABLE-WITHOUT-THEM: the actual credential entry (their passwords) and the jakkarit->nipaporn alias firing, which needs ONE real jakkarit login; verify then via container log line 'auth: SIT impersonation jakkaritw@ -> nipapornt@' + the UI showing Nipaporn's step-2 queue.",
       "agent": "claude"
     },
     {
@@ -2457,53 +2489,6 @@
       "created": "2026-07-14T23:44:43+0700",
       "updated": "2026-07-15T00:36:51+0700",
       "ai": "DDL EXECUTED 2026-07-15 on fabric_sql_database (Fabric SQL editor, clean run no-error) — 5 budget.* tables LIVE: pending_budget, pending_budget_detail, budget_trip, approval_status, approval_log + 9 indexes. dbo holds synced masters. Employee source=dbo.v_employee_budget_01 (verified A=0,C=0). NEXT: env re-point (at A2) + A2 backend scaffold."
-    },
-    {
-      "id": "gridgeist-0002-3",
-      "state": "done",
-      "created": "2026-07-13T23:05:45+0700",
-      "updated": "2026-07-13T23:16:37+0700",
-      "agent": "05-software-developer",
-      "skills": [
-        "gridgeist"
-      ],
-      "files": [
-        {
-          "path": "design/mockups/0002claude design/0002.3budget-export.html"
-        }
-      ],
-      "ai": "DONE + COMMITTED 0e562c3 (main). Gridgeist redesign 0002.2->0002.3budget-export.html, CSS-only restyle, behavior preserved. Removed AI-slop (glassSweep/twinkle/rainbow/addGlow=0), unified button set (rust=Submit/Save only), --r:6px token, grid-forward ledger table (hairline rules/mono tabular-nums/status swatch), Newsreader headers, prefers-reduced-motion. Light+dark themes kept; light approved by jakkaritw. SET AS PROJECT DEFAULT main-app mockup (CLAUDE.md pointer 0002.2->0002.3; 0002.2 retained as prior). Ref PNGs 0002_3_light/dark.png committed in design/mockups/."
-    },
-    {
-      "id": "perdiem-master-inspect",
-      "state": "done",
-      "created": "2026-07-13T21:16:20+0700",
-      "updated": "2026-07-13T21:16:53+0700",
-      "agent": "04-data-engineer",
-      "skills": [
-        "04-etl-patterns"
-      ],
-      "files": [
-        {
-          "path": "design/mockups/0002claude design/0002.2budget-export.html"
-        }
-      ],
-      "ai": "Read-only Graph inspect of SharePoint per-diem rate file (drive Budgeting and Management, root; note: real filename has a typo in the Thai spelling vs the name given in the task -- verify exact spelling by listing the drive before scripting, don't assume it). 1 sheet, Position x 3 rate cols (domestic THB / asian USD / other USD), 16 rows = 12 unique positions (Chief Officer C-Level dup 5x identical, harmless, dedupe on sync). All numeric rates match mockup POSITION_PER_DIEM exactly EXCEPT source stores domestic=0 for CEO/C-Level/VP/AVP/Advisor where mockup hardcodes null/NA -- semantics decision needed (0 THB vs N/A/hide) before engine build. BIGGEST GAP: country-to-group (asian/other) classification NOT in this file or any other source found -- only hardcoded JS arrays in mockup (asian-group 12 countries incl non-ASEAN members like China/India/South Africa/Papua New Guinea/Bangladesh, only 7/12 are real ASEAN; other-group 16 countries incl Singapore despite Singapore being ASEAN). No dup/overlap between lists; Thailand correctly excluded as domestic sentinel. Needs 02-data-modeler decision: new country-group master (Excel-on-SharePoint, ADR-0018 pattern) or static app config. All rate cells numeric type (no text-number issue), no missing rates."
-    },
-    {
-      "id": "spec-a-v2",
-      "state": "done",
-      "created": "2026-07-13T15:15:12+0700",
-      "updated": "2026-07-13T16:32:01+0700",
-      "agent": "01-sa-doc-writer",
-      "ai": "Spec A V2.0 committed 0a91a4f (3-part restructure, reconciled ADR-0019/0021/0008, toolbar markers fixed, 4 text edits). Generators in _build/. V1.0 untouched. Email draft to K'laddawan pending user approval."
-    },
-    {
-      "id": "mockup-0002.2-admin-reconcile",
-      "state": "done",
-      "created": "2026-07-13T14:00:12+0700",
-      "updated": "2026-07-13T14:23:35+0700",
-      "ai": "DONE + user-confirmed screenshot 2026-07-12. 05-software-developer applied 3 edits to 0002.2: (1) restored admin-mode toggle in page-head (ADR-0014 regression fix; toggle shows for dual-role admins only, jakkaritw pure-admin always-on by design), (2) removed Import Approved button+importCSV()+file input, added read-only SharePoint note, (3) deleted Export Approved button+exportApprovedCSV() 21-col. Bonus: 'CSV'->'Excel' wording fix. Verify headless Playwright 5/5 PASS (toggle wired+flips adminMode+overlay CC count increases; import/export gone; 0 console errors). Diff +5/-69, mockup only. ADR-0021 updated (export=deleted, library 'Budgeting and Management' confirmed). Follow-up open: regenerate signoff doc 01 (still shows old buttons); doc-sweep gold_sap_gl_trans in project-context/data-platform-map/data-sources."
     },
     {
       "id": "sap-actuals-view",
