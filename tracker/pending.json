@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-13T00:36:37+0700",
+  "updated": "2026-08-13T02:14:28+0700",
   "tasks": [
+    {
+      "id": "board-alert-low-cleanup",
+      "state": "done",
+      "created": "2026-08-13T01:47:53+0700",
+      "updated": "2026-08-13T02:14:28+0700",
+      "ai": "SHIPPED + LIVE 2026-08-13. 19.dw 616fe44 (+344/-57, 21 new tests, suite 313 green, PUSHED ahead=0): (A) cells_coerced_zero counts only rows entering groups — orphan-skipped/defect rows excluded, amounts+reconcile provably untouched (gate verified hunk-level); (B) summarize_board_run([]) -> explicit 'no approved_budget_*.xlsx files found in SharePoint folder' error_msg, status stays failed, marker-first intact; (C) dedupe marker now carries mode= — probe-sent no longer suppresses first live send; legacy no-mode markers conservative-suppress (no email storm on deploy); 4 NB marker call sites + decision all pass BOARD_ALERT_MODE; (D) empty recipient constant for valid mode -> explanatory note in run log + exact-40/41 boundary tests cc/gl. blank_key raw-on-exception = accepted-by-design, unchanged. Gate (single agent): 06 APPROVE, 07 PASS, 08 313/313 re-run clean HEAD; 1 LOW coverage note (orphan skip-total THB w/ coerced cells asserted by inspection only) + 1 INFO. Deployed both NBs --live, getDefinition verified. LOW backlog from wf_d359a0fd-22b now CLEARED (2 fixed 8a3318b + 3 fixed 616fe44 + 1 accepted-by-design + summarize-empty test added).",
+      "agent": "claude"
+    },
+    {
+      "id": "board-alert-low-hardening",
+      "state": "done",
+      "created": "2026-08-13T00:46:17+0700",
+      "updated": "2026-08-13T01:08:59+0700",
+      "ai": "SHIPPED + LIVE 2026-08-13. 19.dw 8a3318b (+153/-23, 12 new tests, suite 292 green): (1) board_alert_recipients(mode) fail-CLOSED — typo/None/casing -> empty recipients + 'fail-closed' note into run-log marker path (traced end-to-end by gate); (2) cc/gl/blank_key values length-capped 40 via _board_email_truncate at render gateway (defect dicts keep raw values by design). Combined gate (single agent): 06 APPROVE_WITH_SUGGESTIONS, 07 PASS, 08 292/292 re-run at clean HEAD; 2 trivial new LOW (empty-live-list latent note gap, no exact-40 boundary test). Deployed both NBs --live, getDefinition verified both. 19.dw PUSHED to GitHub (16 commits incl parallel session's fact-actual docs, ahead now 0; second push after 8a3318b, ahead 0). LOW ledger from wf_d359a0fd-22b now: 2 fixed, 5 remain (coerced-count on orphan rows, empty-folder NULL error_msg, probe->live 12h dedupe overlap, summarize([]) untested, blank_key raw-on-exception=accepted-by-design).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-74a4f97",
+      "state": "done",
+      "created": "2026-08-13T00:36:51+0700",
+      "updated": "2026-08-13T00:36:51+0700",
+      "agent": "autolog",
+      "ai": "docs(adr-0021): amend board_budget ingest — dash/blank coerce to 0, per-file isolation, admin alert email (19.dw 3e32488/98b0cc6) [commit 74a4f97]"
+    },
     {
       "id": "board-lane-tolerant-ingest-email-alert",
       "state": "done",
