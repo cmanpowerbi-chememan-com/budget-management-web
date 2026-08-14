@@ -322,6 +322,14 @@ export interface ApprovalStatusState {
   current_approver_name: string | null
   can_act: boolean
   notification_warning: string | null
+  /** SIT defect fix (2026-08-14): true only once `fiscal_year`'s submission
+   * deadline has passed (`app.deadline.is_post_deadline`, ADR-0012). Set by
+   * the router on every endpoint that returns this shape, not just GET
+   * /status. `canSubmit` uses it to show the admin submit button on a
+   * locked status (PENDING_* or APPROVED) ONLY when the server's
+   * post-deadline override door will actually accept it — the ONE admin door not gated by
+   * `_ensure_admin_overwrite_allowed` mid-cycle. */
+  is_post_deadline: boolean
 }
 
 /** `GET /approval/pending-for-me` (`routers/approval.PendingForMeResponse`)

@@ -46,11 +46,31 @@ def test_submit_success_returns_200(client):
     _override_auth("filler@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.resolve_scope", return_value=MagicMock()
-    ), patch("app.routers.approval.submit_department", return_value=_fake_state()):
+    ), patch("app.routers.approval.submit_department", return_value=_fake_state()), patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 200
     assert response.json()["status"] == PENDING_APPROVER1
+
+
+def test_submit_response_includes_is_post_deadline(client):
+    """Multi-endpoint contract pin (SIT defect 2026-08-14 fix): `is_post_deadline`
+    must be populated on the SUBMIT response too, not just GET /status --
+    the frontend refetches nothing between a submit click and its own
+    button-visibility recheck, so a stale/absent value here would show a
+    doomed submit button again right after the one that just succeeded."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department", return_value=_fake_state()
+    ), patch("app.routers.approval.is_post_deadline", return_value=True):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is True
 
 
 def test_submit_forbidden_maps_to_403(client):
@@ -112,11 +132,22 @@ def test_approve_success_returns_200(client):
     _override_auth("manager@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.approve_department", return_value=_fake_state(status=APPROVED)
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 200
     assert response.json()["status"] == APPROVED
+
+
+def test_approve_response_includes_is_post_deadline(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.approve_department", return_value=_fake_state(status=APPROVED)
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is False
 
 
 def test_approve_not_current_approver_maps_to_403(client):
@@ -145,13 +176,26 @@ def test_reject_success_returns_200(client):
     _override_auth("manager@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.reject_department", return_value=_fake_state(status="REJECTED", reject_reason="bad")
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post(
             "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
         )
     assert response.status_code == 200
     assert response.json()["status"] == "REJECTED"
+
+
+def test_reject_response_includes_is_post_deadline(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.reject_department", return_value=_fake_state(status="REJECTED", reject_reason="bad")
+    ), patch("app.routers.approval.is_post_deadline", return_value=True):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post(
+            "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
+        )
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is True
 
 
 def test_reject_requires_reason_field_422(client):
@@ -169,11 +213,54 @@ def test_status_returns_draft_when_never_submitted(client):
     ), patch(
         "app.routers.approval.get_approval_status",
         return_value=_fake_state(status="DRAFT", current_position=None),
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 200
     assert response.json()["status"] == "DRAFT"
+
+
+def test_status_is_post_deadline_true_when_past_deadline(client):
+    """SIT defect 2026-08-14 fix: `GET /approval/status` must expose whether
+    `fiscal_year` is past its submission deadline — the frontend's `canSubmit`
+    uses this to decide whether the admin post-deadline override door
+    (`app.approval.submit_department`'s `ACTION_ADMIN_OVERRIDE_DEADLINE`
+    branch, the only one exempt from `_ensure_admin_overwrite_allowed`) will
+    actually succeed before showing the button. Router sets it AFTER calling
+    `get_approval_status` (same seam as `current_approver_name`), never
+    inside `app.approval`'s pure state-machine functions -- adding an
+    unconditional DB lookup there would break test_approval.py's finite
+    mocked side_effect sequences (see `_notify_after_transition`'s own
+    docstring for the same reasoning)."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status=PENDING_APPROVER2, current_position=2),
+    ), patch("app.routers.approval.is_post_deadline", return_value=True):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is True
+
+
+def test_status_is_post_deadline_false_when_not_past_deadline(client):
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status=PENDING_APPROVER2, current_position=2),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is False
 
 
 def test_status_401_without_auth(client):
@@ -205,7 +292,7 @@ def test_submit_success_notifies_the_new_current_approver(client):
         "app.routers.approval.resolve_scope", return_value=MagicMock()
     ), patch("app.routers.approval.submit_department", return_value=state), patch(
         "app.routers.approval.notifications.notify_turn"
-    ) as mock_notify:
+    ) as mock_notify, patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
 
@@ -225,7 +312,7 @@ def test_submit_notification_failure_never_fails_the_request(client):
         "app.routers.approval.resolve_scope", return_value=MagicMock()
     ), patch("app.routers.approval.submit_department", return_value=state), patch(
         "app.routers.approval.notifications.notify_turn", side_effect=RuntimeError("graph down")
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
 
@@ -238,7 +325,9 @@ def test_approve_notifies_next_approver_when_still_pending(client):
     state = _fake_state(status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.approve_department", return_value=state
-    ), patch("app.routers.approval.notifications.notify_turn") as mock_notify:
+    ), patch("app.routers.approval.notifications.notify_turn") as mock_notify, patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -262,7 +351,7 @@ def test_approve_final_step_notifies_approved_not_turn(client):
         "app.routers.approval.notifications.notify_reject"
     ) as mock_reject, patch(
         "app.routers.approval.notifications.notify_approved"
-    ) as mock_approved:
+    ) as mock_approved, patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -285,7 +374,7 @@ def test_approve_mid_chain_still_notifies_turn_not_approved(client):
         "app.routers.approval.approve_department", return_value=state
     ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
         "app.routers.approval.notifications.notify_approved"
-    ) as mock_approved:
+    ) as mock_approved, patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -306,7 +395,7 @@ def test_approve_final_step_notification_failure_never_fails_the_request(client)
         "app.routers.approval.approve_department", return_value=state
     ), patch(
         "app.routers.approval.notifications.notify_approved", side_effect=RuntimeError("graph down")
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -319,7 +408,9 @@ def test_reject_notifies_the_last_submitter(client):
     state = _fake_state(status="REJECTED", reject_reason="bad numbers", submitter_email="filler@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.reject_department", return_value=state
-    ), patch("app.routers.approval.notifications.notify_reject") as mock_notify:
+    ), patch("app.routers.approval.notifications.notify_reject") as mock_notify, patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post(
             "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
@@ -341,7 +432,9 @@ def test_reject_passes_frozen_approver1_empcode_for_cc(client):
     )
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.reject_department", return_value=state
-    ), patch("app.routers.approval.notifications.notify_reject") as mock_notify:
+    ), patch("app.routers.approval.notifications.notify_reject") as mock_notify, patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post(
             "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
@@ -363,7 +456,9 @@ def test_approve_final_passes_frozen_approver1_empcode_for_cc(client):
     )
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.approve_department", return_value=state
-    ), patch("app.routers.approval.notifications.notify_approved") as mock_approved:
+    ), patch("app.routers.approval.notifications.notify_approved") as mock_approved, patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -481,7 +576,7 @@ def test_override_step_admin_success_notifies_submitter_and_next_approver(client
         "app.routers.approval.notifications.notify_step_overridden"
     ) as mock_overridden, patch(
         "app.routers.approval.notifications.notify_turn"
-    ) as mock_turn:
+    ) as mock_turn, patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
@@ -496,6 +591,25 @@ def test_override_step_admin_success_notifies_submitter_and_next_approver(client
     assert mock_overridden.call_args.kwargs["admin_email"] == "jakkaritw@chememan.com"
     mock_turn.assert_called_once()
     assert mock_turn.call_args.kwargs["approver_empcode"] == "101032"
+
+
+def test_override_step_response_includes_is_post_deadline(client):
+    _override_auth("jakkaritw@chememan.com")
+    state = _fake_state(
+        status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032",
+        submitter_email="filler@chememan.com", approver1_empcode="200",
+    )
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
+    ), patch("app.routers.approval.admin_override_step", return_value=state), patch(
+        "app.routers.approval.notifications.notify_step_overridden"
+    ), patch("app.routers.approval.notifications.notify_turn"), patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["is_post_deadline"] is False
 
 
 def test_override_step_notification_failure_never_fails_the_request(client):
@@ -514,7 +628,9 @@ def test_override_step_notification_failure_never_fails_the_request(client):
         "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
     ), patch("app.routers.approval.admin_override_step", return_value=state), patch(
         "app.routers.approval.notifications.notify_step_overridden", side_effect=RuntimeError("graph down")
-    ), patch("app.routers.approval.notifications.notify_turn") as mock_turn:
+    ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
+        "app.routers.approval.is_post_deadline", return_value=False
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
@@ -539,7 +655,7 @@ def test_override_step_notify_turn_failure_still_sends_override_notice(client):
         "app.routers.approval.notifications.notify_step_overridden"
     ) as mock_overridden, patch(
         "app.routers.approval.notifications.notify_turn", side_effect=RuntimeError("graph down")
-    ):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 

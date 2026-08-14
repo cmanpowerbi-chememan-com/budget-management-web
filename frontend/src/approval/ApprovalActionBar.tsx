@@ -161,7 +161,9 @@ export function ApprovalActionBar({
 
   if (!status) return null
 
-  const showSubmit = canSubmit({ isFillerOfDept, adminViewEnabled, status: status.status })
+  const showSubmit = canSubmit({
+    isFillerOfDept, adminViewEnabled, status: status.status, isPostDeadline: status.is_post_deadline,
+  })
   const showApproveReject = status.can_act && !adminViewEnabled
   // ADR-0027: ONE อนุมัติ button — visible to the frozen approver (normal
   // approve) OR to an admin while the department sits on PENDING_APPROVER1

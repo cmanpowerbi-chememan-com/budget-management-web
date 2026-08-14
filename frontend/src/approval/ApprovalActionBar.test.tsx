@@ -27,6 +27,7 @@ function state(overrides: Partial<ApprovalStatusState> = {}): ApprovalStatusStat
     current_approver_name: null,
     can_act: false,
     notification_warning: null,
+    is_post_deadline: false,
     ...overrides,
   }
 }
@@ -193,8 +194,25 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
   })
 
-  it('shows Submit in admin mode regardless of status (server decides the branch)', async () => {
-    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'APPROVED' }))
+  it('hides Submit for admin on a locked status while the cycle is still open (SIT defect 2026-08-14 fix)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, is_post_deadline: false }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    await screen.findByTestId('approval-approve-btn') // ADR-0027 step-override still shows
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+  })
+
+  it('shows Submit for admin on a locked status once past the deadline (post-deadline override door)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, is_post_deadline: true }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+  })
+
+  it('shows Submit for admin on DRAFT regardless of deadline (no regression)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', is_post_deadline: false }))
     render(<ApprovalActionBar {...BASE_PROPS} adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
   })

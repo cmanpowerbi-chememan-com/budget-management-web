@@ -312,6 +312,18 @@ class ApprovalStatusState(BaseModel):
     # notify attempt raised — a non-fatal warning, never a reason to fail the
     # request (the transition above already committed successfully).
     notification_warning: str | None = None
+    # SIT defect fix (2026-08-14): set by the router (never by this module,
+    # same placement reasoning as `current_approver_name` — an unconditional
+    # extra DB lookup inside this module's pure state-machine functions would
+    # break test_approval.py's finite mocked side_effect sequences). True
+    # only when `app.deadline.is_post_deadline` — the frontend's `canSubmit`
+    # uses it to show the admin submit button on a locked status (PENDING_*/
+    # APPROVED) ONLY when it will actually reach `submit_department`'s
+    # post-deadline override branch (the one door NOT gated by
+    # `_ensure_admin_overwrite_allowed`, ADR-0012). Defaults False so any
+    # path that never sets it hides the button rather than showing a doomed
+    # one.
+    is_post_deadline: bool = False
 
 
 def _occupant_for_position(position: int, approver1_empcode: str | None) -> str:

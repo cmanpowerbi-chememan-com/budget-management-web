@@ -1,8 +1,67 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-13T02:14:28+0700",
+  "updated": "2026-08-15T01:13:24+0700",
   "tasks": [
+    {
+      "id": "sc-qas-theme-revise",
+      "state": "doing",
+      "created": "2026-08-15T00:48:14+0700",
+      "updated": "2026-08-15T00:48:14+0700",
+      "ai": "Task: revise web theme (color/font/text size) for Chememan Supply Chain app at https://sc-qas.chememan.com/Po -- STG(QAS) ONLY per jakkaritw, do not touch prd. Probe done: stack = ASP.NET MVC + Bootstrap 5.3.2 + /Content/site.css, behind openresty; current palette dark green #1a472a/#2d6a4f gradient, brand header #1a472a. BLOCKER: source code NOT on this machine -- grepped all 24 C:\\NN.* project folders + C:\\inetpub, zero hits for sc-qas/csproj/cshtml. Need repo location from jakkaritw. Candidate target theme = C:\\10.cman-design-system tokens (forest #00522C, blue #3C60A5, amber #745021, font FC Minimal, fs/spacing/radius scales). SECURITY: jakkaritw pasted SAP-style creds (user zladdawank + plaintext password) into chat -- must be rotated per CLAUDE.md secret-in-chat rule; not stored anywhere by me.",
+      "agent": "claude"
+    },
+    {
+      "id": "admin-submit-mid-cycle-403-sit",
+      "state": "done",
+      "created": "2026-08-15T00:41:34+0700",
+      "updated": "2026-08-15T01:13:23+0700",
+      "ai": "Option B shipped (backend+frontend, TDD, UNCOMMITTED, not deployed). Backend: ApprovalStatusState.is_post_deadline bool field (app/approval.py), populated by new router helper _set_is_post_deadline (app/routers/approval.py, wired into submit/approve/reject/override-step/status -- placed at router not inside app.approval's pure fns, same seam as current_approver_name, avoids breaking test_approval.py mocked cursor sequences). Frontend: canSubmit() in approval/model.ts -- admin+locked status (PENDING_*/APPROVED) now returns is_post_deadline instead of unconditional true; DRAFT/REJECTED/admin-never-submitted doors unaffected. types.ts +is_post_deadline field. ApprovalActionBar.tsx:164 passes it through. Tests: backend 990->996 (+6), frontend model.test.ts+9 ApprovalActionBar.test.tsx+2net (replaced 1 outdated test), suite 629 passed. tsc clean, next build clean. plan.md updated (Current Phase 2026-08-15). NOT committed, NOT deployed per dispatch scope.",
+      "agent": "claude"
+    },
+    {
+      "id": "ux-submit-button-shown-midchain",
+      "state": "doing",
+      "created": "2026-08-15T00:18:57+0700",
+      "updated": "2026-08-15T00:33:37+0700",
+      "ai": "[JAKKARITW ORDERED FIX 2026-08-14: 'แก้ไขเรื่องปุ่มก่อน กันความสับสน both stg m prd แล้วค่อยกลับมาทดสอบต่อ'] Fix scope = hide the ส่งอนุมัติ button while the department is mid-chain (PENDING_*) even in Admin mode -> canSubmit() in frontend/src/approval/model.ts. Deploy target = BOTH stg and prd. SIT paused until this ships."
+    },
+    {
+      "id": "sit-tc046-reject-from-step3",
+      "state": "done",
+      "created": "2026-08-15T00:18:57+0700",
+      "updated": "2026-08-15T00:18:57+0700",
+      "ai": "TC-046 PASS (real UI, real mail, 2026-08-14): reject issued from step 3 goes STRAIGHT back to the filler, not stepwise backwards. Setup: jakkaritw impersonating warapornt (SIT_IMPERSONATE), approval_status fixture-set to PENDING_APPROVER3 (jakkaritw explicitly authorised the direct DB state edit after I raised the concern; scope pinned to Data & Analytic/2027, backed up to scratchpad/backup_approval_state.json). Action: Admin-mode OFF -> dept appeared via ADR-0029 approver see-overlay -> clicked ตีกลับทั้งฝ่าย, reason 'test'. EVIDENCE approval_status: status=REJECTED, rejected_by_empcode=100427 (วราพร), reject_reason='test', approver3_actioned_at stays NULL. approval_log 648: REJECT by warapornt@ previous=PENDING_APPROVER3 -> new=REJECTED (NOT back to PENDING_APPROVER2) = the exact TC-046 assertion. MAIL (redirect already off, real recipients): To=Pornthip Phermsaphiran, Cc=Laddawan Kearnoi + CMAN_PowerBI, subject '*** ทดสอบ on stg server *** ถูกตีกลับ...', reason 'test' rendered, deep link present — note cc is the FROZEN approver1 (laddawan) even though the rejecter was step 3, which is the designed behaviour."
+    },
+    {
+      "id": "sit-mail-real-recipients",
+      "state": "done",
+      "created": "2026-08-14T23:00:34+0700",
+      "updated": "2026-08-14T23:04:02+0700",
+      "ai": "[VERIFIED PASS by jakkaritw 2026-08-14, inbox eyecheck] Real-recipient mail confirmed delivered and correctly rendered: To=Pornthip Phermsaphiran, Cc=Laddawan Kearnoi + CMAN_PowerBI, from CMAN_PowerBI, subject '*** ทดสอบ on stg server *** ถูกตีกลับ งบประมาณของฝ่าย Data & Analytic ปีงบประมาณ 2027', red test banner + Thai 'ไม่ใช่คำขออนุมัติจริง ไม่ต้องดำเนินการ' line, detail table (ฝ่าย/ปีงบประมาณ 2027 (หน้าจอ: Year 2026)/สถานะ ถูกตีกลับ/เหตุผล), deep link 'คลิกที่นี่เพื่อแก้ไขและส่งใหม่', Best Regards signature. This is the real-recipient proof of TC-039 (reject mail incl. cc to approver1). Redirect stays OFF for the human SIT round."
+    },
+    {
+      "id": "perdiem-verify-southafrica-master",
+      "state": "done",
+      "created": "2026-08-14T00:01:07+0700",
+      "updated": "2026-08-14T00:02:37+0700",
+      "ai": "[DECISION jakkaritw 2026-08-14] NOT a program bug — CLOSED as admin/master-data housekeeping, NO code change, NO app-side workaround. The per-diem engine is confirmed faithful to the masters (80 USD x 33.00 FX x 35 days = 92,400.00 exact). The South-Africa='asian' classification (and Papua New Guinea likewise) is the master-file owner's (Nipaporn) call to correct on SharePoint; the app will recompute automatically after the next master sync. DO NOT 'fix' country_group in code, do not hardcode a geography override, and do not re-raise this as a defect in future sessions — it was reviewed and deliberately left to the admin."
+    },
+    {
+      "id": "sit-frontback-reconcile",
+      "state": "done",
+      "created": "2026-08-13T23:56:11+0700",
+      "updated": "2026-08-13T23:56:11+0700",
+      "ai": "Front-end grid vs back-end DB reconcile, FY2027 Data & Analytic cc 10IT013000 (pre-SIT data): ALL MATCH, 0 mismatch. PENDING layer screen==budget.pending_budget exactly: 6211100110 Jan 5,000,000.00; 6210400010 Dec 92,400.00; 6210400020 Dec 450,000.00; 6210400030 Dec 500,000.00; 6210400999 Dec 80,000.00; 6211400010 empty. Group subtotals: Maintenance-License 5,000,000.00, Travelling Expense 1,122,400.00, Other admin 0. GRAND TOTAL Pending screen 6,122,400.00 == DB 6,122,400.00. Child rows: pending_budget_detail SUM == parent total_year for all 4 travel GLs. SAP layer from gold.fact_gl_trans FY2026 (planning_year-1) cc 10IT013000: 6211100110 m03 844.91 + 6210400010 m03 500.00 = 1,344.91 == screen 1,344.91 exactly (company_code 1000, raw sum, no reversal filter needed). NET-ZERO RULE PROVEN LIVE: GL 6211400010 has 3 txns in m03 netting to 0.00 -> grid correctly shows '-' (per-month net-zero row-hide working as designed); it also has 624.50 in m04 which is outside the declared Jan-Mar actuals window. Approved layer '-' correct (no board_budget table in this DB / none for 10IT). approval_status=APPROVED. LEFTOVER FOUND: 1 stray pending_budget row cc=10SC012000 gl=6120300010 total=0.00 created by nipapornt@ (jakkarit impersonating) during pre-SIT — different dept, zero value, flag for cleanup."
+    },
+    {
+      "id": "log-8a40cb3",
+      "state": "done",
+      "created": "2026-08-13T02:15:13+0700",
+      "updated": "2026-08-13T02:15:13+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): board alert LOW backlog cleared — 8a3318b + 616fe44 shipped, deployed, pushed [commit 8a40cb3]"
+    },
     {
       "id": "board-alert-low-cleanup",
       "state": "done",
@@ -2361,158 +2420,6 @@
         "40-diagnose"
       ],
       "ai": "DONE+VERIFIED: staging /health?deep=1 -> db:ok on image dbfix-b037a5e (rev 0000003, jakkaritw approved stg update). Root cause: msodbcsql internal SP token fetch ~20.3s on Linux > 15s login timeout (NOT ip block). Fix: db.py msal token + attrs_before 1256, health.py RuntimeError degrade, msal==1.36.0. Gate APPROVE-W-SUGG (07 all-pass), 508/508 unit. Probe jobs deleted. Pending: Easy Auth still OFF on stg (runbook s7 unmet); prod deploy awaits runbook run; stg image lacks 2 hardening follow-ups (in git, next build)."
-    },
-    {
-      "id": "a14-deploy",
-      "state": "done",
-      "created": "2026-07-15T23:13:09+0700",
-      "updated": "2026-07-16T01:03:25+0700",
-      "agent": "10-devops",
-      "ai": "STAGING COMPREHENSIVE TEST DONE — app layer CLEAN, single infra blocker. PASS: /health 200, / SPA 200 no-cache, /me 401, SPA deep-link hard-reload serves index, asset immutable-cache split correct, CWE-22 traversal 3/3 safe IN DEPLOYED IMAGE, revision Healthy, all env vars wired, DEV_AUTH_EMAIL+NOTIFICATIONS_DRY_RUN NOT set, clean 500s no stack leak. BLOCKER (infra not code): DB egress HYT00 network-drop (deterministic 15s) — root cause NARROWED: Fabric tenant ConfigureWorkspaceLevelIPFirewallRules=enabled, env egress IP 40.119.206.243 not on workspace budget_management_web allow-list (AllowAccessOverPrivateLinks=false so not PrivateLink). FIX #1 (recommended): Fabric/DATA workspace admin allow-lists 40.119.206.243 (+gold ws if same) — staging+prod share env=same IP so one entry unblocks both. Easy Auth still OFF (/docs public, header-trusted) — mandatory before prod + security pass + jakkaritw approval. Committing 3 build fixes + runbook truths."
-    },
-    {
-      "id": "pc-health-check",
-      "state": "done",
-      "created": "2026-07-15T22:46:53+0700",
-      "updated": "2026-07-15T23:05:12+0700",
-      "ai": "DONE. User confirmed uvicorn 8001/8002 still in use for testing - kept alive. Cleanup executed: Temp>7d 12.9GB (40561 files), pip 1.7GB, npm ~2GB, Edge 465MB, VSCode CachedData 238MB. Disk 219 to 248GB free. uv cache clean deferred (lock held by live sessions). Root cause of lag = RAM 90% from 5 concurrent CC sessions; advice: keep <=3 sessions. Memory saved: reference_machine_multi_session_ram.md"
-    },
-    {
-      "id": "sign-laddawan-specs",
-      "state": "done",
-      "created": "2026-07-15T22:18:08+0700",
-      "updated": "2026-07-15T22:33:39+0700",
-      "agent": "main",
-      "ai": "Stamped cursive 'Jakkarit W' signature into 3 signoff docx (Spec A/B/C V2.0, laddawan) - verify PASS x3, committed 2ba6c5a. Then exported all 3 to PDF via Word COM (ExportAsFixedFormat) for review email to Nipaporn+Waraporn, cut-off 20 Jul 2026. PDFs not committed (derived, regenerable via scratchpad convert_pdf.ps1)."
-    },
-    {
-      "id": "a13-6-e2e-journey",
-      "state": "done",
-      "created": "2026-07-15T22:03:07+0700",
-      "updated": "2026-07-15T23:11:41+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE: APPROVE. Depth audit: 23/23 classified DEEP (payload field-level asserts incl _updated_at echo, 409 reverts to REFETCHED value, dropdown-vs-fixture parity, per-diem == server number, negative cases, sessionStorage persistence, multipart field parsing, /budget never-called proof for no-scope); 0 shallow. Bug fix verified vs backend source (PastDeadlineError text match, disjoint from department_locked marker). Mock shapes == real Pydantic models (3 sampled). Gate re-ran: e2e 23/23 zero flakes 1.7m, vitest 255, build green, workflows untouched, artifacts gitignored. Committed."
-    },
-    {
-      "id": "a13-5-tool-sweep",
-      "state": "done",
-      "created": "2026-07-15T21:38:52+0700",
-      "updated": "2026-07-15T22:00:30+0700",
-      "agent": "08-tester",
-      "ai": "A13.5 SWEEP COMPLETE — overall PASS, nothing blocks A14. (1) pip-audit/Bandit: Bandit 18 hits all false-positive (documented closed-enum pattern); requirements.txt fresh-resolve clean; stale shared venv has 3 real backend-relevant CVEs (starlette via fastapi, python-multipart = attachment surface, idna) — fresh install at deploy pulls clean; recommend pinning requirements.txt. (2) Schemathesis: 274 calls / 22 endpoints / 0x 5xx; injection/XSS/IDOR/RLS/error-leak all clean; row-count invariant proven 0 writes; minor note: no-scope GET /budget still runs the full SAP fetch before filtering -> slow/timeout, could short-circuit role=none (non-blocking). (3) Locust 30 users x 3min: /me p95 36ms, /scope p95 660ms, /budget p95 2.6-3.5s (SAP cross-store read-through — dominant cost), 0 failures on core endpoints; 47 'failures' = test-harness 422s (missing query params), not system errors. Playwright journey ran shallower than briefed (page-load smoke x3 personas, 0 console errors) — acceptable because A8/A9/A10 per-feature Playwright runs (13+2+6 scenarios) already covered the flows individually; noted honestly. Deferred items logged: dep pin, no-scope short-circuit, locust harness params."
-    },
-    {
-      "id": "a13-final-verify",
-      "state": "done",
-      "created": "2026-07-15T20:40:48+0700",
-      "updated": "2026-07-15T21:25:29+0700",
-      "agent": "08-tester",
-      "ai": "FINAL GATE: READY (after 1 mechanical fix). Whole-system verdict: 0 ungated endpoints; never-cut->test mapping complete (control-number reconcile = manual A14 gate by design); secrets/PDPA/injection/XSS clean; fail-safe defaults verified. Blocker fixed: ci-tests.yml verify step false-failed every run (collect-only prints IDs not decorators) — removed, exclusion = pytest.ini addopts + explicit -m; lifecycle test renamed (was overclaiming — real chain proven by A6/A10 tests, gate verified each green). Counts: 486 mocked + 42 live + 2 jobs, FE 254 + build, audit 0, sentinels 0 @2092-2099. Gate transparency: its own 120s timeout once killed a live run mid-txn leaving 1 dirty row @2099 — self-healed on rerun, sweep confirms clean. A13 COMPLETE. A14 = deploy checklist for jakkaritw (8 items in commit msg). Committed."
-    },
-    {
-      "id": "a10-approval-ui",
-      "state": "done",
-      "created": "2026-07-15T18:40:36+0700",
-      "updated": "2026-07-15T20:23:47+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE FINAL: APPROVE. FIX1 verified: single entry validate_upload -> sanitized name, quote(safe='') = no raw colon possible (test-locked), reserved names case-insensitive, 404 unknown dept incl admin, 413 pre-read. FIX2 verified: all 5 write/delete entry points gated before deadline check, admin zero-extra-queries (assert_not_called), 4 extended mocks sampled = not weakened, live 2093 value-unchanged proof. Gate re-ran: 483 mocked + 39 + 2 live, sentinels 0 @2093-2099, FE 254 + build, audit 0. Notes: FE lock-message matches error substring (brittle-but-acceptable, no error-code convention exists); unknown-CC fail-open judged unreachable by non-admin. A10 COMPLETE. Committed."
-    },
-    {
-      "id": "a9-subforms-trip",
-      "state": "done",
-      "created": "2026-07-15T16:45:08+0700",
-      "updated": "2026-07-15T18:40:03+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE: APPROVE, zero findings. See-scope read judged correct (matches GET /budget); DELETE IDOR-proof confirmed (id+token only, owner from DB); commit-order asserted via mock_calls index; fixture parity = real shared file both sides (git check-ignore clean); no client per-diem math (grep-verified); notify_approved correct branch gating. Gate re-ran: 402 mocked + 34 live + 2 jobs live, sentinels 0 @2095-2099, FE 184 + build, audit 0. Committed."
-    },
-    {
-      "id": "a11-a12-automations",
-      "state": "done",
-      "created": "2026-07-15T16:18:38+0700",
-      "updated": "2026-07-15T17:54:44+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE: APPROVE WITH SUGGESTIONS. Triple dry-run gate verified independently (job --execute + DRY_RUN env + notifications_dry_run); workflow dispatch-only; recipients correct (no name-guessing, frozen submitter_email); refactor byte-identical + A6 live 31/31 regression clean; REJECTED-exclusion judged CORRECT per ADR-0012 (not a policy Q). Tests: 136/136 scope, 2/2 live jobs, sentinels clean. Both suggestions applied (in-function deadline guard + prod placeholder warning, 89/89). POLICY ANSWERS (jakkaritw 2026-07-16): final-APPROVED email = BUILD (dispatching); admin stuck-view = Phase 2; negative months = NO (positive only). Committed."
-    },
-    {
-      "id": "a8-main-grid",
-      "state": "done",
-      "created": "2026-07-15T15:12:06+0700",
-      "updated": "2026-07-15T16:44:45+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Security clear: /scope/departments scoped server-side (unit+live attack tests), no filler-email leak, updated_at = timestamp only; COST/SGA lock structurally tested; year semantics correct; 409 revert covered; is_special single-source (classify_special_gl both sides); admin auto-see-all = correct ADR-0014 reading (pure admin, backend re-checks). Gate re-ran: FE 109 + build, BE 293 mocked + 31 live, sentinels clean. Suggestions: scope-error banner (APPLIED — 110/110), commit-hygiene note (2 A8 live tests rode in 9bdbc16), test_notifications collect error = A11/12 in-flight, negative-months = open policy Q for jakkaritw. Committed."
-    },
-    {
-      "id": "a5-deadline-lock",
-      "state": "done",
-      "created": "2026-07-15T15:12:06+0700",
-      "updated": "2026-07-15T15:57:01+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE: APPROVE WITH SUGGESTIONS (no blockers). Extraction verified behavior-preserving; all 3 write entry points gated before first write; admin exemption server-side; batch per-item independence tested; fail-loud on lookup error; monkeypatch target fix verified correct (module-namespace lookup). Gate re-ran: isolated 124, full mocked 291, live 31, sentinels 0 @2097+2099. Suggestions: docstring (applied via cavecrew), pre-existing fetchone side_effect extras (logged, not new). Committed."
-    },
-    {
-      "id": "a7-frontend-scaffold",
-      "state": "done",
-      "created": "2026-07-15T14:30:19+0700",
-      "updated": "2026-07-15T15:07:14+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE FINAL: APPROVE. strict:true both tsconfigs verified (build still 0 type errors); 4 boundary tests + dynamic-year test verified; gate re-ran npm test 28/28 + build green itself; git tracking clean (no node_modules/dist, nothing outside frontend/+plan.md). A7 COMPLETE: React+Vite+TS scaffold, Easy Auth /me+/scope hooks, deep-link ?dept&year parser (server-side authz unchanged), mockup-0002.3 design tokens, shell. Committing."
-    },
-    {
-      "id": "a6-approval-engine",
-      "state": "done",
-      "created": "2026-07-15T13:40:11+0700",
-      "updated": "2026-07-15T14:20:08+0700",
-      "agent": "05-software-developer",
-      "ai": "GATE FINAL: APPROVE (combined 06+07+08, re-verified for real). B1 RLS fix confirmed live (real out-of-scope 403, no dept enumeration); B2 fail-closed guard confirmed, post-deadline override preserved, policy confirmed by jakkaritw + ADR-0012 amended; S1-S4 verified at exact lines. Gate re-ran suites itself: 265 mocked + 27 live pass, sentinels clean. A6 approval engine COMPLETE. Committing now."
-    },
-    {
-      "id": "a4-a5-exhaustive-verify",
-      "state": "done",
-      "created": "2026-07-15T10:55:29+0700",
-      "updated": "2026-07-15T12:06:44+0700",
-      "ai": "A4+A5 exhaustive live verify DONE + all 11 defects FIXED (194 mocked + 15 live green). D1 per_diem col position->job_level (SHOWSTOPPER, trip feature was 100% dead live). D2 SAP assignment NULL-safe (policy jakkaritw: keep NULL, cut only TFRS16) - ADR-0020 + DATA_PIPELINE#7 corrected; the old live parity check passed only because it compared the query to an identical hand-query dropping NULLs the same way (self-consistency != correctness). D3/D4 IDOR+parent desync -> resolve detail row's ACTUAL cc. D5 parent recompute now atomic single-statement SUM (was losing money 5/5 live races under RCSI). D6 quantize months at boundary -> total_year==SUM(months). D7 travel_months 1..12 + dedupe. D8 side-flip handles ALL trip lines. D9 max_length/range + per-item rollback. D10 fetch_cc_dims for SAP-led rows. D11 ORDER BY filler_email. D13 no table-name leak. D12 policy: rate 0.00 = VALID (fail only when job_level has no row). LOGIC AUDIT (jakkaritw asked 'make sense?'): cost_center NOT IN is NULL-unsafe TOO but its NULLs MUST stay dropped - FY2025 2249381 rows/-1138962985.31 THB have no cc and cannot appear in a cc-keyed grid; making it NULL-safe would pull ~1.1 BILLION THB in and corrupt every cell. doc_type<>CO NULL-unsafe but 0 NULL rows live. Both recorded in ADR-0020. REMAINING: add explicit 'AND cost_center IS NOT NULL' (behavior-identical, prevents a future catastrophic fix) - needs dev agent, session limit resets 15:50."
-    },
-    {
-      "id": "live-db-verification",
-      "state": "done",
-      "created": "2026-07-15T10:12:25+0700",
-      "updated": "2026-07-15T10:12:25+0700",
-      "ai": "FIRST LIVE-DB verification (env re-point DONE via backend/.env, gitignored). CONNECTION SOLVED: SERVER=<cluster>-<base32le(workspace GUID)>.database.fabric.microsoft.com ; DATABASE=<displayName>-<full item GUID> (GUID suffix REQUIRED; bare name -> error 40532). cluster v5o4qez3u4cupase7cogkwvyke shared across cman-dw workspaces. PROVEN ON REAL DB: Entertainment 1000 -> API 1000 -> fresh-connection re-read pending_budget.m01=1000 total_year=1000; 2nd line 500 -> 1500. Real data cc=10AC010000 filler=salineep@chememan.com GL=5211900030. 2 SHOWSTOPPERS mocks hid: (1) dbo.gl_group real col = gl_group NOT group_name; (2) budget.pending_budget has NO status column (correct per DDL/ADR-0013, status lives on approval_status) but A4 read + A5 write both referenced it -> every first save would fail 'Invalid column name status'. Both fixed+verified live. GL-NAME GAP RESOLVED: dbo.gl_group carries gl_code->gl_name (cols: gl_code, gl_group, gl_name) - no gl_account_ref seed, no extra SharePoint file; DATA_PIPELINE_PLAN item4 closed. 3 integration tests (sentinel fy=2099, cleanup 0 rows verified) + 165 mocked green. FOLLOW-UP: A4 read path still has NO live test (SapLayer lacks gl_name/gl_group; structural). NOT deployed."
-    },
-    {
-      "id": "a5-write-path",
-      "state": "done",
-      "created": "2026-07-15T08:46:37+0700",
-      "updated": "2026-07-15T08:46:37+0700",
-      "ai": "A5 budget write (05-dev, TDD): per_diem.py derive_per_diem days*rate(job_level_name_en,country_group)*FX, Decimal, LAST month absorbs remainder (sum==exact total; mockup round-every-month=BUG), missing FX/rate/'N/A' -> raise never 35.00 fallback. write_model.py save_pending_rows/save_detail_lines/save_trip: row-grain optimistic lock (atomic UPDATE WHERE _updated_at + rowcount -> 409 no clobber no TOCTOU), total_year in sync, parent==SUM(detail), dim re-derive, Pending BLANK, approval_status untouched (ADR-0013), ONE side/trip + side-flip cleans old-GL line + recomputes old parent, excluded-CC + fill-scope + CC-existence on ALL write paths (admin bypasses fill-scope only ADR-0012). special_gl.py GL-conditional meta (Entertainment, Lease&Rental; other 3 free-form per spec 4a). routers/budget_write.py PUT /budget/rows /budget/detail, POST|PUT /budget/trip. 165/165. GATE 3 ROUNDS: R1 REQUEST-CHANGES 4 MUST-FIX (parent-cell recompute NEVER committed->silent data loss 5 special-GL groups w/ 200 OK; PK-collision race 502 not 409; travel line w/o trip_id bypassed side-check; trip side-flip ghost amount). R2 verified + found 5th (detail path missing excluded-CC check -> would break SAP control-number reconcile). R3 delta APPROVE no regression. LESSON: mock-only unit tests missed the commit-ordering bug; ordering asserted via conn.mock_calls now. PENDING: env re-point->fabric_sql_database for live integration test. A6 approval next."
-    },
-    {
-      "id": "a4-read-path",
-      "state": "done",
-      "created": "2026-07-15T07:28:50+0700",
-      "updated": "2026-07-15T07:28:50+0700",
-      "ai": "A4 main-table read path (05-dev, TDD): app/sap.py fetch_sap_actuals VERBATIM ADR-0020 query on gold.fact_gl_trans (company_code=1000, doc_type<>CO, excl CCs w/o 10SC012000, assignment<>TFRS16, NO sign flip, NO doc_status) + fail-loud SapActualsFetchError->502 never silent-empty. app/read_model.py dbo.board_budget FULL OUTER JOIN budget.pending_budget (local cross-schema ADR-0023) key (cc,gl); FULL OUTER not LEFT per ADR-0010 (board-only + manual pending-only rows must persist) - gate RULED CORRECT. SAP merged in FastAPI, period_month->m01..m12 pivot. Years spec 1c: SAP=Y, Approved=Y, Pending=Y+1; router year=planning, board_year=year-1. RLS: SQL-side parameterized cost_center IN (See scope) + Python backstop; empty See->0 rows; admin-wide only if is_admin AND admin_view_enabled. GET /budget. 502 detail generic (raw logged server-side). 85/85 tests. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (SAP char-by-char verified, fail-loud, RLS/admin verified). PENDING: env re-point->fabric_sql_database for live integration test. A5 write next."
-    },
-    {
-      "id": "a3-rls-scope-resolution",
-      "state": "done",
-      "created": "2026-07-15T01:38:22+0700",
-      "updated": "2026-07-15T01:38:22+0700",
-      "ai": "A3 RLS scope resolution (05-dev, TDD) on A2: app/rls.py resolve_scope(email,conn)->Scope{is_admin,role,fill_cost_centers,see_cost_centers}. Fill=dbo.cc_filler_map WHERE filler_email=@me (case-insens); See=Fill UNION CCs of Fillers whose Primary manager_email=@me (JOIN cc_filler_map x dbo.v_employee_budget_01, param SQL). role=admin/filler/see_only/none. GET /scope. ADMIN_EMAILS exact-match set. Edge: Filler-not-in-view still Fills no-crash. admin_view_enabled=A4 no-op hook (regression test: cannot self-elevate non-admin). Hardening: blank-email guard, cursor.close finally. 43/43 tests (mocked DB). Gate 06+07+08=APPROVE-WITH-SUGGESTIONS no blockers (parameterized, no scope leak, no self-elevate). PENDING: env re-point->fabric_sql_database for live integration test. A4 read path next."
-    },
-    {
-      "id": "a2-backend-foundation",
-      "state": "done",
-      "created": "2026-07-15T01:04:50+0700",
-      "updated": "2026-07-15T01:04:50+0700",
-      "ai": "A2 increment-1 backend foundation (05-dev, TDD): FastAPI backend/ — config(fail-closed APP_ENV=production, env_file anchored abs), Easy Auth email extraction (x-ms-client-principal-name + DEV override local-only), 2 conn factories (fabric_sql_database + gold warehouse; SP cman-fabric-write; ODBC17; lazy/context-managed), GET /health(+deep) /me, 25 pyodbc-mocked unit tests PASS. Gate 06+07+08=APPROVE-WITH-SUGGESTIONS, no blockers. REQUIRED before deploy: Container Apps Easy Auth=require-auth (header spoof guard). Non-block suggestions: conn pool(A4/A5), GOLD_SQL_* doc-sync, structured logging. NO RLS/read/write yet (A3+). env re-point still pending. NOT committed->now committing. NOT deployed."
-    },
-    {
-      "id": "db-consolidation-single-fabric-sql",
-      "state": "done",
-      "created": "2026-07-14T23:44:43+0700",
-      "updated": "2026-07-15T00:36:51+0700",
-      "ai": "DDL EXECUTED 2026-07-15 on fabric_sql_database (Fabric SQL editor, clean run no-error) — 5 budget.* tables LIVE: pending_budget, pending_budget_detail, budget_trip, approval_status, approval_log + 9 indexes. dbo holds synced masters. Employee source=dbo.v_employee_budget_01 (verified A=0,C=0). NEXT: env re-point (at A2) + A2 backend scaffold."
     },
     {
       "id": "sap-actuals-view",

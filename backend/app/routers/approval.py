@@ -32,7 +32,7 @@ from app.approval import (
 from app.auth import get_current_user_email
 from app.config import get_settings
 from app.db import get_fabric_conn
-from app.deadline import YEAR_NOT_OPEN, fiscal_year_state
+from app.deadline import YEAR_NOT_OPEN, fiscal_year_state, is_post_deadline
 from app.read_model import fetch_locked_departments
 from app.reference_data import fetch_departments
 from app.rls import resolve_scope
@@ -192,6 +192,37 @@ class LockedDepartmentsResponse(BaseModel):
     year_not_open: bool = False
 
 
+def _set_is_post_deadline(conn: pyodbc.Connection, state: ApprovalStatusState) -> None:
+    """Populates `state.is_post_deadline` — wired HERE (the router), not
+    inside `app.approval`'s pure state-machine functions, for the same
+    reason `current_approver_name` is (see GET /status below): an
+    unconditional extra DB lookup inside those functions would break most of
+    test_approval.py's finite mocked `side_effect` sequences. Called
+    identically at every endpoint that returns `ApprovalStatusState` (SIT
+    defect fix, 2026-08-14) so the frontend's `canSubmit` never sees a
+    stale/absent value after any action, not just after GET /status.
+
+    Never-cut (review fix, gate MED finding): wrapped in try/except so a
+    broken or half-configured `dbo.submission_deadline` row (`deadline_date`
+    is nullable, `db/schema.sql:105` — `fiscal_year_state`'s `bangkok_today()
+    > row[0]` raises `TypeError` on a NULL) can never turn an
+    ALREADY-COMMITTED action into a 500/502 for the caller. Callers on the 4
+    action paths (submit/approve/reject/override-step) run this AFTER
+    `_notify_after_transition` for the same reason — a raise here must never
+    block the next approver's "ถึงตาคุณ" mail, or the department goes silent
+    until the 7-day reminder (exactly what that function's own docstring
+    says must never happen). On failure `state.is_post_deadline` simply
+    stays at its fail-safe `False` default (hides the submit button) and a
+    WARNING is logged so a broken row is visible in the container logs."""
+    try:
+        state.is_post_deadline = is_post_deadline(conn, state.fiscal_year)
+    except Exception:  # noqa: BLE001 -- must never fail an already-committed action or block the notify that follows
+        logger.warning(
+            "is_post_deadline lookup failed for fiscal_year=%s — defaulting to False (submit button stays hidden)",
+            state.fiscal_year, exc_info=True,
+        )
+
+
 def _run(action: Callable[[], _T]) -> _T:
     try:
         return action()
@@ -210,6 +241,7 @@ def submit(body: DepartmentYearBody, email: str = Depends(get_current_user_email
             scope = resolve_scope(email, conn)
             state = submit_department(conn, body.department, body.fiscal_year, email, scope)
             _notify_after_transition(conn, "submit", state)
+            _set_is_post_deadline(conn, state)
             return state
 
     return _run(_action)
@@ -221,6 +253,7 @@ def approve(body: ApproveBody, email: str = Depends(get_current_user_email)):
         with get_fabric_conn() as conn:
             state = approve_department(conn, body.department, body.fiscal_year, email, body.comment)
             _notify_after_transition(conn, "approve", state)
+            _set_is_post_deadline(conn, state)
             return state
 
     return _run(_action)
@@ -232,6 +265,7 @@ def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
         with get_fabric_conn() as conn:
             state = reject_department(conn, body.department, body.fiscal_year, email, body.reason)
             _notify_after_transition(conn, "reject", state)
+            _set_is_post_deadline(conn, state)
             return state
 
     return _run(_action)
@@ -256,6 +290,7 @@ def override_step(body: DepartmentYearBody, email: str = Depends(get_current_use
                 )
             state = admin_override_step(conn, body.department, body.fiscal_year, email)
             _notify_after_transition(conn, "override_step", state, admin_email=email)
+            _set_is_post_deadline(conn, state)
             return state
 
     return _run(_action)
@@ -323,6 +358,7 @@ def status(
             # being skipped — resolved here from the same source as the mail
             # cc lookup, so the UI needs no second fetch.
             state.current_approver_name = lookup_employee_name(conn, state.current_approver_empcode)
+            _set_is_post_deadline(conn, state)
             return state
 
     return _run(_action)

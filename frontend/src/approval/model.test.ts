@@ -88,23 +88,61 @@ describe('isFillerOfDepartment', () => {
 
 describe('canSubmit', () => {
   it('shows Submit for a Filler when status is DRAFT', () => {
-    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'DRAFT' })).toBe(true)
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'DRAFT', isPostDeadline: false })).toBe(true)
   })
 
   it('shows Submit for a Filler when status is REJECTED', () => {
-    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'REJECTED' })).toBe(true)
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'REJECTED', isPostDeadline: false })).toBe(true)
   })
 
   it('hides Submit for a Filler once PENDING (locked, no recall)', () => {
-    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'PENDING_APPROVER1' })).toBe(false)
+    expect(
+      canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'PENDING_APPROVER1', isPostDeadline: false }),
+    ).toBe(false)
   })
 
   it('hides Submit for a non-Filler, non-admin viewer', () => {
-    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: false, status: 'DRAFT' })).toBe(false)
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: false, status: 'DRAFT', isPostDeadline: false })).toBe(false)
   })
 
-  it('always shows Submit in admin mode regardless of status (server decides the branch)', () => {
-    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status: 'APPROVED' })).toBe(true)
+  // Guards branch order: the post-deadline override is the admin hat's alone.
+  // If the `adminViewEnabled` branch is ever reordered/merged with the plain
+  // filler check, a non-admin filler would start seeing Submit on a locked
+  // department once the deadline passes -- a real authorization-shaped regression.
+  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
+    'still hides Submit for a non-admin Filler on locked status %s even past the deadline (override never leaks to non-admins)',
+    (status) => {
+      expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status, isPostDeadline: true })).toBe(false)
+    },
+  )
+
+  // SIT defect fix (2026-08-14): admin used to always see Submit regardless
+  // of status, so the button was shown mid-cycle and 403'd every time (the
+  // server's normal-chain/Template-2/orphan doors all refuse a locked
+  // record). The one admin door that DOES accept a locked status is the
+  // post-deadline override (ADR-0012) -- gated here by `isPostDeadline`.
+  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
+    'hides Submit for admin on locked status %s while the cycle is still open',
+    (status) => {
+      expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status, isPostDeadline: false })).toBe(false)
+    },
+  )
+
+  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
+    'shows Submit for admin on locked status %s once the deadline has passed (post-deadline override door survives)',
+    (status) => {
+      expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status, isPostDeadline: true })).toBe(true)
+    },
+  )
+
+  it('shows Submit for admin on DRAFT regardless of deadline (never-submitted admin door unaffected)', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status: 'DRAFT', isPostDeadline: false })).toBe(true)
+  })
+
+  it('shows Submit for admin on REJECTED regardless of deadline (Template-2/orphan doors unaffected)', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status: 'REJECTED', isPostDeadline: false })).toBe(
+      true,
+    )
   })
 })
 

@@ -58,13 +58,34 @@ export function isFillerOfDepartment(rows: DepartmentRow[], department: string, 
 }
 
 /** Submit is offered to: Fillers of the department while it is still
- * editable (never-submitted / DRAFT / REJECTED), or the admin hat (any
- * status — the server decides the exact admin branch: orphan / Template-2 /
- * post-deadline / 403 mid-cycle). Step-gating detail is the server's job
- * (never-cut); this only decides whether to SHOW the button. */
-export function canSubmit(params: { isFillerOfDept: boolean; adminViewEnabled: boolean; status: string }): boolean {
-  const { isFillerOfDept, adminViewEnabled, status } = params
-  if (adminViewEnabled) return true
+ * editable (never-submitted / DRAFT / REJECTED), or the admin hat.
+ *
+ * SIT defect fix (2026-08-14): the admin hat used to show Submit
+ * unconditionally, so opening a department mid-approval
+ * (PENDING_APPROVER1/2/3 or APPROVED) in Admin mode offered a button that
+ * ALWAYS 403'd server-side — every admin submit door except one refuses a
+ * locked record (`_ensure_admin_overwrite_allowed` on the Template-2 and
+ * orphan doors, `submit_department`'s AdminCannotSubmitInCycleError
+ * fallthrough otherwise). The one exception is the post-deadline override
+ * (ADR-0012), which the server allows on ANY status once
+ * `fiscal_year`'s deadline has passed — `isPostDeadline` (from
+ * `ApprovalStatusState.is_post_deadline`) is what the button now checks
+ * before showing itself on a locked status, so it only ever appears when it
+ * will actually work. DRAFT/REJECTED for the admin hat are untouched (the
+ * never-submitted, Template-2, and orphan doors already refuse mid-chain
+ * records regardless of deadline, so showing the button there was never the
+ * bug). */
+export function canSubmit(params: {
+  isFillerOfDept: boolean
+  adminViewEnabled: boolean
+  status: string
+  isPostDeadline: boolean
+}): boolean {
+  const { isFillerOfDept, adminViewEnabled, status, isPostDeadline } = params
+  if (adminViewEnabled) {
+    const locked = isPendingLocked(status) || status === 'APPROVED'
+    return locked ? isPostDeadline : true
+  }
   return isFillerOfDept && (status === 'DRAFT' || status === 'REJECTED')
 }
 
