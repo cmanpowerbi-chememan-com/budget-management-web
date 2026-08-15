@@ -1,14 +1,58 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T01:13:24+0700",
+  "updated": "2026-08-15T15:37:09+0700",
   "tasks": [
     {
-      "id": "sc-qas-theme-revise",
+      "id": "db1-retire-step2-repoint-orgcode",
+      "state": "done",
+      "created": "2026-08-15T15:37:09+0700",
+      "updated": "2026-08-15T15:37:09+0700",
+      "ai": "STEP 2+3/5 DONE (jakkaritw-approved DB1 retirement). Repointed the master-tables orgcode_costcenter module off the dead DB1 table onto the consolidated DB: list_handler.py + reference_handler.py now read dbo.employee_master (org_code/org_name_th) instead of dbo.mas_employee_data (orgcode/orgnameth). BEFORE/AFTER PARITY PROVEN against BOTH live databases, not just tests: list screen 725 rows before = 725 after, 0 rows added, 0 removed, same ORDER BY; 5 rows IMPROVED (blank Thai name in the stale old source now resolves, e.g. org 1155403 '' -> 'แผนกดูแลพื้นที่'). jakkaritw chose to keep the dropdown identical rather than accept the raw mirror's extra codes, so reference_handler re-applies the OLD sync filter (lifted from setup/sync_employees.py:90-101): record_status='active' AND employee_code NOT LIKE '4%' (Gritsman) AND org_code NOT LIKE '117%' (Vietnam AND Australia — both share the 117 prefix) AND job_level_name_en NOT IN (Operator 1/2/3, Driver, Maid). VERIFIED with that clause the dropdown returns 191 codes = the old 191 EXACTLY: 0 added / 0 removed / 0 renamed, and the list still returns 725. Join fan-out risk checked and clear: 0 org_codes carry more than one distinct org_name_th. GATE: 07 PASS (static SQL only, no interpolation, no creds, env/infra untouched), 06 Approve-with-suggestions, 08 PASS 22/22 handler suite unchanged = output contract byte-identical (JSON keys orgcode_name/code/name preserved). Pin tests now assert the table, the new columns, DISTINCT, the NULL guard, all FOUR filter conditions, AND the SQL aliases (aliases ARE the JSON keys via db.py fetchall/cursor.description). test_orgcode_cc_local.py's 1 failure + 5 errors are PRE-EXISTING (gate re-ran the HEAD version and got the identical failure set: live-DB pyodbc 08001 + 'fixture conn not found'). .claude/project-context.md lines 89/104-106 corrected. NOT committed, NOT deployed. TWO GATE WARNINGS BINDING ON STEP 4: (1) this code queries cfg_master + dbo.employee_master in ONE connection, and only the consolidated DB has both — deploying it while the Functions env still points at DB1 = instant 500s, so code and env MUST cut over together; (2) admins editing through the live editor still write to DB1's cfg_master copy, so RE-RECONCILE/re-copy cfg_master immediately before the flip."
+    },
+    {
+      "id": "db1-retire-step1-cfgmaster-copy",
+      "state": "done",
+      "created": "2026-08-15T14:49:48+0700",
+      "updated": "2026-08-15T14:49:48+0700",
+      "ai": "STEP 1/5 of the DB1 retirement DONE (jakkaritw-approved 5-step plan, 2026-08-15). Copied all 4 cfg_master tables DB1 -> consolidated DB (fabric_sql_database-a42ef9f3), ADDITIVE ONLY: new cfg_master schema + 4 new tables; nothing in DB1 touched, nothing pre-existing in the consolidated DB touched, so the deployed master-tables Functions app (still pointed at DB1) keeps running unaffected. RECONCILE all MATCH: orgcode_costcenter_map 725=725, gl_group_mapping 136=136, gl_group_dim 21=21, hide_document_number 3=3. Two Fabric-SQL-DB DDL gotchas hit and fixed: (1) plain 'CREATE SCHEMA x' fails with error 33134 'Principal ... could not be resolved / Server identity is not configured' when the connecting principal is a service principal -> must write CREATE SCHEMA cfg_master AUTHORIZATION dbo; (2) 'PRIMARY KEY NONCLUSTERED ... NOT ENFORCED' (Fabric WAREHOUSE syntax) is rejected with error 40514 in Fabric SQL DATABASE -> use plain enforced PRIMARY KEY. IDENTITY preserved on orgcode_costcenter_map.id via SET IDENTITY_INSERT. COVERAGE PRE-CHECK (gate for step 2): consolidated dbo.employee_master has org_code + org_name_th and covers 183/184 of the orgcodes the map actually uses; the single miss is the placeholder '9999999', which has NO Thai name in the old source either -> zero regression. Old source had 191 orgcodes, new has 209 (broader). All 655 employee_master rows carry a Thai org name. FLAGGED FOR LATER, not resolved here: cfg_master.gl_group_dim+gl_group_mapping (gl_code->group_id GUID->group_name) DUPLICATE the concept in dbo.gl_group (146 rows, gl_code->gl_group name, DW-synced from SharePoint and treated as authoritative elsewhere). Copied as-is to preserve editor behaviour; consolidating the two GL-group stores is a separate decision. NEXT: step 2 = repoint orgcode_costcenter list_handler.py:28 + reference_handler.py:17 from dbo.mas_employee_data (orgcode/orgnameth) to dbo.employee_master (org_code/org_name_th)."
+    },
+    {
+      "id": "daily-employee-sync-broken",
+      "state": "willdo",
+      "created": "2026-08-15T14:18:56+0700",
+      "updated": "2026-08-15T14:31:49+0700",
+      "ai": "[CORRECTED 2026-08-15 — DO NOT DELETE. jakkaritw said 'delete legacy' then 'make sure 100% not used'; the 100% check REVERSED the earlier conclusion.] DB1 IS NOT RETIRED AND IS NOT DEAD. Connected live to SERVER v5o4qez3u4cupase7cogkwvyke-w4l3zd35yzkuzfgnonsogpi55e.database.fabric.microsoft.com,1433 / DATABASE 'fabric sql db-036a3270-82dd-40f4-aea4-6c27f55cff07': CONNECT OK, schemas cfg_master+dbo+sys, dbo.mas_employee_data EXISTS with 336 rows (exactly the 'Include: 336 rows' the failing sync computes), cfg_master.orgcode_costcenter_map EXISTS with 725 rows. Meanwhile the CONSOLIDATED DB (fabric_sql_database-a42ef9f3) has schemas budget+dbo+sys ONLY — no cfg_master, no mas_employee_data. CONCLUSION: the deployed master-tables Azure Functions module (02backend/db.py get_conn -> FABRIC_SQL_SERVER/DATABASE env) still points at DB1 and its orgcode-costcenter editor WORKS there; mas_employee_data is live data, not legacy. The nightly 'Daily Employee Sync' fails ONLY because its GitHub secrets FABRIC_SQL_SERVER/FABRIC_SQL_DATABASE were repointed to the consolidated DB during ADR-0023 while the table stayed in DB1 — a mis-pointed job, NOT an obsolete one. Data in mas_employee_data is therefore STALE since the first failure (2026-08-07). ADR-0023 consolidation is INCOMPLETE: cfg_master.* and dbo.mas_employee_data were never migrated and DB1 was never actually decommissioned. OPTIONS: (a) point the sync's GitHub secrets back at DB1 -> nightly resumes, editor unaffected, fastest restore; (b) migrate mas_employee_data + cfg_master into the consolidated DB and repoint the master-tables module too, finishing ADR-0023. NOTHING DELETED, NOTHING CHANGED — awaiting jakkaritw."
+    },
+    {
+      "id": "theme-supplychain-preview",
+      "state": "done",
+      "created": "2026-08-15T14:18:10+0700",
+      "updated": "2026-08-15T14:28:40+0700",
+      "ai": "Repointed accent tier to Supply Chain green (#1a472a/#2d6a4f), --sans to Bootstrap 5.3.2 system stack, --serif=var(--sans), --mono=Bootstrap default; dark-mode accent lightened to #3fa06e/#5cbf8c (light-mode greens fail contrast ~1.6:1/2.4:1 vs dark paper). Removed Google Fonts link from layout.tsx. body font-size 14px -> .875rem. Files: frontend/src/styles/tokens.css, frontend/src/styles/global.css:16, frontend/src/app/layout.tsx. next build PASS, vitest 633/633 PASS. Local only, NOT committed/pushed/deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "push-77308d7",
+      "state": "done",
+      "created": "2026-08-15T14:05:48+0700",
+      "updated": "2026-08-15T14:05:48+0700",
+      "ai": "Pushed origin/main fdc6f6e..77308d7 (3 commits) 2026-08-15 after jakkaritw's 'push': 74a4f97 docs(adr-0021), 8a40cb3 chore(tracker), 77308d7 fix(approval) the SIT submit-button defect. 0 unpushed remaining; origin/main head = 77308d7 = exactly the image live on BOTH stg rev 0000045 and prd rev 0000024, so deployed code and git are now in sync. No CI deploy triggered by this push: master-tables-deploy.yml is paths-filtered to 03-edit-master-table/** which none of these touch."
+    },
+    {
+      "id": "stg-theme-supplychain",
       "state": "doing",
+      "created": "2026-08-15T13:58:01+0700",
+      "updated": "2026-08-15T14:34:13+0700",
+      "ai": "[2026-08-15 ~09:10] TO-BE APPLIED LOCALLY + BOTH REVIEW PAGES PUBLISHED, NOT COMMITTED/PUSHED/DEPLOYED. Theme change is 3 files, CSS-only, no .tsx logic: frontend/src/styles/tokens.css (accent tier b24222/4a5e80 terracotta+blue -> 1a472a/2d6a4f green; --sans/--serif/--mono all collapsed to the Bootstrap system stack, no Thai face pinned, matching the source app), frontend/src/styles/global.css:16 (14px -> .875rem, same value, intent-explicit), frontend/src/app/layout.tsx (removed the Google Fonts link for Archivo/Newsreader/IBM Plex -- now zero webfont loads). KEPT ON PURPOSE: --c-gold/--accent-3 #a8763a stays, it encodes the pending status chip + current-month highlight, not branding; --status-sap/--status-approved/--status-pending/--special-* untouched. DARK MODE DEVIATION (agent judgement, flag to jakkaritw): #1a472a on the dark ground measures 1.6:1 contrast (min readable 3:1), so dark uses #3fa06e/#5cbf8c (5.3:1/7.7:1) -- same hue, lighter. Light mode is exactly #1a472a/#2d6a4f as ordered. VERIFY: npx next build PASS, vitest 633/633 PASS, git diff confined to CSS + the layout font link. KNOWN BUG SURFACED, NOT FIXED (separate task if wanted): .status-chip-rejected in global.css binds to --accent, so the REJECTED chip is now green = reads as approved; pre-existing mis-binding, was merely masked by the old orange accent. 12 after-shots in scratchpad/ui-after via SHOT_DIR env on the same temp spec, so before/after are frame-for-frame. Published: before = claude.ai/code/artifact/1875fff3-c74d-4701-9910-4cf1552e9121, to-be (with press-and-hold before/after swap) = claude.ai/code/artifact/220aef00-fd36-42ac-9f0e-ba8e4c8a5420. AWAITING jakkaritw verdict on the to-be. Then: delete frontend/e2e/_theme-before.spec.ts, gate, deploy STG ONLY.",
+      "agent": "claude"
+    },
+    {
+      "id": "sc-qas-theme-revise",
+      "state": "done",
       "created": "2026-08-15T00:48:14+0700",
-      "updated": "2026-08-15T00:48:14+0700",
-      "ai": "Task: revise web theme (color/font/text size) for Chememan Supply Chain app at https://sc-qas.chememan.com/Po -- STG(QAS) ONLY per jakkaritw, do not touch prd. Probe done: stack = ASP.NET MVC + Bootstrap 5.3.2 + /Content/site.css, behind openresty; current palette dark green #1a472a/#2d6a4f gradient, brand header #1a472a. BLOCKER: source code NOT on this machine -- grepped all 24 C:\\NN.* project folders + C:\\inetpub, zero hits for sc-qas/csproj/cshtml. Need repo location from jakkaritw. Candidate target theme = C:\\10.cman-design-system tokens (forest #00522C, blue #3C60A5, amber #745021, font FC Minimal, fs/spacing/radius scales). SECURITY: jakkaritw pasted SAP-style creds (user zladdawank + plaintext password) into chat -- must be rotated per CLAUDE.md secret-in-chat rule; not stored anywhere by me.",
+      "updated": "2026-08-15T08:42:09+0700",
+      "ai": "PUSHED + VERIFIED LANDED: 74b532c on github cmanpowerbi-chememan-com/cman-design-system main (3a01b43..74b532c, origin/main == local HEAD confirmed via fetch), 19 files +3124/-1248. Theme extracted from LIVE Chememan Supply Chain app sc-qas.chememan.com (NOT SAP; ASP.NET MVC + Bootstrap 5.3.2 + FontAwesome 6.5.0 + jQuery 3.7.1 + select2 + flatpickr), 6 dumps / 4 unique pages + /Content/site.css. Values: brand #1a472a green + #2d6a4f teal; 14-step --cman-surface-* scale (--cman-neutral-* kept as aliases); 10 status colors; radius 4/6/8/16; navbar 44px + sidebar 240/64px; type .65-1.5rem; NO font-family declared anywhere => Bootstrap system stack (recorded as fact, no webfont added). Old CI palette preserved byte-for-byte in tokens/brand-ci-legacy.css (148/148 declarations, re-diffed vs HEAD~1). New: reference/sc-qas-extracted/ (raw auditable CSS, site.css byte-identical to server), examples/app-shell.html, tools/check-tokens.py (key-based 3-file drift guard, 12/12 mutation catch after rewrite; v1 was 5/12), .gitignore. GATES: round-1 NOT-SAFE-TO-PUSH (HIGH = live customer data 1120001/AFRISERVE AGENCIES LTD + PO 4210000405 + id 1264 + 'of 1039' + employee name in docs) -> scrubbed; round-2 SAFE-TO-PUSH (06 APPROVE-WITH-SUGGESTIONS, 07 PASS, 08 GAPS) -> 4 MED + 2 LOW doc fixes applied at jakkaritw's choice -> final verify all green (check-tokens exit 0, verify_ds 10/10, verify_shell 13/13, leak grep 0 hits, no new file gitignored). jakkaritw approved push via AskUserQuestion 'fix 4 first then push'. STILL OPEN (needs jakkaritw): delete the 7 stale nested dirs tokens/tokens, typography/typography, components/components, patterns/patterns, adapters/adapters, assets/assets, examples/examples -- they still hold the OLD #00522C system at colliding paths; README documents them as do-not-read + gives the command. NOT DONE / OUT OF SCOPE: the sc-qas app itself was never modified -- its source is not on this machine (grepped all 24 C:\\\\NN.* + inetpub, 0 .csproj/.cshtml), so the original 'adjust web theme' ask is unfulfilled; only the design system was built. SECURITY: jakkaritw pasted plaintext password for user zladdawank in chat -> ROTATE; scratchpad creds.json deleted; 0 tokens/PII/cookies in the pushed repo (verified).",
       "agent": "claude"
     },
     {
@@ -21,10 +65,10 @@
     },
     {
       "id": "ux-submit-button-shown-midchain",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-15T00:18:57+0700",
-      "updated": "2026-08-15T00:33:37+0700",
-      "ai": "[JAKKARITW ORDERED FIX 2026-08-14: 'แก้ไขเรื่องปุ่มก่อน กันความสับสน both stg m prd แล้วค่อยกลับมาทดสอบต่อ'] Fix scope = hide the ส่งอนุมัติ button while the department is mid-chain (PENDING_*) even in Admin mode -> canSubmit() in frontend/src/approval/model.ts. Deploy target = BOTH stg and prd. SIT paused until this ships."
+      "updated": "2026-08-15T14:02:39+0700",
+      "ai": "[SHIPPED TO BOTH ENVS 2026-08-15] commit 77308d7 live on stg rev 0000045 (Healthy) AND prd rev 0000024 (Healthy/RunningAtMaxScale/100, image budget-web:77308d7). prd verify-deploy-landed done live, not from cache: anonymous GET /me -> 401, /.auth/login/aad -> 302 to login.windows.net tenant 13c85daf with prd app 61d5d556 = Easy Auth still enforcing after the swap. PRD GUARDS RE-CONFIRMED post-deploy: APP_ENV=production, and SIT_IMPERSONATE / NOTIFICATIONS_ENVIRONMENT_LABEL / NOTIFICATIONS_REDIRECT_ALL_TO are all ABSENT -> the SIT impersonation alias is inert on prd (all three conditions fail) and prd mail behaviour is unchanged (no test label, no redirect). Defect closed: admin Admin-mode no longer shows a ส่งอนุมัติ button that the server would refuse; the post-deadline escape hatch still renders (ADR-0012). STILL OPEN, separate task: 3 commits unpushed to origin/main; and the LOW sibling case (admin + DRAFT/REJECTED on a non-orphan non-Template-2 dept in an open cycle still shows a doomed button — durable fix = server-computed can_submit)."
     },
     {
       "id": "sit-tc046-reject-from-step3",
@@ -55,14 +99,6 @@
       "ai": "Front-end grid vs back-end DB reconcile, FY2027 Data & Analytic cc 10IT013000 (pre-SIT data): ALL MATCH, 0 mismatch. PENDING layer screen==budget.pending_budget exactly: 6211100110 Jan 5,000,000.00; 6210400010 Dec 92,400.00; 6210400020 Dec 450,000.00; 6210400030 Dec 500,000.00; 6210400999 Dec 80,000.00; 6211400010 empty. Group subtotals: Maintenance-License 5,000,000.00, Travelling Expense 1,122,400.00, Other admin 0. GRAND TOTAL Pending screen 6,122,400.00 == DB 6,122,400.00. Child rows: pending_budget_detail SUM == parent total_year for all 4 travel GLs. SAP layer from gold.fact_gl_trans FY2026 (planning_year-1) cc 10IT013000: 6211100110 m03 844.91 + 6210400010 m03 500.00 = 1,344.91 == screen 1,344.91 exactly (company_code 1000, raw sum, no reversal filter needed). NET-ZERO RULE PROVEN LIVE: GL 6211400010 has 3 txns in m03 netting to 0.00 -> grid correctly shows '-' (per-month net-zero row-hide working as designed); it also has 624.50 in m04 which is outside the declared Jan-Mar actuals window. Approved layer '-' correct (no board_budget table in this DB / none for 10IT). approval_status=APPROVED. LEFTOVER FOUND: 1 stray pending_budget row cc=10SC012000 gl=6120300010 total=0.00 created by nipapornt@ (jakkarit impersonating) during pre-SIT — different dept, zero value, flag for cleanup."
     },
     {
-      "id": "log-8a40cb3",
-      "state": "done",
-      "created": "2026-08-13T02:15:13+0700",
-      "updated": "2026-08-13T02:15:13+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): board alert LOW backlog cleared — 8a3318b + 616fe44 shipped, deployed, pushed [commit 8a40cb3]"
-    },
-    {
       "id": "board-alert-low-cleanup",
       "state": "done",
       "created": "2026-08-13T01:47:53+0700",
@@ -77,14 +113,6 @@
       "updated": "2026-08-13T01:08:59+0700",
       "ai": "SHIPPED + LIVE 2026-08-13. 19.dw 8a3318b (+153/-23, 12 new tests, suite 292 green): (1) board_alert_recipients(mode) fail-CLOSED — typo/None/casing -> empty recipients + 'fail-closed' note into run-log marker path (traced end-to-end by gate); (2) cc/gl/blank_key values length-capped 40 via _board_email_truncate at render gateway (defect dicts keep raw values by design). Combined gate (single agent): 06 APPROVE_WITH_SUGGESTIONS, 07 PASS, 08 292/292 re-run at clean HEAD; 2 trivial new LOW (empty-live-list latent note gap, no exact-40 boundary test). Deployed both NBs --live, getDefinition verified both. 19.dw PUSHED to GitHub (16 commits incl parallel session's fact-actual docs, ahead now 0; second push after 8a3318b, ahead 0). LOW ledger from wf_d359a0fd-22b now: 2 fixed, 5 remain (coerced-count on orphan rows, empty-folder NULL error_msg, probe->live 12h dedupe overlap, summarize([]) untested, blank_key raw-on-exception=accepted-by-design).",
       "agent": "claude"
-    },
-    {
-      "id": "log-74a4f97",
-      "state": "done",
-      "created": "2026-08-13T00:36:51+0700",
-      "updated": "2026-08-13T00:36:51+0700",
-      "agent": "autolog",
-      "ai": "docs(adr-0021): amend board_budget ingest — dash/blank coerce to 0, per-file isolation, admin alert email (19.dw 3e32488/98b0cc6) [commit 74a4f97]"
     },
     {
       "id": "board-lane-tolerant-ingest-email-alert",
@@ -2380,46 +2408,6 @@
       "created": "2026-07-16T13:54:51+0700",
       "updated": "2026-07-28T14:51:05+0700",
       "ai": "VERIFIED 2026-07-28: implement แล้วจริง — client_token NVARCHAR(64) อยู่ใน write_model.py (_MAX_LEN_CLIENT_TOKEN, dedup logic) ปิด task"
-    },
-    {
-      "id": "backend-502-secheaders",
-      "state": "done",
-      "created": "2026-07-16T13:54:48+0700",
-      "updated": "2026-07-16T13:59:23+0700",
-      "agent": "05-software-developer",
-      "ai": "DONE: FIX1 resolve_scope inside try->502 in routers/budget.py+scope.py+subform.py(x2)+reference.py(departments); FIX2 add_security_headers middleware main.py (4 headers, CSP deferred). TDD RED->GREEN, 9 new tests, suite 513->522 pass/44 deselected. Residual: conn-OPEN failure still 500 (out of scope). Not deployed/committed."
-    },
-    {
-      "id": "stg-test-suite3",
-      "state": "done",
-      "created": "2026-07-16T13:16:36+0700",
-      "updated": "2026-07-16T14:35:16+0700",
-      "ai": "ALL 5 suites done. F5-A backend 60/60, F5-B database 39/40 (Thai-label bug), F5-C data 6/6 (91858 cells 0 mismatch), F5-D frontend 16/16 (0 console err, fy2020 clean), F5-E other 45/45. Bugs FOUND+FIXED (staged, gated APPROVE, NOT deployed per jakkaritw hold): (1) Thai per-diem label ??? -> parameterized; (2) resolve_scope-500 -> 502 across 4 read routers; (3) security headers added. Feature built (gated APPROVE, migration ready NOT applied): trip-idempotency client_token. Design calls PENDING jakkaritw: grid concurrency optimistic-lock vs last-write-wins; trip default side SGA vs COST-first dropdown; editable-but-unsaveable rows (SAP GL not in 142 master shows editable->400 on save; verify Y-1 SAP GLs subset master pre-golive); trip idempotency approach approved=option1. Follow-ups: get_fabric_conn connection-OPEN still 500 not 502 (db.py); modal-load click race; 422 generic msg. Nothing deployed; staging still on subform-fix image."
-    },
-    {
-      "id": "fix-subform-500",
-      "state": "done",
-      "created": "2026-07-16T03:17:44+0700",
-      "updated": "2026-07-16T03:30:17+0700",
-      "ai": "FIXED+VERIFIED. subform.py DetailLineRow/TripRow updated_at str->datetime (matches TripState/DetailLineState/PendingLayer). Gate 06+08 APPROVE-W-SUGG; Decimal->float verified safe (no 2nd latent 500). 512 unit pass (+4). Deployed to staging image subform-fix; mut_suite W6 now GREEN (/budget/detail returns 2 per-diem lines sum 1000). Committed 356570e. Note: staging now on subform-fix but git tip 356570e differs from that image build source only by the commit itself (working-tree identical); rebuild from 356570e before prod. Non-blocking suggestion: pin Decimal month in a router test."
-    },
-    {
-      "id": "stg-test-sweep",
-      "state": "done",
-      "created": "2026-07-16T02:00:16+0700",
-      "updated": "2026-07-16T06:22:03+0700",
-      "ai": "COMPLETE. 3 suites all app-correct: read-only 35/35 + mutation 28/28 + suite2 19/19-effective. Suite2 added: security/IDOR (approval-status view authz 403 no-leak, non-admin admin_view_enabled no-widen, header case-insensitive, IDOR trip-delete-by-other 403, IDOR detail owner-mismatch 409), financial edge (negative month 400, overflow 422, FX-with-rate asian fy2026 2*70*35.5=4970, cent-boundary total==sum, manual travel-line rollup+delete-recompute, side-mismatch 400), RLS depth (see_only manager read-yes/write-no/fill-empty, see-widening bunpotk fill0->see120, sibling-CC lock), approval edge (approve-unsubmitted 404, approve-approved 409, self-skip Nipaporn pos2). 3 suite2 fails ALL test-harness not app bugs: S4 httpx blocks whitespace header; R2 fixture scope-overlap (widening proven by R1); F5 cross-check polluted by S6 leftover line (clean repro confirms rollup=500 correct). Final reconcile budget.* ALL-ZERO. Untestable-naturally: past_deadline (deadlines all future), null-manager fallback (no such filler exists)."
-    },
-    {
-      "id": "stg-db-connectivity",
-      "state": "done",
-      "created": "2026-07-16T01:19:01+0700",
-      "updated": "2026-07-16T01:47:06+0700",
-      "agent": "main",
-      "skills": [
-        "40-diagnose"
-      ],
-      "ai": "DONE+VERIFIED: staging /health?deep=1 -> db:ok on image dbfix-b037a5e (rev 0000003, jakkaritw approved stg update). Root cause: msodbcsql internal SP token fetch ~20.3s on Linux > 15s login timeout (NOT ip block). Fix: db.py msal token + attrs_before 1256, health.py RuntimeError degrade, msal==1.36.0. Gate APPROVE-W-SUGG (07 all-pass), 508/508 unit. Probe jobs deleted. Pending: Easy Auth still OFF on stg (runbook s7 unmet); prod deploy awaits runbook run; stg image lacks 2 hardening follow-ups (in git, next build)."
     },
     {
       "id": "sap-actuals-view",

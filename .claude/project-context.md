@@ -86,7 +86,7 @@ GET    /api/master/<module>/reference/<name>   (e.g. orgcodes, cost-centers)
 ```
 
 ### DB access — `02backend/db.py` (pyodbc + Service Principal)
-- `get_conn()`           → **Fabric SQL DB** (R/W) → `cfg_master.*`, `dbo.mas_employee_data`
+- `get_conn()`           → **Fabric SQL DB** (R/W) → `cfg_master.*`, `dbo.employee_master`
 - `get_lakehouse_conn()` → **Fabric Lakehouse SQL Analytics Endpoint** (R/O) →
   `dbo.gold_sap_gl_trans`, `dbo.gold_sap_m_cost_center`, …
 - Both share the workspace prefix; only the host suffix differs: `.database.` (SQL DB) vs
@@ -101,9 +101,17 @@ GET    /api/master/<module>/reference/<name>   (e.g. orgcodes, cost-centers)
   `jakkaritw@chememan.com, nipapornt@chememan.com, warapornt@chememan.com, piyadad@chememan.com`.
 - **No audit columns** (`created_by/at`, `deleted_by/at`) — traceability not required at this scale.
 - **Hard delete** is fine — no soft-delete pattern.
-- `dbo.mas_employee_data` is **pre-filtered at sync time** by `setup/sync_employees.py`
-  (Active only; no Gritsman `empcode LIKE '4%'`; no Vietnam `orgcode LIKE '117%'`; no L5
-  Operator/Driver/Maid). **Do NOT re-apply these filters in queries.**
+- **orgcode_costcenter module reads `dbo.employee_master`** (the consolidated Fabric SQL
+  DB's raw employee mirror — 2026-08-15, retiring the old DB1 `dbo.mas_employee_data`,
+  whose nightly refresh died 2026-08-07). Unlike the retired table, `employee_master` is
+  **NOT pre-filtered** — nothing upstream excludes inactive employees, subsidiaries, or
+  L5 job levels. `reference_handler.py`'s `orgcodes` ref re-applies the old
+  `setup/sync_employees.py:90-101` filter itself (active only, no Gritsman
+  `employee_code LIKE '4%'`, no Vietnam/Australia `org_code LIKE '117%'`, no L5
+  Operator/Driver/Maid) so the dropdown still excludes subsidiary org codes.
+  `list_handler.py`'s join does NOT apply the filter — verified it is a pure name
+  lookup returning the same row count either way; filtering there would only blank
+  out names that currently resolve.
 
 ---
 

@@ -21,13 +21,13 @@ def handle(req: func.HttpRequest) -> func.HttpResponse:
                 m.id,
                 m.cost_center,
                 m.orgcode,
-                COALESCE(e.orgnameth, '') AS orgcode_name
+                COALESCE(e.org_name_th, '') AS orgcode_name
             FROM cfg_master.orgcode_costcenter_map m
             LEFT JOIN (
-                SELECT DISTINCT orgcode, orgnameth
-                FROM dbo.mas_employee_data
-                WHERE orgcode IS NOT NULL
-            ) e ON e.orgcode = m.orgcode
+                SELECT DISTINCT org_code, org_name_th
+                FROM dbo.employee_master
+                WHERE org_code IS NOT NULL
+            ) e ON e.org_code = m.orgcode
             ORDER BY m.cost_center, m.orgcode
         """)
     except Exception as e:
