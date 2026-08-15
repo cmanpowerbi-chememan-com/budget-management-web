@@ -1,8 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T15:37:09+0700",
+  "updated": "2026-08-15T16:32:14+0700",
   "tasks": [
+    {
+      "id": "master-tables-superseded-by-specc",
+      "state": "willdo",
+      "created": "2026-08-15T16:32:14+0700",
+      "updated": "2026-08-15T16:32:14+0700",
+      "ai": "DIRECTION CHANGE — jakkaritw pointed at 'Spec C การจัดการตารางข้อมูลหลัก_V2.0' (signed-off, laddawan) and he is RIGHT: the master-tables SWA is superseded BY DESIGN, so steps 1-4 of the DB1 retirement kept alive a module the approved spec says should not exist. Spec C's own generator docstring (requirement_spec/.../_build/build_spec_c_master_tables.py:6-9) states it verbatim: the 6 admin master datasets 'are edited via Excel workbooks on SharePoint (site CMANDWPRD) and synced into Fabric (cman-dw-ws / modern_lh_cman_dw). THERE IS NO WEB UI'. All six carry live SharePoint links in the spec: GL group, ORGCODE<->COST CENTER (Spec C-3, LINK_ORG), budget closing date, master currency, hide document (Spec C-4), and cc dept.xlsx CC<->filler (Spec C-6). This ANSWERS the open question I raised: yes, the orgcode<->CC master IS on SharePoint, so nothing unique lives in cfg_master.orgcode_costcenter_map. Spec C-3 further says that file is REFERENCE/report-grouping ONLY and explicitly NOT the RLS source — RLS uses Spec C-6's cc dept.xlsx (which is what dbo.cc_filler_map already is). CORROBORATING LIVE EVIDENCE: the main app reads only dbo.* masters, every one stamped _load_dttm 2026-08-15 06:30-06:31 from the SharePoint sync (hide_document 498 rows vs the editor's cfg_master.hide_document_number 3; gl_group 146 rows with edit_by vs the editor's GUID-keyed gl_group_dim/mapping; cc_filler_map for RLS). backend/app never references cfg_master at all. There is no orgcode<->CC table in dbo.* because that dataset is reporting reference data and lives in the DW lakehouse, not the transactional DB. Also: only 3 of the 5 editor screens even have a backend — master-currency.html and budget-closing-date.html are shells with no module and no /api calls, which fits a UI that was being abandoned mid-flight. RECOMMENDATION: retire the whole master-tables SWA rather than finish step 5 as scoped — but FIRST reconcile the 725 pairs in cfg_master.orgcode_costcenter_map against the Spec C-3 SharePoint file so nothing that exists only in the editor's copy is lost. AWAITING jakkaritw. Nothing deleted; the step-4 cutover stands and is harmless."
+    },
+    {
+      "id": "db1-retire-step4-cutover",
+      "state": "doing",
+      "created": "2026-08-15T16:11:30+0700",
+      "updated": "2026-08-15T16:11:30+0700",
+      "ai": "STEP 4/5 CUTOVER EXECUTED 2026-08-15 (jakkaritw-approved) — awaiting his 5-screen eye-check. (4.1) Pre-flip re-reconcile: ZERO drift, all 4 cfg_master tables byte-identical DB1 vs consolidated (725/21/136/3) -> SAFE TO FLIP. (4.2) Commit 1bb3853 pushed. FIRST DEPLOY FAILED — not our code: Azure/static-web-apps-deploy needs a default document and 01frontend/index.html (an 8-line meta-refresh to gl-group.html) had been swept away by bulk commit 86617e9 on 2026-07-19, so EVERY Master Tables deploy has failed since; last green was 2026-06-14 fa2ded6. Restored it verbatim from 86617e9^ as commit 0419ce2 -> deploy run 31875744078 SUCCESS (1m45s). NOTE this deploy also shipped frontend work that had been sitting undeployed since June (hide-document.html, shared/gl-group.js, shared/orgcode-cc.js) because of that same broken workflow; backend drift was only our 2 orgcode files. (4.3) SWA cman-budget-master-0003 appsettings FLIPPED: FABRIC_SQL_SERVER -> ...bby6xlm3ncqexly4ozejod2vqe..., FABRIC_SQL_DATABASE -> fabric_sql_database-a42ef9f3 (verified by re-read). FABRIC_LAKEHOUSE_* deliberately untouched — gold_sap_* tables go through get_lakehouse_conn(), a different endpoint, unaffected. SP access non-issue: the SWA uses AAD_CLIENT_ID de4b353f = the SAME principal I used to create cfg_master and query the consolidated DB all session. (4.4) Headless smoke test NOT possible: all /api/master/* return the Microsoft sign-in page — the SWA enforces AAD and the principal-name header cannot be spoofed from outside, which is correct. So the 5-screen check MUST be done by jakkaritw in a browser. CI: the 2 red frontend tests on this push were BudgetGrid mount-fetch flakes ('called 1 times but got 0'/'got 2') in a file untouched by the html-only commit; re-run of the same commit went GREEN (run 31875744090, 1m02s) = confirmed flaky, not a regression. ROLLBACK if a screen is broken: az staticwebapp appsettings set -n cman-budget-master-0003 -g CMAN-BUDGET-MNGT-WEB-RG --setting-names FABRIC_SQL_SERVER=v5o4qez3u4cupase7cogkwvyke-w4l3zd35yzkuzfgnonsogpi55e.database.fabric.microsoft.com 'FABRIC_SQL_DATABASE=fabric sql db-036a3270-82dd-40f4-aea4-6c27f55cff07' (DB1 untouched, still complete). STEP 5 (delete sync + retire DB1) NOT started — gated on the eye-check."
+    },
     {
       "id": "db1-retire-step2-repoint-orgcode",
       "state": "done",
@@ -43,8 +57,8 @@
       "id": "stg-theme-supplychain",
       "state": "doing",
       "created": "2026-08-15T13:58:01+0700",
-      "updated": "2026-08-15T14:34:13+0700",
-      "ai": "[2026-08-15 ~09:10] TO-BE APPLIED LOCALLY + BOTH REVIEW PAGES PUBLISHED, NOT COMMITTED/PUSHED/DEPLOYED. Theme change is 3 files, CSS-only, no .tsx logic: frontend/src/styles/tokens.css (accent tier b24222/4a5e80 terracotta+blue -> 1a472a/2d6a4f green; --sans/--serif/--mono all collapsed to the Bootstrap system stack, no Thai face pinned, matching the source app), frontend/src/styles/global.css:16 (14px -> .875rem, same value, intent-explicit), frontend/src/app/layout.tsx (removed the Google Fonts link for Archivo/Newsreader/IBM Plex -- now zero webfont loads). KEPT ON PURPOSE: --c-gold/--accent-3 #a8763a stays, it encodes the pending status chip + current-month highlight, not branding; --status-sap/--status-approved/--status-pending/--special-* untouched. DARK MODE DEVIATION (agent judgement, flag to jakkaritw): #1a472a on the dark ground measures 1.6:1 contrast (min readable 3:1), so dark uses #3fa06e/#5cbf8c (5.3:1/7.7:1) -- same hue, lighter. Light mode is exactly #1a472a/#2d6a4f as ordered. VERIFY: npx next build PASS, vitest 633/633 PASS, git diff confined to CSS + the layout font link. KNOWN BUG SURFACED, NOT FIXED (separate task if wanted): .status-chip-rejected in global.css binds to --accent, so the REJECTED chip is now green = reads as approved; pre-existing mis-binding, was merely masked by the old orange accent. 12 after-shots in scratchpad/ui-after via SHOT_DIR env on the same temp spec, so before/after are frame-for-frame. Published: before = claude.ai/code/artifact/1875fff3-c74d-4701-9910-4cf1552e9121, to-be (with press-and-hold before/after swap) = claude.ai/code/artifact/220aef00-fd36-42ac-9f0e-ba8e4c8a5420. AWAITING jakkaritw verdict on the to-be. Then: delete frontend/e2e/_theme-before.spec.ts, gate, deploy STG ONLY.",
+      "updated": "2026-08-15T16:15:00+0700",
+      "ai": "[2026-08-15 ~13:00] GREEN-SHELL VARIANT DONE + CONTRAST-PROVEN, NOT COMMITTED/PUSHED/DEPLOYED. jakkaritw round 3: main background -> #1a472a; green text -> terracotta #b24222; 'anything swallowed by the bg must change'. IMPLEMENTED as shell-vs-card split: --paper=#1a472a (page shell), --surface/--paper-2 UNCHANGED light (cards float on green). NEW on-shell tokens in tokens.css: --ink-on-shell #f2eee5 (9.17:1), --ink-on-shell-2 #c6c0b2 (5.85:1), --accent-text #b24222 (5.40:1 on card), --accent-on-shell #d4ac52 (4.96:1 on green), --line-on-shell rgba(242,238,229,.45) (3.16:1). KEY MEASURED FINDING: jakkaritw's terracotta #b24222 on green is only 1.87:1 -- ALSO swallowed -- so it is correct for card text only; shell-direct text needed the separate gold token. Dark theme aliases the on-shell tokens back to its own already-correct values. 05 agent died at session limit (resets 19:00) mid-audit; I finished in main session: 2 real regressions fixed inline (.btn-export border-color --accent -> --line-on-shell, green button was dissolving into green shell; .admin-zone-title --status-approved #4a5e80 1.62:1 -> --accent-on-shell) AND fixed a REAL BUG in the audit spec: Chromium serializes color-mix(in oklab,...) as oklab() which canvas fillStyle will NOT round-trip, so parseColor returned null, the bg-walk sailed past OPAQUE light chips and blamed the green shell -- 2 of the 4 'violations' were false positives. Added explicit Ottosson oklab/oklch->sRGB conversion. RESULT: violations with bg=rgb(26,71,42) = ZERO. Baseline A/B (git checkout HEAD of the 3 theme files, same audit, then restored from scratchpad/theme-backup): HEAD 778 distinct / 5078 instances vs themed 751 / 5051 -- theme has FEWER contrast failures than the original, remaining ones are pre-existing faint card borders + #86806f muted text at 3.74:1. VERIFY: next build PASS, vitest 633/633 PASS. Artifact published https://claude.ai/code/artifact/7961dfe7-302a-44fd-a187-e4858f8b5147 (earlier to-be 220aef00 was deleted by jakkaritw, before-set 1875fff3 still up). gate:INCOMPLETE(degraded:2) -- combined 06+07+08 gate has NOT run on this changeset. TEMP FILES TO DELETE: frontend/e2e/_theme-before.spec.ts, _contrast-audit.spec.ts, _probe_chip.spec.ts, _debug_bg.spec.ts. OPEN: .status-chip-rejected still binds to the brand accent instead of owning a semantic color.",
       "agent": "claude"
     },
     {
@@ -2175,14 +2189,6 @@
       "ai": "Merge branch 'main' of https://github.com/cmanpowerbi-chememan-com/budget-management-web [commit 8d45fb1]"
     },
     {
-      "id": "log-86617e9",
-      "state": "done",
-      "created": "2026-07-19T19:30:10+0700",
-      "updated": "2026-07-19T19:30:10+0700",
-      "agent": "autolog",
-      "ai": "chore: commit in-progress session work (user-requested bulk commit) [commit 86617e9]"
-    },
-    {
       "id": "log-47d00ab",
       "state": "done",
       "created": "2026-07-19T19:14:25+0700",
@@ -2394,13 +2400,6 @@
       "updated": "2026-07-16T16:52:21+0700",
       "agent": "05-software-developer",
       "ai": "DONE+GATED APPROVE-W-SUGG. Dept-grain side derivation: deriveTravelSideHistory (sap/board only, pending excluded), single-side lock non-admin, both->larger-total(tie SGA), no-history must-pick, admin always enabled. 287/287 vitest, build clean. Gate suggestions non-blocking backlog: align lock to adminViewEnabled or doc it; add mismatch-side+tie tests; backend side-enforce=post-golive (client lock acceptable: EasyAuth+own-dept+approver-visible+admin-fixable)."
-    },
-    {
-      "id": "design-concurrency",
-      "state": "done",
-      "created": "2026-07-16T15:58:36+0700",
-      "updated": "2026-07-16T15:58:36+0700",
-      "ai": "DECIDED (jakkaritw 2026-07-16): grid concurrency = row-grain OPTIMISTIC-LOCK (keep current). No code change - code already matches ADR-0003 (decided 2026-06-07, supersedes last-write-wins). ADR correct. Only stale artifact was MEMORY.md index one-liner ('last-write-wins no-lock') -> fixed. F5-B 'divergence' was a false flag from that stale index line, not a real code/ADR mismatch. Optimistic-lock protects the 73%-of-CCs multi-filler case from silent lost-update; frontend auto-reloads on 409."
     },
     {
       "id": "trip-idempotency",
