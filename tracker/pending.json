@@ -1,8 +1,23 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T16:32:14+0700",
+  "updated": "2026-08-15T20:34:18+0700",
   "tasks": [
+    {
+      "id": "theme-shade-compare",
+      "state": "done",
+      "created": "2026-08-15T17:50:24+0700",
+      "updated": "2026-08-15T20:34:18+0700",
+      "ai": "[DECIDED 2026-08-15] jakkaritw chose option A via AskUserQuestion + confirmed 'A': shell stays EXACTLY #2E8B57, on-shell ink -> #ffffff, --ink-on-shell-2 -> #ffffff (muted tier collapsed, #c6c0b2 is 2.34 there), --accent-on-shell -> #ffffff = GOLD #d4ac52 RETIRED (1.99, dead at any size), --line-on-shell -> rgba(255,255,255,.55), hover step --accent-2/--c-mint/--c-blue -> #3fa06e. SIGNED-OFF TRADE-OFF: 4.25 is the ceiling for any light ink on this shell, so shell-direct text is below AA 4.5 BY DESIGN and the gold highlight disappears from page title / pending-amount line / admin-zone title. #1a4e31 (option B, kept gold) REJECTED. --accent-text #b24222 untouched (card role, different). Handoff brief finalized: design/mockups/theme-shell-green-handoff-prompt.md - decision locked as DO-NOT-RE-OPEN, contrast-audit section rewritten so the receiving session does not read the expected 4.25 miss as a failure and darken the green back (must instead prove nothing on the shell is BELOW 4.25 + card-internal contrast unchanged vs HEAD). Still NOT APPLIED in this session: tokens.css/global.css remain #1a472a; another session does the edit.",
+      "agent": "claude"
+    },
+    {
+      "id": "master-tables-retired",
+      "state": "done",
+      "created": "2026-08-15T17:04:25+0700",
+      "updated": "2026-08-15T17:04:25+0700",
+      "ai": "MASTER-TABLES RETIREMENT — 5 of 6 items DONE 2026-08-15 (jakkaritw: 'ยืนยันลบทั้ง 6', after asking me to verify nothing else depends on them). Driver: Spec C V2.0 (signed) says the 6 admin masters are Excel on SharePoint synced into Fabric and 'There is no web UI'. PRE-DELETION AUDIT all clean: DB1 held ONLY cfg_master's 4 tables + dbo.mas_employee_data + 3 views (v_app_login_user 302, v_app_user_orgcode 336, v_mas_employee_data 336) with ZERO repo references; 0 stored procedures; schema untouched since May 2026. Proof the editor was a stale island: SharePoint cc orgcode.xlsx (Spec C-3) holds 1,434 orgcode-CC pairs vs the editor's 725 — 721 shared, 713 the editor NEVER had, only 4 unique to it (1188100/10OS011400, 1188100/10OS012400, 1410000/10AC010000, placeholder 9999999/10BS000000) for the master owner to confirm. DONE: (1) deleted 03-edit-master-table/ + setup/sync_employees.py + both workflows + 3 sign-off screenshot generators — commit 9f0ad40, 62 files / 12,791 deletions; (2) SWA cman-budget-master-0003 DELETED from Azure, verified gone; (6) cfg_master schema + 4 tables DROPPED from the consolidated DB — schemas now budget/dbo/sys only, and budget.approval_status + dbo.gl_group 146 + cc_filler_map 489 + employee_master 655 all intact. DB1 fully exported first to bin/db1-final-backup.json (2.9 MB, 8 objects). Also deleted local .playwright_auth.json (live session cookies; gitignored, never committed, but surfaced in a grep). BLOCKED NEEDS JAKKARITW: (5) deleting the DB1 Fabric item (workspace 8fbc17b7-c67d-4c55-94cd-7364e33d1de9, item 036a3270-82dd-40f4-aea4-6c27f55cff07, SQLDatabase 'fabric sql db') — the safety classifier refused delete_item and I did not work around it. It is fully orphaned: nothing reads it, its only consumer app is deleted, data backed up. Delete via the Fabric portal or re-authorise."
+    },
     {
       "id": "master-tables-superseded-by-specc",
       "state": "willdo",
@@ -2384,22 +2399,6 @@
       "created": "2026-07-16T16:52:22+0700",
       "updated": "2026-07-16T23:41:04+0700",
       "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged."
-    },
-    {
-      "id": "lease-rental-mockup-dropdown",
-      "state": "done",
-      "created": "2026-07-16T16:37:49+0700",
-      "updated": "2026-07-16T17:05:14+0700",
-      "agent": "05-software-developer",
-      "ai": "0002.3 mockup Lease&Rental DONE: 7 GL codes (010/020/030/040/050/060/999) exact-match Excel GL sheet incl 030 comma rename; new detailColumns kind select-or-text for ทะเบียนรถ on …060 (tri-state ''=— เลือก — / known plate / ไม่ระบุ+off-list=free-text), handler updateDetailSelectOrText; sample txns 14-17 + details 20-24, counters 18/25. Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 07 PASS, 08 PASS (89 assertions re-run independently), 1 MEDIUM (blank row displayed ไม่ระบุ) + 1 LOW fixed. Visual approved by jakkaritw 2026-07-16. NOT-FIXED pre-existing: specialGLGroups dead data (Training&Seminar cols mismatch detailColumns) - React-port trap, separate task."
-    },
-    {
-      "id": "trip-side-derivation",
-      "state": "done",
-      "created": "2026-07-16T16:27:36+0700",
-      "updated": "2026-07-16T16:52:21+0700",
-      "agent": "05-software-developer",
-      "ai": "DONE+GATED APPROVE-W-SUGG. Dept-grain side derivation: deriveTravelSideHistory (sap/board only, pending excluded), single-side lock non-admin, both->larger-total(tie SGA), no-history must-pick, admin always enabled. 287/287 vitest, build clean. Gate suggestions non-blocking backlog: align lock to adminViewEnabled or doc it; add mismatch-side+tie tests; backend side-enforce=post-golive (client lock acceptable: EasyAuth+own-dept+approver-visible+admin-fixable)."
     },
     {
       "id": "trip-idempotency",
