@@ -57,36 +57,92 @@ export function isFillerOfDepartment(rows: DepartmentRow[], department: string, 
   return costCentersOfDepartment(rows, department).some((cc) => fillSet.has(cc))
 }
 
-/** Submit is offered to: Fillers of the department while it is still
- * editable (never-submitted / DRAFT / REJECTED), or the admin hat.
+/** Submit is offered to: Fillers of the department, or the admin hat —
+ * gated by `canSubmitServer`, the server's own verdict (`ApprovalStatusState
+ * .can_submit`, `app.approval.evaluate_submit_eligibility`) on whether THIS
+ * caller could actually submit RIGHT NOW. Client-side, this function keeps
+ * exactly ONE thing: the "put on the admin hat first" gesture — a non-filler
+ * admin with the hat OFF (`adminViewEnabled=false`) sees no Submit button
+ * even if the server would accept it, because Admin mode is a deliberate,
+ * visible act before any admin-only action is offered (never silently
+ * available). Everything else — is this status submittable, is the year
+ * open, is the department a filler's own, would a Template-2/orphan/
+ * post-deadline door accept it — is decided ONCE, server-side, and read
+ * here instead of re-derived (see `ApprovalStatusState.can_submit`'s
+ * docstring in `types.ts` for the full predicate list).
  *
- * SIT defect fix (2026-08-14): the admin hat used to show Submit
- * unconditionally, so opening a department mid-approval
- * (PENDING_APPROVER1/2/3 or APPROVED) in Admin mode offered a button that
- * ALWAYS 403'd server-side — every admin submit door except one refuses a
- * locked record (`_ensure_admin_overwrite_allowed` on the Template-2 and
- * orphan doors, `submit_department`'s AdminCannotSubmitInCycleError
- * fallthrough otherwise). The one exception is the post-deadline override
- * (ADR-0012), which the server allows on ANY status once
- * `fiscal_year`'s deadline has passed — `isPostDeadline` (from
- * `ApprovalStatusState.is_post_deadline`) is what the button now checks
- * before showing itself on a locked status, so it only ever appears when it
- * will actually work. DRAFT/REJECTED for the admin hat are untouched (the
- * never-submitted, Template-2, and orphan doors already refuse mid-chain
- * records regardless of deadline, so showing the button there was never the
- * bug). */
+ * SIT defect fix #2 (2026-08-16): the earlier client-side version
+ * (`isPendingLocked(status) || status === 'APPROVED' ? isPostDeadline :
+ * true` for the admin hat) could not tell the 3 admin doors apart from a
+ * 4th, refused shape — not a filler, department not orphan, no Template-2
+ * rows, cycle still open — which always showed a Submit button on
+ * DRAFT/REJECTED that then 403'd (`admin_cannot_submit_in_cycle`). This also
+ * folds the FILLER branch into the same server verdict (previously its own
+ * `status === 'DRAFT' || 'REJECTED'` check, genuinely duplicating what the
+ * server already decides) — a bonus fix, not just for admin: a filler could
+ * previously see Submit on an EMPTY department (0 budget rows) or a
+ * NOT_OPEN/past-deadline fiscal year and get a doomed click too; the server
+ * verdict already covers those, so there is no reason to keep two
+ * definitions of "submittable" that can drift. See the 2026-08-14 sibling
+ * fix (`is_post_deadline`, now superseded here) for the first half of this
+ * story.
+ *
+ * Fail-closed typing (gate review, 2026-08-16): `canSubmitServer` is typed
+ * `boolean`, but an older/partial server response reaching this through
+ * `JSON.parse` has no such guarantee -- a missing/renamed field would come
+ * through as `undefined`, which the TS type signature hides. The strict
+ * `=== true` check below means only an EXPLICIT server `true` ever shows the
+ * button; `undefined`/`null`/anything else stays hidden, matching this
+ * function's already-documented fail-closed intent instead of merely
+ * relying on `undefined` being falsy by accident. */
 export function canSubmit(params: {
   isFillerOfDept: boolean
   adminViewEnabled: boolean
-  status: string
-  isPostDeadline: boolean
+  canSubmitServer: boolean
 }): boolean {
-  const { isFillerOfDept, adminViewEnabled, status, isPostDeadline } = params
-  if (adminViewEnabled) {
-    const locked = isPendingLocked(status) || status === 'APPROVED'
-    return locked ? isPostDeadline : true
-  }
-  return isFillerOfDept && (status === 'DRAFT' || status === 'REJECTED')
+  const { isFillerOfDept, adminViewEnabled, canSubmitServer } = params
+  if (!isFillerOfDept && !adminViewEnabled) return false
+  return canSubmitServer === true
+}
+
+/** Short Thai explanation for why the Submit button is absent (design call,
+ * 2026-08-16, extended the same day per jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"
+ * — show the same hint to a blocked FILLER, not just a blocked admin):
+ * whoever is blocked sees a small hint line next to the status chip rather
+ * than nothing at all — per the project philosophy ("decrease manual tasks,
+ * minimize confusion"), a silently-absent button on a page the user expects
+ * to be able to act on has its own confusion cost. A DISABLED button was
+ * considered and rejected: it invites a click-then-fail habit exactly like
+ * the bug this closes.
+ *
+ * `not_filler_of_department`'s copy was corrected in the same pass: the
+ * original wording said "ผู้ดูแลระบบ" (admin), but
+ * `evaluate_submit_eligibility` (backend/app/approval.py) only returns this
+ * reason once `scope.is_admin` is confirmed FALSE — an actual admin never
+ * reaches this branch, so the old text had the audience backwards. It is
+ * now written for who the server actually sends it to: a viewer with See
+ * scope on this department but no Fill scope on it, admin or not.
+ *
+ * One shared map, not split per audience: every reason here is written
+ * audience-neutral except `admin_cannot_submit_in_cycle`, which genuinely
+ * IS admin-only (`evaluate_submit_eligibility` only returns it after
+ * confirming `scope.is_admin`) — the reason code itself already determines
+ * who can receive each string, so a second per-audience copy would just be
+ * duplication with nothing to disambiguate. */
+const SUBMIT_BLOCKED_REASON_TH: Record<string, string> = {
+  admin_cannot_submit_in_cycle:
+    'ฝ่ายนี้ยังอยู่ในรอบอนุมัติปกติ ผู้ดูแลระบบส่งแทนไม่ได้ (ต้องรอเลยกำหนดส่ง หรือเป็นฝ่ายที่ไม่มีผู้กรอกอยู่จริง)',
+  mid_chain_admin_overwrite: 'ฝ่ายนี้อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว ส่งซ้ำไม่ได้',
+  department_empty: 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้',
+  not_filler_of_department: 'คุณไม่ใช่ผู้กรอกของฝ่ายนี้ จึงส่งอนุมัติแทนไม่ได้',
+  year_not_open: 'ปีงบประมาณนี้ยังไม่เปิดให้ส่งอนุมัติ กรุณารอประกาศเปิดรอบ',
+  past_deadline: 'เลยกำหนดส่งอนุมัติของปีงบประมาณนี้แล้ว จึงส่งอนุมัติไม่ได้',
+  invalid_approval_state: 'ฝ่ายนี้อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว จึงส่งซ้ำไม่ได้',
+}
+
+export function submitBlockedReasonLabel(reason: string | null): string | null {
+  if (!reason) return null
+  return SUBMIT_BLOCKED_REASON_TH[reason] ?? null
 }
 
 /** Thai confirm-dialog text for Submit — summarizes what is being sent so

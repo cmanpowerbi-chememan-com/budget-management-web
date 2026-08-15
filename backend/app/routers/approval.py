@@ -22,6 +22,7 @@ from app.approval import (
     admin_override_step,
     approve_department,
     authorize_status_view,
+    evaluate_submit_eligibility,
     get_approval_status,
     list_departments_pending_my_approval,
     lookup_employee_name,
@@ -35,7 +36,7 @@ from app.db import get_fabric_conn
 from app.deadline import YEAR_NOT_OPEN, fiscal_year_state, is_post_deadline
 from app.read_model import fetch_locked_departments
 from app.reference_data import fetch_departments
-from app.rls import resolve_scope
+from app.rls import Scope, resolve_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/approval")
@@ -202,6 +203,20 @@ def _set_is_post_deadline(conn: pyodbc.Connection, state: ApprovalStatusState) -
     defect fix, 2026-08-14) so the frontend's `canSubmit` never sees a
     stale/absent value after any action, not just after GET /status.
 
+    KEPT despite `canSubmit` no longer reading it (2026-08-16 gate review:
+    verified zero frontend production reads remain — `types.ts`'s doc comment
+    for `is_post_deadline` was corrected to say so). Deliberately NOT folded
+    into `_set_can_submit`/`evaluate_submit_eligibility`: this is a
+    year-wide flag computed identically for every caller/branch, whereas
+    `SubmitEligibility.is_post_deadline` is only ever `true` inside ONE
+    narrow admin branch — reusing that value here would silently change this
+    field's meaning (e.g. a FILLER blocked by `past_deadline` would show
+    `is_post_deadline=False`, which is wrong) and break the router tests that
+    pin its value independently of `evaluate_submit_eligibility` (see
+    `test_status_is_post_deadline_true/false_when_not_past_deadline` in
+    test_approval_router.py). The extra query stays a real, once-per-request
+    cost, not a redundant one.
+
     Never-cut (review fix, gate MED finding): wrapped in try/except so a
     broken or half-configured `dbo.submission_deadline` row (`deadline_date`
     is nullable, `db/schema.sql:105` — `fiscal_year_state`'s `bangkok_today()
@@ -220,6 +235,54 @@ def _set_is_post_deadline(conn: pyodbc.Connection, state: ApprovalStatusState) -
         logger.warning(
             "is_post_deadline lookup failed for fiscal_year=%s — defaulting to False (submit button stays hidden)",
             state.fiscal_year, exc_info=True,
+        )
+
+
+def _set_can_submit(
+    conn: pyodbc.Connection, state: ApprovalStatusState, email: str, scope: Scope | None = None,
+) -> None:
+    """Populates `state.can_submit`/`state.submit_blocked_reason` — the SIT
+    "doomed submit button" fix #2 (2026-08-16, sibling of the 2026-08-14
+    `is_post_deadline` fix directly above). The admin hat used to decide
+    button visibility client-side from `status`/`is_post_deadline` alone,
+    which cannot tell the 3 admin doors (Template-2/orphan/post-deadline
+    override) apart from the 4th, refused shape (not a filler, department
+    not orphan, no Template-2 rows, cycle still open) — that shape always
+    showed a Submit button that then 403'd (`AdminCannotSubmitInCycleError`).
+    `evaluate_submit_eligibility` is the EXACT same read-only decision
+    `submit_department` itself now delegates to (`app.approval`, single
+    source of truth) — this only surfaces its verdict here so the frontend's
+    `canSubmit` (`model.ts`) never re-derives admin authorization
+    client-side again.
+
+    Perf fix (2026-08-16 gate review): `scope` is OPTIONAL — pass the one the
+    caller already resolved this request (`submit`/`override-step`/`status`
+    all call `resolve_scope` earlier in the SAME request) instead of paying a
+    SECOND full `resolve_scope` (up to 5 round-trips: `_FILL_SQL`,
+    `_MANAGER_SEE_ADD_SQL`, `resolve_submitter`,
+    `departments_pending_for_empcode`, `cost_centers_for_departments`) on top
+    of `evaluate_submit_eligibility`'s own 4-5 queries. `GET /approval/status`
+    is the hottest endpoint in the app (fires on every ฝ่าย switch and after
+    every action — the SAME endpoint the 2026-08-02 first-load fix targeted,
+    `c2bd552`), so doubling its round-trips was a real regression, not a
+    theoretical one. Only `approve`/`reject` have no scope in hand (their
+    write path never needed one) — those two genuinely resolve fresh here.
+
+    Never-cut / fail-closed (same reasoning as `_set_is_post_deadline`
+    directly above): ANY failure — a broken scope lookup, an unexpected DB
+    error — leaves `can_submit` at its pydantic default `False` (hides the
+    button) and only logs a warning, never raises. A failure here must never
+    turn an already-committed action into a 500, or block the notify that
+    ran just before it."""
+    try:
+        resolved_scope = scope if scope is not None else resolve_scope(email, conn)
+        eligibility = evaluate_submit_eligibility(conn, state.department, state.fiscal_year, email, resolved_scope)
+        state.can_submit = eligibility.can_submit
+        state.submit_blocked_reason = eligibility.reason
+    except Exception:  # noqa: BLE001 -- must never fail an already-committed action
+        logger.warning(
+            "evaluate_submit_eligibility failed for %s/%s — defaulting can_submit=False",
+            state.department, state.fiscal_year, exc_info=True,
         )
 
 
@@ -242,6 +305,7 @@ def submit(body: DepartmentYearBody, email: str = Depends(get_current_user_email
             state = submit_department(conn, body.department, body.fiscal_year, email, scope)
             _notify_after_transition(conn, "submit", state)
             _set_is_post_deadline(conn, state)
+            _set_can_submit(conn, state, email, scope)
             return state
 
     return _run(_action)
@@ -254,6 +318,7 @@ def approve(body: ApproveBody, email: str = Depends(get_current_user_email)):
             state = approve_department(conn, body.department, body.fiscal_year, email, body.comment)
             _notify_after_transition(conn, "approve", state)
             _set_is_post_deadline(conn, state)
+            _set_can_submit(conn, state, email)
             return state
 
     return _run(_action)
@@ -266,6 +331,7 @@ def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
             state = reject_department(conn, body.department, body.fiscal_year, email, body.reason)
             _notify_after_transition(conn, "reject", state)
             _set_is_post_deadline(conn, state)
+            _set_can_submit(conn, state, email)
             return state
 
     return _run(_action)
@@ -291,6 +357,7 @@ def override_step(body: DepartmentYearBody, email: str = Depends(get_current_use
             state = admin_override_step(conn, body.department, body.fiscal_year, email)
             _notify_after_transition(conn, "override_step", state, admin_email=email)
             _set_is_post_deadline(conn, state)
+            _set_can_submit(conn, state, email, scope)
             return state
 
     return _run(_action)
@@ -359,6 +426,7 @@ def status(
             # cc lookup, so the UI needs no second fetch.
             state.current_approver_name = lookup_employee_name(conn, state.current_approver_empcode)
             _set_is_post_deadline(conn, state)
+            _set_can_submit(conn, state, email, scope)
             return state
 
     return _run(_action)

@@ -84,7 +84,9 @@ test.describe('filler journey', () => {
     await expect(costSection.getByText('Office Expenses').first()).toBeVisible()
 
     // 3-layer block for the COST row: SAP (read-only), Approved (read-only), Pending (editable).
-    await expect(page.getByTestId(`sap-value-${CC}-${GL_OFFICE_COST}-m01`)).toHaveText('100')
+    // Displayed amounts carry two decimals in all three layers (commit 9110837);
+    // the editable Pending INPUT still holds the raw value, hence '200' below.
+    await expect(page.getByTestId(`sap-value-${CC}-${GL_OFFICE_COST}-m01`)).toHaveText('100.00')
     await expect(page.getByTestId(`board-value-${CC}-${GL_OFFICE_COST}-m01`)).toHaveText('—')
     await expect(page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)).toHaveValue('200')
   })
@@ -218,7 +220,7 @@ test.describe('filler journey', () => {
     })
 
     await expect.poll(() => realBudgetFetchCount(world)).toBeGreaterThanOrEqual(2) // onSaved() refetches the grid
-    await expect(page.getByTestId(`pending-cell-${CC}-${GL_ENTERTAIN_EXT}-m01`)).toHaveText('5,000')
+    await expect(page.getByTestId(`pending-cell-${CC}-${GL_ENTERTAIN_EXT}-m01`)).toHaveText('5,000.00')
   })
 
   test('1.7 deleting a detail line confirms, sends the id + lock token, and the grid refetches', async ({ page }) => {
@@ -334,7 +336,10 @@ test.describe('filler journey', () => {
   test('1.9 Submit confirms with a summary, posts the payload, and the status chip flips to รออนุมัติ ขั้น 1', async ({ page }) => {
     const world = fillerWorld({
       budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 100 }, pendingUpdatedAt: 'PEND-1' })]],
-      approvalStatusByDept: { [DEPT]: approvalState({ department: DEPT, status: 'DRAFT' }) },
+      // can_submit: true set explicitly -- the fixture default is now
+      // fail-closed `false` (gate review, 2026-08-16); this scenario needs
+      // the Submit button visible and clickable, so it opts in on purpose.
+      approvalStatusByDept: { [DEPT]: approvalState({ department: DEPT, status: 'DRAFT', can_submit: true }) },
       submitQueue: [
         ok(approvalState({ department: DEPT, status: 'PENDING_APPROVER1', current_position: 1, current_approver_empcode: '999999' })),
       ],
@@ -361,5 +366,25 @@ test.describe('filler journey', () => {
     const chip = page.getByTestId('approval-status-chip')
     await expect(chip).toContainText('รออนุมัติ')
     await expect(chip).toContainText('ขั้น 1')
+  })
+
+  // Filler-blocked-hint fix (2026-08-16, jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"):
+  // pinned in the permanent suite, not just a unit test -- a blocked Filler
+  // must see WHY the Submit button is gone, same as a blocked admin already did.
+  test('1.10 a blocked Filler sees the Thai reason instead of a silently-absent Submit button', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 100 }, pendingUpdatedAt: 'PEND-1' })]],
+      approvalStatusByDept: {
+        [DEPT]: approvalState({
+          department: DEPT, status: 'DRAFT', can_submit: false, submit_blocked_reason: 'year_not_open',
+        }),
+      },
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('ยังไม่เปิด')
+    await expect(page.getByTestId('approval-submit-btn')).not.toBeVisible()
   })
 })

@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { approveDepartment, fetchApprovalStatus, overrideStep, rejectDepartment, submitDepartment } from '../api/approval'
 import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
-import { approverLabel, buildOverrideConfirmText, buildSubmitConfirmText, canSubmit, isPendingLocked, statusChipLabel } from './model'
+import {
+  approverLabel,
+  buildOverrideConfirmText,
+  buildSubmitConfirmText,
+  canSubmit,
+  isPendingLocked,
+  statusChipLabel,
+  submitBlockedReasonLabel,
+} from './model'
 
 export interface ApprovalActionBarProps {
   department: string | null
@@ -162,7 +170,7 @@ export function ApprovalActionBar({
   if (!status) return null
 
   const showSubmit = canSubmit({
-    isFillerOfDept, adminViewEnabled, status: status.status, isPostDeadline: status.is_post_deadline,
+    isFillerOfDept, adminViewEnabled, canSubmitServer: status.can_submit,
   })
   const showApproveReject = status.can_act && !adminViewEnabled
   // ADR-0027: ONE อนุมัติ button — visible to the frozen approver (normal
@@ -172,6 +180,22 @@ export function ApprovalActionBar({
   const showApprove =
     showApproveReject || (isAdmin && status.status === 'PENDING_APPROVER1' && !status.can_act)
   const locked = isPendingLocked(status.status) && isFillerOfDept && !adminViewEnabled
+  // Filler-blocked-hint fix (2026-08-16, same day as SIT defect fix #2,
+  // jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"): the hint used to be gated to
+  // admins only (`adminViewEnabled && !isFillerOfDept`), so a Filler who
+  // lost the Submit button silently (empty department / year not open /
+  // past deadline / already submitted) got no explanation at all — exactly
+  // the asymmetry this closes. Now shows for WHOEVER is actually blocked.
+  // `!locked` avoids a duplicate line with the pending-lock hint just below:
+  // both would otherwise fire together for a Filler on a PENDING_*
+  // department (`locked` says "ส่งแล้ว..."; the server's
+  // `invalid_approval_state` reason says almost the same thing) — `locked`
+  // is the more specific of the two, so it wins and the generic hint stays
+  // silent there. The one case `locked` does NOT cover is a Filler on an
+  // APPROVED department (not "pending"), where `invalid_approval_state`
+  // still surfaces on its own — see `submitBlockedReasonLabel`'s docstring
+  // for the copy itself.
+  const submitBlockedHint = !showSubmit && !locked ? submitBlockedReasonLabel(status.submit_blocked_reason) : null
 
   return (
     <div className="approval-bar" data-testid="approval-bar">
@@ -182,6 +206,11 @@ export function ApprovalActionBar({
           {statusChipLabel(status)}
         </span>
         {locked && <span className="act-status">ส่งแล้ว — แก้ไขไม่ได้จนกว่าจะถูกตีกลับ</span>}
+        {submitBlockedHint && (
+          <span className="act-status" data-testid="approval-submit-blocked-hint">
+            {submitBlockedHint}
+          </span>
+        )}
         {/* No role="alert" here (unlike loadError/actionMessage below) — this
          * is a persisted field of an already-REJECTED department, not a
          * transient result of the CALLER's own action; announcing it as an

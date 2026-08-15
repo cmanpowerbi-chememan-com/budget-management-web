@@ -28,6 +28,8 @@ function state(overrides: Partial<ApprovalStatusState> = {}): ApprovalStatusStat
     can_act: false,
     notification_warning: null,
     is_post_deadline: false,
+    can_submit: true,
+    submit_blocked_reason: null,
     ...overrides,
   }
 }
@@ -170,8 +172,8 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
   })
 
-  it('on a 400 department_empty error, shows the server\'s own Thai detail (bug 3, 2026-08-08 -- no new frontend code, same describeApiError fallback every non-409 submit failure already uses)', async () => {
-    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT' }))
+  it('on a 400 department_empty error, shows the server\'s own Thai detail (bug 3, 2026-08-08 -- defense in depth for a stale can_submit=true, same describeApiError fallback every non-409 submit failure already uses)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
     vi.mocked(approvalApi.submitDepartment).mockRejectedValue(
       new ApiError(400, 'คำขอไม่ถูกต้อง', 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้'),
     )
@@ -194,27 +196,52 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
   })
 
-  it('hides Submit for admin on a locked status while the cycle is still open (SIT defect 2026-08-14 fix)', async () => {
+  it('hides Submit for admin on a locked status the server refuses -- shape (a), the SIT defect (2026-08-16 fix #2)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
-      state({ status: 'PENDING_APPROVER1', current_position: 1, is_post_deadline: false }),
+      state({
+        status: 'PENDING_APPROVER1', current_position: 1,
+        can_submit: false, submit_blocked_reason: 'admin_cannot_submit_in_cycle',
+      }),
     )
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     await screen.findByTestId('approval-approve-btn') // ADR-0027 step-override still shows
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
 
-  it('shows Submit for admin on a locked status once past the deadline (post-deadline override door)', async () => {
+  it('shows a short Thai explanation next to the chip when the blocked admin hint applies (2026-08-16 fix #2)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
-      state({ status: 'PENDING_APPROVER1', current_position: 1, is_post_deadline: true }),
+      state({
+        status: 'DRAFT', current_position: null,
+        can_submit: false, submit_blocked_reason: 'admin_cannot_submit_in_cycle',
+      }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('รอบอนุมัติปกติ'),
+    )
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+  })
+
+  it('shows Submit for admin on a locked status the server allows (post-deadline override door, shape (d))', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, can_submit: true, submit_blocked_reason: null }),
     )
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+    expect(screen.queryByTestId('approval-submit-blocked-hint')).not.toBeInTheDocument()
   })
 
-  it('shows Submit for admin on DRAFT regardless of deadline (no regression)', async () => {
-    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', is_post_deadline: false }))
+  it('shows Submit for admin on DRAFT when the server allows it (never-submitted admin door, no regression)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
     render(<ApprovalActionBar {...BASE_PROPS} adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+  })
+
+  it('hides Submit for an admin viewer with the hat OFF even when the server would allow it', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled={false} isFillerOfDept={false} />)
+    await screen.findByTestId('approval-status-chip')
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
 
   it('hides อนุมัติ for a non-admin who is not the current approver', async () => {
@@ -255,6 +282,51 @@ describe('ApprovalActionBar', () => {
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     await screen.findByTestId('approval-status-chip')
     expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
+  })
+
+  // Filler-blocked-hint fix (2026-08-16, jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"):
+  // the hint used to be gated to admins only (`adminViewEnabled && !isFillerOfDept`)
+  // -- a Filler who lost the button silently got no explanation at all.
+  it('shows a Thai explanation to a blocked Filler, not just to a blocked admin (jakkaritw 2026-08-16)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: 'department_empty' }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ'),
+    )
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+  })
+
+  it.each(['year_not_open', 'past_deadline'] as const)(
+    'shows the filler-reachable %s reason as a Thai hint next to the chip',
+    async (reason) => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+        state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: reason }),
+      )
+      render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
+      await waitFor(() => expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument())
+    },
+  )
+
+  it('does not duplicate the pending-lock message with the generic blocked hint (invalid_approval_state on PENDING_*, both would otherwise fire)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({
+        status: 'PENDING_APPROVER1', current_position: 1,
+        can_submit: false, submit_blocked_reason: 'invalid_approval_state',
+      }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
+    await screen.findByText('ส่งแล้ว — แก้ไขไม่ได้จนกว่าจะถูกตีกลับ')
+    expect(screen.queryByTestId('approval-submit-blocked-hint')).not.toBeInTheDocument()
+  })
+
+  it('shows the invalid_approval_state hint for a Filler on an APPROVED department (the pending-lock hint does not cover this status)', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'APPROVED', can_submit: false, submit_blocked_reason: 'invalid_approval_state' }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
+    await waitFor(() => expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument())
   })
 
   it("on a 409 from override-step, shows the server's Thai detail as-is", async () => {

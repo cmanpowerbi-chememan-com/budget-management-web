@@ -48,6 +48,7 @@ from app.approval import (
     auto_submit_department,
     cost_centers_for_departments,
     departments_pending_for_empcode,
+    evaluate_submit_eligibility,
     fetch_pending_rows,
     get_approval_status,
     list_departments_pending_my_approval,
@@ -682,6 +683,192 @@ def test_submit_department_empty_admin_post_deadline_door_refused():
     with pytest.raises(DepartmentEmptyError):
         submit_department(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
     conn.commit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# evaluate_submit_eligibility — read-only mirror of submit_department's
+# decision tree (SIT defect fix #2, 2026-08-16, sibling of the 2026-08-14
+# `is_post_deadline` fix). Every submit_department test above already proves
+# the WRITE path decides these branches correctly (that part was never
+# broken) -- these pin the READ-ONLY `can_submit`/`reason` verdict the
+# frontend button now consumes instead of re-deriving admin authorization
+# client-side. Covers all 4 admin shapes from the SIT defect explicitly,
+# plus the filler paths and the already-fixed mid-chain case (77308d7), so
+# neither can regress alone.
+# ---------------------------------------------------------------------------
+
+def test_eligibility_admin_blocked_not_filler_not_orphan_no_template2_cycle_open():
+    """Shape (a) -- THE bug: a non-filler admin, department not orphan, no
+    Template-2 rows, cycle still open, DRAFT -- the old client-side
+    canSubmit() always showed Submit here; the write path already refused it
+    (AdminCannotSubmitInCycleError, proven by
+    test_admin_cannot_submit_normal_in_cycle_department_they_do_not_fill
+    above). This is the READ verdict the button now reads instead."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row -> DRAFT (never submitted)
+        (1,),   # _department_has_pending_rows -> has rows
+        None,   # _department_has_admin_template_rows -> none
+        None,   # _is_post_deadline -> not passed
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # has real CCs -- not orphan
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+
+    assert result.can_submit is False
+    assert result.reason == "admin_cannot_submit_in_cycle"
+
+
+def test_eligibility_admin_allowed_orphan_department():
+    """Shape (b)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row
+        (1,),   # _department_has_pending_rows -> orphan fallback finds real rows
+        None,   # _department_has_admin_template_rows -> none
+    ]
+    cursor.fetchall.side_effect = [[]]  # orphan: zero cost centers for this department
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+
+    assert result.can_submit is True
+    assert result.reason is None
+
+
+def test_eligibility_admin_allowed_template_2_rows_present():
+    """Shape (c)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,   # _fetch_row
+        (1,),   # _department_has_pending_rows -> has rows
+        (1,),   # _department_has_admin_template_rows -> found
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+
+    assert result.can_submit is True
+    assert result.reason is None
+
+
+def test_eligibility_admin_allowed_post_deadline_override_any_status():
+    """Shape (d) -- proven against a LOCKED existing status too (the
+    post-deadline door overrides ANY status, ADR-0012)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER2),  # _fetch_row -- locked, still overridden
+        (1,),                    # _department_has_pending_rows -> has rows
+        None,                    # _department_has_admin_template_rows -> none
+        (date(2020, 1, 1),),      # _is_post_deadline -> already passed
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]  # has real CCs -- not orphan
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+
+    assert result.can_submit is True
+    assert result.reason is None
+
+
+def test_eligibility_admin_template2_blocked_when_existing_is_mid_chain():
+    """B2 guard, read side: Template-2 door blocked from overwriting a
+    mid-chain/approved record -- same guard the write path enforces."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        _status_row(status=PENDING_APPROVER2),  # _fetch_row -- existing mid-chain
+        (1,),   # _department_has_pending_rows -> has rows
+        (1,),   # _department_has_admin_template_rows -> found
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "admin@chememan.com", _admin_scope())
+
+    assert result.can_submit is False
+    assert result.reason == "mid_chain_admin_overwrite"
+
+
+def test_eligibility_non_filler_non_admin_blocked():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, (1,)]  # _fetch_row; _department_has_pending_rows -> has rows
+    cursor.fetchall.side_effect = [[("CC1",)]]  # dept has CCs, caller Fills none of them
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "outsider@chememan.com", _scope(fill_cost_centers=["OTHER-CC"]))
+
+    assert result.can_submit is False
+    assert result.reason == "not_filler_of_department"
+
+
+def test_eligibility_department_empty_blocked_for_any_caller():
+    """Runs BEFORE the filler/admin branch split, exactly like
+    `submit_department`'s own DepartmentEmptyError guard."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, None]  # _fetch_row; _department_has_pending_rows -> zero rows
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.can_submit is False
+    assert result.reason == "department_empty"
+
+
+def test_eligibility_filler_draft_allowed():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,             # _fetch_row
+        (1,),             # _department_has_pending_rows -> has rows
+        _OPEN_DEADLINE,   # _fiscal_year_state -> OPEN
+    ]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.can_submit is True
+    assert result.reason is None
+
+
+def test_eligibility_filler_mid_chain_blocked_regression_guard_77308d7():
+    """Regression guard for the 2026-08-14 fix (77308d7): a filler must never
+    be told Submit is available once mid-chain -- no recall (ADR-0006)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_status_row(status=PENDING_APPROVER1), (1,)]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.can_submit is False
+    assert result.reason == "invalid_approval_state"
+
+
+def test_eligibility_filler_year_not_open_blocked():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, (1,), None]  # _fiscal_year_state -> NOT_OPEN
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.can_submit is False
+    assert result.reason == "year_not_open"
+
+
+def test_eligibility_filler_past_deadline_blocked():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, (1,), (date(2020, 1, 1),)]
+    cursor.fetchall.side_effect = [[("CC1",)]]
+
+    result = evaluate_submit_eligibility(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
+
+    assert result.can_submit is False
+    assert result.reason == "past_deadline"
 
 
 def test_department_has_pending_rows_query_shape_live_cost_centers():

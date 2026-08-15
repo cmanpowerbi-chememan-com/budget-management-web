@@ -8,6 +8,7 @@ import {
   isFillerOfDepartment,
   isPendingLocked,
   statusChipLabel,
+  submitBlockedReasonLabel,
 } from './model'
 
 describe('approverLabel', () => {
@@ -87,62 +88,102 @@ describe('isFillerOfDepartment', () => {
 })
 
 describe('canSubmit', () => {
-  it('shows Submit for a Filler when status is DRAFT', () => {
-    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'DRAFT', isPostDeadline: false })).toBe(true)
+  it('shows Submit for a Filler when the server allows it', () => {
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, canSubmitServer: true })).toBe(true)
   })
 
-  it('shows Submit for a Filler when status is REJECTED', () => {
-    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'REJECTED', isPostDeadline: false })).toBe(true)
+  // Regression guard for the 2026-08-14 fix (77308d7): a filler must never
+  // see Submit once the department is locked (mid-chain / APPROVED, no
+  // recall -- ADR-0006). The server's own `evaluate_submit_eligibility`
+  // encodes this now (`invalid_approval_state`); the client just reads it.
+  it('hides Submit for a Filler when the server blocks it (mid-chain, no recall)', () => {
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, canSubmitServer: false })).toBe(false)
   })
 
-  it('hides Submit for a Filler once PENDING (locked, no recall)', () => {
-    expect(
-      canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status: 'PENDING_APPROVER1', isPostDeadline: false }),
-    ).toBe(false)
+  it('hides Submit for a non-Filler, non-admin viewer regardless of the server verdict', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: false, canSubmitServer: true })).toBe(false)
   })
 
-  it('hides Submit for a non-Filler, non-admin viewer', () => {
-    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: false, status: 'DRAFT', isPostDeadline: false })).toBe(false)
+  // The "put on the admin hat first" gesture stays entirely client-side: an
+  // admin who has not toggled Admin mode on never sees an admin-only action,
+  // even for a department the server would actually let them submit.
+  it('hides Submit for an admin viewer with the hat OFF, even when the server would allow it', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: false, canSubmitServer: true })).toBe(false)
   })
 
-  // Guards branch order: the post-deadline override is the admin hat's alone.
-  // If the `adminViewEnabled` branch is ever reordered/merged with the plain
-  // filler check, a non-admin filler would start seeing Submit on a locked
-  // department once the deadline passes -- a real authorization-shaped regression.
-  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
-    'still hides Submit for a non-admin Filler on locked status %s even past the deadline (override never leaks to non-admins)',
-    (status) => {
-      expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: false, status, isPostDeadline: true })).toBe(false)
-    },
-  )
-
-  // SIT defect fix (2026-08-14): admin used to always see Submit regardless
-  // of status, so the button was shown mid-cycle and 403'd every time (the
-  // server's normal-chain/Template-2/orphan doors all refuse a locked
-  // record). The one admin door that DOES accept a locked status is the
-  // post-deadline override (ADR-0012) -- gated here by `isPostDeadline`.
-  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
-    'hides Submit for admin on locked status %s while the cycle is still open',
-    (status) => {
-      expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status, isPostDeadline: false })).toBe(false)
-    },
-  )
-
-  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])(
-    'shows Submit for admin on locked status %s once the deadline has passed (post-deadline override door survives)',
-    (status) => {
-      expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status, isPostDeadline: true })).toBe(true)
-    },
-  )
-
-  it('shows Submit for admin on DRAFT regardless of deadline (never-submitted admin door unaffected)', () => {
-    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status: 'DRAFT', isPostDeadline: false })).toBe(true)
+  // SIT defect fix #2 (2026-08-16): shape (a), the actual reported bug -- a
+  // non-filler admin, department not orphan, no Template-2 rows, cycle
+  // still open. `canSubmitServer` is now `false`
+  // (`admin_cannot_submit_in_cycle`) and the button must not appear.
+  it('hides Submit for admin (hat on) when the server refuses -- shape (a), the SIT defect', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, canSubmitServer: false })).toBe(false)
   })
 
-  it('shows Submit for admin on REJECTED regardless of deadline (Template-2/orphan doors unaffected)', () => {
-    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, status: 'REJECTED', isPostDeadline: false })).toBe(
-      true,
-    )
+  // Shapes (b) orphan department / (c) Template-2 rows present / (d)
+  // post-deadline override -- the server says true and the button shows.
+  it('shows Submit for admin (hat on) when the server allows it -- shapes (b)/(c)/(d)', () => {
+    expect(canSubmit({ isFillerOfDept: false, adminViewEnabled: true, canSubmitServer: true })).toBe(true)
+  })
+
+  // A caller who BOTH Fills the department AND has the admin hat on
+  // (Nipaporn/Waraporn's dual role, ADR-0006) follows the FILLER branch --
+  // the hat is irrelevant once isFillerOfDept is true, matching the
+  // server's own branch selection (a filler ALWAYS routes through the
+  // normal chain, never the admin doors, regardless of scope.is_admin).
+  it('follows the server verdict for a filler-admin regardless of the hat (dual-role, ADR-0006)', () => {
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: true, canSubmitServer: true })).toBe(true)
+    expect(canSubmit({ isFillerOfDept: true, adminViewEnabled: true, canSubmitServer: false })).toBe(false)
+  })
+
+  // Fail-closed typing regression guard (gate review, 2026-08-16):
+  // `canSubmitServer` is typed `boolean`, but an older/partial server
+  // response is not actually guaranteed to carry it -- `undefined` must
+  // still hide the button, not throw or accidentally show it. Cast through
+  // `unknown` deliberately: this is testing behaviour AGAINST the type
+  // system's own guarantee, which a plain missing property could not do.
+  it('hides Submit when the server response is missing can_submit entirely (fail-closed, not just falsy)', () => {
+    const staleServerResponse = { isFillerOfDept: true, adminViewEnabled: false } as unknown as Parameters<typeof canSubmit>[0]
+    expect(canSubmit(staleServerResponse)).toBe(false)
+  })
+})
+
+describe('submitBlockedReasonLabel', () => {
+  it('returns null when there is no blocked reason', () => {
+    expect(submitBlockedReasonLabel(null)).toBeNull()
+  })
+
+  it("explains shape (a)'s admin_cannot_submit_in_cycle reason in Thai", () => {
+    expect(submitBlockedReasonLabel('admin_cannot_submit_in_cycle')).toContain('รอบอนุมัติปกติ')
+  })
+
+  it("explains department_empty in Thai, matching the server's own DepartmentEmptyError text", () => {
+    expect(submitBlockedReasonLabel('department_empty')).toBe('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้')
+  })
+
+  it('returns null for an unmapped/unknown reason code (never shows a raw machine code)', () => {
+    expect(submitBlockedReasonLabel('some_future_reason')).toBeNull()
+  })
+
+  // Filler-blocked-hint fix (2026-08-16, jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"):
+  // these 3 reasons are the filler-reachable ones confirmed against
+  // `evaluate_submit_eligibility` in backend/app/approval.py (department_empty
+  // was already covered above, since it fires for every caller).
+  it('explains year_not_open in Thai, saying the year has not opened yet', () => {
+    expect(submitBlockedReasonLabel('year_not_open')).toContain('ยังไม่เปิด')
+  })
+
+  it('explains past_deadline in Thai, saying the deadline has already passed', () => {
+    expect(submitBlockedReasonLabel('past_deadline')).toContain('เลยกำหนด')
+  })
+
+  it('explains invalid_approval_state in Thai (already mid-chain or approved)', () => {
+    expect(submitBlockedReasonLabel('invalid_approval_state')).toContain('ส่งซ้ำไม่ได้')
+  })
+
+  it('explains not_filler_of_department without assuming the reader is an admin (evaluate_submit_eligibility only returns this reason when scope.is_admin is False -- an actual admin never sees it)', () => {
+    const text = submitBlockedReasonLabel('not_filler_of_department')
+    expect(text).not.toBeNull()
+    expect(text).not.toContain('ผู้ดูแลระบบ')
   })
 })
 

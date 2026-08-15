@@ -4,7 +4,7 @@
  * unselected" rule applies after toggling too), persists across reload),
  * attachments upload/list/download, and a pure admin's always-on wide-open
  * view. */
-import { CC, CC2, C_LEVEL, DEEP_LINK_YEAR, DEPT, DEPT2, DIVISION, dualRoleAdminWorld, installMocks, ok, PLANNING_YEAR, pureAdminWorld, parseMultipartFields, test, expect } from './fixtures'
+import { approvalState, CC, CC2, C_LEVEL, DEEP_LINK_YEAR, DEPT, DEPT2, DIVISION, dualRoleAdminWorld, installMocks, ok, PLANNING_YEAR, pureAdminWorld, parseMultipartFields, test, expect } from './fixtures'
 
 test.describe('admin journey', () => {
   test('3.1 the admin toggle is OFF by default, switches admin_view_enabled on refetch, re-auto-selects the first ฝ่าย of the new scope, and persists across reload', async ({ page }) => {
@@ -102,5 +102,50 @@ test.describe('admin journey', () => {
     await expect(page.getByTestId('admin-mode-toggle')).toHaveCount(0)
     await expect.poll(() => world.captured.budgetQueries.length).toBeGreaterThan(0)
     expect(world.captured.budgetQueries[0].admin_view_enabled).toBe('true')
+  })
+
+  // SIT "doomed submit button" fix #2 (2026-08-16): the admin hat used to
+  // decide Submit's visibility client-side from `status`/`is_post_deadline`
+  // alone, which could not tell apart the 3 real admin doors (Template-2 /
+  // orphan / post-deadline-override) from this 4th, refused shape -- a pure
+  // admin (not a Filler of the department), department not orphan, no
+  // Template-2 rows, cycle still open. That shape always showed a Submit
+  // button that then 403'd (`AdminCannotSubmitInCycleError`). The button now
+  // reads the server's own verdict (`ApprovalStatusState.can_submit`) instead
+  // of re-deriving admin authorization -- these two tests hold the world
+  // identical (same pure-admin persona, same DEPT, same DRAFT status) and
+  // change ONLY the server verdict, so the button's presence is proven to
+  // track that verdict and nothing else.
+  test('3.4 a blocked admin (shape (a): not a Filler, department not orphan, no Template-2 rows, cycle still open) sees no Submit button and a short Thai reason instead', async ({ page }) => {
+    const world = pureAdminWorld({
+      budgetGridQueue: [[]],
+      approvalStatusByDept: {
+        [DEPT]: approvalState({
+          department: DEPT, status: 'DRAFT',
+          can_submit: false, submit_blocked_reason: 'admin_cannot_submit_in_cycle',
+        }),
+      },
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await expect(page.getByTestId('approval-status-chip')).toBeVisible()
+
+    await expect(page.getByTestId('approval-submit-btn')).toHaveCount(0)
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('รอบอนุมัติปกติ')
+  })
+
+  test('3.5 the SAME blocked admin/department sees Submit once the server allows it -- proves the button tracks the server verdict, not a client-side guess', async ({ page }) => {
+    const world = pureAdminWorld({
+      budgetGridQueue: [[]],
+      approvalStatusByDept: {
+        [DEPT]: approvalState({ department: DEPT, status: 'DRAFT', can_submit: true }),
+      },
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await expect(page.getByTestId('approval-submit-btn')).toBeVisible()
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toHaveCount(0)
   })
 })

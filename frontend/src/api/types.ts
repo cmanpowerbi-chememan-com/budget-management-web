@@ -325,11 +325,38 @@ export interface ApprovalStatusState {
   /** SIT defect fix (2026-08-14): true only once `fiscal_year`'s submission
    * deadline has passed (`app.deadline.is_post_deadline`, ADR-0012). Set by
    * the router on every endpoint that returns this shape, not just GET
-   * /status. `canSubmit` uses it to show the admin submit button on a
-   * locked status (PENDING_* or APPROVED) ONLY when the server's
-   * post-deadline override door will actually accept it — the ONE admin door not gated by
-   * `_ensure_admin_overwrite_allowed` mid-cycle. */
+   * /status. Superseded as `canSubmit`'s main input by `can_submit` below
+   * (SIT defect fix #2) — verified 2026-08-16 gate review that NO frontend
+   * production code reads this field any more (`statusChipLabel` only reads
+   * `status`/`current_position`/`current_approver_empcode`). Kept anyway
+   * (not dropped) because it is a genuinely DIFFERENT signal than
+   * `can_submit`, not just a redundant duplicate: a year-wide flag computed
+   * the same way for every caller/branch, whereas `can_submit`'s backing
+   * `SubmitEligibility.is_post_deadline` is only ever set `true` inside ONE
+   * narrow admin branch (the post-deadline override door) — the two are not
+   * interchangeable, so this could not simply be recomputed from the other
+   * without changing its meaning. */
   is_post_deadline: boolean
+  /** SIT defect fix #2 (2026-08-16): the server's own verdict on whether
+   * THIS caller could actually submit this department right now — mirrors
+   * `app.approval.evaluate_submit_eligibility` exactly, the SAME decision
+   * `POST /approval/submit` itself uses. Closes the sibling of the
+   * 2026-08-14 bug: the admin hat used to show Submit unconditionally on
+   * DRAFT/REJECTED even when NONE of the 3 admin doors (Template-2/orphan/
+   * post-deadline) would accept it — a non-filler, non-orphan department
+   * with no Template-2 rows while the cycle is still open always 403'd.
+   * `canSubmit` (model.ts) reads this directly instead of re-deriving
+   * admin authorization client-side. Set by the router on every endpoint
+   * that returns this shape (same convention as `is_post_deadline`), fails
+   * closed to `false` on an old/stale response or a server-side lookup
+   * failure. */
+  can_submit: boolean
+  /** Machine-readable reason when `can_submit` is `false` — one of
+   * `department_empty` / `not_filler_of_department` / `year_not_open` /
+   * `past_deadline` / `invalid_approval_state` / `admin_cannot_submit_in_cycle`
+   * / `mid_chain_admin_overwrite` (`app.approval.ERROR_CODE_BY_EXCEPTION`'s
+   * values). `null` when `can_submit` is `true` or unknown. */
+  submit_blocked_reason: string | null
 }
 
 /** `GET /approval/pending-for-me` (`routers/approval.PendingForMeResponse`)

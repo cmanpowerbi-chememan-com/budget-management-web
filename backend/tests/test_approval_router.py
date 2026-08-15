@@ -3,7 +3,10 @@ reject, GET /approval/status. DB always mocked; the state machine itself is
 unit-tested in test_approval.py — these tests only prove the router wiring:
 auth, error-code -> HTTP-status mapping, and the 502 DB-unavailable path.
 """
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.approval import (
     APPROVED,
@@ -18,6 +21,7 @@ from app.approval import (
     NotCurrentApproverError,
     NotFillerOfDepartmentError,
     StepNotOverridableError,
+    SubmitEligibility,
 )
 from app.auth import get_current_user_email
 from app.deadline import YEAR_NOT_OPEN, YEAR_OPEN
@@ -261,6 +265,298 @@ def test_status_is_post_deadline_false_when_not_past_deadline(client):
         response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 200
     assert response.json()["is_post_deadline"] is False
+
+
+def test_status_includes_can_submit_true_with_no_reason(client):
+    """SIT defect fix #2 (2026-08-16): `GET /approval/status` surfaces the
+    server's own submit verdict instead of leaving the frontend to re-derive
+    admin authorization from `status`/`is_post_deadline` alone."""
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status="DRAFT", current_position=None),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility",
+        return_value=SubmitEligibility(can_submit=True),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["can_submit"] is True
+    assert response.json()["submit_blocked_reason"] is None
+
+
+def test_status_includes_can_submit_false_with_reason(client):
+    """The refused admin shape (SIT defect #2, case (a) -- not a filler,
+    department not orphan, no Template-2 rows, cycle still open): the
+    machine-readable reason travels with the verdict so the UI can explain
+    itself instead of just hiding a control silently."""
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status="DRAFT", current_position=None),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility",
+        return_value=SubmitEligibility(can_submit=False, reason="admin_cannot_submit_in_cycle"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["can_submit"] is False
+    assert response.json()["submit_blocked_reason"] == "admin_cannot_submit_in_cycle"
+
+
+def test_status_can_submit_fails_closed_when_eligibility_lookup_errors(client):
+    """Never-cut: a broken eligibility lookup must never fail an
+    already-successful GET /status -- `can_submit` simply stays at its
+    fail-closed default `False` (never a stale/unknown `True`)."""
+    _override_auth("admin@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch("app.routers.approval.authorize_status_view"), patch(
+        "app.routers.approval.resolve_submitter", return_value=(None, None)
+    ), patch(
+        "app.routers.approval.get_approval_status",
+        return_value=_fake_state(status="DRAFT", current_position=None),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility", side_effect=RuntimeError("db down"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/status", params={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["can_submit"] is False
+
+
+def test_submit_response_includes_can_submit(client):
+    """Multi-endpoint contract pin (same convention as
+    `test_submit_response_includes_is_post_deadline`): `can_submit` travels
+    on every endpoint that returns `ApprovalStatusState`, not just GET
+    /status, so the button never goes stale after the caller's own action."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        return_value=_fake_state(status=PENDING_APPROVER1, current_position=1),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility",
+        return_value=SubmitEligibility(can_submit=False, reason="invalid_approval_state"),
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["can_submit"] is False
+    assert response.json()["submit_blocked_reason"] == "invalid_approval_state"
+
+
+# ---------------------------------------------------------------------------
+# `can_submit` wiring gap closed (gate review, 2026-08-16): the earlier tests
+# above only asserted `evaluate_submit_eligibility` on 2 of the 5 endpoints
+# that carry `can_submit` (status, submit), and NONE of them proved WHICH
+# identity gets evaluated -- the entire reason this feature is auth-safe is
+# that it is always the CALLER's own email/scope, never `state.submitter_email`
+# (a different person could easily have submitted the record being viewed).
+# ---------------------------------------------------------------------------
+
+_NOT_THE_CALLER = "not-the-caller@chememan.com"  # every fixture state below is "submitted by" this email
+
+
+def _can_submit_endpoint_cases():
+    """One case per endpoint returning `ApprovalStatusState` — the pieces
+    that differ (patch targets, request shape) are captured directly;
+    `evaluate_submit_eligibility` and `resolve_scope` are added identically
+    for every case by the test itself below, matching the router's own
+    convention that `_set_can_submit` runs identically on all 5."""
+    return [
+        pytest.param(
+            "caller-submit@chememan.com", "post", "/approval/submit",
+            {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.submit_department": {
+                    "return_value": _fake_state(status=PENDING_APPROVER1, current_position=1, submitter_email=_NOT_THE_CALLER)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="submit",
+        ),
+        pytest.param(
+            "caller-approve@chememan.com", "post", "/approval/approve",
+            {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.approve_department": {
+                    "return_value": _fake_state(status=APPROVED, submitter_email=_NOT_THE_CALLER)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="approve",
+        ),
+        pytest.param(
+            "caller-reject@chememan.com", "post", "/approval/reject",
+            {"json": {"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}},
+            {
+                "app.routers.approval.reject_department": {
+                    "return_value": _fake_state(status="REJECTED", reject_reason="bad numbers", submitter_email=_NOT_THE_CALLER)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="reject",
+        ),
+        pytest.param(
+            "caller-override@chememan.com", "post", "/approval/override-step",
+            {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.admin_override_step": {
+                    "return_value": _fake_state(
+                        status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032",
+                        submitter_email=_NOT_THE_CALLER, approver1_empcode="200",
+                    )
+                },
+                "app.routers.approval.notifications.notify_step_overridden": {},
+                "app.routers.approval.notifications.notify_turn": {},
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="override-step",
+        ),
+        pytest.param(
+            "caller-status@chememan.com", "get", "/approval/status",
+            {"params": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.authorize_status_view": {},
+                "app.routers.approval.resolve_submitter": {"return_value": (None, None)},
+                "app.routers.approval.get_approval_status": {
+                    "return_value": _fake_state(status="DRAFT", current_position=None, submitter_email=_NOT_THE_CALLER)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="status",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("caller_email, http_method, path, request_kwargs, extra_patches", _can_submit_endpoint_cases())
+def test_can_submit_travels_on_every_endpoint_for_the_callers_own_identity(
+    client, caller_email, http_method, path, request_kwargs, extra_patches,
+):
+    """Closes 2 gaps at once (gate review, 2026-08-16): (1) only 2 of 5
+    endpoints had a `can_submit` contract pin before this — now all 5 are
+    parametrized together so they can never silently drift apart again; (2)
+    NOTHING previously asserted `evaluate_submit_eligibility`'s call_args, so
+    nothing actually PROVED the security-load-bearing property that makes
+    this feature auth-safe in the first place: the verdict is computed for
+    the CALLER's own identity, never `state.submitter_email`. Every fixture
+    state above is "submitted by" `_NOT_THE_CALLER` -- if the wiring ever
+    regressed to evaluating that field instead of the authenticated caller,
+    this assertion fails immediately."""
+    _override_auth(caller_email)
+    with ExitStack() as stack, patch("app.routers.approval.get_fabric_conn") as mock_conn:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        stack.enter_context(patch("app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)))
+        for target, kwargs in extra_patches.items():
+            stack.enter_context(patch(target, **kwargs))
+        mock_eligibility = stack.enter_context(
+            patch("app.routers.approval.evaluate_submit_eligibility", return_value=SubmitEligibility(can_submit=True))
+        )
+        response = getattr(client, http_method)(path, **request_kwargs)
+
+    assert response.status_code == 200
+    assert response.json()["can_submit"] is True
+    mock_eligibility.assert_called_once()
+    # args = (conn, department, fiscal_year, email, scope) -- args[3] is the
+    # identity that was ACTUALLY evaluated.
+    assert mock_eligibility.call_args.args[3] == caller_email
+    assert mock_eligibility.call_args.args[3] != _NOT_THE_CALLER
+
+
+@pytest.mark.parametrize(
+    "caller_email, http_method, path, request_kwargs, extra_patches",
+    [
+        pytest.param(
+            "filler@chememan.com", "post", "/approval/submit",
+            {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.submit_department": {
+                    "return_value": _fake_state(status=PENDING_APPROVER1, current_position=1)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="submit",
+        ),
+        pytest.param(
+            "jakkaritw@chememan.com", "post", "/approval/override-step",
+            {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.admin_override_step": {
+                    "return_value": _fake_state(
+                        status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032",
+                        approver1_empcode="200",
+                    )
+                },
+                "app.routers.approval.notifications.notify_step_overridden": {},
+                "app.routers.approval.notifications.notify_turn": {},
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="override-step",
+        ),
+        pytest.param(
+            "filler@chememan.com", "get", "/approval/status",
+            {"params": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.authorize_status_view": {},
+                "app.routers.approval.resolve_submitter": {"return_value": (None, None)},
+                "app.routers.approval.get_approval_status": {
+                    "return_value": _fake_state(status="DRAFT", current_position=None)
+                },
+                "app.routers.approval.is_post_deadline": {"return_value": False},
+            },
+            id="status",
+        ),
+    ],
+)
+def test_can_submit_reuses_the_scope_already_resolved_this_request(
+    client, caller_email, http_method, path, request_kwargs, extra_patches,
+):
+    """Perf regression guard (gate review, 2026-08-16): `submit`/
+    `override-step`/`status` each already resolve `scope` once for their own
+    logic before `_set_can_submit` runs -- it must REUSE that object, not pay
+    a SECOND full `resolve_scope` (up to 5 round-trips: `_FILL_SQL`,
+    `_MANAGER_SEE_ADD_SQL`, `resolve_submitter`,
+    `departments_pending_for_empcode`, `cost_centers_for_departments`) on
+    `GET /approval/status` — the app's hottest endpoint (fires on every
+    ฝ่าย switch and after every action). `approve`/`reject` are NOT in this
+    list: they never had a scope in hand to begin with, so their single
+    `resolve_scope` call inside `_set_can_submit` is not a regression to
+    guard against.
+
+    Proven two ways so a future "resolved once, but a NEW, coincidentally-
+    equal scope" refactor cannot slip past: `resolve_scope` is asserted
+    called exactly ONCE, and the object `evaluate_submit_eligibility`
+    receives IS (identity, not `==`) the one `resolve_scope` returned."""
+    scope_sentinel = MagicMock(is_admin=True)  # is_admin=True also satisfies override-step's own admin gate
+    _override_auth(caller_email)
+    with ExitStack() as stack, patch("app.routers.approval.get_fabric_conn") as mock_conn:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        mock_resolve_scope = stack.enter_context(
+            patch("app.routers.approval.resolve_scope", return_value=scope_sentinel)
+        )
+        for target, kwargs in extra_patches.items():
+            stack.enter_context(patch(target, **kwargs))
+        mock_eligibility = stack.enter_context(
+            patch("app.routers.approval.evaluate_submit_eligibility", return_value=SubmitEligibility(can_submit=True))
+        )
+        response = getattr(client, http_method)(path, **request_kwargs)
+
+    assert response.status_code == 200
+    mock_resolve_scope.assert_called_once()
+    # args = (conn, department, fiscal_year, email, scope)
+    assert mock_eligibility.call_args.args[4] is scope_sentinel
 
 
 def test_status_401_without_auth(client):

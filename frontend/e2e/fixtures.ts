@@ -173,6 +173,24 @@ export function approvalState(overrides: Partial<ApprovalStatusState> = {}): App
     current_approver_empcode: null,
     can_act: false,
     notification_warning: null,
+    // `is_post_deadline` (2026-08-14 fix) and `can_submit`/
+    // `submit_blocked_reason` (2026-08-16 fix #2) were both missing from
+    // this default until now -- `e2e/` is excluded from `tsc`, so a missing
+    // required field never surfaced as a build error, only as a silent
+    // `undefined` reaching the component at runtime (harmless for these two
+    // specific fields' fail-closed defaults, but worth closing since both
+    // feed the SAME Submit-button decision this fixture exists to drive).
+    //
+    // `can_submit` defaults `false` (gate review, 2026-08-16), matching the
+    // server's own fail-closed default -- a PERMISSIVE `true` default here
+    // could never catch a regression in the fail-closed client code it is
+    // meant to exercise (a fixture that always says "yes" cannot prove the
+    // "no" path works). Specs that need the Submit button visible set
+    // `can_submit: true` explicitly (e.g. filler-journey.spec.ts 1.9) --
+    // admin-journey.spec.ts already did this for both its cases.
+    is_post_deadline: false,
+    can_submit: false,
+    submit_blocked_reason: null,
     ...overrides,
   }
 }

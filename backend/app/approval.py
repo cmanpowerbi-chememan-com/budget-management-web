@@ -27,6 +27,7 @@ themselves, dedup/self-skip drops the redundant position automatically —
 no special-cased branches needed for "invalid approver1" vs "self-submit".
 """
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -324,6 +325,24 @@ class ApprovalStatusState(BaseModel):
     # path that never sets it hides the button rather than showing a doomed
     # one.
     is_post_deadline: bool = False
+    # SIT defect fix (2026-08-16, doomed-submit-button case #2): set by the
+    # router (never by this module, same placement reasoning as
+    # `is_post_deadline` just above) from `evaluate_submit_eligibility` --
+    # the exact read-only decision `submit_department` itself now delegates
+    # to. Replaces `is_post_deadline` as the frontend's `canSubmit` input:
+    # `is_post_deadline` alone could not tell apart the post-deadline
+    # override door from the OTHER refused admin shape (not a filler, not
+    # orphan, no Template-2 rows, cycle still open) -- that shape always
+    # showed a Submit button that then 403'd. Defaults False (fail-closed):
+    # any path that never sets it hides the button.
+    can_submit: bool = False
+    # Machine-readable reason when `can_submit` is False -- one of
+    # `ERROR_CODE_BY_EXCEPTION`'s submit-related values (`department_empty`,
+    # `not_filler_of_department`, `year_not_open`, `past_deadline`,
+    # `invalid_approval_state`, `admin_cannot_submit_in_cycle`,
+    # `mid_chain_admin_overwrite`). `None` when `can_submit` is True or
+    # unknown (fail-closed default).
+    submit_blocked_reason: str | None = None
 
 
 def _occupant_for_position(position: int, approver1_empcode: str | None) -> str:
@@ -611,21 +630,112 @@ def resolve_chain(conn: pyodbc.Connection, submitter_email: str) -> tuple[str | 
 # Submit
 # ---------------------------------------------------------------------------
 
-def _ensure_admin_overwrite_allowed(existing: dict | None, department: str, fiscal_year: int) -> None:
-    """B2 gate fix — fail-closed guard shared by the ADMIN_SUBMIT
-    (Template-2 door) and orphan-department branches: neither may silently
-    overwrite a record that is already mid-chain (PENDING_APPROVER1/2/3) or
-    already APPROVED. This is the DEFAULT policy until jakkaritw confirms
-    whether admin should be allowed to override mid-chain in all cases —
-    kept as one small shared guard so flipping that policy later means
-    deleting this function's call sites, not restructuring
-    `submit_department`. The post-deadline branch never calls this —
-    ADR-0012's confirmed policy lets it override ANY existing status."""
-    if existing is not None and existing["status"] in PENDING_STATUSES | {APPROVED}:
-        raise MidChainAdminOverwriteError(
-            f"{department}/{fiscal_year} is {existing['status']} — mid-approval; admin cannot "
-            "admin-submit until it is rejected or the submission deadline has passed"
+@dataclass
+class SubmitEligibility:
+    """Read-only mirror of `submit_department`'s decision tree — SAME
+    predicates, SAME query order, zero writes. `submit_department` (the
+    write path) and `routers/approval.py`'s `_set_can_submit` (the
+    button-visibility verdict on every `GET/POST /approval/*` response) both
+    build off this ONE function, so a future change to a door automatically
+    moves both instead of the two silently drifting apart — which is exactly
+    the shape of the SIT "doomed submit button" bug this closes (2026-08-16,
+    the sibling of the 2026-08-14 `is_post_deadline` fix): the admin hat used
+    to decide button visibility from `status`/`is_post_deadline` alone, which
+    cannot tell the 3 admin doors (Template-2/orphan/post-deadline-override)
+    apart from the 4th, refused shape (not a filler, department not orphan,
+    no Template-2 rows, cycle still open) — that shape always showed a
+    button that then 403'd with `AdminCannotSubmitInCycleError`.
+
+    `reason` is `None` when `can_submit` is True; otherwise one of
+    `ERROR_CODE_BY_EXCEPTION`'s values — see that map for what the code means
+    and `ERROR_HTTP_STATUS` for the HTTP status `submit_department` raises
+    for it.
+
+    `existing`/`dept_ccs`/`is_filler`/`has_admin_template_rows` are the data
+    ALREADY fetched while deciding — `submit_department` reuses them
+    directly for its write branch instead of re-querying. This is WHY the
+    query count/order stays byte-identical to before this refactor (every
+    pre-existing mocked-cursor test in test_approval.py still pins the same
+    `fetchone`/`fetchall` sequence unchanged)."""
+
+    can_submit: bool
+    reason: str | None = None
+    existing: dict | None = None
+    dept_ccs: set[str] = field(default_factory=set)
+    is_filler: bool = False
+    has_admin_template_rows: bool = False
+
+
+def evaluate_submit_eligibility(
+    conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, scope: "Scope",
+) -> SubmitEligibility:
+    """Would `submit_department(conn, department, fiscal_year, submitter_email, scope)`
+    succeed right now? Same branch order as that function's docstring
+    describes (department-emptiness first, then filler-normal-chain vs the 3
+    admin-only doors) — see `SubmitEligibility` for why this is the ONE place
+    that logic lives.
+
+    `submitter_email` is accepted but not read in this function's body (gate
+    review, 2026-08-16) — kept for signature symmetry with
+    `submit_department(conn, department, fiscal_year, submitter_email, scope)`,
+    the write path this mirrors call-for-call, so the two stay trivially
+    swappable at every call site without a parameter-order trap. Not dropped:
+    12 existing test call sites in test_approval.py already pass it
+    positionally, and every branch below is decided by `scope` alone."""
+    existing = _fetch_row(conn, department, fiscal_year)
+    dept_ccs = _department_cost_centers(conn, department)
+    if not _department_has_pending_rows(conn, department, dept_ccs, fiscal_year):
+        return SubmitEligibility(can_submit=False, reason="department_empty", existing=existing, dept_ccs=dept_ccs)
+
+    is_filler = bool(dept_ccs & set(scope.fill_cost_centers))
+    if is_filler:
+        if existing is not None and existing["status"] != REJECTED:
+            return SubmitEligibility(
+                can_submit=False, reason="invalid_approval_state", existing=existing, dept_ccs=dept_ccs, is_filler=True,
+            )
+        year_state = _fiscal_year_state(conn, fiscal_year)
+        if year_state == YEAR_NOT_OPEN:
+            return SubmitEligibility(
+                can_submit=False, reason="year_not_open", existing=existing, dept_ccs=dept_ccs, is_filler=True,
+            )
+        if year_state == YEAR_PAST_DEADLINE:
+            return SubmitEligibility(
+                can_submit=False, reason="past_deadline", existing=existing, dept_ccs=dept_ccs, is_filler=True,
+            )
+        return SubmitEligibility(can_submit=True, existing=existing, dept_ccs=dept_ccs, is_filler=True)
+
+    if not scope.is_admin:
+        return SubmitEligibility(
+            can_submit=False, reason="not_filler_of_department", existing=existing, dept_ccs=dept_ccs,
         )
+
+    has_admin_template_rows = _department_has_admin_template_rows(conn, department, fiscal_year)
+    if has_admin_template_rows:
+        if existing is not None and existing["status"] in PENDING_STATUSES | {APPROVED}:
+            return SubmitEligibility(
+                can_submit=False, reason="mid_chain_admin_overwrite", existing=existing, dept_ccs=dept_ccs,
+                has_admin_template_rows=True,
+            )
+        return SubmitEligibility(can_submit=True, existing=existing, dept_ccs=dept_ccs, has_admin_template_rows=True)
+
+    if not dept_ccs:  # orphan: zero cost centers currently map to this department
+        if existing is not None and existing["status"] in PENDING_STATUSES | {APPROVED}:
+            return SubmitEligibility(
+                can_submit=False, reason="mid_chain_admin_overwrite", existing=existing, dept_ccs=dept_ccs,
+            )
+        return SubmitEligibility(can_submit=True, existing=existing, dept_ccs=dept_ccs)
+
+    if _is_post_deadline(conn, fiscal_year):
+        # The query result decides `can_submit` itself (the post-deadline
+        # override door) -- it is NOT also stashed on a `SubmitEligibility`
+        # field, since nothing ever read one (gate review, 2026-08-16;
+        # dropped). `state.is_post_deadline` on the response is a SEPARATE,
+        # unconditional value the router computes itself (`_set_is_post_
+        # deadline`) -- see that function's docstring for why the two must
+        # stay independent rather than one reusing the other.
+        return SubmitEligibility(can_submit=True, existing=existing, dept_ccs=dept_ccs)
+
+    return SubmitEligibility(can_submit=False, reason="admin_cannot_submit_in_cycle", existing=existing, dept_ccs=dept_ccs)
 
 
 def submit_department(
@@ -633,79 +743,83 @@ def submit_department(
 ) -> ApprovalStatusState:
     """Submit `(department, fiscal_year)`.
 
-    Branch selection: a caller who Fills >=1 cost center of this department
-    ALWAYS goes through the normal chain, regardless of `scope.is_admin` —
-    this is what keeps Nipaporn/Waraporn's dual role correct (they Fill 5
-    departments themselves and must go through self-skip/dedup like anyone
-    else, per ADR-0006's own worked examples). Only a caller who does NOT
-    Fill this department at all can hit the admin direct-approve branch, and
-    only if they are admin (ADR-0012).
+    The WHOLE authorization decision (department-emptiness, filler-normal-
+    chain-vs-admin-doors branch selection, the B2 fail-closed mid-chain-
+    overwrite guard) lives in `evaluate_submit_eligibility` — this function
+    only turns a refused verdict into the matching exception (for the HTTP
+    layer, via `ERROR_CODE_BY_EXCEPTION`) and, on a go verdict, dispatches to
+    the write branch the eligibility check already identified. See
+    `SubmitEligibility`'s docstring for why the decision is centralized this
+    way and `evaluate_submit_eligibility` for the branch order itself.
 
-    B2 gate fix: the ADMIN_SUBMIT and orphan branches are fail-closed —
-    `_ensure_admin_overwrite_allowed` blocks them from overwriting a
-    mid-chain/APPROVED record. The post-deadline branch is exempt (ADR-0012:
-    admin may override ANY status once the cycle has closed).
+    Branch selection recap: a caller who Fills >=1 cost center of this
+    department ALWAYS goes through the normal chain, regardless of
+    `scope.is_admin` — this is what keeps Nipaporn/Waraporn's dual role
+    correct (they Fill 5 departments themselves and must go through
+    self-skip/dedup like anyone else, per ADR-0006's own worked examples).
+    Only a caller who does NOT Fill this department at all can hit the admin
+    direct-approve branch, and only if they are admin (ADR-0012).
 
     Admin-GL rows (`dbo.gl_group.edit_by='admin'`, ADR-0024) are never
     referenced here at all — they never enter `budget.approval_status`,
     approved-on-save the instant the admin (Budget dept) saves them (A5's
     write path), independent of this normal chain. A normal submit governs
     only the department's lane-2.1 (user-GL) rows, whether the submitter is
-    an admin who also Fills the department or a plain non-admin filler.
-
-    Bug 3 (2026-08-07 wave) fix: the VERY FIRST check, before the
-    filler/admin branch split, is `DepartmentEmptyError` —
-    `_department_has_pending_rows` on the department's live cost-center set.
-    A department with zero `budget.pending_budget` rows has nothing to
-    approve, so this refuses EVERY caller identically (jakkaritw, option ก) —
-    a plain filler, and an admin via any of the three doors below. This is
-    intentionally checked ahead of even `NotFillerOfDepartmentError` — data
-    validity is a more fundamental precondition than who is asking.
-
-    2026-08-08 3-state extension (jakkaritw): a `fiscal_year` with no
-    `dbo.submission_deadline` row (NOT_OPEN — see `app.deadline`'s module
-    docstring) is not submittable via the normal chain either — checked
-    inside `_submit_normal_chain` below, which BOTH a plain non-admin filler
-    and an admin-who-also-Fills go through identically (same reasoning as
-    the admin-GL paragraph above). The 3 admin-only doors below
-    (Template-2/orphan/post-deadline-override) are UNCHANGED: they still
-    consult `_is_post_deadline` only, so a NOT_OPEN, non-orphan,
-    non-Template-2 department still falls through to
-    `AdminCannotSubmitInCycleError` exactly as before — data for such a year
-    is expected to arrive via the future admin-import feature, not through
-    this endpoint."""
-    existing = _fetch_row(conn, department, fiscal_year)
-    dept_ccs = _department_cost_centers(conn, department)
-    if not _department_has_pending_rows(conn, department, dept_ccs, fiscal_year):
-        raise DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้")
-    is_filler = bool(dept_ccs & set(scope.fill_cost_centers))
+    an admin who also Fills the department or a plain non-admin filler."""
+    eligibility = evaluate_submit_eligibility(conn, department, fiscal_year, submitter_email, scope)
+    existing = eligibility.existing
     now = _now()
 
-    if is_filler:
+    if not eligibility.can_submit:
+        if eligibility.reason == "department_empty":
+            raise DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้")
+        if eligibility.reason == "invalid_approval_state":
+            raise InvalidApprovalStateError(
+                f"{department}/{fiscal_year} is {existing['status']} — cannot submit "
+                "(PENDING_* has no recall; APPROVED needs no re-submission, ADR-0013)"
+            )
+        if eligibility.reason == "year_not_open":
+            raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ")
+        if eligibility.reason == "past_deadline":
+            raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
+        if eligibility.reason == "not_filler_of_department":
+            raise NotFillerOfDepartmentError(f"{submitter_email} does not Fill any cost center of {department!r}")
+        if eligibility.reason == "mid_chain_admin_overwrite":
+            raise MidChainAdminOverwriteError(
+                f"{department}/{fiscal_year} is {existing['status']} — mid-approval; admin cannot "
+                "admin-submit until it is rejected or the submission deadline has passed"
+            )
+        if eligibility.reason == "admin_cannot_submit_in_cycle":
+            raise AdminCannotSubmitInCycleError(
+                f"admin cannot submit {department!r} while the cycle is open unless it is orphan "
+                "or was entered via the Template-2 (ADMIN) door"
+            )
+        # Should never fire — every real branch in `evaluate_submit_eligibility`
+        # is handled above. Was a bare `AssertionError` (gate review,
+        # 2026-08-16): not in `ERROR_CODE_BY_EXCEPTION`, so it would have
+        # surfaced as an UNCAUGHT 500 through `_run` instead of the same
+        # clean, mapped 4xx every other refusal gets. Reuses
+        # `InvalidApprovalStateError` (already mapped -> 409) rather than
+        # inventing a new exception/code for a should-never-happen path —
+        # the write is refused either way (fail-closed); this only controls
+        # HOW that refusal is reported.
+        raise InvalidApprovalStateError(  # pragma: no cover
+            f"{department}/{fiscal_year}: unreachable SubmitEligibility.reason: {eligibility.reason!r}"
+        )
+
+    if eligibility.is_filler:
         return _submit_normal_chain(conn, department, fiscal_year, submitter_email, existing, now)
 
-    if not scope.is_admin:
-        raise NotFillerOfDepartmentError(f"{submitter_email} does not Fill any cost center of {department!r}")
-
-    if _department_has_admin_template_rows(conn, department, fiscal_year):
-        _ensure_admin_overwrite_allowed(existing, department, fiscal_year)
+    if eligibility.has_admin_template_rows:
         return _admin_direct_approve(conn, department, fiscal_year, submitter_email, existing, now, ACTION_ADMIN_SUBMIT)
 
-    is_orphan = not dept_ccs  # reuse the already-fetched set — no extra query
-    if is_orphan:
-        _ensure_admin_overwrite_allowed(existing, department, fiscal_year)
+    if not eligibility.dept_ccs:  # orphan
         return _admin_direct_approve(
             conn, department, fiscal_year, submitter_email, existing, now, ACTION_ADMIN_OVERRIDE_ORPHAN
         )
 
-    if _is_post_deadline(conn, fiscal_year):
-        return _admin_direct_approve(
-            conn, department, fiscal_year, submitter_email, existing, now, ACTION_ADMIN_OVERRIDE_DEADLINE
-        )
-
-    raise AdminCannotSubmitInCycleError(
-        f"admin cannot submit {department!r} while the cycle is open unless it is orphan "
-        "or was entered via the Template-2 (ADMIN) door"
+    return _admin_direct_approve(
+        conn, department, fiscal_year, submitter_email, existing, now, ACTION_ADMIN_OVERRIDE_DEADLINE
     )
 
 
@@ -741,29 +855,14 @@ def _insert_new_approval_row(
 def _submit_normal_chain(
     conn: pyodbc.Connection, department: str, fiscal_year: int, submitter_email: str, existing: dict | None, now: datetime,
 ) -> ApprovalStatusState:
-    if existing is not None and existing["status"] != REJECTED:
-        raise InvalidApprovalStateError(
-            f"{department}/{fiscal_year} is {existing['status']} — cannot submit "
-            "(PENDING_* has no recall; APPROVED needs no re-submission, ADR-0013)"
-        )
-    # 2026-08-08 3-state extension (jakkaritw): a year nobody may fill should
-    # not be submittable by a filler either — a plain non-admin filler AND an
-    # admin who also Fills this department (Nipaporn/Waraporn's own dual
-    # role, ADR-0006) both route through THIS function identically (see the
-    # module docstring above `submit_department`), so both are refused the
-    # same way here, mirroring exactly how the pre-existing PAST_DEADLINE
-    # check below already treats an admin-filler as a plain filler for
-    # deadline purposes (no `scope` is even threaded into this function).
-    # The 3 admin-only doors in `submit_department` (Template-2, orphan,
-    # post-deadline override) are UNCHANGED by this — data for a NOT_OPEN
-    # year is expected to arrive via the future admin-import feature, not
-    # through a normal-chain submit.
-    year_state = _fiscal_year_state(conn, fiscal_year)
-    if year_state == YEAR_NOT_OPEN:
-        raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ")
-    if year_state == YEAR_PAST_DEADLINE:
-        raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
-
+    """The filler-chain write branch — only ever reached via `submit_department`
+    after `evaluate_submit_eligibility` has already confirmed `existing` is
+    either `None` or `REJECTED` (no recall of a PENDING_*/APPROVED record,
+    ADR-0013) AND `fiscal_year` is OPEN (not NOT_OPEN/PAST_DEADLINE,
+    2026-08-08 3-state extension) — those checks used to live here directly;
+    they now live once in `evaluate_submit_eligibility` so this function and
+    the button-visibility verdict can never drift on what "eligible" means.
+    `submit_department` is this function's only caller."""
     submitter_empcode, approver1_empcode, active = resolve_chain(conn, submitter_email)
     first_status = _POSITION_TO_STATUS[active[0]]
     action = ACTION_RESUBMIT if existing is not None else ACTION_SUBMIT
