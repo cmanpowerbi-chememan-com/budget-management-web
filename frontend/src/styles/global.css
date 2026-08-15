@@ -13,7 +13,7 @@ body {
   font-family: var(--sans);
   background: var(--paper);
   color: var(--ink);
-  font-size: 14px;
+  font-size: .875rem; /* = 14px at the default root size */
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   transition:
@@ -29,10 +29,17 @@ textarea {
   color: inherit;
 }
 
+/* GATE HIGH-2 (2026-08-15): was `var(--accent)` — once --accent and --paper
+   became the same green hex, `outline-offset: 2px` (which paints the ring
+   OUTSIDE the control, over whatever background sits behind it) made every
+   shell-hosted control's ring invisible (1:1). --focus-ring carries the
+   theme-aware split (tokens.css): card-context default here, shell-context
+   override wherever a container has no card ancestor (.nav/.side-heading-row/
+   .approval-bar below). */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -50,7 +57,10 @@ input:focus-visible {
   top: 0;
   z-index: 100;
   background: var(--paper);
-  border-bottom: 1px solid var(--line-2);
+  /* --line-on-shell (not --line-2): this border sits on --paper's OWN
+     background (green) with no light card behind it — the plain dark
+     hairline used everywhere else would vanish here (~1:1). */
+  border-bottom: 1px solid var(--line-on-shell);
 }
 .nav-inner {
   display: flex;
@@ -60,6 +70,23 @@ input:focus-visible {
   max-width: 1980px;
   margin: 0 auto;
   padding: 0 28px;
+}
+/* Wordmark (frontend/public/chememan-full-logo-white.png, source 1190x616,
+   1.93:1, white knockout on the Sea Green shell) sits left of the text
+   lockup below (jakkaritw, 2026-08-15). height + width:auto only — never a
+   fixed width, so the aspect ratio can't distort; flex-shrink:0 so a narrow
+   viewport squeezes the text lockup, not the logo.
+   44px, not 36px (measured, 2026-08-15): at 36px on a STANDARD (1x) DPI
+   monitor the wordmark's fine strokes render into only ~21% crisp
+   near-white pixels (rest anti-aliased blend) — measurably soft. The exact
+   same 36px on a 2x/retina display renders ~38% crisp, and a 44px render
+   at 1x DPI matches that same ~39% — i.e. 44px on an ordinary monitor reads
+   as crisp as 36px already does on a retina one. Still comfortably inside
+   the 64px bar and clearly taller than the ~27px two-line text block. */
+.nav-logo {
+  height: 44px;
+  width: auto;
+  flex-shrink: 0;
 }
 .nav-logo-text {
   display: flex;
@@ -71,30 +98,16 @@ input:focus-visible {
   font-weight: 600;
   font-size: 14.5px;
   letter-spacing: -0.005em;
+  /* Sits directly on .nav's own --paper background (green) — was relying on
+     inherited body color (dark ink), invisible there. */
+  color: var(--ink-on-shell);
 }
 .nav-logo-text .sub {
   font-size: 10.5px;
-  color: var(--ink-3);
+  color: var(--ink-on-shell-2);
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.icon-btn {
-  margin-left: auto;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-  transition: all 160ms ease;
-}
-.icon-btn:hover {
-  border-color: var(--ink);
-  transform: translateY(-1px);
 }
 
 /* ─── Page shell ─── */
@@ -116,17 +129,21 @@ input:focus-visible {
   gap: 24px;
   flex-wrap: wrap;
 }
+/* .page-title/.glassy render as an <h1> directly in .page-head — no light
+   card behind it, straight on the page shell (--paper, now green) — so
+   both the base word ("OPEX") and the emphasized word ("Management.") use
+   the on-shell tokens, not the card-context --accent-text/--ink. */
 .page-title {
   font-family: var(--serif);
   font-size: clamp(34px, 4.9vw, 60px);
   line-height: 0.98;
   letter-spacing: -0.025em;
   font-weight: 400;
-  color: var(--accent);
+  color: var(--accent-on-shell);
 }
 .page-title em {
   font-style: italic;
-  color: var(--accent);
+  color: var(--accent-on-shell);
   opacity: 0.85;
 }
 
@@ -139,13 +156,13 @@ input:focus-visible {
   -webkit-background-clip: border-box;
   background-clip: border-box;
   -webkit-text-fill-color: currentColor;
-  color: var(--accent);
+  color: var(--accent-on-shell);
   filter: none;
   text-shadow: none;
 }
 .glassy em {
   font-style: italic;
-  color: var(--ink);
+  color: var(--ink-on-shell);
 }
 
 /* ─── Logged-in user bar ─── */
@@ -165,7 +182,7 @@ input:focus-visible {
   color: var(--ink-3);
 }
 .user-bar-status.user-bar-error {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .meta-tag {
   font-family: var(--mono);
@@ -192,7 +209,10 @@ input:focus-visible {
   font-size: 15px;
   color: #fff;
   text-transform: uppercase;
-  background: var(--accent-2);
+  /* --accent-2-text (2026-08-15, contrast fix), not raw --accent-2 — white
+     initials on the bright hover-mint only cleared 3.25:1; the darker
+     pine-green companion clears 6.48:1 while staying in the green family. */
+  background: var(--accent-2-text);
 }
 .user-avatar.admin {
   background: var(--accent);
@@ -205,15 +225,29 @@ input:focus-visible {
   padding: 2px 7px;
   border-radius: 999px;
 }
+/* GATE LOW-7 (2026-08-15) — rule: a tint (color-mix background/border) and
+   its own text always mix from the SAME base token. Text here moved to
+   --accent-text (terracotta) when --accent became green, but the tint was
+   left mixing from raw --accent — terracotta text on a green plate/border.
+   Fixed at this + 4 more sites (.filter-chip/.grid-error/.month-col.now/
+   .admin-toggle) by mixing the tint from --accent-text too; both tokens are
+   already theme-aware so this needs no per-theme override. .role-badge.user/
+   .v3-count/.dept-picker-badge already mixed text+tint from the SAME base
+   token (--accent-2) so this rule held for them too — but --accent-2 itself
+   failed WCAG as text (2.63-2.65:1); see the --accent-2-text fix directly
+   below, applied identically to all three plus 2 solid-fill sites. */
 .role-badge.admin {
-  background: color-mix(in oklab, var(--accent) 16%, transparent);
-  color: var(--accent);
-  border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--line));
+  background: color-mix(in oklab, var(--accent-text) 16%, transparent);
+  color: var(--accent-text);
+  border: 1px solid color-mix(in oklab, var(--accent-text) 42%, var(--line));
 }
+/* --accent-2-text (2026-08-15, contrast fix — same GATE LOW-7 rule: tint and
+   text mix from the SAME base token): raw --accent-2 as text on this chip's
+   light tint measured 2.63:1; the darker pine-green companion clears 4.5:1. */
 .role-badge.user {
-  background: color-mix(in oklab, var(--accent-2) 16%, transparent);
-  color: var(--accent-2);
-  border: 1px solid color-mix(in oklab, var(--accent-2) 42%, var(--line));
+  background: color-mix(in oklab, var(--accent-2-text) 16%, transparent);
+  color: var(--accent-2-text);
+  border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
 }
 
 /* ─── User bar · V3 layout (avatar/identity | สายงาน › ฝ่าย(n) › Cost
@@ -283,7 +317,7 @@ input:focus-visible {
   font-family: var(--serif);
   font-size: 20px;
   line-height: 1;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
@@ -298,9 +332,11 @@ input:focus-visible {
   font-size: 9.5px;
   font-weight: 800;
   line-height: 1;
-  color: var(--accent-2);
-  background: color-mix(in oklab, var(--accent-2) 15%, transparent);
-  border: 1px solid color-mix(in oklab, var(--accent-2) 42%, var(--line));
+  /* --accent-2-text, not raw --accent-2 (2026-08-15, contrast fix) — was
+     2.65:1 as text on this tint; the pine-green companion clears 4.5:1. */
+  color: var(--accent-2-text);
+  background: color-mix(in oklab, var(--accent-2-text) 15%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
   border-radius: 999px;
   min-width: 17px;
   height: 17px;
@@ -356,7 +392,10 @@ input:focus-visible {
   color: #fff;
 }
 .v3 .v3-gl-pill {
-  background: var(--accent-2);
+  /* --accent-2-text (2026-08-15, contrast fix) — raw --accent-2 as a solid
+     fill under white text measured the same 3.25:1 as .user-avatar; found
+     during the badge-contrast sweep, same fix applied. */
+  background: var(--accent-2-text);
   color: #fff;
 }
 .v3 .v3-cc-pill .n,
@@ -392,9 +431,11 @@ input:focus-visible {
   padding: 8px 13px;
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 8%, var(--surface));
-  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+  color: var(--accent-text);
+  /* GATE LOW-7: tint mixes from --accent-text, not raw --accent — see the
+     rule comment at .role-badge.admin. */
+  background: color-mix(in oklab, var(--accent-text) 8%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent-text) 30%, var(--line));
   border-radius: var(--r);
 }
 .filter-chip-empty {
@@ -439,14 +480,28 @@ input:focus-visible {
 .btn-add {
   border-color: var(--line);
 }
+/* GATE MED-5 (2026-08-15): NOT shell-direct — all 3 call sites render
+   inside a light card (AddTransactionForm's .add-txn-form/--paper-2 inside
+   .grid-toolbar/--surface; DetailSubform's and TripManager's .modal/
+   --surface), never straight on --paper. The prior comment here was wrong
+   for the same reason as HIGH-1's .admin-zone-title — a color-mix() parse
+   gap in the contrast auditor misread these opaque card backgrounds as the
+   shell below them. border-color: var(--line-on-shell) washed a crisp
+   10.08:1 edge down to 3.19:1; reverted to var(--accent), which is exactly
+   the fill color so the edge reads as a clean self-colored border on its
+   actual (light) background. */
 .btn-export {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
 }
+/* Was a hardcoded terracotta hex (#8f3216) left over from the pre-green
+   theme — re-derived from --accent (now green) using the same darken-on-
+   hover idiom already used by .btn-approve below, instead of hardcoding a
+   color unrelated to the current accent. */
 .btn-export:hover {
-  background: #8f3216;
-  border-color: #8f3216;
+  background: color-mix(in oklab, var(--accent) 78%, black);
+  border-color: color-mix(in oklab, var(--accent) 78%, black);
 }
 /* Small ghost variant (mockup 0002.3budget-export.html lines 166-168) —
    used by the "Reset columns" control (UI-parity point 8c); no other
@@ -456,14 +511,24 @@ input:focus-visible {
   font-size: 12px;
   border-radius: var(--r);
 }
+/* .btn-ghost's one real caller (Reset columns, GridTable.tsx) sits in
+   .side-heading-row, which has no card ancestor — same reasoning as
+   .side-heading below. Fixed by the automated contrast audit
+   (bg=rgb(26,71,42), ratio=1.13). */
 .btn-ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--ink-2);
+  color: var(--ink-on-shell-2);
 }
 .btn-ghost:hover {
-  color: var(--ink);
+  color: var(--ink-on-shell);
   background: transparent;
+}
+/* GATE HIGH-2: .btn-ghost's caller (Reset columns) sits in
+   .side-heading-row, no card ancestor, so its focus ring needs the
+   shell-context color. */
+.side-heading-row .btn-ghost {
+  --focus-ring: var(--accent-on-shell);
 }
 
 /* ─── A8 budget grid toolbar ─── */
@@ -594,6 +659,15 @@ input:focus-visible {
   color: var(--status-approved);
   flex-shrink: 0;
 }
+/* GATE HIGH-1 (2026-08-15): NOT shell-direct — .admin-zone (above) is an
+   opaque light card of its own (color-mix(...--status-approved 7%, --surface),
+   ~rgb(238,237,235)), and this title is its direct child (BudgetGrid.tsx),
+   so it never touches --paper. The prior comment here was wrong — the
+   contrast auditor that "found" a --paper failure couldn't parse Chromium's
+   oklab() serialization of the color-mix() result yet, read the opaque card
+   as transparent, and blamed the shell underneath it. --status-approved on
+   the card's real background clears 5.60:1; the --accent-on-shell swap that
+   "fixed" that misreading dropped it to 1.83:1. Reverted. */
 .admin-zone-title {
   font-family: var(--serif);
   font-weight: 500;
@@ -649,7 +723,11 @@ input:focus-visible {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): this is an inset input nested inside
+     .dept-picker-panel's own --surface card — was using --paper only for
+     its slightly-darker cream shade, not for the page-shell color, which
+     is now green and unrelated to this box. */
+  background: var(--paper-2);
   color: var(--ink);
   font-size: 13px;
 }
@@ -672,9 +750,11 @@ input:focus-visible {
   font-family: var(--mono);
   font-size: 9.5px;
   font-weight: 800;
-  color: var(--accent-2);
-  background: color-mix(in oklab, var(--accent-2) 15%, transparent);
-  border: 1px solid color-mix(in oklab, var(--accent-2) 42%, var(--line));
+  /* --accent-2-text, not raw --accent-2 (2026-08-15, contrast fix) — was
+     2.65:1 as text on this tint; the pine-green companion clears 4.5:1. */
+  color: var(--accent-2-text);
+  background: color-mix(in oklab, var(--accent-2-text) 15%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
   border-radius: 999px;
   padding: 1px 6px;
 }
@@ -723,7 +803,10 @@ input:focus-visible {
   gap: 12px;
   flex-wrap: wrap;
   padding: 12px;
-  background: var(--paper);
+  /* --paper-2 (not --paper): nested inside .grid-toolbar's own --surface
+     card as an inset dashed panel — same reasoning as .dept-picker-search
+     above. */
+  background: var(--paper-2);
   border: 1px dashed var(--line);
   border-radius: var(--r);
 }
@@ -797,7 +880,7 @@ input:focus-visible {
   font-size: 12px;
 }
 .add-txn-error {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12.5px;
   align-self: center;
 }
@@ -848,10 +931,12 @@ input:focus-visible {
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  background: color-mix(in oklab, var(--accent) 8%, var(--surface));
-  border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+  /* GATE LOW-7: tint mixes from --accent-text, not raw --accent — see the
+     rule comment at .role-badge.admin. */
+  background: color-mix(in oklab, var(--accent-text) 8%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent-text) 35%, var(--line));
   border-radius: var(--r);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13.5px;
 }
 
@@ -880,11 +965,15 @@ input:focus-visible {
   gap: 12px;
   margin-bottom: 8px;
 }
+/* .side-heading-row (the heading + "Reset columns" row) has no card
+   ancestor — .table-panel only wraps the table BELOW it — so this renders
+   directly on --paper (green). Fixed by the automated contrast audit
+   (bg=rgb(26,71,42), ratio=1.64). */
 .side-heading {
   font-family: var(--serif);
   font-size: 20px;
   font-weight: 500;
-  color: var(--ink);
+  color: var(--ink-on-shell);
   margin: 0;
 }
 /* Bordered frame per side-table — border/radius live here, not on
@@ -1370,8 +1459,10 @@ body.col-dragging * {
    tinted header cell + gold dot/underline mark "today" so users don't have
    to count columns to find the current month. */
 .data-table thead th.month-col.now {
-  color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 8%, var(--paper-2));
+  color: var(--accent-text);
+  /* GATE LOW-7: tint mixes from --accent-text, not raw --accent — see the
+     rule comment at .role-badge.admin. */
+  background: color-mix(in oklab, var(--accent-text) 8%, var(--paper-2));
 }
 .data-table thead th.month-col.now .th-label {
   display: flex;
@@ -1603,7 +1694,9 @@ th.total-year-col {
   padding: 5px 7px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): inset editable cell nested in .data-table's
+     own --surface card, same reasoning as .dept-picker-search above. */
+  background: var(--paper-2);
   color: var(--ink);
   font-weight: 600;
   outline: none;
@@ -1626,7 +1719,8 @@ th.total-year-col {
   padding: 5px 7px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): same reasoning as .month-input above. */
+  background: var(--paper-2);
   color: var(--ink);
   font-size: 12px;
   outline: none;
@@ -1646,7 +1740,7 @@ th.total-year-col {
   padding: 6px 10px !important;
 }
 .row-message-error {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .row-message-saving {
   color: var(--ink-3);
@@ -1700,7 +1794,11 @@ th.total-year-col {
 .modal {
   width: 100%;
   max-width: 980px;
-  background: var(--paper);
+  /* --surface (not --paper): the whole special-GL/Trip Manager dialog and
+     every child inside it (.modal-title/.detail-table/.trip-card etc.)
+     assumes a light card background — --paper is now the green page shell,
+     which would make every --ink/--ink-2/--ink-3 text inside unreadable. */
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: 0 24px 60px -12px rgba(11, 26, 18, 0.35);
@@ -1724,7 +1822,7 @@ th.total-year-col {
 }
 .modal-title em {
   font-style: italic;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .modal-subtitle {
   margin-top: 4px;
@@ -1818,7 +1916,9 @@ th.total-year-col {
   padding: 5px 7px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): inset editable cell nested inside the modal's
+     own --surface card, same reasoning as .month-input above. */
+  background: var(--paper-2);
   color: var(--ink);
   font-size: 12px;
 }
@@ -1854,7 +1954,7 @@ th.total-year-col {
   letter-spacing: 0.05em;
 }
 .detail-table tr.total-row td.grand {
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--mono);
   font-size: 14px;
 }
@@ -1986,7 +2086,9 @@ th.total-year-col {
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): inset field nested inside the modal's own
+     --surface card, same reasoning as .month-input above. */
+  background: var(--paper-2);
   color: var(--ink);
   font-size: 12.5px;
 }
@@ -2153,7 +2255,8 @@ th.total-year-col {
   padding: 4px 6px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--paper);
+  /* --paper-2 (not --paper): same reasoning as .month-input above. */
+  background: var(--paper-2);
   font-family: var(--mono);
   text-align: right;
 }
@@ -2172,7 +2275,7 @@ th.total-year-col {
 .exp-row-total {
   font-family: var(--mono);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 /* Per-diem row — visually distinct (quiet tint) + its cells are always
@@ -2192,7 +2295,7 @@ th.total-year-col {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 /* รายละเอียด placeholder row beneath the expense table — disabled: no
    backing field exists in the trip data model yet (see TripManager.tsx). */
@@ -2247,6 +2350,13 @@ th.total-year-col {
   gap: 14px;
   flex-wrap: wrap;
 }
+/* .act-status is shared between .approval-bar (no card — sits directly on
+   the page shell, --paper) and .add-txn-trigger (inside .grid-toolbar's own
+   --surface card) — the base rule below serves the CARD case; the
+   .approval-bar-scoped overrides further down serve the shell case. Both
+   scoped overrides share specificity (0,2,0), so the error variant must
+   come AFTER the plain one to win on the same element (className="act-status
+   act-status-error"). */
 .act-status {
   font-family: var(--mono);
   font-size: 11.5px;
@@ -2254,7 +2364,30 @@ th.total-year-col {
   letter-spacing: 0.02em;
 }
 .act-status-error {
-  color: var(--accent);
+  color: var(--accent-text);
+}
+.approval-bar .act-status {
+  color: var(--ink-on-shell-2);
+}
+/* GATE finding 1 (2026-08-15): both this rule and the plain .act-status one
+   above used to resolve to the SAME #ffffff (--ink-on-shell-2 ==
+   --accent-on-shell on this shell — see the tokens.css warning), so an error
+   message was pixel-identical to a normal status line. Fixed with THREE
+   independent, colour-blind-safe cues (never colour alone): --error-on-shell
+   is a warm off-white, not pure white; font-weight 700 vs the normal line's
+   inherited 400; and a darkened plate (not a red one — red-on-green is the
+   one hue pair a red/green colour-blind reader may not distinguish from the
+   shell, so the plate's cue is LUMINANCE, not hue) that also lifts the text
+   contrast to 5.89:1 (tokens.css --error-on-shell comment has the full
+   numbers). */
+.approval-bar .act-status-error {
+  display: inline-block;
+  color: var(--error-on-shell);
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-on-shell);
 }
 .status-chip {
   font-family: var(--mono);
@@ -2270,20 +2403,33 @@ th.total-year-col {
   background: var(--paper-2);
   border: 1px solid var(--line);
 }
+/* .status-chip-pending/approved/rejected render inside .approval-bar (no
+   card — directly on --paper). Their backgrounds used to mix into
+   `transparent`, which is fine on the OLD cream page but on the new green
+   shell composites into a dark, muddy chip that fails contrast for every
+   text color below. Mixing into --surface instead makes each chip a small
+   opaque light card of its own — same appearance as before (--surface is
+   close to the old --paper), safe on any background behind it. */
 .status-chip-pending {
   color: #8a5a12;
-  background: color-mix(in oklab, var(--c-gold) 18%, transparent);
+  background: color-mix(in oklab, var(--c-gold) 18%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--c-gold) 50%, var(--line));
 }
 .status-chip-approved {
   color: var(--status-approved);
-  background: color-mix(in oklab, var(--status-approved) 14%, transparent);
+  background: color-mix(in oklab, var(--status-approved) 14%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--status-approved) 40%, var(--line));
 }
+/* GATE MED-4 (2026-08-15): was var(--accent)/var(--accent-text) — those
+   track the BRAND accent (now green), not a semantic status, so this chip
+   drifted with every accent change (most recently: green plate/border next
+   to terracotta text — a "rejected" chip that read as a second "approved"
+   one). --status-rejected (tokens.css) is its own token, same pattern as
+   --status-approved above, so it stays a stable red regardless of --accent. */
 .status-chip-rejected {
-  color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line));
+  color: var(--status-rejected);
+  background: color-mix(in oklab, var(--status-rejected) 12%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--status-rejected) 40%, var(--line));
 }
 .btn-submit,
 .btn-approve,
@@ -2310,29 +2456,72 @@ th.total-year-col {
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* GATE HIGH-2: these 3 render straight on --paper inside .approval-bar (no
+   card). Scoped to the .approval-bar ancestor, not the button classes
+   themselves — .btn-submit has a 2nd, unrelated call site
+   (SessionExpiredDialog, inside .modal, a light card) that must keep the
+   default card-context ring.
+   .btn-reject specifically uses the DIRECT-CHILD combinator (`>`), not the
+   descendant combinator its siblings use: ApprovalActionBar.tsx renders TWO
+   .btn-reject buttons — the trigger (direct child of .approval-bar, shell-
+   direct) and "ยืนยันตีกลับ" inside .reject-panel (a light --paper-2 card
+   nested inside .approval-bar). A plain `.approval-bar .btn-reject`
+   descendant selector matched BOTH, so the confirm button wrongly got a
+   white ring against its own light card (white-on-cream, ~1.27:1 — found by
+   the 2026-08-15 focus-pass contrast audit). `>` scopes the shell-context
+   ring to the trigger only; the confirm button now falls through to the
+   default card-context --accent-text ring, correct for its own background. */
+.approval-bar .btn-submit,
+.approval-bar .btn-approve,
+.approval-bar > .btn-reject {
+  --focus-ring: var(--accent-on-shell);
+}
 /* Submit is "the one accent moment" (mockup 0002.3) — bigger and wider than
    Approve/Reject: 13px 26px padding, 14px text, paper-plane icon. */
+/* .btn-submit renders directly in .approval-bar (no card, straight on
+   --paper) — --accent and --paper are now the SAME green hex, so a
+   var(--accent) border was literally invisible against its own page
+   background (0 ratio-defining step at all; fixed by the automated
+   contrast audit — border fg==bg, ratio=1). --ink-on-shell gives the
+   button a real, visible boundary against the shell.
+   GATE finding 2 (2026-08-15): that border-color used to live on the base
+   .btn-submit rule (unscoped), so it leaked onto .btn-submit's 2nd call
+   site — SessionExpiredDialog.tsx, inside .modal on --surface — where a
+   white border measured 1.05:1 (invisible-but-wrong, not a visible defect,
+   still the exact trap --focus-ring was already scoped for above). Moved to
+   `.approval-bar .btn-submit`, same idiom as the focus-ring rule; the base
+   rule below falls back to the shared `border: 1px solid transparent`,
+   which is correct there — that button already reads fine as a solid green
+   fill on a light card and never needed a visible edge. */
+.approval-bar .btn-submit {
+  border-color: var(--ink-on-shell);
+}
 .btn-submit {
   gap: 10px;
   padding: 13px 26px;
   font-size: 14px;
   color: #fff;
   background: var(--accent);
-  border-color: var(--accent);
 }
 .btn-submit svg {
   width: 15px;
   height: 15px;
   color: #fff;
 }
+/* Same re-derivation as .btn-export:hover above. */
 .btn-submit:hover {
-  background: #8f3216;
-  border-color: #8f3216;
+  background: color-mix(in oklab, var(--accent) 78%, black);
+  border-color: color-mix(in oklab, var(--accent) 78%, black);
 }
+/* Same reasoning as .btn-submit above: this button also renders unwrapped
+   in .approval-bar, and border-color==background-color made its edge
+   invisible once that background is the (differently-toned but still dark)
+   green shell — status-sap only clears 2.21:1 against --paper, short of the
+   3:1 a button boundary needs. */
 .btn-approve {
   color: #fff;
   background: var(--status-sap);
-  border-color: var(--status-sap);
+  border-color: var(--ink-on-shell);
 }
 .btn-approve:hover {
   background: color-mix(in oklab, var(--status-sap) 78%, black);
@@ -2355,7 +2544,11 @@ th.total-year-col {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: var(--paper);
+  /* --paper-2 (not --paper): unlike the rest of .approval-bar, this dashed
+     box has its own opaque fill — turning it into a small light card is
+     simplest, matching .add-txn-form's identical dashed-inset pattern,
+     rather than adding on-shell tokens just for this one panel's label. */
+  background: var(--paper-2);
   border: 1px dashed var(--line);
   border-radius: var(--r);
 }
@@ -2420,9 +2613,11 @@ th.total-year-col {
   font-weight: 700;
   padding: 8px 13px;
   border-radius: var(--r);
-  color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
-  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+  color: var(--accent-text);
+  /* GATE LOW-7: tint mixes from --accent-text, not raw --accent — see the
+     rule comment at .role-badge.admin. */
+  background: color-mix(in oklab, var(--accent-text) 7%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent-text) 30%, var(--line));
 }
 .admin-toggle input {
   display: none;
@@ -2468,12 +2663,14 @@ th.total-year-col {
   padding: 18px;
   text-align: center;
   cursor: pointer;
-  background: var(--paper);
+  /* --paper-2 (not --paper): same dashed-inset-card pattern as .add-txn-form
+     above, nested inside the modal's own --surface. */
+  background: var(--paper-2);
   transition: all 150ms ease;
 }
 .attach-drop:hover {
   border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 5%, var(--paper));
+  background: color-mix(in oklab, var(--accent) 5%, var(--paper-2));
 }
 .attach-drop .hint {
   font-size: 12.5px;

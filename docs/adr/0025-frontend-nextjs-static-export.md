@@ -89,3 +89,17 @@ usefully rendered before the user is authenticated).
 - Flipping to a Node server later (SSR/RSC) remains cheap if ever needed — only `next.config.ts`'s
   `output: 'export'` and the `ssr:false` boundary would need to change; the route/component tree
   underneath is unaffected either way.
+- **Amendment 2026-08-15 (jakkaritw, Sea Green one-theme rework — tracker `dsn-drop-dark-mode` /
+  `theme-seagreen-*`): three things this ADR originally described no longer exist.** Dark mode was
+  removed outright (one theme only, Sea Green `#2E8B57`, light) — this ADR's own decision list above
+  (§"`app/layout.tsx`") still describes a pre-paint inline `<script>` that applied a stored dark theme
+  before first paint; that script, `ThemeToggle`, and every `data-theme`/`prefers-color-scheme` read
+  are deleted, not merely unused. Same bullet also still lists Google-Fonts `<link>` tags in
+  `app/layout.tsx` (Newsreader/Archivo/IBM Plex, matching the old mockup) — also removed; `--sans`
+  (`styles/tokens.css`) now points at the plain system font stack, `app/layout.tsx` has no `<link>`
+  tags at all, and the app makes zero external font requests. The `frontend/src/platform/` bullet
+  describes `usePersistedToggle.ts` as "consumed by both the theme toggle and the admin-view
+  toggle" — with `ThemeToggle` gone, its sole consumer is now `admin/useAdminViewToggle.ts` (hook
+  kept as-is; only the toggle it originally shared with is gone). None of this changes the
+  `output: 'export'` / single-route / static-serving decisions above — only the theme-related
+  content of the `app/layout.tsx` and `platform/` bullets is superseded.

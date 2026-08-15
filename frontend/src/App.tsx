@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from './auth/useAuth'
 import { useScope } from './auth/useScope'
 import { SessionExpiredDialog } from './auth/SessionExpiredDialog'
@@ -6,51 +6,6 @@ import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
 import { UserBar } from './userbar/UserBar'
 import { currentSearch } from './platform/location'
-import { usePersistedState } from './platform/usePersistedToggle'
-
-const THEME_STORAGE_KEY = 'budget-theme'
-type Theme = 'light' | 'dark'
-
-function decodeTheme(raw: string | null): Theme {
-  return raw === 'dark' ? 'dark' : 'light'
-}
-
-function encodeTheme(theme: Theme): string {
-  return theme
-}
-
-/** Nav-bar dark/light toggle — demonstrates the ported dark-theme tokens
- * (tokens.css) actually work; A8+ can reuse the same `data-theme` switch.
- * Persistence guard shared with the admin-view toggle via
- * platform/usePersistedToggle (ARCH-b); the pre-paint <script> in
- * app/layout.tsx (ARCH-a) already applies the stored theme before this
- * component ever mounts, so this effect only needs to keep the DOM attribute
- * in sync with subsequent toggles. */
-function ThemeToggle() {
-  const [theme, setTheme] = usePersistedState<Theme>(
-    THEME_STORAGE_KEY,
-    'local',
-    'light',
-    decodeTheme,
-    encodeTheme,
-  )
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme
-  }, [theme])
-
-  return (
-    <button
-      type="button"
-      className="icon-btn"
-      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-      aria-label="สลับโหมดสี"
-      title="สลับโหมดสี (light/dark)"
-    >
-      {theme === 'light' ? '🌙' : '☀️'}
-    </button>
-  )
-}
 
 function App() {
   // Parsed once on load — ADR-0016 deep-link is convenience-only, the
@@ -72,11 +27,21 @@ function App() {
 
       <nav className="nav">
         <div className="nav-inner">
+          {/* White knockout variant (2026-08-15, jakkaritw: "ทำโลโก้สีขาวใหม่")
+              — the stock artwork's dark-green wordmark only reached 2.84:1 on
+              the #2E8B57 shell. -white.png reverses the ink to solid white
+              while keeping the artwork's own white areas transparent (shell
+              shows through), so it reads at the same 4.25:1 ceiling as every
+              other on-shell element. Original /chememan-full-logo.png kept in
+              public/ for any future light-shell use — not deleted. */}
+          {/* alt="" (2026-08-15 gate finding): decorative — the "Chememan"
+              text two nodes below already carries this for screen readers,
+              so a real alt would announce it twice. */}
+          <img src="/chememan-full-logo-white.png" alt="" className="nav-logo" />
           <div className="nav-logo-text">
             <span className="name">Budget Management</span>
             <span className="sub">Chememan</span>
           </div>
-          <ThemeToggle />
         </div>
       </nav>
 

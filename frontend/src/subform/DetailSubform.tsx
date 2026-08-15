@@ -269,7 +269,7 @@ export function DetailSubform({
                   {/* Accent-tinted รวม header, per mockup #detailModal */}
                   <th
                     className="month-col"
-                    style={{ background: 'color-mix(in oklab, var(--accent) 10%, var(--paper-2))', color: 'var(--accent)' }}
+                    style={{ background: 'color-mix(in oklab, var(--accent) 10%, var(--paper-2))', color: 'var(--accent-text)' }}
                   >
                     รวม
                   </th>

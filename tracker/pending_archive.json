@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T17:50:24+0700",
+  "updated": "2026-08-15T23:55:04+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -478,6 +478,13 @@
       "updated": "2026-07-16T17:05:14+0700",
       "agent": "05-software-developer",
       "ai": "0002.3 mockup Lease&Rental DONE: 7 GL codes (010/020/030/040/050/060/999) exact-match Excel GL sheet incl 030 comma rename; new detailColumns kind select-or-text for ทะเบียนรถ on …060 (tri-state ''=— เลือก — / known plate / ไม่ระบุ+off-list=free-text), handler updateDetailSelectOrText; sample txns 14-17 + details 20-24, counters 18/25. Gate 06+07+08 APPROVE-WITH-SUGGESTIONS: 07 PASS, 08 PASS (89 assertions re-run independently), 1 MEDIUM (blank row displayed ไม่ระบุ) + 1 LOW fixed. Visual approved by jakkaritw 2026-07-16. NOT-FIXED pre-existing: specialGLGroups dead data (Training&Seminar cols mismatch detailColumns) - React-port trap, separate task."
+    },
+    {
+      "id": "gl-not-in-master-readonly",
+      "state": "done",
+      "created": "2026-07-16T16:52:22+0700",
+      "updated": "2026-07-16T23:41:04+0700",
+      "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged."
     }
   ]
 }

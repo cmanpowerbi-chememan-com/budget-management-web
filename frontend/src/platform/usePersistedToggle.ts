@@ -7,14 +7,19 @@ function resolveStorage(kind: StorageKind): Storage | undefined {
   return kind === 'local' ? window.localStorage : window.sessionStorage
 }
 
-/** Shared persisted-state guard (ARCH-b): the theme toggle (localStorage,
- * `'light'|'dark'`) and the admin-view toggle (sessionStorage, boolean) are
- * the same "read once at mount, persist on change" shape — this hook gives
- * both one uniform `typeof window` + try/catch guard instead of two
- * independently drifting copies. `decode`/`encode` keep each caller's exact
+/** Shared persisted-state guard (ARCH-b): built for the "read once at mount,
+ * persist on change" shape common to any sessionStorage/localStorage toggle
+ * — a uniform `typeof window` + try/catch guard instead of an independently
+ * drifting copy per caller. `decode`/`encode` keep each caller's exact
  * on-disk string representation (nothing here assumes booleans); pass
  * module-level named functions (not inline arrows) so their identity stays
- * stable across renders. */
+ * stable across renders.
+ * Sole consumer since the 2026-08-15 dark-mode removal:
+ * `admin/useAdminViewToggle.ts`. (Originally shared with the theme toggle,
+ * localStorage `'light'|'dark'` — deleted along with `ThemeToggle` when the
+ * app moved to one theme only; kept as a generic hook rather than inlined
+ * back into useAdminViewToggle since the seam costs nothing and a future
+ * persisted toggle can reuse it.) */
 export function usePersistedState<T>(
   key: string,
   kind: StorageKind,

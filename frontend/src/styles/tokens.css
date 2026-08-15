@@ -1,21 +1,37 @@
-/* ─── Design tokens — ported from the canonical mockup
-   (design/mockups/0002claude design/0002.3budget-export.html)
-   so A8-A10 inherit the same palette/type/radius/dark-light theme.
-   Do NOT rename or add tokens speculatively — extend only when A8+
-   actually needs a new one. ─── */
+/* ─── Design tokens — Chememan theme, Sea Green shell (2026-08-15, jakkaritw
+   request; local-only, not yet approved for deploy). Accent tier repoints to
+   Sea Green (#2E8B57 / #3fa06e hover, jakkaritw-picked shade) — lighter than
+   the Supply Chain green (#1a472a) explored earlier the same day; --sans
+   stays on the Bootstrap 5.3.2 default system stack (Supply Chain app
+   declares no custom font). Was previously ported from the canonical mockup
+   (design/mockups/0002claude design/0002.3budget-export.html) — that file is
+   untouched, still terracotta/serif; this token file has diverged from it on
+   purpose for this preview.
+   #2E8B57 is too light for any dark ink, so on-shell text is now white
+   (--ink-on-shell/--ink-on-shell-2/--accent-on-shell all #ffffff) and the
+   gold on-shell accent (#d4ac52) is RETIRED — see the "On-shell text roles"
+   comment below for the accepted 4.25:1 ceiling this trades off.
+   One theme only — dark mode was removed 2026-08-15 (jakkaritw: one theme,
+   Sea Green, light).
+   Do NOT rename or add tokens speculatively — extend only when actually
+   needed. ─── */
 :root {
-  --c-forest: #b24222;
-  --c-mint: #4a5e80;
   --c-gold: #a8763a;
-  --c-blue: #4a5e80;
-  --accent: #b24222;
-  --accent-2: #4a5e80;
-  --accent-3: #a8763a;
+  --accent: #2E8B57;
+  --accent-2: #3fa06e;
 
   --ink: #1c1a16;
   --ink-2: #4a463d;
   --ink-3: #86806f;
-  --paper: #f2eee5;
+  /* --paper = the page SHELL (2026-08-15, jakkaritw): repointed from cream
+     to green so the app reads as light cards floating on a Sea Green
+     field. --paper-2/--surface (the light card family) are UNCHANGED — most
+     of the app still renders on them, unaffected by this. Anything that
+     used to paint text/borders directly on --paper (no light-card ancestor)
+     needed its own fix — see the on-shell tokens below and the global.css
+     call sites that reference them (.nav, .page-title/.glassy, the
+     approval-bar's shell-direct text, the 3 status chips' backgrounds). */
+  --paper: #2E8B57;
   --paper-2: #eae4d7;
   --surface: #fbf9f3;
   --line: rgba(28, 26, 22, 0.14);
@@ -24,28 +40,99 @@
   --status-sap: #5e7a50;
   --status-approved: #4a5e80;
   --status-pending: var(--ink);
+  /* Own hue, not --accent (2026-08-15 gate MED-4) — the rejected chip used
+     to just reuse --accent/--accent-text, so once --accent became green it
+     read as a second "approved-ish" chip. Reuses the existing reject-action
+     red (.btn-reject:hover background) so "reject" the verb and "rejected"
+     the state share one identity. */
+  --status-rejected: #a8443a;
   --special-bg: #f0e7d3;
   --special-edge: #c9a24b;
 
-  --serif: 'Newsreader', Georgia, serif;
-  --sans: 'Archivo', 'IBM Plex Sans Thai', -apple-system, system-ui, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* ─── On-shell text roles (2026-08-15, repointed for the Sea Green
+     #2E8B57 shell) — for the FEW spots that paint directly on --paper (now
+     Sea Green) with no light-card ancestor. Do NOT use these inside a card
+     (--surface/--paper-2 already contrast fine with the plain
+     --ink/--ink-2/--accent-text tokens below). ───
+     #2E8B57 is lighter than the earlier #1a472a shell, so no light ink
+     clears WCAG AA (4.5:1) here any more — pure white tops out at 4.25:1,
+     the best any light ink can reach. jakkaritw signed off on that ceiling
+     2026-08-15 rather than darkening the shell back: --ink-on-shell(-2) and
+     --accent-on-shell all collapse to plain #ffffff (the old cream
+     #f2eee5/muted #c6c0b2 tier and the gold #d4ac52 accent are ALL RETIRED —
+     none of them clears 4.25:1 either, so there is no reason to keep a
+     separate muted or accent hue here). This is an accepted small-text AA
+     miss, not a bug — do not "fix" it by re-darkening --paper.
+     WARNING (2026-08-15 gate finding 1): because all three names below
+     collapse to the SAME #ffffff, they can never visually distinguish two
+     on-shell states from each other — that trap already fired once
+     (.approval-bar's normal vs error status line were pixel-identical, both
+     resolving through --ink-on-shell-2 / --accent-on-shell). Do not repoint
+     one of these three to signal a NEW state; add a dedicated token instead
+     (see --error-on-shell below for the pattern this gate fix introduced).
+     --accent-text: what --accent becomes when used as TEXT on a light card
+     (jakkaritw's literal ask: green text -> terracotta, "swallowed
+     otherwise") — 5.40:1 on --surface. Unrelated role, unchanged by this pass.
+     --line-on-shell: hairline dividers drawn directly on --paper — plain
+     --line/--line-2 are low-alpha DARK and disappear on green. Was 55%-alpha
+     white; measured live on nav.nav's own border-bottom (blended against its
+     own green background, the only call site) that is 2.37:1, NOT the 3:1
+     non-text minimum this comment used to claim (gate finding, 2026-08-15).
+     Raised to 75%-alpha — 3.11:1 measured the same way — so the claim is
+     actually true, rather than downgrading the comment to admit a sub-3:1
+     decorative line. Card-internal borders (the vast majority) are
+     untouched — a border only ever needs to read against the box's OWN
+     background, and every card's own background is still the light
+     --surface/--paper-2 family. */
+  --ink-on-shell: #ffffff;
+  --ink-on-shell-2: #ffffff;
+  --accent-text: #b24222;
+  --accent-on-shell: #ffffff;
+  --line-on-shell: rgba(255, 255, 255, 0.75);
+  /* --error-on-shell (2026-08-15 gate finding 1 — the on-shell approval-bar
+     error state was pixel-identical to its own normal status line, both
+     white): the one on-shell error treatment that does NOT collapse to
+     --accent-on-shell's plain white. Colour is deliberately not the only
+     cue — .approval-bar .act-status-error (global.css) pairs this with
+     bold weight and a darkened plate, since a colour-only signal fails
+     colour-blind readers and red-on-green is the worst-case hue pair for
+     exactly that. On the plate (its real, shipped background) the text
+     measures 5.89:1 — comfortably clears AA; on raw --paper alone, with no
+     plate, it would only be 3.53:1 (why the plate exists — see the call
+     site comment for the exact blend). */
+  --error-on-shell: #ffe4e1;
+  /* --accent-2-text (2026-08-15, jakkaritw: "แก้ — ให้สีของตัวเอง" — same
+     treatment as --status-rejected getting its own hue): --accent-2 (#3fa06e,
+     the bright hover-mint) reads fine as a light *tint* background but fails
+     WCAG AA as TEXT/solid-fill-with-white-text on the four sites that used it
+     raw (.user-avatar, .role-badge.user, .v3-count, .dept-picker-badge —
+     2.63-3.25:1) plus one more the audit didn't reach (.v3-gl-pill, same
+     raw-fill pattern). Unlike --accent-text (which deliberately swapped to
+     terracotta, "swallowed otherwise" per jakkaritw), this one is asked to
+     STAY in the green family, just darker: a deep pine green, 6.16:1 on
+     --surface as text (6.48:1 is the same hex measured against pure white,
+     not --surface — corrected 2026-08-15 gate finding) and used as a solid
+     fill with white text at the same ratio (symmetric formula) — clears
+     4.5:1 with margin, distinct from --accent (#2E8B57, lighter/greyer),
+     --status-approved (blue), --status-rejected (red) and the pending chip
+     (--ink). */
+  --accent-2-text: #1f6b42;
+
+  /* --focus-ring: keyboard focus outline (global.css `:focus-visible`).
+     Defaults to --accent-text — right for the vast majority of controls,
+     which sit inside a --surface/--paper-2 card. The few containers with
+     NO card ancestor (.side-heading-row, .approval-bar) repoint this
+     to --accent-on-shell locally in global.css, right where each is
+     defined. (.nav dropped from this list 2026-08-15 gate finding — it lost
+     its only focusable child, ThemeToggle, when dark mode was removed, and
+     no longer repoints --focus-ring at all.) */
+  --focus-ring: var(--accent-text);
+
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans',
+    'Liberation Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
+  --serif: var(--sans); /* Supply Chain app has no serif face — collapses to body sans */
+  --mono: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
   --r: 6px;
-}
-
-[data-theme='dark'] {
-  --ink: #f2eee5;
-  --ink-2: #c6c0b2;
-  --ink-3: #8b857a;
-  --paper: #1c1a16;
-  --paper-2: #242019;
-  --surface: #2a251e;
-  --line: rgba(242, 238, 229, 0.12);
-  --line-2: rgba(242, 238, 229, 0.07);
-  --special-bg: #33280f;
-  --special-edge: #5c4915;
-  --status-sap: #8fa97e;
-  --status-approved: #8098c0;
-  --status-pending: #f2eee5;
 }

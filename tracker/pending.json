@@ -1,14 +1,35 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T21:25:40+0700",
+  "updated": "2026-08-16T00:59:34+0700",
   "tasks": [
+    {
+      "id": "theme-seagreen-logo-badges",
+      "state": "done",
+      "created": "2026-08-15T22:34:36+0700",
+      "updated": "2026-08-15T23:17:24+0700",
+      "ai": "Logo: App.tsx repointed to chememan-full-logo-white.png (App.tsx:30); height 36px->44px in global.css:86 (measured w/ Playwright+Pillow: 36px/1x DPI only ~21% crisp near-white of drawn pixels vs ~38% at 2x DPI; 44px/1x now matches ~39%). Badges: new --accent-2-text token (tokens.css:79, #1f6b42, pine-green companion to --accent-2, mirrors --accent-text pattern but stays green) applied to .user-avatar (global.css:200-215), .role-badge.user (247-250), .v3-count (330-339), .dept-picker-badge (749-757), plus .v3-gl-pill (394-398, found via sweep, same raw-fill bug missed by earlier audit since text lives in nested .n/.t children). Contrast set-diff (before/after via temp-revert-then-restore of just these 6 edits, keyed kind+selector+sample): FIXED 7, NEW 0; pre-existing BORDER hairlines + .user-avatar.admin 4.25 shell-ceiling entry correctly unchanged/out of scope. next build clean, vitest 633/633. Re-shot design/mockups/theme-final-*.png (12 files). Temp specs copied into frontend/e2e/ then removed after each run. Not committed/deployed."
+    },
+    {
+      "id": "dsn-drop-dark-mode",
+      "state": "done",
+      "created": "2026-08-15T21:47:05+0700",
+      "updated": "2026-08-15T23:59:14+0700",
+      "ai": "[CROSS-SESSION UPDATE 4ddbf57] PUSHED + VERIFIED LANDED: origin/main == local HEAD == 4ddbf5773e778deef22d4ddc736c95ab2c9c10fc on github cmanpowerbi-chememan-com/cman-design-system (554802b..4ddbf57), 9 files -110/+194. jakkaritw approved the push via AskUserQuestion 2026-08-15. CORRECTION to my earlier note: the repo was only ONE commit ahead of origin, not three -- 3b72d59 (Sea Green rebuild) and 554802b (scrub real GL codes + SAP figures from the demo page) had ALREADY been pushed by the parallel session; only the dark-mode removal was local. Design-system repo is now fully in sync with GitHub; nothing pending there."
+    },
+    {
+      "id": "theme-seagreen-nodark-logo",
+      "state": "done",
+      "created": "2026-08-15T21:32:57+0700",
+      "updated": "2026-08-15T22:22:27+0700",
+      "ai": "[FIX] Prior entry lost a backtick-quoted clause to shell substitution: the .btn-reject selector was changed to the direct-child form '.approval-bar-greater-than-btn-reject' (CSS combinator, not a literal arrow) so only the shell-direct trigger button gets the shell-context focus ring, not the nested reject-panel confirm button. See frontend/src/styles/global.css around line 2439 for the exact rule. No other content in the prior entry was affected."
+    },
     {
       "id": "ds-push-and-dark-mode-prompt",
       "state": "done",
       "created": "2026-08-15T21:21:46+0700",
-      "updated": "2026-08-15T21:21:46+0700",
-      "ai": "PUSHED + VERIFIED LANDED: cman-design-system 554802b on github cmanpowerbi-chememan-com/cman-design-system main (74b532c..554802b, local HEAD == origin/main confirmed by fetch+rev-parse). Two commits: 3b72d59 (theme rebuild, 111->18 tracked files) + 554802b. PRE-PUSH LEAK FIND (main session caught it, agent had shipped it): examples/app-shell.html demo table carried REAL data - SAP actuals total 1,026,902 (the verified live FY2025 figure) and 3 real GL codes incl 6410200250, a GL the app deliberately hides. Scrubbed to invented placeholders 6000000001-3 + round amounts with an inline comment saying why, screenshot re-rendered from the scrubbed page, and added tools/shot-app-shell.py so regenerating it is a repo tool not an ad-hoc script. Secrets sweep before push: 0 hits (password/secret/api-key/SAS/bearer); email-pattern hits were PNG binary false positives. ALSO WROTE (not executed): design/mockups/theme-delete-dark-mode-prompt.md - jakkaritw wants dark mode deleted entirely; brief covers app side (tokens.css dark block, layout.tsx pre-paint script + localStorage budget-theme, App.tsx ThemeToggle/THEME_STORAGE_KEY/encodeTheme, usePersistedToggle.ts only if no other consumer, dark-only global.css rules, toggle tests) and DS side (tokens.css/json/tailwind/pptx/check-tokens dark-aware revert + README 6 / CLAUDE.md 8 / WEB.md 5 prose), with verify commands. Deleting dark mode also closes the open dark-accent conflict (DS #3fa06e/#5cbf8c vs app #2f7f55/#227d66). Nothing deleted yet.",
+      "updated": "2026-08-15T21:29:31+0700",
+      "ai": "[COMMITTED c65d351 on main, NOT pushed] design/mockups/theme-delete-dark-mode-prompt.md + tracker ledger. Staged by explicit path again - parallel session still has uncommitted edits in frontend/src/{app/layout.tsx,styles/global.css,styles/tokens.css,subform/DetailSubform.tsx,next-env.d.ts} plus setup/phase2_harness_dkl.py, the deleted laddawan Spec B docx and monthly_update/* ; all deliberately left out. Budget repo now has 2 unpushed commits: 11df776 (shade comparison set) + c65d351 (dark-mode brief). DS repo 554802b already pushed+verified.",
       "agent": "claude"
     },
     {
@@ -88,8 +109,8 @@
       "id": "stg-theme-supplychain",
       "state": "doing",
       "created": "2026-08-15T13:58:01+0700",
-      "updated": "2026-08-15T21:25:40+0700",
-      "ai": "[GATE FIX 2026-08-15 late] Combined 06+07+08 gate returned NOT-SAFE (06 REQUEST-CHANGES) on the uncommitted green-shell theme diff (frontend/src/styles/global.css+tokens.css, frontend/src/subform/DetailSubform.tsx). Fixed all 7 findings, UNCOMMITTED (per instruction, no commit/push/deploy): HIGH-1 admin-zone-title reverted to --status-approved (was mis-fixed against a false reading -- contrast auditor's original oklab()-parse gap misread .admin-zone's opaque card bg as the green shell, 5.60:1->1.83:1 regression, now reverted); HIGH-2 focus ring was invisible (--accent==--paper, 1:1) on .icon-btn/.btn-ghost/.btn-submit/.btn-approve/.btn-reject -- added --focus-ring token (tokens.css, defaults --accent-text, shell-scoped override --accent-on-shell on .nav/.side-heading-row/.approval-bar's 3 buttons) both themes; MED-3 dark --accent 3fa06e gave white-text 3.25:1 (was 5.68:1 pre-theme) on .btn-submit/.btn-export/.v3-cc-pill -- darkened to #2f7f55 (white=4.90:1), --accent-2 #5cbf8c->#227d66 (white=5.01:1, was failing 2.26:1 on .user-avatar/.v3-gl-pill); MED-4 added --status-rejected token (#a8443a light/#e08a7c dark) so the rejected chip stops tracking --accent; MED-5 .btn-export border reverted var(--line-on-shell)->var(--accent) (was a false-reading fix, all 3 call sites are on light cards not shell); MED-6 DetailSubform.tsx:272 inline color var(--accent)->var(--accent-text); LOW-7 5 components' color-mix tint switched from var(--accent) to var(--accent-text) so tint follows text hue (role-badge.admin/filter-chip/grid-error/month-col-now/admin-toggle). VERIFY: next build clean, vitest 633/633 unchanged; built a throwaway Playwright contrast+focus auditor (frontend/e2e/_contrast-audit.spec.ts, removed after use, both light+dark themes, kept as SET DIFF keyed theme+kind+selector via git-stash baseline vs working tree) -- new=5 (all dark-theme --ink-3-on-modal secondary/caption text, root cause = the ALREADY-uncommitted .modal background paper->surface rework colliding with dark ink-3, unrelated to any of these 7 fixes, same ink-3 debt family the task's own NOT-IN-SCOPE note already excludes -- flagged for jakkaritw, not touched), fixed=19. Found + fixed 2 methodology holes in the auditor itself: outline/focus-ring was invisible to the walk (added a Node-side Playwright-driven focus pass, not scripted el.focus() which silently fails Chromium's :focus-visible heuristic after any prior click), and CSS transitions caused mid-interpolation reads right after .focus() (disabled transitions page-wide during audit). git status confirmed only styles/*.css + DetailSubform.tsx + (pre-existing) layout.tsx touched, no temp spec left behind.",
+      "updated": "2026-08-16T00:59:34+0700",
+      "ai": "[2026-08-16 ~01:30] ALL 4 GATE FINDINGS FIXED, READY FOR STG, AWAITING EXPLICIT DEPLOY APPROVAL. (1) approval-bar error state was pixel-identical white to the normal status line -- fixed with THREE cues not just color: new --error-on-shell #ffe4e1 + font-weight 700 + a dark plate rgba(0,0,0,.28) with a --line-on-shell border, text-vs-plate 5.89:1; deliberately NOT a red plate because red-green colorblind users cannot separate it from the shell, so lightness carries the signal. Also found NO screen-reader announcement existed at all -> role='alert' added to ApprovalActionBar.tsx:154,191 (loadError + actionMessage only); reject_reason span deliberately excluded with a comment, it is pre-existing data not a fresh event and would re-announce on every page open. (2) .btn-submit white border-color moved from the unscoped base rule into '.approval-bar .btn-submit' -- the SessionExpiredDialog.tsx:61 call site now measures borderColor rgba(0,0,0,0) verified live in Playwright (was opaque white on --surface at 1.05:1); the auditor could never have caught this, it never renders that dialog. (3) docs/adr/0025 got a dated Amendment bullet in Consequences following ADR-0021's own convention; docs/reference/*, CONTEXT.md and .claude/plan.md grepped clean; docs/test/spot-test-*.html left alone as frozen historical run artifacts. (4) comment lies fixed by making the CODE true rather than weakening the claim: --line-on-shell alpha .55 -> .75 so the nav divider actually measures 3.11:1 as its comment always claimed (was 2.36); --accent-2-text comment corrected 6.48 -> 6.16 (6.48 was against pure white, not --surface); stale .nav dropped from the --focus-ring comment; explicit do-not-diverge warning added above the 3 white on-shell aliases since relying on them to distinguish states is exactly what caused finding 1. ALSO: 4 dead tokens deleted (--c-forest/--c-mint/--c-blue/--accent-3, grep-confirmed 0 consumers), App.tsx:37 alt='Chememan' -> alt='' (screen reader was announcing it twice, the visible text sits 2 nodes later), usePersistedToggle.ts JSDoc corrected to name its sole remaining consumer. VERIFY: next build exit 0; vitest 633/633; contrast auditor before/after (targeted revert of only the 2 files with pixel effect) = fixed 10 (nav divider x9 scenarios + the error text), new 1 = .btn-add border 1.61 vs 1.33 in test03, root-caused to .btn:hover's 160ms background transition and reproduced identically in BOTH before and after states across 2 reruns -> harness timing artifact, not this diff. 12 screenshots re-shot at design/mockups/theme-final-*.png. Artifact updated https://claude.ai/code/artifact/42c15382-90b8-4b5a-94ed-037c75d2f7d7 . NOTHING committed/pushed/deployed. Design-system repo pushed + verified earlier (4ddbf57).",
       "agent": "claude"
     },
     {
@@ -2408,13 +2429,6 @@
       "updated": "2026-07-28T14:51:06+0700",
       "agent": "05-software-developer",
       "ai": "ปิด — mockup sample data เสร็จตั้งแต่ 2026-07-16 และ mockup ถูก supersede แล้ว (stale doing)"
-    },
-    {
-      "id": "gl-not-in-master-readonly",
-      "state": "done",
-      "created": "2026-07-16T16:52:22+0700",
-      "updated": "2026-07-16T23:41:04+0700",
-      "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged."
     },
     {
       "id": "trip-idempotency",

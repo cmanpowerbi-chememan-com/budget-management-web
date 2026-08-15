@@ -151,7 +151,7 @@ export function ApprovalActionBar({
   if (loadError) {
     return (
       <div className="approval-bar" data-testid="approval-bar">
-        <span className="act-status act-status-error">{loadError}</span>
+        <span className="act-status act-status-error" role="alert">{loadError}</span>
         <button type="button" className="btn" onClick={load}>
           ลองใหม่
         </button>
@@ -182,13 +182,19 @@ export function ApprovalActionBar({
           {statusChipLabel(status)}
         </span>
         {locked && <span className="act-status">ส่งแล้ว — แก้ไขไม่ได้จนกว่าจะถูกตีกลับ</span>}
+        {/* No role="alert" here (unlike loadError/actionMessage below) — this
+         * is a persisted field of an already-REJECTED department, not a
+         * transient result of the CALLER's own action; announcing it as an
+         * "alert" every time the page loads an already-rejected department
+         * would be noisy for screen-reader users, not helpful. Still gets
+         * the same visual .act-status-error treatment (GATE finding 1). */}
         {status.status === 'REJECTED' && status.reject_reason && (
           <span className="act-status act-status-error" data-testid="approval-reject-reason">
             เหตุผลที่ตีกลับ: {status.reject_reason}
           </span>
         )}
         {actionMessage && (
-          <span className="act-status act-status-error" data-testid="approval-action-message">
+          <span className="act-status act-status-error" role="alert" data-testid="approval-action-message">
             {actionMessage}
           </span>
         )}
