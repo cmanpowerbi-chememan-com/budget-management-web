@@ -1,0 +1,1353 @@
+[
+  {
+    "kind": "border",
+    "selector": "button.action-btn (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.btn (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.btn-reject (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.btn.btn-add (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.btn.btn-attach (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.col-toggle-btn (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.dept-picker-trigger (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.fs-toggle-btn (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.modal-close (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.special-open-btn (border-top)",
+    "sample": "",
+    "ratio": 2.09,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "button.tm-toggle (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.admin-zone (border-top)",
+    "sample": "",
+    "ratio": 1.34,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.dept-picker-panel (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.grid-empty.no-scope-empty (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.grid-toolbar (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.modal (border-top)",
+    "sample": "",
+    "ratio": 1.11,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.modal-foot (border-top)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.modal-head (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.modal.trip-modal (border-top)",
+    "sample": "",
+    "ratio": 1.11,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.reject-panel (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.table-panel (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.trip-card (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.trip-legend (border-top)",
+    "sample": "",
+    "ratio": 2.09,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.trip-section-label (border-bottom)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "div.v3-id (border-right)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.col-filter (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.dept-picker-search (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.detail-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.detail-input.month-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.month-value.month-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.remark-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "input.traveler-combo-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "label.admin-toggle (border-top)",
+    "sample": "",
+    "ratio": 1.93,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "label.attach-drop (border-top)",
+    "sample": "",
+    "ratio": 1.9,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "section.user-bar.v3 (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "select (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "select.detail-input (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "select.year-select (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.dept-picker-badge (border-top)",
+    "sample": "",
+    "ratio": 2.2,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.exp-gl-chip (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.gl-chip.special-gl-group.gl-green (border-top)",
+    "sample": "",
+    "ratio": 1.01,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.gl-chip.special-gl-group.gl-yellow (border-top)",
+    "sample": "",
+    "ratio": 1.01,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.meta-tag (border-top)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.role-badge.admin (border-top)",
+    "sample": "",
+    "ratio": 2.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.role-badge.user (border-top)",
+    "sample": "",
+    "ratio": 2.19,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.status-chip.status-chip-draft (border-top)",
+    "sample": "",
+    "ratio": 1.22,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.status-chip.status-chip-pending (border-top)",
+    "sample": "",
+    "ratio": 1.13,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.status-chip.status-chip-rejected (border-top)",
+    "sample": "",
+    "ratio": 1.45,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.trip-readonly (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.user-chip.cc (border-top)",
+    "sample": "",
+    "ratio": 1.68,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "span.v3-count (border-top)",
+    "sample": "",
+    "ratio": 2.2,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "table.detail-table (border-top)",
+    "sample": "",
+    "ratio": 1.33,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.action-cell (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.exp-row-total (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.exp-type-name (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.frz.frz-1 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.frz.frz-1.frz-edge (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.gl-cell.frz.frz-2 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.gl-group-cell.frz.frz-3 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.idx-cell.frz.frz-1 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.label (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.month-cell (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.month-cell.grand (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.month-cell.now (border-bottom)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.month-cell.total-year-cell (border-right)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.num-col (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.remark-cell.frz.frz-4 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.special-col-cell (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.status-cell.approved.frz.frz-5 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.status-cell.pending.frz.frz-5 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "td.status-cell.sap.frz.frz-5 (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "textarea (border-top)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th (border-bottom)",
+    "sample": "",
+    "ratio": 1.15,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.action-col-head (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-1 (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-2 (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-3 (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-4 (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-5 (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.frz.frz-5.frz-edge (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.month-col (border-bottom)",
+    "sample": "",
+    "ratio": 1.31,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.month-col.now (border-bottom)",
+    "sample": "",
+    "ratio": 1.31,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.month-group-label (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.month-group-label.total-year-head (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.num-col (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.special-col (border-bottom)",
+    "sample": "",
+    "ratio": 1.32,
+    "required": 3
+  },
+  {
+    "kind": "border",
+    "selector": "th.total-year-col (border-right)",
+    "sample": "",
+    "ratio": 1.14,
+    "required": 3
+  },
+  {
+    "kind": "text",
+    "selector": "b",
+    "sample": "฿—",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "b",
+    "sample": "1",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.btn.btn-export",
+    "sample": "บันทึก",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.btn.btn-export",
+    "sample": "บันทึก & ลงบัญชี",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.btn.btn-sm.btn-ghost",
+    "sample": "Reset columns",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.special-open-btn",
+    "sample": "แก้ไขผ่านฟอร์มย่อย ↗",
+    "ratio": 2.09,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Apr",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Aug",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Dec",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Feb",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Jan",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Jul",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Jun",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Mar",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "May",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Nov",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Oct",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "button.tm-toggle",
+    "sample": "Sep",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.attach-empty",
+    "sample": "ยังไม่มีไฟล์ในโฟลเดอร์นี้ — เลือกไฟล์เพื",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.dept-picker-group-head",
+    "sample": "สายงานสนับสนุนองค์กร1",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.gl-name",
+    "sample": "ค่าใช้จ่ายสำนักงาน",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.gl-name",
+    "sample": "ค่าใช้จ่ายสำนักงาน (บริหาร)",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.gl-name",
+    "sample": "ค่าเลี้ยงรับรองภายนอก",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.gl-name",
+    "sample": "เบี้ยเลี้ยง",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.modal-foot-info",
+    "sample": "Rows: 1 · Year total: ฿—",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.modal-foot-info",
+    "sample": "ทริป: 1",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.modal-foot-info",
+    "sample": "ไฟล์ในโฟลเดอร์: 0",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.trip-months-label",
+    "sample": "Travel Month — คลิกเลือกเดือนที่เดินทาง",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.trip-section-label",
+    "sample": "A — ข้อมูลหลัก (กรอกครั้งเดียว)",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.trip-section-label",
+    "sample": "B — ค่าใช้จ่าย 4 ประเภท",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.types",
+    "sample": "pdf · xlsx · xls · png · jpg — สูงสุด 10",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "div.user-avatar.admin",
+    "sample": "SO",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "h2.side-heading",
+    "sample": "ฝั่งบริหาร / ขาย · SG&A (6xxx)",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "h2.side-heading",
+    "sample": "ฝั่งผลิต / ต้นทุน (5xxx)",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "DESTINATION · ปลายทาง— เลือกปลายทาง —ประ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "POSITION—",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "PROJECT · โครงการ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "PURPOSE · วัตถุประสงค์",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "TOTAL DAYS / YEAR",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "TRAVELER NAME · SAP",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "ฝั่งบัญชีฝั่งผลิต / ต้นทุน (5xxx)ฝั่งบริ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label",
+    "sample": "เหตุผลที่ตีกลับ (จำเป็น)",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "label.trip-detail-label",
+    "sample": "รายละเอียด",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "p",
+    "sample": "กรุณาติดต่อ nipapornt@chememan.com เพื่อ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "p",
+    "sample": "บัญชีของคุณ outsider@chememan.com ยังไม่",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "p.modal-subtitle",
+    "sample": "10CA013000 · 5211900030 · ค่าเลี้ยงรับรอ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "p.modal-subtitle",
+    "sample": "10CA013000 · FY2027 · ทริปทั้งหมดรวมกัน ",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "p.modal-subtitle",
+    "sample": "ปีงบประมาณ 2027 · เอกสาร ฝ่าย/ฝ่ายบัญชี/",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span",
+    "sample": "ระบบจะคำนวณให้หลังกดบันทึก",
+    "ratio": 3.62,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.dept-picker-cc-count",
+    "sample": "1 CC",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.exp-gl-chip",
+    "sample": "5210400010",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.exp-gl-chip",
+    "sample": "5210400020",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.exp-gl-chip",
+    "sample": "5210400030",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.exp-gl-chip",
+    "sample": "5210400999",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.gl-chip.special-gl-group.gl-green",
+    "sample": "Travelling Expense",
+    "ratio": 2.28,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.legend-item",
+    "sample": "Approved · งบอนุมัติ (2026)",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.legend-item",
+    "sample": "Pending · งบรออนุมัติ (2027)",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.legend-item",
+    "sample": "SAP · ใช้จริง (2026)",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.meta-tag",
+    "sample": "ฝ่าย",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.meta-tag",
+    "sample": "สายงาน",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.approved-ro.zero",
+    "sample": "—",
+    "ratio": 3.27,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.pending-readonly.zero",
+    "sample": "—",
+    "ratio": 3.04,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "110,250.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "120,000.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "18,000.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "20,000.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "45,000.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "47,500.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap",
+    "sample": "98,500.00",
+    "ratio": 3.63,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.month-value.sap.zero",
+    "sample": "—",
+    "ratio": 3.34,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.n",
+    "sample": "1",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.name",
+    "sample": "Budget Management",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.role-badge.admin",
+    "sample": "ผู้ดูแลระบบ",
+    "ratio": 4.28,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.status-chip.status-chip-draft",
+    "sample": "แบบร่าง (ยังไม่ส่งอนุมัติ)",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.sub",
+    "sample": "Chememan",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.t",
+    "sample": "Cost Centers",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.th-label",
+    "sample": "Aug",
+    "ratio": 4.05,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.trip-idx",
+    "sample": "01",
+    "ratio": 3.11,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.trip-legend-badge",
+    "sample": "A",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.trip-legend-badge",
+    "sample": "B",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.trip-legend-badge",
+    "sample": "C",
+    "ratio": 4.25,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "span.v3-email",
+    "sample": "somchai.f@chememan.com",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "td.month-cell.grand",
+    "sample": "—",
+    "ratio": 4.49,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Apr",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Aug",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Dec",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Feb",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "GL",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Jan",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Jul",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Jun",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Mar",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "May",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Nov",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Oct",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "Sep",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "ขนาด",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "ประเภทค่าใช้จ่าย",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "ไฟล์",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "ยอดรวม/ทริป",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th",
+    "sample": "อัปโหลดโดย",
+    "ratio": 3.74,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th.month-col",
+    "sample": "รวม",
+    "ratio": 4.03,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th.special-col",
+    "sample": "ประเภทการรับรอง",
+    "ratio": 1.95,
+    "required": 4.5
+  },
+  {
+    "kind": "text",
+    "selector": "th.special-col",
+    "sample": "รายละเอียด",
+    "ratio": 1.95,
+    "required": 4.5
+  }
+]

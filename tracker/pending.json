@@ -1,8 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-16T03:11:48+0700",
+  "updated": "2026-08-17T09:28:02+0700",
   "tasks": [
+    {
+      "id": "contrast-ratchet-permanent",
+      "state": "done",
+      "created": "2026-08-17T08:29:25+0700",
+      "updated": "2026-08-17T09:28:02+0700",
+      "ai": "Promoted the throwaway contrast auditor into frontend/e2e/contrast.spec.ts (permanent, wired into default 'npx playwright test' run) + frontend/e2e/contrast-baseline.json (193 accepted pre-existing violations, ratio-included keys). Ratchet asserts new==0 AND worsened==0 (0.05 tolerance), never total==0. 4 required fixes applied: (1) border checked against BOTH own-bg and behind-bg, flag only if both fail; (2) text check widened to leaf-based (children.length===0) in addition to direct-text-node, still per-element so nested spans (.v3-gl-pill .n/.t) get their own ancestor-walked bg; (3) new focus pass — Locator.focus() + a page.keyboard.press('Shift') nudge is REQUIRED (empirically found: :focus-visible tracks last input modality page-wide, not just the current focus() call, so a nudge-less focus() still read false/outline:none after any prior click in the same test — undocumented in the original task brief, discovered + fixed here); (4) baseline keyed kind+selector+sample with ratio stored separately for worsened-detection. Also fixed a real flake: admin-mode-toggle triggers an async refetch (admin_view_enabled=true) that the checkbox's own checked-state didn't wait for, causing 07a's violation count to vary 28/79/81 across identical runs -- fixed via expect.poll on the captured query + networkidle, now deterministic (193 across 3 repeat runs). Mutation-tested all 3 required cases then fully reverted (git diff --stat clean on src/): (a) lightened --accent-text (task said darken but --surface is near-white so darkening only INCREASES contrast -- used lighten instead, noted in report) -> 38 NEW + 1 WORSENED, caught on test 01; (b) lightened --ink-3 slightly -> 14 WORSENED (3.74->3.00 etc), caught on test 01; (c) deleted .approval-bar .btn-submit/.btn-approve/>.btn-reject focus-ring override -> 1 NEW focus violation (button.btn-approve, 1.34:1), caught on test 05. Full suite 35/35 (26 journeys + 9 contrast) in 2.3min; contrast.spec.ts alone ~1.0-1.3min. next build clean, vitest 638/638 untouched. oxlint clean. No app source (frontend/src/**) changed -- all mutations reverted. No real NEW bugs found in current tree (baseline is 100% pre-existing violations, same class as the ~751 previously documented: --ink-3 body text + --line/--line-2 hairlines); nothing flagged as a new follow-up task.",
+      "agent": "claude"
+    },
+    {
+      "id": "fabric-sp-read-item-denied",
+      "state": "doing",
+      "created": "2026-08-16T08:18:54+0700",
+      "updated": "2026-08-17T08:17:37+0700",
+      "ai": "[2026-08-17 08:15 DECISION LOCKED by jakkaritw's manager: NATURAL BURNDOWN ONLY -- Pause->Resume is FORBIDDEN because it bills the outstanding smoothed backlog as an immediate lump charge; scale-up also implies extra spend, not chosen. State: smoothed usage crossed under 100% at ~06:00 2026-08-17, now 83.6% flat; debt peaked ~1.176M CU(s) at 05:00, now 1,047,326 CU(s) = 9.1h of F32; burndown began (blue bars on the Overages tab, cumulative red line ~109,000% of a 30s window = matches my 1.05M calc). DB unlocks when debt < the 60-min interactive-rejection line = 115,200 CU(s), i.e. ~932k still to burn. Rate = spare capacity: at current 83.6% usage only ~18.9k/h (~2 days); at the 41% Sunday baseline ~67.7k/h (~14h -> tonight ~22:00-02:00). FREE ACCELERATOR available: pause today's heavy scheduled background jobs on the F32 (the ~10 NB_gold_fact_forecast_* daily notebooks ~40k CU(s)/day each, pl_pve_hourly, purchase_workspace Notebook_1 ~157k/day + pipeline1 ~100k/day) -- every CU they skip goes to debt repayment instead; offered to jakkaritw, NOT executed (prod ETL schedules, his call; SP has Admin on cman-dw-ws so I could disable/re-enable via REST jobs API on approval). Monitor b6h4vrm0k probes the DB every 15 min, notifies on CONNECT OK. Yesterday's 3h cron loop died with the old session; not re-created pending his answer."
+    },
+    {
+      "id": "deploy-f2e2ccd-stg",
+      "state": "done",
+      "created": "2026-08-16T03:22:06+0700",
+      "updated": "2026-08-16T03:22:06+0700",
+      "ai": "DEPLOYED TO STAGING + PUSHED + BOTH VERIFIED LANDED. commit f2e2ccda3a6fcfbf6f4a0e66891df73b0a77f641 'fix(approval): let the server decide who may submit' (14 files, +1212/-199) -> ACR run cm1c Succeeded, image budget-web:f2e2ccd -> containerapp update cman-budget-web-stg in CMAN-BUDGET-MNGT-WEB-RG -> revision cman-budget-web-stg--0000047 active=true Running Healthy traffic=100 image confirmed; anonymous GET on the FQDN = HTTP 200 at login.microsoftonline.com serving the Easy Auth challenge (app UP + still protected). git push 9f2cd14..f2e2ccd, origin/main == local HEAD, in sync. jakkaritw approved commit+deploy-stg+push AND 'fix the 2 red tests too' via AskUserQuestion. Built from a clean detached worktree at f2e2ccd (0 dirty files, removed + pruned after). az acr build exited 1 again on the cp1252 warn-glyph UnicodeEncodeError as always -- judged by az acr task list-runs per the recorded recipe. PRE-EXISTING RED TESTS FIXED IN THE SAME COMMIT (jakkaritw said เก็บด้วยเลย): filler-journey 1.2 toHaveText('100')->'100.00' and 1.6 ('5,000')->'5,000.00', stale since committed 9110837 shipped the two-decimal formatter; added a comment noting the editable Pending INPUT still holds the raw '200' so nobody 'fixes' that one too. Full mocked e2e suite now 26/26 (was 24/26). FINAL VERIFY in main session: backend 1019 passed / 48 deselected, next build clean, vitest 638, e2e 26/26. PRODUCTION NOT TOUCHED, NOT APPROVED. Staging now runs BOTH the Sea Green theme (9f2cd14) and this fix (f2e2ccd)."
+    },
     {
       "id": "filler-blocked-hint",
       "state": "done",
@@ -106,10 +128,10 @@
     },
     {
       "id": "daily-employee-sync-broken",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-15T14:18:56+0700",
-      "updated": "2026-08-15T14:31:49+0700",
-      "ai": "[CORRECTED 2026-08-15 — DO NOT DELETE. jakkaritw said 'delete legacy' then 'make sure 100% not used'; the 100% check REVERSED the earlier conclusion.] DB1 IS NOT RETIRED AND IS NOT DEAD. Connected live to SERVER v5o4qez3u4cupase7cogkwvyke-w4l3zd35yzkuzfgnonsogpi55e.database.fabric.microsoft.com,1433 / DATABASE 'fabric sql db-036a3270-82dd-40f4-aea4-6c27f55cff07': CONNECT OK, schemas cfg_master+dbo+sys, dbo.mas_employee_data EXISTS with 336 rows (exactly the 'Include: 336 rows' the failing sync computes), cfg_master.orgcode_costcenter_map EXISTS with 725 rows. Meanwhile the CONSOLIDATED DB (fabric_sql_database-a42ef9f3) has schemas budget+dbo+sys ONLY — no cfg_master, no mas_employee_data. CONCLUSION: the deployed master-tables Azure Functions module (02backend/db.py get_conn -> FABRIC_SQL_SERVER/DATABASE env) still points at DB1 and its orgcode-costcenter editor WORKS there; mas_employee_data is live data, not legacy. The nightly 'Daily Employee Sync' fails ONLY because its GitHub secrets FABRIC_SQL_SERVER/FABRIC_SQL_DATABASE were repointed to the consolidated DB during ADR-0023 while the table stayed in DB1 — a mis-pointed job, NOT an obsolete one. Data in mas_employee_data is therefore STALE since the first failure (2026-08-07). ADR-0023 consolidation is INCOMPLETE: cfg_master.* and dbo.mas_employee_data were never migrated and DB1 was never actually decommissioned. OPTIONS: (a) point the sync's GitHub secrets back at DB1 -> nightly resumes, editor unaffected, fastest restore; (b) migrate mas_employee_data + cfg_master into the consolidated DB and repoint the master-tables module too, finishing ADR-0023. NOTHING DELETED, NOTHING CHANGED — awaiting jakkaritw."
+      "updated": "2026-08-16T04:38:57+0700",
+      "ai": "CLOSED AS OBSOLETE 2026-08-16 (verified against the live remote, not assumed). The nightly job cannot fail anymore because it no longer exists: 'gh workflow list' on cmanpowerbi-chememan-com/budget-management-web now returns ONLY 3 active workflows (Budget Automations 313737320, CI-Tests 316165193, FX Re-persist Per-Diem 321956432) -- 'Daily Employee Sync' AND 'Master Tables - Test & Deploy' are both gone from the remote, removed by 9f0ad40 which landed on origin/main via push 9f2cd14. setup/sync_employees.py is deleted from the tree. LAST FAILURE EVER = run 31849355519 at 2026-08-14T23:09:41Z; zero runs since (streak of 8 nightly failures 2026-08-07..08-14 ended by deletion, not by repair). Option (a)/(b) from the earlier note are both MOOT: jakkaritw chose 'delete legacy' per Spec C V2.0 -- dbo.mas_employee_data (336 rows, DB1-only) had no reader, and the app's employee source is dbo.employee_master in the consolidated DB (re-apply the 4 exclusion filters in-query, see memory project_mas_employee_filter). Only DB1 loose end left = the orphaned Fabric item 036a3270-82dd-40f4-aea4-6c27f55cff07, still BLOCKED on jakkaritw deleting it in the portal."
     },
     {
       "id": "theme-supplychain-preview",
@@ -2390,21 +2412,6 @@
       "ai": "DONE+VERIFIED live: /me -> suchanyay@chememan.com, /health 200 on 127.0.0.1:8000. backend/.env change is uncommitted (dev-only, same as arthids before it). Note for ui-parity session: backend now impersonates suchanyay — re-set DEV_AUTH_EMAIL if arthids needed again; backend owned by kimi bg task bash-lru0opw2 (PID 17468)."
     },
     {
-      "id": "gl-editby-approval-separation",
-      "state": "done",
-      "created": "2026-07-17T17:32:17+0700",
-      "updated": "2026-07-17T22:53:55+0700",
-      "ai": "BUILT+COMMITTED 9e57b77 (05 agent a8d3265, gate APPROVE agent a14ae00). Lane 2.2 = admin กรอก=อนุมัติเลย. Removed buggy AdminGlInNormalSubmitError guard (would stamp whole dept APPROVED bypassing approver); submit_department routes any is_filler to normal chain; admin-GL rows never enter approval_status (approved-on-save convention, audited _user/_updated_at, no schema change); auto_submit last-editor excludes admin-GL (flag-gated); ADR-0024 written (narrows 0011, disambiguates 0012 template vs edit_by). ALSO fixed: read_model.py (core read-strip) was MISSED from commit 5119e19 - now committed in 9e57b77. Suite 621 pass/19 pre-existing flake. Flag OFF. plan.md NOT committed (shared w/ concurrent ui-parity session, content synced in-tree). NOT pushed, NOT deployed, flag NOT flipped - await jakkaritw."
-    },
-    {
-      "id": "gl-editby-dwsync",
-      "state": "done",
-      "created": "2026-07-17T15:47:48+0700",
-      "updated": "2026-07-17T16:11:54+0700",
-      "agent": "04-data-engineer",
-      "ai": "DEPLOYED+VERIFIED live cman-dw-ws (jakkaritw approved 'Deploy เลย'). 3 mutations done: (1) ALTER dbo.gl_group ADD edit_by NVARCHAR(10) NULL; (2) pushed budget_masters_lib via REST updateDefinition, live==intended byte-identical, still 1 cell; (3) ran NB_budget_masters_sync only_spec=Budget_Masters_gl_group headless (job 13167c07 Completed 1.5min). VERIFY: 146 rows, edit_by 0 NULL, admin=13/user=133, 4 new 5xxx codes=admin, 5 dup codes->1 row admin (admin-wins), 0 dup gl_codes. App unaffected (SELECT explicit cols). Follow-ups (non-blocking): source dup-fix by owner; budget_app_tables.sql DW-repo DDL +edit_by. Next: app track (05 flag-gated code)."
-    },
-    {
       "id": "ui-parity-mockup-0002-3",
       "state": "done",
       "created": "2026-07-17T14:50:50+0700",
@@ -2427,14 +2434,6 @@
       "created": "2026-07-17T14:44:00+0700",
       "updated": "2026-07-28T14:51:06+0700",
       "ai": "ปิด — งานถูก absorb โดย ui-parity-mockup-0002-3 ที่ done ครบแล้ว (stale doing ตั้งแต่ 2026-07-17)"
-    },
-    {
-      "id": "gl-editby-column",
-      "state": "done",
-      "created": "2026-07-17T14:29:59+0700",
-      "updated": "2026-07-17T17:26:11+0700",
-      "agent": "05-software-developer",
-      "ai": "App code COMMITTED 5119e19 (11 files, edit_by only; chip files of ui-parity-mockup-0002-3 excluded). Feature complete flag-OFF: DW sync deployed+live (gl-editby-dwsync done) + app server-side-strip/403-guards/submit-guard, gate APPROVE-WITH-SUGGESTIONS. NOT pushed, NOT deployed to Container Apps, flag NOT flipped (all await jakkaritw). PRE-FLAG-ON items: (1) decide submit-guard widening to non-admin filler submitting dept w/ admin-GL rows (workflow-only, no leak); (2) budget_app_tables.sql DW-repo DDL +edit_by; (3) source Excel dup-fix by owner; (4) add characterization test after (1)."
     },
     {
       "id": "special-group-completeness",

@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-15T23:55:04+0700",
+  "updated": "2026-08-17T08:17:37+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -485,6 +485,29 @@
       "created": "2026-07-16T16:52:22+0700",
       "updated": "2026-07-16T23:41:04+0700",
       "ai": "DONE+verified (291 vitest, predicate row.editable && !is_special && in_master, read-only marker). Committed af53b2d with the whole staging-QA batch: 7 fixes + trip-idempotency + trip-side dept-grain + gl-readonly. Migration client_token APPLIED to live budget_trip (0 rows, EXISTS verified). NOT rebuilt/redeployed (jakkaritw: 1+2 only). 55 unrelated churn files left unstaged."
+    },
+    {
+      "id": "gl-editby-approval-separation",
+      "state": "done",
+      "created": "2026-07-17T17:32:17+0700",
+      "updated": "2026-07-17T22:53:55+0700",
+      "ai": "BUILT+COMMITTED 9e57b77 (05 agent a8d3265, gate APPROVE agent a14ae00). Lane 2.2 = admin กรอก=อนุมัติเลย. Removed buggy AdminGlInNormalSubmitError guard (would stamp whole dept APPROVED bypassing approver); submit_department routes any is_filler to normal chain; admin-GL rows never enter approval_status (approved-on-save convention, audited _user/_updated_at, no schema change); auto_submit last-editor excludes admin-GL (flag-gated); ADR-0024 written (narrows 0011, disambiguates 0012 template vs edit_by). ALSO fixed: read_model.py (core read-strip) was MISSED from commit 5119e19 - now committed in 9e57b77. Suite 621 pass/19 pre-existing flake. Flag OFF. plan.md NOT committed (shared w/ concurrent ui-parity session, content synced in-tree). NOT pushed, NOT deployed, flag NOT flipped - await jakkaritw."
+    },
+    {
+      "id": "gl-editby-dwsync",
+      "state": "done",
+      "created": "2026-07-17T15:47:48+0700",
+      "updated": "2026-07-17T16:11:54+0700",
+      "agent": "04-data-engineer",
+      "ai": "DEPLOYED+VERIFIED live cman-dw-ws (jakkaritw approved 'Deploy เลย'). 3 mutations done: (1) ALTER dbo.gl_group ADD edit_by NVARCHAR(10) NULL; (2) pushed budget_masters_lib via REST updateDefinition, live==intended byte-identical, still 1 cell; (3) ran NB_budget_masters_sync only_spec=Budget_Masters_gl_group headless (job 13167c07 Completed 1.5min). VERIFY: 146 rows, edit_by 0 NULL, admin=13/user=133, 4 new 5xxx codes=admin, 5 dup codes->1 row admin (admin-wins), 0 dup gl_codes. App unaffected (SELECT explicit cols). Follow-ups (non-blocking): source dup-fix by owner; budget_app_tables.sql DW-repo DDL +edit_by. Next: app track (05 flag-gated code)."
+    },
+    {
+      "id": "gl-editby-column",
+      "state": "done",
+      "created": "2026-07-17T14:29:59+0700",
+      "updated": "2026-07-17T17:26:11+0700",
+      "agent": "05-software-developer",
+      "ai": "App code COMMITTED 5119e19 (11 files, edit_by only; chip files of ui-parity-mockup-0002-3 excluded). Feature complete flag-OFF: DW sync deployed+live (gl-editby-dwsync done) + app server-side-strip/403-guards/submit-guard, gate APPROVE-WITH-SUGGESTIONS. NOT pushed, NOT deployed to Container Apps, flag NOT flipped (all await jakkaritw). PRE-FLAG-ON items: (1) decide submit-guard widening to non-admin filler submitting dept w/ admin-GL rows (workflow-only, no leak); (2) budget_app_tables.sql DW-repo DDL +edit_by; (3) source Excel dup-fix by owner; (4) add characterization test after (1)."
     }
   ]
 }
