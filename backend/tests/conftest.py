@@ -40,6 +40,9 @@ def _hermetic_unit_settings(request, monkeypatch):
         return
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("DEV_AUTH_EMAIL", raising=False)
+    # REMINDER_INTERVAL_MINUTES set locally would shift the 7-day production
+    # default the boundary tests in test_jobs_send_reminders.py pin.
+    monkeypatch.delenv("REMINDER_INTERVAL_MINUTES", raising=False)
     monkeypatch.setenv("GL_EDIT_BY_ENABLED", "false")
     monkeypatch.setenv("SAP_CACHE_TTL_SECONDS", "0")
     monkeypatch.setenv("WARMUP_ENABLED", "false")

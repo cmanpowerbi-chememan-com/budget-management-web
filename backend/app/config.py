@@ -142,6 +142,17 @@ class Settings(BaseSettings):
     reminder_send_delay_seconds: float = 2.0
     reminder_max_sends_per_run: int = 150
 
+    # §7 person-level reminder cadence (jobs/send_reminders.py) — how long
+    # since a person's last reminder before they are due again. In MINUTES,
+    # not days, specifically so it can be dialed down for a live SIT test
+    # (TC-041 "หากยังไม่อนุมัติ อีเมลเตือนผู้อนุมัติทุกๆ 7 วัน") — waiting 7 real
+    # days to prove the repeat fires is impractical. Default = exactly 7 days
+    # (7 * 24 * 60 = 10080). PRODUCTION LEAVES THIS UNSET (keeps the default).
+    # A small value (e.g. 2) is a STAGING-ONLY SIT aid to compress the 7-day
+    # wait into minutes for one manual test session — never set a small
+    # value in production.
+    reminder_interval_minutes: int = 10080
+
     # Convenience-only deep-link base (ADR-0016) — placeholder default OK,
     # flagged: the React+FastAPI app is not deployed yet (CLAUDE.md), so this
     # is the intended production domain, not a live URL today.

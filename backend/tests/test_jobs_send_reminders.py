@@ -73,15 +73,41 @@ def test_person_cadence_clear_when_last_sent_7_days_ago():
 
 
 def test_deadline_due_when_never_sent():
-    assert _deadline_due(None, TODAY) is True
+    assert _deadline_due(None, NOW) is True
 
 
 def test_deadline_not_due_when_sent_less_than_7_days_ago():
-    assert _deadline_due(NOW - timedelta(days=6), TODAY) is False
+    assert _deadline_due(NOW - timedelta(days=6), NOW) is False
 
 
 def test_deadline_due_when_last_sent_7_days_ago():
-    assert _deadline_due(NOW - timedelta(days=7), TODAY) is True
+    assert _deadline_due(NOW - timedelta(days=7), NOW) is True
+
+
+# ---------------------------------------------------------------------------
+# reminder_interval_minutes (SIT aid, TC-041) — same two cadence checks with
+# a small, staging-style interval instead of the 10080-minute (7-day) default
+# ---------------------------------------------------------------------------
+
+def test_person_cadence_2min_interval_due_after_3_minutes():
+    assert _person_cadence_clear(NOW - timedelta(minutes=3), NOW, interval_minutes=2) is True
+
+
+def test_person_cadence_2min_interval_not_due_after_1_minute():
+    assert _person_cadence_clear(NOW - timedelta(minutes=1), NOW, interval_minutes=2) is False
+
+
+def test_deadline_due_2min_interval_due_after_3_minutes_same_calendar_day():
+    """The bug this cadence fix closes: at DATE granularity, a same-day
+    3-minute-old `last_sent` could never be due (today - today == 0 days).
+    At datetime granularity it correctly elapses."""
+    last_sent = NOW - timedelta(minutes=3)
+    assert last_sent.date() == NOW.date()  # same calendar day, by construction
+    assert _deadline_due(last_sent, NOW, interval_minutes=2) is True
+
+
+def test_deadline_due_2min_interval_not_due_after_1_minute():
+    assert _deadline_due(NOW - timedelta(minutes=1), NOW, interval_minutes=2) is False
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +361,67 @@ def test_turn_summary_counts_mail_that_needed_a_retry(caplog):
     assert "retried=1" in caplog.text
 
 
+def test_turn_due_gate_2min_interval_triggers_without_a_7_day_old_fixture():
+    """TC-041 SIT aid: the "at least one pending item is old enough" gate
+    must read the SAME interval_minutes setting as the person-cadence check
+    — otherwise a 2-minute staging override would still need a real
+    7-day-old row to ever fire, making the SIT test impossible."""
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with p_rows as m_rows, p_last as m_last, p_log as m_log, p_notify as m_notify:
+        m_rows.return_value = [_pending_row(submitted_at=NOW - timedelta(minutes=3))]
+        sent = _run_turn_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True, now=NOW,
+            interval_minutes=2,
+        )
+
+    assert sent == 1
+    m_notify.assert_called_once()
+    m_log.assert_called_once()
+
+
+def test_turn_repeat_sequence_three_spaced_runs_then_a_silent_fourth():
+    """The exact TC-041 runbook shape: run the job repeatedly with the clock
+    advanced past the (small, staging) interval each time -> 3 sends for the
+    same approver; a 4th run on the SAME clock as the 3rd (no time elapsed)
+    -> 0, cadence still open. `_last_sent_at`/`_log_reminder` are faked with
+    a real in-memory store so the cadence actually carries across calls,
+    exactly like `budget.reminder_log` does across job runs."""
+    interval_minutes = 2
+    store: dict[str, datetime] = {}
+
+    def fake_last_sent(conn, reminder_type, department, fiscal_year, recipient):
+        return store.get(recipient)
+
+    def fake_log(conn, reminder_type, department, fiscal_year, recipient, sent_at):
+        store[recipient] = sent_at
+
+    with patch("jobs.send_reminders.fetch_pending_rows") as m_rows, \
+            patch("jobs.send_reminders._last_sent_at", side_effect=fake_last_sent), \
+            patch("jobs.send_reminders._log_reminder", side_effect=fake_log), \
+            patch("jobs.send_reminders.notifications.notify_turn_reminder", return_value=_ok_result()) as m_notify:
+        m_rows.return_value = [_pending_row(submitted_at=NOW - timedelta(minutes=10))]
+
+        run_1 = _run_turn_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True,
+            now=NOW, interval_minutes=interval_minutes,
+        )
+        run_2 = _run_turn_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True,
+            now=NOW + timedelta(minutes=interval_minutes), interval_minutes=interval_minutes,
+        )
+        run_3 = _run_turn_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True,
+            now=NOW + timedelta(minutes=2 * interval_minutes), interval_minutes=interval_minutes,
+        )
+        run_4_same_clock = _run_turn_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True,
+            now=NOW + timedelta(minutes=2 * interval_minutes), interval_minutes=interval_minutes,
+        )
+
+    assert (run_1, run_2, run_3, run_4_same_clock) == (1, 1, 1, 0)
+    assert m_notify.call_count == 3
+
+
 # ---------------------------------------------------------------------------
 # Phase B — deadline reminders, grouped ONE mail per filler
 # ---------------------------------------------------------------------------
@@ -450,7 +537,11 @@ def test_deadline_person_cadence_blocks_rerun_within_7_days():
         m_depts.return_value = ["Accounting"]
         m_fillers.return_value = ["alice@chememan.com"]
         m_last.return_value = NOW - timedelta(days=3)  # reminded 3 days ago
-        sent = _run_deadline_reminders(MagicMock(), 2027, dry_run=False, notifications_dry_run=True, today=TODAY)
+        # `now=NOW` pinned explicitly: the cadence check now compares against
+        # `now` (datetime granularity, see _deadline_due), not the real clock.
+        sent = _run_deadline_reminders(
+            MagicMock(), 2027, dry_run=False, notifications_dry_run=True, today=TODAY, now=NOW,
+        )
 
     assert sent == 0
     m_notify.assert_not_called()

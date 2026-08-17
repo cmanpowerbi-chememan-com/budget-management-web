@@ -124,6 +124,14 @@ def test_log_level_reads_from_env(monkeypatch):
     assert settings.log_level == "WARNING"
 
 
+def test_reminder_interval_minutes_defaults_to_7_days():
+    """Production leaves REMINDER_INTERVAL_MINUTES unset, so this must equal
+    exactly 7 days in minutes — a STAGING-ONLY SIT aid (TC-041) overrides it
+    to a small value via env, never in production."""
+    settings = Settings(_env_file=None)
+    assert settings.reminder_interval_minutes == 10080
+
+
 def test_get_settings_reads_from_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("FABRIC_SQL_SERVER", "example.database.fabric.microsoft.com")

@@ -21,6 +21,13 @@ approver1 (the filler's `manager_employee_code` from
 `dbo.v_employee_budget_01`, fallback Nipaporn — the same rule
 `app.approval.resolve_chain` freezes at submit time, ONE address).
 
+The 7-day cadence is configurable (`Settings.reminder_interval_minutes`, in
+MINUTES so it can be compressed for a live SIT test — default 10080 = 7 days;
+production leaves it unset). All three cadence checks below (person-level
+turn/deadline "clear" gates + the turn-phase "old enough" gate) read the same
+setting, so a staging override makes the WHOLE 7-day loop testable in minutes
+without a DB fixture — see `app/config.py`.
+
 Cadence bookkeeping lives in `budget.reminder_log` (db/ddl/budget_reminder_log.sql),
 keyed per PERSON per year on the '*' department sentinel (the mail is no
 longer about one department): ('turn','*',fy,empcode) /
@@ -72,7 +79,6 @@ logger = logging.getLogger("jobs.send_reminders")
 
 TURN_REMINDER_TYPE = "turn"
 DEADLINE_REMINDER_TYPE = "deadline"
-REMINDER_INTERVAL_DAYS = 7
 # §7.2: reminder mails are grouped per PERSON, so the reminder_log
 # `department` column carries this sentinel instead of a real ฝ่าย.
 PERSON_SENTINEL = "*"
@@ -129,24 +135,45 @@ def _naive(dt: datetime) -> datetime:
     return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
-def _person_cadence_clear(last_sent: datetime | None, now: datetime) -> bool:
-    """§7 person-level 7-day cadence: clear when this PERSON was never
-    reminded, or their last reminder went out >= 7 days ago. Replaces the
-    per-(department, recipient) cadence of the first revamp — the reminder
-    mail is grouped per person now, so the throttle is per person too."""
-    if last_sent is None:
-        return True
-    return (_naive(now) - _naive(last_sent)).days >= REMINDER_INTERVAL_DAYS
+def _resolve_interval_minutes(interval_minutes: int | None) -> int:
+    """None means "use the configured cadence" (`Settings.reminder_interval_minutes`,
+    default 10080 = 7 days); an explicit value — always what tests and the
+    per-run callers below pass — wins. Kept as one lookup point so every
+    cadence check in this module reads the exact same setting."""
+    return interval_minutes if interval_minutes is not None else get_settings().reminder_interval_minutes
 
 
-def _deadline_due(last_sent: datetime | None, today: date) -> bool:
-    """Deadline-phase person cadence (date-granularity twin of
-    `_person_cadence_clear`): due when never sent, or the last send was
-    >= 7 days ago. (The window check — reminder_date..closing_date —
-    happens once per run in `_run_deadline_reminders`, not here.)"""
+def _minutes_elapsed(earlier: datetime, later: datetime) -> float:
+    """Whole-precision elapsed minutes between two datetimes, `_naive`-safe.
+    Minutes (not `.days`) so a STAGING-ONLY interval override of a few
+    minutes (SIT aid, TC-041) can actually elapse within a test session."""
+    return (_naive(later) - _naive(earlier)).total_seconds() / 60
+
+
+def _person_cadence_clear(last_sent: datetime | None, now: datetime, interval_minutes: int | None = None) -> bool:
+    """§7 person-level cadence: clear when this PERSON was never reminded, or
+    their last reminder went out >= the configured interval ago (production
+    default 10080 minutes = 7 days, see `Settings.reminder_interval_minutes`).
+    Replaces the per-(department, recipient) cadence of the first revamp —
+    the reminder mail is grouped per person now, so the throttle is per
+    person too."""
     if last_sent is None:
         return True
-    return (today - _naive(last_sent).date()).days >= REMINDER_INTERVAL_DAYS
+    return _minutes_elapsed(last_sent, now) >= _resolve_interval_minutes(interval_minutes)
+
+
+def _deadline_due(last_sent: datetime | None, now: datetime, interval_minutes: int | None = None) -> bool:
+    """Deadline-phase person cadence (elapsed-time twin of
+    `_person_cadence_clear`): due when never sent, or the last send was >=
+    the configured interval ago. Compares at DATETIME granularity — NOT
+    calendar-date — because `reminder_log.sent_at` is a full datetime and a
+    minutes-based interval (SIT aid) must be able to elapse more than once
+    within the same calendar day; a date-only compare made that impossible.
+    (The window check — reminder_date..closing_date — happens once per run
+    in `_run_deadline_reminders`, not here.)"""
+    if last_sent is None:
+        return True
+    return _minutes_elapsed(last_sent, now) >= _resolve_interval_minutes(interval_minutes)
 
 
 def _apply_cap(due: list, max_sends: int, phase: str, fiscal_year: int) -> tuple[list, int]:
@@ -170,9 +197,14 @@ def _apply_cap(due: list, max_sends: int, phase: str, fiscal_year: int) -> tuple
 def _run_turn_reminders(
     conn, fiscal_year: int, dry_run: bool, notifications_dry_run: bool, now: datetime,
     *, sleep: Callable[[float], None] = time.sleep, send_delay_seconds: float = 2.0, max_sends: int = 150,
+    interval_minutes: int | None = None,
 ) -> int:
+    interval_minutes = _resolve_interval_minutes(interval_minutes)
     rows = fetch_pending_rows(conn, fiscal_year)
-    by_approver: dict[str, list[tuple[str, int]]] = {}  # empcode -> [(department, days_pending)]
+    # empcode -> [(department, days_pending, minutes_pending)]. days_pending
+    # is display-only (mail content "ค้างมา X วัน", unchanged by this cadence
+    # setting); minutes_pending drives the due-gate below.
+    by_approver: dict[str, list[tuple[str, int, float]]] = {}
     for row in rows:
         turn_start, approver_empcode = current_turn_info(row)
         if not approver_empcode:
@@ -181,19 +213,22 @@ def _run_turn_reminders(
                 row["department"], row["status"],
             )
             continue
-        days_pending = (_naive(now) - _naive(turn_start)).days
-        by_approver.setdefault(approver_empcode, []).append((row["department"], days_pending))
+        elapsed = _naive(now) - _naive(turn_start)
+        by_approver.setdefault(approver_empcode, []).append(
+            (row["department"], elapsed.days, elapsed.total_seconds() / 60)
+        )
 
-    # Per-person due gate: >=1 item aged >=7d AND the person's own 7-day
-    # cadence is clear. Content is always ALL their pending items (younger
-    # ones ride along — see module docstring).
+    # Per-person due gate: >=1 item old enough (interval_minutes, default
+    # 10080 = 7 days) AND the person's own cadence is clear. Content is
+    # always ALL their pending items (younger ones ride along — see module
+    # docstring).
     due: list[tuple[str, list[tuple[str, int]]]] = []
     for approver_empcode, items in by_approver.items():
-        if not any(days >= REMINDER_INTERVAL_DAYS for _, days in items):
+        if not any(minutes_pending >= interval_minutes for _, _, minutes_pending in items):
             continue
         last_sent = _last_sent_at(conn, TURN_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, approver_empcode)
-        if _person_cadence_clear(last_sent, now):
-            due.append((approver_empcode, items))
+        if _person_cadence_clear(last_sent, now, interval_minutes=interval_minutes):
+            due.append((approver_empcode, [(dept, days) for dept, days, _ in items]))
 
     if not due:
         logger.info("fiscal_year=%s: 0 turn reminder(s) due", fiscal_year)
@@ -333,11 +368,13 @@ def _resolve_approver1_cc_email(conn, filler_email: str) -> str | None:
 def _run_deadline_reminders(
     conn, fiscal_year: int, dry_run: bool, notifications_dry_run: bool, today: date,
     *, sleep: Callable[[float], None] = time.sleep, send_delay_seconds: float = 2.0, max_sends: int = 150,
-    now: datetime | None = None,
+    now: datetime | None = None, interval_minutes: int | None = None,
 ) -> int:
-    # `now` stamps reminder_log rows (injectable for deterministic tests, same
-    # clock Phase A uses); `today` drives the reminder/closing window.
+    # `now` stamps reminder_log rows AND drives the person-cadence check
+    # (injectable for deterministic tests, same clock Phase A uses); `today`
+    # drives only the reminder/closing DATE window below.
     now = now or datetime.now(timezone.utc)
+    interval_minutes = _resolve_interval_minutes(interval_minutes)
     window = _deadline_window(conn, fiscal_year)
     if window is None:
         logger.info(
@@ -366,12 +403,12 @@ def _run_deadline_reminders(
             by_filler.setdefault(filler_email, []).append(department)
 
     # Per-person due gate: inside the reminder window (checked above) AND
-    # the person's own 7-day cadence is clear. Content is always ALL their
-    # pending departments.
+    # the person's own cadence is clear. Content is always ALL their pending
+    # departments.
     due: list[tuple[str, list[str]]] = []
     for filler_email, depts in by_filler.items():
         last_sent = _last_sent_at(conn, DEADLINE_REMINDER_TYPE, PERSON_SENTINEL, fiscal_year, filler_email)
-        if _deadline_due(last_sent, today):
+        if _deadline_due(last_sent, now, interval_minutes=interval_minutes):
             due.append((filler_email, sorted(depts)))
 
     if not due:
@@ -439,9 +476,10 @@ def run(
     *, sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Runs both phases on ONE connection. Returns the total number of
-    reminders sent (dry-run: the number that WOULD be). Pacing delay and the
-    per-phase cap come from Settings (§7.3); `sleep` is injectable so tests
-    never really wait."""
+    reminders sent (dry-run: the number that WOULD be). Pacing delay, the
+    per-phase cap, and the reminder cadence all come from Settings (§7.3 +
+    `reminder_interval_minutes`); `sleep` is injectable so tests never
+    really wait."""
     now = now or datetime.now(timezone.utc)
     settings = get_settings()
     with get_fabric_conn() as conn:
@@ -450,6 +488,7 @@ def run(
             sleep=sleep,
             send_delay_seconds=settings.reminder_send_delay_seconds,
             max_sends=settings.reminder_max_sends_per_run,
+            interval_minutes=settings.reminder_interval_minutes,
         )
         deadline_sent = _run_deadline_reminders(
             conn, fiscal_year, dry_run, notifications_dry_run, bangkok_today(),
@@ -457,6 +496,7 @@ def run(
             send_delay_seconds=settings.reminder_send_delay_seconds,
             max_sends=settings.reminder_max_sends_per_run,
             now=now,
+            interval_minutes=settings.reminder_interval_minutes,
         )
         return turn_sent + deadline_sent
 
