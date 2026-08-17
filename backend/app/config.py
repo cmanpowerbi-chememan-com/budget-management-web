@@ -50,15 +50,30 @@ class Settings(BaseSettings):
     # Local-only Easy Auth override — honored ONLY when app_env == "local".
     dev_auth_email: str | None = None
 
-    # SIT/UAT test aid (2026-08-10): rewrites one resolved Easy Auth identity
-    # to another, e.g. "jakkaritw@chememan.com:pornthipp@chememan.com", so a
-    # tester with no employee row can act as a real approver on staging,
-    # where header spoofing no longer works against real Easy Auth. Format is
-    # a single "from_email:to_email" pair. Honored ONLY in non-production:
-    # `app.auth._apply_sit_impersonation` first HARD-guards on
-    # `app_env != "production"` (dead on PRD, which runs app_env=production),
-    # then additionally requires a non-blank `notifications_environment_label`
-    # — three independent conditions must all hold. Never set this on PRD.
+    # SIT/UAT test aid (2026-08-10, grammar + guard extended 2026-08-17):
+    # rewrites one resolved Easy Auth identity to one of a configured list of
+    # targets, e.g. "jakkaritw@chememan.com:nipapornt@chememan.com,warapornt@chememan.com"
+    # (the old single-target "from:to" form still works, a 1-target list).
+    # Which target applies is picked per browser session by the `sit_as`
+    # cookie (default = the first target) — see `app.routers.sit` and
+    # `app.auth._select_sit_target`. Lets a tester with no employee row act
+    # as ANY of the configured approvers on staging, where header spoofing no
+    # longer works against real Easy Auth.
+    #
+    # Honored ONLY when THREE conditions all hold (`app.auth._sit_guard_ok`):
+    # (1) HARD `app_env != "production"` (dead on PRD, which runs
+    # app_env=production, checked first, absolute); (2) the resolved caller
+    # email is in `admin_emails_set` (2026-08-17 — replaces the old
+    # `notifications_environment_label` non-blank check: staging now removes
+    # that label entirely so SIT mail looks byte-identical to production, no
+    # test banner/subject prefix — so it can no longer double as a
+    # non-production signal here); (3) this value is set and well-formed.
+    # Condition 2 alone only rules out non-admins — it is NOT "any admin
+    # may impersonate": the caller must additionally equal this value's own
+    # `from_email` (enforced by `app.auth.sit_targets_for` /
+    # `_apply_sit_impersonation`), so a different admin is refused too
+    # (2026-08-18 gate fix — do not loosen this to match the old, wrong
+    # reading). Never set this on PRD.
     sit_impersonate: str = ""
 
     # Fabric SQL Database — ONE DB, budget.* (transactional) + dbo.* (masters/employee) schemas.

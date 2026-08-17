@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # order, since FastAPI's own /docs /openapi.json /redoc routes already exist
 # before this module ever runs.
 _RESERVED_API_PREFIXES = frozenset(
-    {"health", "me", "scope", "budget", "approval", "attachments", "docs", "openapi.json", "redoc"}
+    {"health", "me", "sit", "scope", "budget", "approval", "attachments", "docs", "openapi.json", "redoc"}
 )
 
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}

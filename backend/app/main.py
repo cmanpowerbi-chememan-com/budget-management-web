@@ -29,7 +29,7 @@ from fastapi import FastAPI, Request, Response
 from app.config import get_settings
 from app.db import get_fabric_conn, get_gold_conn
 from app.logging_config import configure_logging
-from app.routers import approval, attachments, budget, budget_write, health, me, reference, scope, subform
+from app.routers import approval, attachments, budget, budget_write, health, me, reference, scope, sit, subform
 from app.sap import fetch_sap_actuals_cached, resolve_sap_coverage_cached
 from app.static import mount_frontend
 
@@ -122,6 +122,7 @@ async def add_security_headers(
 
 app.include_router(health.router)
 app.include_router(me.router)
+app.include_router(sit.router)
 app.include_router(scope.router)
 app.include_router(budget.router)
 app.include_router(budget_write.router)
