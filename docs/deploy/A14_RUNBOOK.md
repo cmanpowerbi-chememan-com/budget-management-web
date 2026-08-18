@@ -459,6 +459,40 @@ az containerapp update --name $APP_NAME --resource-group $RG --min-replicas 0 --
 
 ---
 
+## 10b. Incident — a session cookie leaked (or a laptop walked off)
+
+Logging the user out does **not** help. Easy Auth's `/.auth/logout` clears the
+browser's cookie and nothing else: the same `AppServiceAuthSession` value
+replayed from any other HTTP client keeps returning 200 on `/me` and `/scope`
+until it expires on its own (proven on staging 2026-08-18, ADR-0028 amendment).
+
+Do this instead, in order:
+
+1. **Revoke in Entra ID** — Entra ID → Users → *(the user)* → **Revoke sessions**
+   (`revokeSignInSessions`). This is the only action that invalidates the issued
+   session and refresh tokens immediately. Requires an admin who can act on that
+   user object.
+2. **Confirm it took** — replay the leaked cookie against the app and expect
+   401/redirect, not 200:
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}
+'      -H "Cookie: AppServiceAuthSession=<the leaked value>"      "https://<fqdn>/me"
+   ```
+3. **Do not rely on the clock alone.** Without a revoke, the exposure window is
+   the full cookie lifetime from the moment that cookie was minted:
+   production `14:00:00`, staging `00:20:00` since 2026-08-18 (was the Azure
+   default ~8 h). Working in the app does not extend it; logging out does not
+   shorten it.
+4. **Rotate anything else that leaked with it.** A cookie pasted into a chat,
+   ticket or screenshot usually travels with other secrets — check for
+   `ENTRA_CLIENT_SECRET`, connection strings and SAS URLs in the same paste and
+   rotate those per section 4.
+
+Never record "user logged out" as the remediation for a leaked session. It is
+not one.
+
+---
+
 ## 11. Post-deploy switches deliberately NOT flipped
 
 - `NOTIFICATIONS_DRY_RUN` — left unset (stays `true`/dry-run). All Graph

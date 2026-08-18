@@ -96,6 +96,45 @@ Three parts, decided together by jakkaritw on 2026-08-04:
   accountant reads it as "the system is down" and raises a support call, when in fact
   nothing is wrong. The accepted wording names the cause and the limit.
 
+## Amendment 2026-08-18 — logout does not end the session, and staging is no longer 14 h
+
+Two facts established after this ADR was accepted. Both change what the numbers above
+mean in practice.
+
+**1. `/.auth/logout` clears the browser cookie only — it does not revoke anything.**
+Proven live on staging: after calling `/.auth/logout` (which redirects to
+`login.microsoftonline.com/.../oauth2/v2.0/logoutsession`, and reloading the app then
+bounces to the Microsoft authorize endpoint, so the browser session really is gone), the
+**same `AppServiceAuthSession` value replayed from a plain HTTP client still returned
+200** on `/me` and `/scope` as that user. The cookie stays valid for its full remaining
+lifetime no matter how many times anyone logs out.
+
+Consequences, in order of how likely they are to bite:
+
+- A leaked or copied `AppServiceAuthSession` cookie **cannot be killed by logging out**.
+  Treat it as live until it expires on its own, or until an admin revokes explicitly.
+- The only real revocation is **Entra ID → Users → *(the user)* → Revoke sessions**
+  (`revokeSignInSessions`), which invalidates issued session and refresh tokens.
+- The ออกจากระบบ button added on 2026-08-18 (`frontend/src/userbar/UserBar.tsx`) is
+  therefore a *convenience for the person at the keyboard*, not a security control. Its
+  UI copy deliberately promises nothing beyond leaving; do not add reassuring wording
+  like "ออกจากระบบเรียบร้อย" that implies the session is dead.
+- Shortening the cookie lifetime is the only lever that bounds the exposure window,
+  because it is the expiry — not any logout — that ends a stolen session.
+
+**2. Staging is now 20 minutes, not 14 hours.** On 2026-08-18 staging was set to
+`login.cookieExpiration.timeToExpiration = 00:20:00` so SIT can exercise the expiry
+dialog inside a test session instead of waiting out a working day. Production is
+unchanged at `14:00:00`.
+
+- The dialog's Thai copy still says **14 ชั่วโมง**, so on staging the message now states
+  a number that does not match that environment. Accepted for the SIT window because the
+  dialog's job there is to prove it appears at all; revert staging (remove the
+  `cookieExpiration` block — staging never had one before, its default was ~8 h) or fix
+  the copy before staging is used to demonstrate the real limit to anyone.
+- A tester must **log in fresh after the change** for 20 minutes to apply: cookies
+  already minted keep the expiry they were issued with, per the Consequences below.
+
 ## Consequences
 
 - The window in which a lost or borrowed laptop holds a live session grows from 8 h to

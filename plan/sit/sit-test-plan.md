@@ -175,11 +175,12 @@ staging กับ production ใช้ **Fabric SQL Database ตัวเดี�
 | image | `cmanbudgetacr.azurecr.io/budget-web:1bbddcb` | เดียวกัน |
 | **image สำหรับ rollback** | `cmanbudgetacr.azurecr.io/budget-web:d0672fc` | เดียวกัน |
 | min-replicas | 0 (มี cold start ~25 วินาที) | 2 (อุ่นตลอด) |
-| Easy Auth | เปิด · cookie 14 ชั่วโมง | เปิด · cookie 14 ชั่วโมง |
+| Easy Auth | เปิด · cookie **20 นาที** (ตั้ง 2026-08-18 เพื่อทดสอบ TC-005; ผู้ทดสอบต้อง login ใหม่หลังการตั้งค่าถึงจะได้ 20 นาที) | เปิด · cookie 14 ชั่วโมง |
 | Fabric SQL | **ตัวเดียวกันทั้งสอง** `fabric_sql_database-a42ef9f3` | เดียวกัน |
 | `ADMIN_EMAILS` | jakkaritw, nipapornt, warapornt (3 รายการ) | เดียวกัน |
 | `GL_EDIT_BY_ENABLED` | `true` | `true` |
 | `NOTIFICATIONS_DRY_RUN` | **ไม่ได้ตั้ง** → ใช้ค่า default `True` = ไม่ส่งอีเมลจริง | เดียวกัน |
+| ปุ่มออกจากระบบ | มีแล้ว (มุมขวาของแถบผู้ใช้ → `/.auth/logout`) ตั้งแต่ commit 82ac689 | เดียวกัน |
 | ผู้ส่งอีเมลของแอป | `cmanpowerbi@chememan.com` (แสดงชื่อ CMAN_PowerBI) | เดียวกัน |
 | SAP cache | TTL 600 วินาที + warmup ตอน process เริ่ม | เดียวกัน |
 | resource group / ACR | `CMAN-BUDGET-MNGT-WEB-RG` (southeastasia) / `cmanbudgetacr` | เดียวกัน |

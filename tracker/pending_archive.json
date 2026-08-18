@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-18T00:14:52+0700",
+  "updated": "2026-08-18T23:27:21+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -555,6 +555,126 @@
       "created": "2026-07-19T00:03:26+0700",
       "updated": "2026-07-19T00:04:18+0700",
       "ai": "Backend+frontend implemented, tests green (24 new backend, 401/401 frontend), live-verified via Playwright: grid 11->9 rows, 0 outliers vs 134-row master, 0 reference-hint elements. plan.md updated. NOT committed (per instructions) -- awaiting user commit approval.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-eca3d47",
+      "state": "done",
+      "created": "2026-07-19T20:43:47+0700",
+      "updated": "2026-07-19T20:43:47+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log dept-picker react feature push (1987dcb) [commit eca3d47]"
+    },
+    {
+      "id": "faip-mount-double-fetch",
+      "state": "done",
+      "created": "2026-07-19T20:29:32+0700",
+      "updated": "2026-07-19T20:43:43+0700",
+      "ai": "DONE + PUSHED 1987dcb. BudgetGrid.tsx loadGrid effect gated on deptResolved -> single mount fetch (was 2). .catch sets deptResolved so failed dept fetch never hangs grid. 3 guard tests; 409 test 3->2 mocks. Gate APPROVE race-free. Suite 432/432 tsc clean.",
+      "agent": "claude"
+    },
+    {
+      "id": "faip-react-single-dept-default",
+      "state": "done",
+      "created": "2026-07-19T20:01:39+0700",
+      "updated": "2026-07-19T20:43:42+0700",
+      "ai": "DONE + PUSHED 1987dcb. resolveInitialDept (frontend/src/picker/model.ts): valid deep-link wins; else exactly-1 ฝ่าย auto-selects; else null. TDD 6 cases. 2 collateral tests fixed (App.test getAllByText==2; BudgetGrid 409 mock). Gate 06+07+08 APPROVE. Part of combined React commit 1987dcb (with faip-mount-double-fetch). Suite 432/432 tsc clean. Mockup equiv 9b7899c.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-8abffa6",
+      "state": "done",
+      "created": "2026-07-19T19:57:08+0700",
+      "updated": "2026-07-19T19:57:08+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log faip dept-picker single-dept default (9b7899c) [commit 8abffa6]"
+    },
+    {
+      "id": "faipicker-filler-default",
+      "state": "done",
+      "created": "2026-07-19T19:47:05+0700",
+      "updated": "2026-07-19T19:47:58+0700",
+      "ai": "DUP of faip-dept-default-single (subagent auto-added). Same work. See that entry.",
+      "agent": "claude"
+    },
+    {
+      "id": "faip-dept-default-single",
+      "state": "done",
+      "created": "2026-07-19T19:40:12+0700",
+      "updated": "2026-07-19T19:56:37+0700",
+      "ai": "DONE + PUSHED 9b7899c to origin/main. buildFaiPicker filler default split by isApprover (0002.3budget-export.html L2007-2016): filler selectedDept=_faiData.length===1?_faiData[0].dept:null; approver firstWait->_faiData[0]->null UNCHANGED. Headless Playwright 4/4 PASS, 0 console err. Real fix = >1-dept no longer arbitrary-locks first-alpha; 1-dept already auto-selected pre-edit (screenshot was stale). No deploy triggered (mockup path).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-8d45fb1",
+      "state": "done",
+      "created": "2026-07-19T19:35:34+0700",
+      "updated": "2026-07-19T19:35:34+0700",
+      "agent": "autolog",
+      "ai": "Merge branch 'main' of https://github.com/cmanpowerbi-chememan-com/budget-management-web [commit 8d45fb1]"
+    },
+    {
+      "id": "log-47d00ab",
+      "state": "done",
+      "created": "2026-07-19T19:14:25+0700",
+      "updated": "2026-07-19T19:14:25+0700",
+      "agent": "autolog",
+      "ai": "feat(subform): dept-scoped trip traveler picker (v_employee_orgmap + v_traveler_picker) [commit 47d00ab]"
+    },
+    {
+      "id": "traveler-picker-dept-views",
+      "state": "done",
+      "created": "2026-07-19T18:09:26+0700",
+      "updated": "2026-07-19T18:24:12+0700",
+      "ai": "DONE: dbo.v_employee_orgmap + dbo.v_traveler_picker created LIVE in fabric_sql_database (SP had DDL rights; dedupe fix: ROW_NUMBER one-row-per-traveler, priority manager>skip>report>dept — caught by suchanya 13-row/8-person dupe). Verified live: orgmap 611 rows; suchanya picker 8 rows correct; 99/99 fillers min=3/median=7/max=46. DDL persisted db/ddl/traveler_picker_views.sql (run-order + verify notes). Backend: fetch_travelers(conn, filler_email) queries v_traveler_picker WHERE filler_email=? (lower-cased, parameterized); full-roster fallback + WARN for logins absent from roster (admin/test). Router passes email. Tests: 4 traveler unit tests rewritten (scoped-map/fallback/null-coerce/close) all pass; router tests untouched-green. Live smoke: suchanya mixed-case → 8 rows; unknown email → 611-roster fallback. Spec budget-transactional-data-model.md updated (view row + 1b note). NOT committed (repo has other sessions' uncommitted work; 65 pre-existing suite failures in write_model dept-lock + 401-vs-403 from other in-flight features, unrelated). plan.md sync left to that session.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-30fc5ac",
+      "state": "done",
+      "created": "2026-07-19T17:53:37+0700",
+      "updated": "2026-07-19T17:53:37+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log session work (subform save-all, grid, signoff, housekeeping) [commit 30fc5ac]"
+    },
+    {
+      "id": "tripmanager-delete-409-guard",
+      "state": "done",
+      "created": "2026-07-19T17:05:23+0700",
+      "updated": "2026-07-19T17:05:32+0700",
+      "ai": "Fixed frontend/src/subform/TripManager.tsx deleteTripCard 409 catch: now checks otherCardsHaveUnsavedEdits (dirty or manualDirty on any card != deleted localId) before auto-load(); when true, reuses existing conflictMessage banner + reload button, flags deleted card status=error (never wiped); when false, keeps original auto-load (nothing to lose). 2 new/updated tests in TripManager.test.tsx, 123/123 subform + 425/425 full frontend suite green, tsc -b clean, npm run build clean. frontend/src/grid/** untouched. Not committed (per instructions).",
+      "agent": "claude"
+    },
+    {
+      "id": "grid-remark-identity-col",
+      "state": "done",
+      "created": "2026-07-19T16:02:48+0700",
+      "updated": "2026-07-19T16:29:27+0700",
+      "ai": "Remark is now the 4th frozen identity column (same part as CC/GL/GL Group): model.ts ColumnWidths.remark + DEFAULT 170 + freezeOffsets frz4 + loadStored per-key fallback (pre-Remark localStorage entries safe) + selectMeasureCandidates.remark (skip null, capped longest). GridTable.tsx: measurer renders remark candidates with real .remark-text font; colgroup 4th col width from shared state; header th frz frz-4 with col-resize-remark handle; body td frz frz-4 (dropped rowspan/shared approach — sticky+rowspan is what the colSpan-merged cells avoid); rows 2/3 merged colSpan 4; group-head frozen band colSpan 4; --frz4 inline var. global.css: .frz-4, frozen-edge shadow moved frz-3->frz-4, z-index chain 19/18/17 for frz-1/2/3 (glGroup handle needed a bump now that its right neighbor is frozen Remark), removed fixed .remark-col rule + .remark-cell vertical-align. Tests: freezeOffsets/loadStored/selectMeasureCandidates model tests + GridTable remark frz-4/drag test + handle counts 4 cols + --frz4 assertion; vitest 133 grid tests pass, tsc + oxlint clean. Playwright live verify PASS: remark cell x unchanged when scrolled fully right (frozen), fit-to-content width 155px on colgroup col, drag +80px resized 155->235px. Leftover: screenshot frontend/test-results/remark-col-verify.png (scrolled-right state) awaiting user visual confirm; NOT committed",
+      "agent": "kimi"
+    },
+    {
+      "id": "trip-save-consolidation",
+      "state": "done",
+      "created": "2026-07-19T15:26:29+0700",
+      "updated": "2026-07-19T17:53:34+0700",
+      "ai": "COMMITTED 2b6b345 feat(subform): consolidate saves into one บันทึก & ลงบัญชี. save-all+delete-409-guard+race-hardening(cardsRef). skeptic refuted=FALSE, gate APPROVE, 124/124, tsc/build clean. Also committed this session: grid remark col 972a831, signoff PDF rebuild 0b77eb7, monthly 4182f39, tracker-v2 52ee502, vite-dev 0afa7a4. UNCOMMITTED/held per user: global.css+plan.md (shared), mockup 0002.3+master-tables(doing), vite.review.config.ts(temp spoof, author marked not-for-commit).",
+      "agent": "claude"
+    },
+    {
+      "id": "grid-remark-column",
+      "state": "done",
+      "created": "2026-07-19T15:00:02+0700",
+      "updated": "2026-07-19T15:28:53+0700",
+      "ai": "Added Remark column to main budget grid per mockup 0002.3budget-export.html (lines 1163-1166 header/filter, 2246-2249 rowspan-3 editable cell). model.ts: ColumnFilters.remark + filterRows match on pending.remark. GridTable.tsx: remark <th> with col-filter between GL Group and Status, colgroup col.remark-col (fixed 170px, not resizable), RemarkCell component (rowSpan=3 shared cell, draft+blur-commit like MonthCell, read-only text for see-only/special-GL rows since backend rejects /budget/rows for special GLs), colSpans 16->17 and subtotal 4->5. BudgetGrid.tsx: extracted shared persistRow() from handleCommitMonth (behavior unchanged), added handleCommitRemark (empty->null). global.css: .remark-col/.remark-cell/.remark-text/.remark-input. Tests: model.test.ts remark filter cases, GridTable.test.tsx 6 remark-column tests; vitest 414 pass, tsc clean, oxlint clean, Playwright mock verify PASS. Leftover: screenshot frontend/test-results/remark-col-verify.png awaiting user visual confirm; NOT committed",
+      "agent": "kimi"
+    },
+    {
+      "id": "trip-subform-mockup-parity",
+      "state": "done",
+      "created": "2026-07-19T14:49:51+0700",
+      "updated": "2026-07-19T17:53:34+0700",
+      "ai": "DONE + COMMITTED. Restyle TripManager to mockup (A/B/C legend, section A/B, uppercase labels, Per Diem read-only table row, GL-code col, ยอดรวม/ทริป col, รายละเอียด placeholder). TSX committed in 2b6b345 (folded with save-all). global.css (subform CSS) left UNCOMMITTED — shared w/ grid session per jakkaritw. gate APPROVE, financial never-cut held.",
       "agent": "claude"
     }
   ]

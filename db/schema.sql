@@ -101,7 +101,9 @@ CREATE TABLE submission_deadline (
     closing_date    INT             NULL,   -- day-of-month INPUT (e.g. 31), not a date
     closing_month   INT             NULL,
     closing_year    INT             NULL,
-    reminder_day    INT             NULL,   -- day-of-month INPUT for the first reminder
+    reminder_day    INT             NULL,   -- COUNT OF DAYS BEFORE the deadline
+                                            -- (corrected 2026-08-18: was read as a
+                                            -- day-of-month; DW commit 7f51775)
     deadline_date   DATE            NULL,   -- real closing date (precomputed) — read THIS
     reminder_date   DATE            NULL,   -- real first-reminder date (precomputed)
     _load_dt        DATE            NULL,

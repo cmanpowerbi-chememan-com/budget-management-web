@@ -1,15 +1,28 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-18T11:56:39+0700",
+  "updated": "2026-08-18T23:29:42+0700",
   "tasks": [
     {
-      "id": "log-3852f1b",
+      "id": "bug-lease-blank-dropdown-400",
+      "state": "doing",
+      "created": "2026-08-18T23:27:21+0700",
+      "updated": "2026-08-18T23:27:21+0700",
+      "ai": "Fixing Lease & Rental blank-dropdown 400 bug, mirroring Entertainment fix 3852f1b. TDD required."
+    },
+    {
+      "id": "wipe-da-testdata-stg",
       "state": "done",
-      "created": "2026-08-18T11:13:40+0700",
-      "updated": "2026-08-18T11:13:40+0700",
-      "agent": "autolog",
-      "ai": "fix(subform): stop a blank Entertainment type reaching the server [commit 3852f1b]"
+      "created": "2026-08-18T13:30:34+0700",
+      "updated": "2026-08-18T13:35:31+0700",
+      "ai": "DONE 2026-08-16, jakkaritw approved 'ล้างหมด รวม log' via AskUserQuestion after being shown the exact row counts and warned that stg+prd share ONE Fabric SQL DB so the delete hits both. DELETED (department='Data & Analytic' AND fiscal_year=2027 only): pending_budget 6, approval_status 1, approval_log 18, reminder_log 1 (fiscal_year=2027), pending_budget_detail 0, budget_trip 0 = 26 rows. VERIFIED AFTER: all six budget.* tables now 0 rows -- the D&A FY2027 set was the ONLY transactional data in the whole DB, so the app is at a clean slate for the human SIT round. MASTER DATA UNTOUCHED and re-counted after the delete: dbo.gl_group 146, dbo.cc_filler_map 489, dbo.employee_master 658, dbo.board_budget 2667. BACKUP first: bin/da-fy2027-testdata-backup.json (14,801 bytes, all 26 rows incl. the absurd test value 746,529,486,584.00 on 10IT013000/5210600020). Deletes ran children-first (detail/trip -> log -> status -> reminder -> pending_budget) in one transaction. SIDE FINDING, IMPORTANT: the Fabric SQL outage is OVER -- the same 2x2 probe that failed 4/4 at 14:37 passed 4/4 at ~15:5x (SP and jakkaritw, consolidated DB and DB1). It recovered on its own; no grant, capacity or code change was made. See fabric-sp-read-item-denied."
+    },
+    {
+      "id": "deploy-82ac689-stg",
+      "state": "done",
+      "created": "2026-08-18T12:51:55+0700",
+      "updated": "2026-08-18T12:51:55+0700",
+      "ai": "DEPLOYED TO STAGING + PUSHED + BOTH VERIFIED LANDED. Push: 1fb5d05..82ac689, origin/main == local HEAD == 82ac689b99ee10fd41dee9b2202e087f5d32f79a, in sync. NOTE the push carried FOUR commits, not just my two -- f39f671 (sit: decouple impersonation from the mail test label) and da84db7 (reminders: cadence configurable in minutes) were another session's, already committed locally but never pushed; flagged to jakkaritw rather than pushed silently. Deploy: ACR run cm1f Succeeded image budget-web:82ac689 (built from a clean detached worktree at 82ac689, 0 dirty files, removed + pruned after) -> containerapp update -> revision cman-budget-web-stg--0000052 active=true Running Healthy traffic=100 image confirmed; anonymous curl = 401 (Easy Auth still enforcing). DELTA STAGING ACTUALLY GAINED, checked before building: da84db7..HEAD = exactly my 2 commits (3852f1b Entertainment blank-type fix, 82ac689 logout button), 12 files +561/-62 -- no other session's work rode along because da84db7 was already the deployed image. jakkaritw ordered tasks 4-5-3 and all three are now live on staging: (4) stg login cookie 00:20:00, (5) blank ประเภทการรับรอง no longer 400s with raw English, (6=3) ออกจากระบบ link in the userbar -> /.auth/logout. VERIFY BEFORE DEPLOY (re-run by me): backend 1067 passed, vitest 652 passed, playwright 36/36 incl the contrast ratchet, next build clean. PRODUCTION NOT TOUCHED, NOT APPROVED (prd still runs 77308d7 and still has cookieExpiration 14:00:00). SIT tester notes: must log in FRESH for the 20-minute expiry to apply, and TC-004 can now use the real button instead of typing /.auth/logout by hand."
     },
     {
       "id": "bug-reminder-day-semantics",
@@ -21,10 +34,10 @@
     },
     {
       "id": "security-easyauth-logout-does-not-revoke",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-18T10:02:53+0700",
-      "updated": "2026-08-18T10:02:53+0700",
-      "ai": "[SECURITY FINDING 2026-08-18, proven live on staging] Easy Auth's /.auth/logout does NOT revoke the session server-side — it only clears the browser's cookie. Proof: called /.auth/logout in a Playwright context (redirected to login.microsoftonline.com/.../oauth2/v2.0/logoutsession, and reloading the app then bounced to the Microsoft authorize endpoint = browser session gone), but immediately afterwards the SAME AppServiceAuthSession value replayed from a plain HTTP client still returned 200 on /me and /scope as pornthipp. DIRECT CONSEQUENCE for this project: the two session cookies jakkaritw pasted into the chat cannot be killed by logging out; they stay usable until their ~8h lifetime expires (the first one did expire on its own, verified 401 this morning). To actually revoke immediately, an admin must use Entra ID -> Users -> jakkaritw -> 'Revoke sessions' (revokeSignInSessions), which invalidates issued session/refresh tokens. Worth adding to the SIT/ops runbook: treat a leaked AppServiceAuthSession as live until expiry or an explicit Entra revoke, never assume logout closed it. Also note stg has NO login.cookieExpiration configured (platform default ~8h) while prd sets 14:00:00.",
+      "updated": "2026-08-18T23:29:42+0700",
+      "ai": "DOCUMENTED 2026-08-18 (no code fix is possible -- this is Easy Auth behaviour, not a bug in our app). Three docs updated, uncommitted at time of writing: (1) docs/adr/0028-session-lifetime-and-expiry-dialog.md -- new 'Amendment 2026-08-18' section before Consequences recording that /.auth/logout clears the browser cookie ONLY, with the live staging proof (same AppServiceAuthSession replayed from a plain HTTP client still returned 200 on /me and /scope after logout), that the ONLY real revocation is Entra ID -> Users -> Revoke sessions (revokeSignInSessions), that the new ออกจากระบบ button is a convenience for the person at the keyboard and NOT a security control (so its copy must never say 'ออกจากระบบเรียบร้อย' or imply the session died), and that shortening the cookie lifetime is the only lever bounding exposure; the same amendment records staging moving to 00:20:00 and flags that the dialog's Thai copy still says 14 ชั่วโมง so staging now states a number that is false for that environment. (2) docs/deploy/A14_RUNBOOK.md -- new section '10b. Incident - a session cookie leaked (or a laptop walked off)': revoke in Entra FIRST, confirm with a curl replay of the leaked cookie expecting 401 not 200, do not rely on the clock (exposure = full remaining lifetime, prd 14:00:00 / stg 00:20:00), rotate anything that leaked alongside it, and an explicit 'never record user logged out as the remediation'. (3) plan/sit/sit-test-plan.md -- the stale 'cookie 14 ชั่วโมงทั้งสอง environment' row corrected to 20 นาที for staging with the log-in-fresh caveat, plus a new row recording that the logout button now exists (commit 82ac689) so TC-004 no longer needs the tester to type /.auth/logout by hand. OPERATIONAL CONSEQUENCE STILL OPEN FOR jakkaritw: the two session cookies he pasted into chat earlier were never revoked -- one expired on its own (verified 401), the other should be assumed live until its ~8h lifetime lapsed; if that matters, run the Entra revoke on his own user.",
       "agent": "claude"
     },
     {
@@ -188,10 +201,10 @@
     },
     {
       "id": "fabric-sp-read-item-denied",
-      "state": "doing",
+      "state": "willdo",
       "created": "2026-08-16T08:18:54+0700",
-      "updated": "2026-08-17T12:37:49+0700",
-      "ai": "[STILL DOWN 2026-08-17 12:34 BKK — new evidence from the app itself] stg rev 0000049 startup warmup failed twice with the same 28000 'Verify the user has the Read item permission', and jakkaritw's live click produced: GET /me 200 (SIT impersonation jakkaritw->nipapornt logged, so auth+impersonation are fine) but GET /scope 502, pyodbc.InterfaceError 28000 at db.py:125 via routers/scope.py:26. So the SIT human round is BLOCKED on this outage, not on any code defect — the whole app is read-only-dead without fabric_sql_database. No watcher running; next check stays manual."
+      "updated": "2026-08-18T13:36:00+0700",
+      "ai": "[RESOLVED BY ITSELF 2026-08-16 ~15:5x — outage over, nothing was changed to fix it] The same 2x2 probe that returned 4/4 FAIL at 14:37 returned 4/4 OK less than 90 minutes later: SP cman-fabric-write and jakkaritw's user token both connect to BOTH the consolidated DB (fabric_sql_database-a42ef9f3) and DB1. No grant was edited, no capacity resumed, no code or config touched — it recovered on the Fabric side, which corroborates the diagnosis below that it was the SQL Database service and not permissions/secret/capacity. Total observed outage window: first failure recorded 2026-08-16 ~08:28, last failure 14:37, recovered by ~15:5x. NO USER IMPACT CONFIRMED: prd console log showed last real traffic 2026-08-15T13:44:35Z with zero requests during the window. LEFT AS willdo (not done) because the ROOT CAUSE was never established from the Fabric side — if it recurs, the evidence and diagnosis order are in memory gotcha_fabric_sp_read_item_denied. STILL UNCHECKED: which server the stg/prd container env actually points at (jakkaritw declined that az command twice). PRIOR DIAGNOSIS, kept for the record: 2x2 matrix showed BOTH DBs x BOTH identities refused 28000 while the LAKEHOUSE endpoint kept serving on the same capacity/credential; roleAssignments on cman-dw-ws listed cman-fabric-write AND jakkaritw as Admin; capacity cmandwprodcapf32 F32 was Active throughout; the item reported healthy with latestRestorePoint 2026-08-16T05:33:20Z. So it was never a grant to fix."
     },
     {
       "id": "deploy-f2e2ccd-stg",
@@ -2400,126 +2413,6 @@
       "created": "2026-07-20T16:18:42+0700",
       "updated": "2026-07-20T16:18:42+0700",
       "ai": "vite.review.config.ts SPOOF_USER anurakb->passakornh@chememan.com for local staging review; dev-only uncommitted config, needs dev-server restart to apply",
-      "agent": "claude"
-    },
-    {
-      "id": "log-eca3d47",
-      "state": "done",
-      "created": "2026-07-19T20:43:47+0700",
-      "updated": "2026-07-19T20:43:47+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): log dept-picker react feature push (1987dcb) [commit eca3d47]"
-    },
-    {
-      "id": "faip-mount-double-fetch",
-      "state": "done",
-      "created": "2026-07-19T20:29:32+0700",
-      "updated": "2026-07-19T20:43:43+0700",
-      "ai": "DONE + PUSHED 1987dcb. BudgetGrid.tsx loadGrid effect gated on deptResolved -> single mount fetch (was 2). .catch sets deptResolved so failed dept fetch never hangs grid. 3 guard tests; 409 test 3->2 mocks. Gate APPROVE race-free. Suite 432/432 tsc clean.",
-      "agent": "claude"
-    },
-    {
-      "id": "faip-react-single-dept-default",
-      "state": "done",
-      "created": "2026-07-19T20:01:39+0700",
-      "updated": "2026-07-19T20:43:42+0700",
-      "ai": "DONE + PUSHED 1987dcb. resolveInitialDept (frontend/src/picker/model.ts): valid deep-link wins; else exactly-1 ฝ่าย auto-selects; else null. TDD 6 cases. 2 collateral tests fixed (App.test getAllByText==2; BudgetGrid 409 mock). Gate 06+07+08 APPROVE. Part of combined React commit 1987dcb (with faip-mount-double-fetch). Suite 432/432 tsc clean. Mockup equiv 9b7899c.",
-      "agent": "claude"
-    },
-    {
-      "id": "log-8abffa6",
-      "state": "done",
-      "created": "2026-07-19T19:57:08+0700",
-      "updated": "2026-07-19T19:57:08+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): log faip dept-picker single-dept default (9b7899c) [commit 8abffa6]"
-    },
-    {
-      "id": "faipicker-filler-default",
-      "state": "done",
-      "created": "2026-07-19T19:47:05+0700",
-      "updated": "2026-07-19T19:47:58+0700",
-      "ai": "DUP of faip-dept-default-single (subagent auto-added). Same work. See that entry.",
-      "agent": "claude"
-    },
-    {
-      "id": "faip-dept-default-single",
-      "state": "done",
-      "created": "2026-07-19T19:40:12+0700",
-      "updated": "2026-07-19T19:56:37+0700",
-      "ai": "DONE + PUSHED 9b7899c to origin/main. buildFaiPicker filler default split by isApprover (0002.3budget-export.html L2007-2016): filler selectedDept=_faiData.length===1?_faiData[0].dept:null; approver firstWait->_faiData[0]->null UNCHANGED. Headless Playwright 4/4 PASS, 0 console err. Real fix = >1-dept no longer arbitrary-locks first-alpha; 1-dept already auto-selected pre-edit (screenshot was stale). No deploy triggered (mockup path).",
-      "agent": "claude"
-    },
-    {
-      "id": "log-8d45fb1",
-      "state": "done",
-      "created": "2026-07-19T19:35:34+0700",
-      "updated": "2026-07-19T19:35:34+0700",
-      "agent": "autolog",
-      "ai": "Merge branch 'main' of https://github.com/cmanpowerbi-chememan-com/budget-management-web [commit 8d45fb1]"
-    },
-    {
-      "id": "log-47d00ab",
-      "state": "done",
-      "created": "2026-07-19T19:14:25+0700",
-      "updated": "2026-07-19T19:14:25+0700",
-      "agent": "autolog",
-      "ai": "feat(subform): dept-scoped trip traveler picker (v_employee_orgmap + v_traveler_picker) [commit 47d00ab]"
-    },
-    {
-      "id": "traveler-picker-dept-views",
-      "state": "done",
-      "created": "2026-07-19T18:09:26+0700",
-      "updated": "2026-07-19T18:24:12+0700",
-      "ai": "DONE: dbo.v_employee_orgmap + dbo.v_traveler_picker created LIVE in fabric_sql_database (SP had DDL rights; dedupe fix: ROW_NUMBER one-row-per-traveler, priority manager>skip>report>dept — caught by suchanya 13-row/8-person dupe). Verified live: orgmap 611 rows; suchanya picker 8 rows correct; 99/99 fillers min=3/median=7/max=46. DDL persisted db/ddl/traveler_picker_views.sql (run-order + verify notes). Backend: fetch_travelers(conn, filler_email) queries v_traveler_picker WHERE filler_email=? (lower-cased, parameterized); full-roster fallback + WARN for logins absent from roster (admin/test). Router passes email. Tests: 4 traveler unit tests rewritten (scoped-map/fallback/null-coerce/close) all pass; router tests untouched-green. Live smoke: suchanya mixed-case → 8 rows; unknown email → 611-roster fallback. Spec budget-transactional-data-model.md updated (view row + 1b note). NOT committed (repo has other sessions' uncommitted work; 65 pre-existing suite failures in write_model dept-lock + 401-vs-403 from other in-flight features, unrelated). plan.md sync left to that session.",
-      "agent": "kimi"
-    },
-    {
-      "id": "log-30fc5ac",
-      "state": "done",
-      "created": "2026-07-19T17:53:37+0700",
-      "updated": "2026-07-19T17:53:37+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): log session work (subform save-all, grid, signoff, housekeeping) [commit 30fc5ac]"
-    },
-    {
-      "id": "tripmanager-delete-409-guard",
-      "state": "done",
-      "created": "2026-07-19T17:05:23+0700",
-      "updated": "2026-07-19T17:05:32+0700",
-      "ai": "Fixed frontend/src/subform/TripManager.tsx deleteTripCard 409 catch: now checks otherCardsHaveUnsavedEdits (dirty or manualDirty on any card != deleted localId) before auto-load(); when true, reuses existing conflictMessage banner + reload button, flags deleted card status=error (never wiped); when false, keeps original auto-load (nothing to lose). 2 new/updated tests in TripManager.test.tsx, 123/123 subform + 425/425 full frontend suite green, tsc -b clean, npm run build clean. frontend/src/grid/** untouched. Not committed (per instructions).",
-      "agent": "claude"
-    },
-    {
-      "id": "grid-remark-identity-col",
-      "state": "done",
-      "created": "2026-07-19T16:02:48+0700",
-      "updated": "2026-07-19T16:29:27+0700",
-      "ai": "Remark is now the 4th frozen identity column (same part as CC/GL/GL Group): model.ts ColumnWidths.remark + DEFAULT 170 + freezeOffsets frz4 + loadStored per-key fallback (pre-Remark localStorage entries safe) + selectMeasureCandidates.remark (skip null, capped longest). GridTable.tsx: measurer renders remark candidates with real .remark-text font; colgroup 4th col width from shared state; header th frz frz-4 with col-resize-remark handle; body td frz frz-4 (dropped rowspan/shared approach — sticky+rowspan is what the colSpan-merged cells avoid); rows 2/3 merged colSpan 4; group-head frozen band colSpan 4; --frz4 inline var. global.css: .frz-4, frozen-edge shadow moved frz-3->frz-4, z-index chain 19/18/17 for frz-1/2/3 (glGroup handle needed a bump now that its right neighbor is frozen Remark), removed fixed .remark-col rule + .remark-cell vertical-align. Tests: freezeOffsets/loadStored/selectMeasureCandidates model tests + GridTable remark frz-4/drag test + handle counts 4 cols + --frz4 assertion; vitest 133 grid tests pass, tsc + oxlint clean. Playwright live verify PASS: remark cell x unchanged when scrolled fully right (frozen), fit-to-content width 155px on colgroup col, drag +80px resized 155->235px. Leftover: screenshot frontend/test-results/remark-col-verify.png (scrolled-right state) awaiting user visual confirm; NOT committed",
-      "agent": "kimi"
-    },
-    {
-      "id": "trip-save-consolidation",
-      "state": "done",
-      "created": "2026-07-19T15:26:29+0700",
-      "updated": "2026-07-19T17:53:34+0700",
-      "ai": "COMMITTED 2b6b345 feat(subform): consolidate saves into one บันทึก & ลงบัญชี. save-all+delete-409-guard+race-hardening(cardsRef). skeptic refuted=FALSE, gate APPROVE, 124/124, tsc/build clean. Also committed this session: grid remark col 972a831, signoff PDF rebuild 0b77eb7, monthly 4182f39, tracker-v2 52ee502, vite-dev 0afa7a4. UNCOMMITTED/held per user: global.css+plan.md (shared), mockup 0002.3+master-tables(doing), vite.review.config.ts(temp spoof, author marked not-for-commit).",
-      "agent": "claude"
-    },
-    {
-      "id": "grid-remark-column",
-      "state": "done",
-      "created": "2026-07-19T15:00:02+0700",
-      "updated": "2026-07-19T15:28:53+0700",
-      "ai": "Added Remark column to main budget grid per mockup 0002.3budget-export.html (lines 1163-1166 header/filter, 2246-2249 rowspan-3 editable cell). model.ts: ColumnFilters.remark + filterRows match on pending.remark. GridTable.tsx: remark <th> with col-filter between GL Group and Status, colgroup col.remark-col (fixed 170px, not resizable), RemarkCell component (rowSpan=3 shared cell, draft+blur-commit like MonthCell, read-only text for see-only/special-GL rows since backend rejects /budget/rows for special GLs), colSpans 16->17 and subtotal 4->5. BudgetGrid.tsx: extracted shared persistRow() from handleCommitMonth (behavior unchanged), added handleCommitRemark (empty->null). global.css: .remark-col/.remark-cell/.remark-text/.remark-input. Tests: model.test.ts remark filter cases, GridTable.test.tsx 6 remark-column tests; vitest 414 pass, tsc clean, oxlint clean, Playwright mock verify PASS. Leftover: screenshot frontend/test-results/remark-col-verify.png awaiting user visual confirm; NOT committed",
-      "agent": "kimi"
-    },
-    {
-      "id": "trip-subform-mockup-parity",
-      "state": "done",
-      "created": "2026-07-19T14:49:51+0700",
-      "updated": "2026-07-19T17:53:34+0700",
-      "ai": "DONE + COMMITTED. Restyle TripManager to mockup (A/B/C legend, section A/B, uppercase labels, Per Diem read-only table row, GL-code col, ยอดรวม/ทริป col, รายละเอียด placeholder). TSX committed in 2b6b345 (folded with save-all). global.css (subform CSS) left UNCOMMITTED — shared w/ grid session per jakkaritw. gate APPROVE, financial never-cut held.",
       "agent": "claude"
     },
     {
