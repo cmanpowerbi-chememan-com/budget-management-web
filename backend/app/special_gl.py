@@ -115,18 +115,29 @@ def validate_lease_meta(gl_account: str, meta: dict[str, Any]) -> dict[str, Any]
     only) is free text — any non-empty sane-length plate, not just the 8
     dropdown shortcuts (jakkaritw 2026-07-17).
 
+    `สถานที่ใช้งาน` and `ประเภทรถ` treat nothing-chosen-yet as a no-op the
+    same way `validate_entertainment_meta` does (bug-lease-blank-dropdown-400:
+    identical None-vs-'' shape to bug-entertainment-blank-type-400, fixed in
+    3852f1b) — whether the key is MISSING (never touched) or an explicit `''`
+    (the frontend's blank placeholder option), both mean "nothing chosen yet".
+    `ทะเบียนรถ` keeps its OWN stricter rule below (2026-07-17 free-text
+    decision, unrelated to this bug): an explicit `''`/whitespace there IS a
+    genuinely invalid plate, not "nothing chosen" — it is NOT widened.
+
     Returns a CLEANED dict with any locked column forced to None, even if the
-    caller supplied a stale value for it (a locked column must never persist).
+    caller supplied a stale value for it (a locked column must never persist);
+    a blank chosen value normalizes to None the same way a never-touched
+    column does.
     """
     suffix = gl_account[-3:]
-    plant = meta.get("สถานที่ใช้งาน")
+    plant = meta.get("สถานที่ใช้งาน") or None
     if plant is not None and plant not in _LEASE_PLANTS:
         raise MetaValidationError(f"'{plant}' is not a valid สถานที่ใช้งาน")
 
     cleaned: dict[str, Any] = {"สถานที่ใช้งาน": plant, "กิจกรรม": meta.get("กิจกรรม")}
 
     if suffix == _LEASE_VEHICLE_SUFFIX:
-        vehicle_type = meta.get("ประเภทรถ")
+        vehicle_type = meta.get("ประเภทรถ") or None
         if vehicle_type is not None and vehicle_type not in _LEASE_VEHICLE_TYPES:
             raise MetaValidationError(f"'{vehicle_type}' is not a valid vehicle ประเภทรถ")
         plate = meta.get("ทะเบียนรถ")
@@ -135,7 +146,7 @@ def validate_lease_meta(gl_account: str, meta: dict[str, Any]) -> dict[str, Any]
         cleaned["ประเภทรถ"] = vehicle_type
         cleaned["ทะเบียนรถ"] = plate
     elif suffix == _LEASE_MACHINERY_SUFFIX:
-        machinery_type = meta.get("ประเภทรถ")
+        machinery_type = meta.get("ประเภทรถ") or None
         if machinery_type is not None and machinery_type not in _LEASE_MACHINERY_TYPES:
             raise MetaValidationError(f"'{machinery_type}' is not a valid machinery ประเภทรถ")
         cleaned["ประเภทรถ"] = machinery_type

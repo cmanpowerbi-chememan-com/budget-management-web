@@ -349,12 +349,17 @@ describe('DetailSubform', () => {
 
     it('a listed plate is sent as-is and shows no free-text input', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
-      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(vehicleLine({ meta_json: { ทะเบียนรถ: '6ขผ-3918' } }))
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        vehicleLine({ meta_json: { ทะเบียนรถ: '6ขผ-3918', สถานที่ใช้งาน: 'BK' } }),
+      )
       renderVehicle()
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
       expect(screen.queryByPlaceholderText('พิมพ์ทะเบียนรถ')).not.toBeInTheDocument()
+      // สถานที่ใช้งาน is a required field (bug-lease-blank-dropdown-400) — pick
+      // one so this test isolates the plate behaviour it's actually about.
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
 
       fireEvent.click(screen.getByTestId('save-all'))
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
@@ -376,12 +381,15 @@ describe('DetailSubform', () => {
 
     it('the typed plate is what gets sent — never the literal อื่นๆ', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
-      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(vehicleLine({ meta_json: { ทะเบียนรถ: 'กข-1234' } }))
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        vehicleLine({ meta_json: { ทะเบียนรถ: 'กข-1234', สถานที่ใช้งาน: 'BK' } }),
+      )
       renderVehicle()
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
       fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'กข-1234' } })
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
@@ -395,6 +403,90 @@ describe('DetailSubform', () => {
 
       expect((screen.getByLabelText('ทะเบียนรถ') as HTMLSelectElement).value).toBe('อื่นๆ')
       expect((screen.getByPlaceholderText('พิมพ์ทะเบียนรถ') as HTMLInputElement).value).toBe('ชล-9999')
+    })
+  })
+
+  describe('Lease & Rental สถานที่ใช้งาน — required dropdown blocks a blank save (bug-lease-blank-dropdown-400)', () => {
+    const VEHICLE_GL = '5211200060'
+    const BUILDING_GL = '6211200020' // non-vehicle suffix — ประเภทรถ/ทะเบียนรถ render locked
+
+    it('leaving สถานที่ใช้งาน on "— เลือก —" blocks the save with a Thai message and calls the API zero times', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: VEHICLE_GL, gl_group: 'Lease & Rental' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount={VEHICLE_GL}
+          glGroup="Lease & Rental"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกสถานที่ใช้งาน')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('picking a value unblocks the save and the payload carries it', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: VEHICLE_GL, gl_group: 'Lease & Rental' }),
+      ])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        blankLine({ gl_account: VEHICLE_GL, gl_group: 'Lease & Rental', meta_json: { สถานที่ใช้งาน: 'BK' } }),
+      )
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount={VEHICLE_GL}
+          glGroup="Lease & Rental"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.สถานที่ใช้งาน).toBe('BK')
+    })
+
+    it('a non-vehicle GL never demands ประเภทรถ/ทะเบียนรถ — locked fields are not part of the required check', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: BUILDING_GL, gl_group: 'Lease & Rental' }),
+      ])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        blankLine({ gl_account: BUILDING_GL, gl_group: 'Lease & Rental', meta_json: { สถานที่ใช้งาน: 'TK' } }),
+      )
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount={BUILDING_GL}
+          glGroup="Lease & Rental"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      expect(screen.queryByLabelText('ประเภทรถ')).not.toBeInTheDocument() // locked — not even rendered as an input
+      expect(screen.queryByLabelText('ทะเบียนรถ')).not.toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'TK' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
     })
   })
 

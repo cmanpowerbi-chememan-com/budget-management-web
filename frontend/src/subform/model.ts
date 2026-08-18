@@ -101,7 +101,16 @@ export function detailFieldsFor(glGroup: string, glAccount: string): DetailField
     return [
       typeField,
       plateField,
-      { key: 'สถานที่ใช้งาน', kind: 'select', options: LEASE_PLANTS },
+      // สถานที่ใช้งาน is the ONE field every Lease & Rental sub-category
+      // renders as an enterable select (never locked) — the row's universal
+      // classification attribute, so it is required the same way
+      // Entertainment's ประเภทการรับรอง is (bug-lease-blank-dropdown-400).
+      // ประเภทรถ is NOT marked required: it renders `locked` for 5 of the 7
+      // suffixes (a locked field must never be demanded), and the backend
+      // explicitly allows it blank even where it IS enterable — it is a
+      // refinement, not the row's sole identity (that comes from the GL
+      // account's own suffix).
+      { key: 'สถานที่ใช้งาน', kind: 'select', options: LEASE_PLANTS, required: true },
       { key: 'กิจกรรม', kind: 'text' },
     ]
   }

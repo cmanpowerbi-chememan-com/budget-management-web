@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-18T23:29:42+0700",
+  "updated": "2026-08-18T23:51:48+0700",
   "tasks": [
     {
       "id": "bug-lease-blank-dropdown-400",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-18T23:27:21+0700",
-      "updated": "2026-08-18T23:27:21+0700",
-      "ai": "Fixing Lease & Rental blank-dropdown 400 bug, mirroring Entertainment fix 3852f1b. TDD required."
+      "updated": "2026-08-18T23:51:48+0700",
+      "ai": "Fixed Lease & Rental blank-dropdown 400, mirrored 3852f1b. Backend special_gl.py:122-149 widened is-not-None guards to truthy (meta.get(...) or None) for สถานที่ใช้งาน + ประเภทรถ (vehicle+machinery branches) — '' now a no-op like Entertainment; ทะเบียนรถ (plate) deliberately left untouched (its own 2026-07-17 free-text rule intentionally rejects blank, pinned by new regression test). Frontend model.ts:104 marked สถานที่ใช้งาน required:true (universal, never locked, parity w/ Entertainment ประเภทการรับรอง); ประเภทรถ NOT required (locked for 5/7 suffixes, backend allows it blank even when enterable) — decision documented in code comment + model.test.ts. No frontend/backend divergence found for Lease (unlike the old Entertainment endsWith bug) — LEASE_* constants already shared via glDropdownConstants.ts + fixture-parity tests (test_special_gl_fixture_parity.py, glDropdownConstants.test.ts), proven passing, no new mechanism needed. TDD: RED confirmed first (3 backend + 2 frontend test fails reproducing the raw English 400 / unblocked save), then GREEN. Verify: backend 1072 passed (+5 from 1067), next build clean, vitest 657 passed (+5 from 652), playwright 36/36 incl. contrast ratchet. Updated 2 pre-existing DetailSubform tests (plate-save cases) that were relying on plant being optional, same pattern as 3852f1b's Entertainment test updates. git diff --stat: 5 files, 191(+)/7(-). Not committed per instructions."
     },
     {
       "id": "wipe-da-testdata-stg",
@@ -26,10 +26,10 @@
     },
     {
       "id": "bug-reminder-day-semantics",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-18T11:07:22+0700",
-      "updated": "2026-08-18T11:16:18+0700",
-      "ai": "[DOC CORRECTED IN THIS REPO 2026-08-18, uncommitted] docs/DATA_PIPELINE_PLAN.md item 6 now specifies reminder_date = deadline_date - reminder_day days, states plainly that reminder_day is a COUNT OF DAYS BEFORE the deadline (not a day-of-month) per jakkaritw's decision, suggests renaming the column to reminder_days_before, and replaces the toothless 'reminder_day < closing_date' check with 'reminder_date < deadline_date'. A dated CORRECTED note records the old wording, the real FY2027 row that exposed it (closing 7/10/2026 + reminder_day 15 -> reminder 2026-10-15 vs deadline 2026-10-07, inverted window, filler reminders unsendable, validation never fired), the corrected result (2026-09-22 -> 2026-10-07), that the transform lives in cman-dw-ws (repo 19.dw_jakkaritw) not here, and that dbo.submission_deadline must never be patched in SQL because the daily sync overwrites it. STILL OPEN — the actual pipeline fix in the DW repo (formula + column rename + validation) has NOT been made; this repo only reads the table. Gotcha for future edits: a sed replacement in this environment turned the literal '\\19' into a \\x01 control character inside the file; caught and repaired with a regex pass — write file edits through a Python script, not sed, when the text contains backslashes.",
+      "updated": "2026-08-18T23:34:35+0700",
+      "ai": "APP-REPO DOC SIDE CLOSED 2026-08-18, commit bc734eb (not pushed yet). The actual fix was NOT here: it shipped in repo 19.dw_jakkaritw commit 7f51775 (the DW transform), deployed and verified on PRD by another session -- reminder_date = deadline_date - reminder_days_before days; live FY2027 row now reads reminder_date 2026-09-22 / deadline_date 2026-10-07 (only row in dbo.submission_deadline). This repo only READS the table and no DB column was renamed, so zero app code changed. WHAT I CORRECTED HERE (all three stale spots that session flagged): db/schema.sql:104 -- the reminder_day comment said 'day-of-month INPUT for the first reminder', now says COUNT OF DAYS BEFORE the deadline with the 7f51775 reference; docs/specs/budget-transactional-data-model.md:515 (DBML comment) and :689 (rules table) -- both stated reminder_date = DATE(closing_year, closing_month, reminder_day) and the toothless 'Validate reminder_day < closing_date', now state the subtraction formula plus the replacement validation set (reminder_date < deadline_date, reminder_day 1..365, closing_year 2000..2100 with the range checks running BEFORE any date construction so a stray cell cannot abort the file, and reminder_day > 60 warns but still loads), and record that the transform's internal name is reminder_days_before while the DB column stays reminder_day, and that the table must NEVER be patched by direct SQL because the daily sync overwrites it from the Excel master; docs/DATA_PIPELINE_PLAN.md item 6 -- the CORRECTED note was already written by that session but uncommitted, now committed. WHY IT MATTERED: the day-of-month reading put FY2027's reminder 8 days AFTER its own deadline, so backend/jobs/send_reminders.py mailed nobody while logging 'not yet reached', and the old validation never fired because 15 > 7 was never the test. STILL OPEN, NOT MINE: renaming the Excel header to reminder_days_before is a separate step with the file's admin, deliberately not done. SIT NOTE for TC-041/TC-042: running the reminder job today (18 Aug) still sends nothing and logs 'reminder_date 2026-09-22 not yet reached' -- that is CORRECT behaviour now, not the bug; to exercise those cases seed a fiscal_year whose window covers today, or override 'today' in the test.",
       "agent": "claude"
     },
     {

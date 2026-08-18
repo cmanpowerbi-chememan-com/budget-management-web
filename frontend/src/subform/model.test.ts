@@ -73,6 +73,27 @@ describe('detailFieldsFor', () => {
     expect(fields.find((f) => f.key === 'กิจกรรม')?.kind).toBe('text')
   })
 
+  describe('Lease & Rental สถานที่ใช้งาน — required, ประเภทรถ is not (bug-lease-blank-dropdown-400)', () => {
+    it('marks สถานที่ใช้งาน as required for every sub-category — vehicle, machinery, and non-vehicle', () => {
+      for (const gl of ['6211200060', '6211200030', '6211200020']) {
+        const fields = detailFieldsFor('Lease & Rental', gl)
+        expect(fields.find((f) => f.key === 'สถานที่ใช้งาน')?.required).toBe(true)
+      }
+    })
+
+    it('does NOT mark ประเภทรถ as required, even when it is an enterable select (vehicle/machinery)', () => {
+      // สถานที่ใช้งาน applies to every sub-category and is the row's one
+      // universal classification field (parity with Entertainment's single
+      // required dropdown); ประเภทรถ is a refinement the backend explicitly
+      // allows blank (test_lease_meta_with_no_values_yet_is_valid_all_none) —
+      // marking it required would also be undemandable for the 5 suffixes
+      // where it renders `locked`, so it stays optional everywhere.
+      expect(detailFieldsFor('Lease & Rental', '6211200060').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
+      expect(detailFieldsFor('Lease & Rental', '6211200030').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
+      expect(detailFieldsFor('Lease & Rental', '6211200020').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
+    })
+  })
+
   it('Professional & Legal Fee is 2 free-text fields, no dropdown', () => {
     const fields = detailFieldsFor('Professional & Legal Fee', '6210700030')
     expect(fields).toEqual([

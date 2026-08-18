@@ -183,3 +183,54 @@ def test_lease_vehicle_plate_rejects_over_max_length():
 def test_lease_vehicle_plate_rejects_non_string():
     with pytest.raises(MetaValidationError):
         validate_lease_meta("5211200060", {"ทะเบียนรถ": 1234})
+
+
+# ---------------------------------------------------------------------------
+# bug-lease-blank-dropdown-400: สถานที่ใช้งาน / ประเภทรถ had the identical
+# None-vs-'' blank-guard shape Entertainment's ประเภทการรับรอง had (fixed in
+# 3852f1b) — an untouched dropdown sends '', which is `not None`, so it fell
+# through to the allowed-value membership check and raised a raw English
+# MetaValidationError straight to the UI instead of being a no-op.
+# ---------------------------------------------------------------------------
+
+def test_lease_blank_plant_is_a_noop_same_as_missing():
+    """'' for สถานที่ใช้งาน must be a no-op regardless of suffix branch — the
+    plant dropdown is validated once, before the suffix split."""
+    for gl in ("5211200060", "5211200030", "5211200010"):  # vehicle / machinery / nonvehicle
+        cleaned = validate_lease_meta(gl, {"สถานที่ใช้งาน": ""})
+        assert cleaned["สถานที่ใช้งาน"] is None
+
+
+def test_lease_blank_vehicle_type_is_a_noop_same_as_missing():
+    cleaned = validate_lease_meta("5211200060", {"ประเภทรถ": ""})
+    assert cleaned["ประเภทรถ"] is None
+
+
+def test_lease_blank_machinery_type_is_a_noop_same_as_missing():
+    cleaned = validate_lease_meta("5211200030", {"ประเภทรถ": ""})
+    assert cleaned["ประเภทรถ"] is None
+
+
+def test_lease_valid_values_still_validate_and_invalid_values_still_raise_after_blank_fix():
+    """Regression guard: widening the blank check (None or '') must not loosen
+    validation for an ACTUAL value — real, listed selections still pass and
+    real, wrong selections still raise, for both สถานที่ใช้งาน and ประเภทรถ."""
+    cleaned = validate_lease_meta("5211200060", {"สถานที่ใช้งาน": "BK", "ประเภทรถ": "Car"})
+    assert cleaned["สถานที่ใช้งาน"] == "BK"
+    assert cleaned["ประเภทรถ"] == "Car"
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200060", {"สถานที่ใช้งาน": "NOT-A-PLANT"})
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200060", {"ประเภทรถ": "Excavator"})  # machinery type on a vehicle GL
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200030", {"ประเภทรถ": "Car"})  # vehicle type on a machinery GL
+
+
+def test_lease_blank_plate_is_still_rejected_not_widened_by_this_fix():
+    """ทะเบียนรถ keeps its OWN stricter rule (2026-07-17 free-text decision,
+    unrelated to this bug): an explicit '' is a genuinely invalid plate, not
+    "nothing chosen" — unlike the two enum dropdowns above, this guard is NOT
+    widened. Regression pin so a future refactor can't accidentally merge the
+    two mechanisms."""
+    with pytest.raises(MetaValidationError):
+        validate_lease_meta("5211200060", {"ทะเบียนรถ": ""})
