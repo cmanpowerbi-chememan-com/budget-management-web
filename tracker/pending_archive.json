@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-17T08:17:37+0700",
+  "updated": "2026-08-18T00:14:52+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -508,6 +508,54 @@
       "updated": "2026-07-17T17:26:11+0700",
       "agent": "05-software-developer",
       "ai": "App code COMMITTED 5119e19 (11 files, edit_by only; chip files of ui-parity-mockup-0002-3 excluded). Feature complete flag-OFF: DW sync deployed+live (gl-editby-dwsync done) + app server-side-strip/403-guards/submit-guard, gate APPROVE-WITH-SUGGESTIONS. NOT pushed, NOT deployed to Container Apps, flag NOT flipped (all await jakkaritw). PRE-FLAG-ON items: (1) decide submit-guard widening to non-admin filler submitting dept w/ admin-GL rows (workflow-only, no leak); (2) budget_app_tables.sql DW-repo DDL +edit_by; (3) source Excel dup-fix by owner; (4) add characterization test after (1)."
+    },
+    {
+      "id": "dev-login-suchanya",
+      "state": "done",
+      "created": "2026-07-18T21:25:54+0700",
+      "updated": "2026-07-18T21:27:37+0700",
+      "agent": "kimi",
+      "ai": "DONE+VERIFIED live: /me -> suchanyay@chememan.com, /health 200 on 127.0.0.1:8000. backend/.env change is uncommitted (dev-only, same as arthids before it). Note for ui-parity session: backend now impersonates suchanyay — re-set DEV_AUTH_EMAIL if arthids needed again; backend owned by kimi bg task bash-lru0opw2 (PID 17468)."
+    },
+    {
+      "id": "tracker-archive-30d",
+      "state": "done",
+      "created": "2026-07-18T23:17:59+0700",
+      "updated": "2026-07-18T23:18:30+0700",
+      "ai": "DONE: ARCHIVE_DAYS 14->30 in tracker/task.py; project + global CLAUDE.md updated to >30d. All 7 previously-archived tasks (2026-06-28/29) still older than 30d cutoff - nothing restored. archive --dry-run confirms no pending migrations. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "tracker-mandatory-start-rule",
+      "state": "done",
+      "created": "2026-07-18T23:15:14+0700",
+      "updated": "2026-07-18T23:16:38+0700",
+      "ai": "DONE: MANDATORY banner added at top of project CLAUDE.md (3-step: list -> add doing -> done); tracker section bullets rewritten as mandatory read-first + log-before-start + done-with-hashes; global ~/.claude/CLAUDE.md rules strengthened same way. Claude Code reads both files automatically every session. .claude/project-context.md has no tracker rules - no sync needed. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "tracker-v2-autolog",
+      "state": "done",
+      "created": "2026-07-18T23:13:17+0700",
+      "updated": "2026-07-18T23:13:17+0700",
+      "ai": "Tracker v2: task.py rewritten - human field + PENDING.html/render_pending.py RETIRED (deleted), empty agent/skills/files omitted on write, auto-archive done>14d on every write, autolog+dedup (log-<hash> entries removed once real entry quotes hash), new compact + check commands. .git/hooks/post-commit installed (autolog every commit, never blocks). CLAUDE.md project+global tracker sections updated to v2. Also logged retroactively: ui-parity thru pt11 (9e76132..23a6b02), monthly-report-2026-07, signoff-spec-pdf-rebuild. NOT committed - user commits.",
+      "agent": "kimi"
+    },
+    {
+      "id": "monthly-report-2026-07",
+      "state": "done",
+      "created": "2026-07-18T23:11:31+0700",
+      "updated": "2026-07-18T23:11:31+0700",
+      "ai": "Monthly report 2026-07 generated: monthly_update/monthly_report_2026-07.html+.png + data_architecture.html/.png. Files UNTRACKED in git (never committed) as of tracker audit 2026-07-18. No ledger entry existed - logged retroactively; producing session unknown.",
+      "agent": "kimi"
+    },
+    {
+      "id": "gl-master-visibility-rule",
+      "state": "done",
+      "created": "2026-07-19T00:03:26+0700",
+      "updated": "2026-07-19T00:04:18+0700",
+      "ai": "Backend+frontend implemented, tests green (24 new backend, 401/401 frontend), live-verified via Playwright: grid 11->9 rows, 0 outliers vs 134-row master, 0 reference-hint elements. plan.md updated. NOT committed (per instructions) -- awaiting user commit approval.",
+      "agent": "claude"
     }
   ]
 }

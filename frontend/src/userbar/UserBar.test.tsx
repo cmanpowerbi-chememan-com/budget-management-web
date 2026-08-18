@@ -218,4 +218,82 @@ describe('UserBar', () => {
     expect(screen.queryByText('เห็นข้อมูลทั้งหมด · ทุก Cost Center')).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('ฝ่ายบัญชี')).toBeInTheDocument())
   })
+
+  describe('Logout control', () => {
+    it('renders a Thai-labelled link that navigates straight to the Easy Auth logout endpoint', () => {
+      stubFetch({})
+      render(
+        <UserBar
+          email="anurakb@chememan.com"
+          authLoading={false}
+          authError={null}
+          scope={scope({ fillCostCenters: [], seeCostCenters: [] })}
+        />,
+      )
+
+      // Asserting the real navigation target (href), not a mocked helper's
+      // internals — this is a plain <a>, no onClick/navigate() indirection.
+      const link = screen.getByRole('link', { name: 'ออกจากระบบ' })
+      expect(link).toHaveAttribute('href', '/.auth/logout')
+    })
+
+    it('is keyboard-reachable (a native anchor takes focus without any extra tabIndex wiring)', () => {
+      stubFetch({})
+      render(<UserBar email="anurakb@chememan.com" authLoading={false} authError={null} scope={scope()} />)
+
+      const link = screen.getByRole('link', { name: 'ออกจากระบบ' })
+      link.focus()
+      expect(link).toHaveFocus()
+    })
+
+    it('still renders for the no-scope role (role="none") — a stuck user needs a way out too', () => {
+      stubFetch({})
+      render(
+        <UserBar
+          email="nobody@chememan.com"
+          authLoading={false}
+          authError={null}
+          scope={scope({ role: 'none', isAdmin: false, fillCostCenters: [], seeCostCenters: [] })}
+        />,
+      )
+
+      expect(screen.getByRole('link', { name: 'ออกจากระบบ' })).toBeInTheDocument()
+    })
+
+    it('still renders for a pure admin (the "sees everything" note branch)', () => {
+      const fetchSpy = vi.fn()
+      vi.stubGlobal('fetch', fetchSpy)
+      render(
+        <UserBar
+          email="jakkaritw@chememan.com"
+          authLoading={false}
+          authError={null}
+          scope={scope({ role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [] })}
+        />,
+      )
+
+      expect(screen.getByRole('link', { name: 'ออกจากระบบ' })).toBeInTheDocument()
+    })
+
+    it('does NOT render during the initial auth/scope loading status line', () => {
+      stubFetch({})
+      render(<UserBar email={null} authLoading authError={null} scope={scope({ loading: true })} />)
+
+      expect(screen.queryByRole('link', { name: 'ออกจากระบบ' })).not.toBeInTheDocument()
+    })
+
+    it('does NOT render on the auth-error banner (that branch has no other control either)', () => {
+      stubFetch({})
+      render(<UserBar email={null} authLoading={false} authError="boom" scope={scope()} />)
+
+      expect(screen.queryByRole('link', { name: 'ออกจากระบบ' })).not.toBeInTheDocument()
+    })
+
+    it('does NOT render on the scope-error banner (that branch has no other control either)', () => {
+      stubFetch({})
+      render(<UserBar email={null} authLoading={false} authError={null} scope={scope({ error: 'boom' })} />)
+
+      expect(screen.queryByRole('link', { name: 'ออกจากระบบ' })).not.toBeInTheDocument()
+    })
+  })
 })

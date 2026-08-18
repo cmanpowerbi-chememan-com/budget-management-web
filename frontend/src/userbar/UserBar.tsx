@@ -174,6 +174,41 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
           </>
         )}
       </div>
+
+      {/* Session action, in the slot the mockup's user-switcher (v3-switch,
+          demo-only persona picker) used to occupy — real Entra auth has no
+          persona to switch into, but a real session STILL needs an exit. A
+          plain same-origin <a> straight to Easy Auth's built-in endpoint:
+          no client JS, natively keyboard-reachable, its visible text is its
+          own accessible name; the shared `a:focus-visible` rule in
+          global.css already draws a visible ring, untouched by this change.
+          NOTE: /.auth/logout only clears this browser's auth cookie — it
+          does not revoke the session server-side, so the same cookie
+          replayed elsewhere still works. Shown for every resolved role
+          (incl. no-scope/pure-admin) since a stuck user still needs a way
+          out; intentionally NOT shown on the loading/error status lines
+          above, which render no other control either.
+          Styled inline, not via global.css (out of scope for this change,
+          the Sea Green theme file is frozen) — `--ink-2`/`--surface`/`--r`/
+          `--sans` are the SAME already-live tokens `.v3-email`/`.v3-name`
+          use two elements up, just read at the call site instead of adding
+          a new stylesheet selector. */}
+      <a
+        href="/.auth/logout"
+        style={{
+          marginLeft: 'auto',
+          flexShrink: 0,
+          padding: '4px 2px',
+          fontFamily: 'var(--sans)',
+          fontSize: '12.5px',
+          fontWeight: 600,
+          color: 'var(--ink-2)',
+          textDecoration: 'none',
+          borderRadius: 'var(--r)',
+        }}
+      >
+        ออกจากระบบ
+      </a>
     </section>
   )
 }

@@ -88,4 +88,15 @@ test.describe('edge states', () => {
 
     await expect(page.getByText('ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้')).toBeVisible()
   })
+
+  test('4.6 the userbar always offers a real Logout control pointing at the Easy Auth logout endpoint', async ({ page }) => {
+    const world = fillerWorld()
+    await installMocks(page, world)
+
+    await page.goto('/')
+
+    const link = page.getByRole('link', { name: 'ออกจากระบบ' })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute('href', '/.auth/logout')
+  })
 })

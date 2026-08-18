@@ -1,14 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-18T11:07:22+0700",
+  "updated": "2026-08-18T11:56:39+0700",
   "tasks": [
+    {
+      "id": "log-3852f1b",
+      "state": "done",
+      "created": "2026-08-18T11:13:40+0700",
+      "updated": "2026-08-18T11:13:40+0700",
+      "agent": "autolog",
+      "ai": "fix(subform): stop a blank Entertainment type reaching the server [commit 3852f1b]"
+    },
     {
       "id": "bug-reminder-day-semantics",
       "state": "willdo",
       "created": "2026-08-18T11:07:22+0700",
-      "updated": "2026-08-18T11:07:22+0700",
-      "ai": "[DECISION by jakkaritw 2026-08-18: reminder_day means DAYS BEFORE the deadline, not a day-of-month] Source master = 'วันปิดรับข้อมูลงบประมาณ.xlsx' on SharePoint site CMANDWPRD, library 'Budgeting and Management' (link https://chememan.sharepoint.com/:x:/r/sites/CMANDWPRD/_layouts/15/Doc.aspx?sourcedoc=%7B6F6D6DF0-1620-4187-B488-CEBBFBBF0A3D%7D). Live row: fiscal_year 2027, closing date 7, closing month 10, closing year 2026, reminder_day 15. CURRENT PIPELINE FORMULA IS WRONG: docs/DATA_PIPELINE_PLAN.md:66 specifies reminder_date = DATE(closing_year, closing_month, reminder_day) + 'validate reminder_day < closing_date', which turns this row into reminder 2026-10-15 vs deadline 2026-10-07 — an inverted window, so dbo.submission_deadline currently makes filler deadline reminders (SIT TC-041/042) UNSENDABLE for FY2027, and the stated validation clearly never ran. CORRECT FORMULA: reminder_date = deadline_date - reminder_day days => 2026-09-22, giving a 15-day window to 2026-10-07. FIX BELONGS IN THE DW REPO (c:\\19.dw_jakkaritw / workspace cman-dw-ws), not here — this repo only reads the table. Also worth doing there: rename the column to reminder_days_before, and replace the validation with 'reminder_date < deadline_date' (a rule that actually catches this). AND correct docs/DATA_PIPELINE_PLAN.md:66 in THIS repo so nobody re-implements the old formula. NEVER patch dbo.submission_deadline directly — the daily sync overwrites it from the Excel file. Meanwhile SIT TC-041/042 can still be exercised by passing a simulated 'today' into _run_deadline_reminders without touching any master.",
+      "updated": "2026-08-18T11:16:18+0700",
+      "ai": "[DOC CORRECTED IN THIS REPO 2026-08-18, uncommitted] docs/DATA_PIPELINE_PLAN.md item 6 now specifies reminder_date = deadline_date - reminder_day days, states plainly that reminder_day is a COUNT OF DAYS BEFORE the deadline (not a day-of-month) per jakkaritw's decision, suggests renaming the column to reminder_days_before, and replaces the toothless 'reminder_day < closing_date' check with 'reminder_date < deadline_date'. A dated CORRECTED note records the old wording, the real FY2027 row that exposed it (closing 7/10/2026 + reminder_day 15 -> reminder 2026-10-15 vs deadline 2026-10-07, inverted window, filler reminders unsendable, validation never fired), the corrected result (2026-09-22 -> 2026-10-07), that the transform lives in cman-dw-ws (repo 19.dw_jakkaritw) not here, and that dbo.submission_deadline must never be patched in SQL because the daily sync overwrites it. STILL OPEN — the actual pipeline fix in the DW repo (formula + column rename + validation) has NOT been made; this repo only reads the table. Gotcha for future edits: a sed replacement in this environment turned the literal '\\19' into a \\x01 control character inside the file; caught and repaired with a regex pass — write file edits through a Python script, not sed, when the text contains backslashes.",
       "agent": "claude"
     },
     {
@@ -109,10 +117,10 @@
     },
     {
       "id": "feature-logout-button",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-08-17T16:04:34+0700",
-      "updated": "2026-08-17T16:08:04+0700",
-      "ai": "[RECORDED ONLY — jakkaritw 2026-08-17: 'โปรแกรมอย่าพึ่งแก้อะไรนะ record ไว้ แก้เอกสารไห้จบก่อน'] Agent STOPPED mid-run, ZERO code written, nothing committed. REQUIREMENT STANDS FOR LATER: add a real Logout button (Thai label ออกจากระบบ) in the userbar switcher navigating to the Container Apps built-in /.auth/logout; reuse existing design tokens only (contrast ratchet 1fb5d05 fails on new colors); no confirm dialog (grid autosaves on blur); evidence must include BOTH vitest and ▲ Next.js 16.2.11 (Turbopack)\n\n  Creating an optimized production build ...\n✓ Compiled successfully in 4.0s\n  Running TypeScript ...\n  Finished TypeScript in 8.0s ...\n  Collecting page data using 4 workers ...\n  Generating static pages using 4 workers (0/3) ...\n✓ Generating static pages using 4 workers (3/3) in 956ms\n  Finalizing page optimization ...\n\nRoute (app)\n┌ ○ /\n└ ○ /_not-found\n\n\n○  (Static)  prerendered as static content. Today the app has NO logout control at all (grep logout/ออกจากระบบ in frontend/src = 0 hits; login redirect at frontend/src/api/client.ts:48 is the only /.auth/ use). Until this ships, SIT TC-004 must instruct the tester to type <host>/.auth/logout by hand. Do NOT start coding without jakkaritw saying documents are done.",
+      "updated": "2026-08-18T11:56:39+0700",
+      "ai": "IMPLEMENTED, UNCOMMITTED (per instructions). Real Logout <a href=/.auth/logout>ออกจากระบบ</a> added at the right edge of UserBar.tsx's .v3 structure (the slot the mockup's v3-switch demo persona-picker used to occupy), shown for every resolved role incl. no-scope/pure-admin, NOT shown on the loading/authError/scopeError early-return status lines (no other control lives there either). Styled INLINE (style prop), not global.css -- constraint said do not touch frontend/src/styles/**; reuses the same --ink-2/--surface/--r/--sans tokens .v3-email/.v3-name already use, no new color. Honest code comment: /.auth/logout only clears the browser cookie, does not revoke server-side (matches recorded finding security-easyauth-logout-does-not-revoke) -- no UI copy overpromises. Mutation-tested a .btn/.btn-sm CSS-class variant first: contrast ratchet caught 1 NEW border violation (1.33:1) AND it would have touched global.css -- reverted, switched to inline style, both problems gone. TDD: UserBar.test.tsx +7 (RED confirmed: 4 cases failed on missing link before impl), e2e/edge-states.spec.ts +1 (case 4.6, href assertion). Results: next build clean x3, vitest 652 passed (was 645, +7 exact), Playwright 36/36 (was 35, +1), all 9 contrast scenarios clean (0 NEW/0 WORSENED). git diff --stat frontend/src/styles/global.css empty (confirmed untouched). Files: frontend/src/userbar/UserBar.tsx, UserBar.test.tsx, frontend/e2e/edge-states.spec.ts, .claude/plan.md. Backend untouched, no new deps, no new files outside repo tree. Not committed/pushed/deployed.",
       "agent": "claude"
     },
     {
