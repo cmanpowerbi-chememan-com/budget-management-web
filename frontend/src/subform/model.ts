@@ -7,6 +7,7 @@ import type { CountryOption, DetailLineInput, DetailLineState, TravelerOption, T
 import { MONTH_KEYS, type MonthKey } from '../grid/model'
 import {
   ENTERTAINMENT_EXTERNAL_VALUES,
+  ENTERTAINMENT_INTERNAL_GLS,
   ENTERTAINMENT_INTERNAL_VALUES,
   LEASE_MACHINERY_SUFFIX,
   LEASE_MACHINERY_TYPES,
@@ -44,19 +45,42 @@ export interface DetailFieldSpec {
    * stored only while the box is empty — `firstBlankFreeTextField` blocks
    * saving in that state. */
   freeTextOption?: string
+  /** Marks a plain `select` field (no `freeTextOption`) the user must
+   * actually pick a value for before saving — enforced by
+   * `firstUnselectedRequiredField`, blocking the save client-side the same
+   * way a blank free-text field does (bug-entertainment-blank-type-400).
+   * The backend still tolerates a blank value as "not provided" (defense
+   * in depth for an older client) — this flag is what makes a FRESH save
+   * actually require the choice. */
+  required?: boolean
 }
-
-const ENTERTAINMENT_INTERNAL_GL_SUFFIX = '900031'
 
 /** Resolves the special-GL group's detail columns for ONE gl_account —
  * Entertainment's dropdown options and Lease & Rental's dropdown/grey-out
  * both switch on the GL code (spec §4a), exactly like
- * `special_gl.validate_entertainment_meta`/`validate_lease_meta`. */
+ * `special_gl.validate_entertainment_meta`/`validate_lease_meta`.
+ *
+ * Entertainment's external/internal split reads `ENTERTAINMENT_INTERNAL_GLS`
+ * — the SAME parity-tested constant `special_gl.py`'s
+ * `_ENTERTAINMENT_INTERNAL_GLS` is checked against
+ * (`test_special_gl_fixture_parity.py`/`glDropdownConstants.test.ts` both
+ * assert it matches `docs/reference/special-gl-dropdown-fixture.json`) —
+ * rather than re-deriving a `.endsWith('900031')` suffix guess. The old
+ * suffix guess happened to agree with the fixture for today's 3 known GLs,
+ * but a future Entertainment GL added only to the fixture (not
+ * necessarily 900031-suffixed) would silently render the WRONG dropdown
+ * under the guess; reading the list directly can't drift from what the
+ * server actually validates. */
 export function detailFieldsFor(glGroup: string, glAccount: string): DetailFieldSpec[] {
   if (glGroup === 'Entertainment') {
-    const isInternal = glAccount.endsWith(ENTERTAINMENT_INTERNAL_GL_SUFFIX)
+    const isInternal = (ENTERTAINMENT_INTERNAL_GLS as readonly string[]).includes(glAccount)
     return [
-      { key: 'ประเภทการรับรอง', kind: 'select', options: isInternal ? ENTERTAINMENT_INTERNAL_VALUES : ENTERTAINMENT_EXTERNAL_VALUES },
+      {
+        key: 'ประเภทการรับรอง',
+        kind: 'select',
+        options: isInternal ? ENTERTAINMENT_INTERNAL_VALUES : ENTERTAINMENT_EXTERNAL_VALUES,
+        required: true,
+      },
       { key: 'รายละเอียด', kind: 'text' },
     ]
   }
@@ -122,6 +146,18 @@ export function fieldFreeText(spec: DetailFieldSpec, value: string | null): stri
  * naming it, or `null` when every free-text field is satisfied. */
 export function firstBlankFreeTextField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): string | null {
   const offending = fields.find((f) => f.freeTextOption !== undefined && meta[f.key] === f.freeTextOption)
+  return offending?.key ?? null
+}
+
+/** A `required` select field (`DetailFieldSpec.required`) left on the blank
+ * "— เลือก —" placeholder — value missing entirely OR an explicit `''` —
+ * must block the save the same way `firstBlankFreeTextField` blocks an
+ * empty free-text box (bug-entertainment-blank-type-400: a blank
+ * ประเภทการรับรอง used to sail past the frontend and 400 on the server).
+ * Returns the first offending field key, or `null` when every required
+ * select is set. */
+export function firstUnselectedRequiredField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): string | null {
+  const offending = fields.find((f) => f.required && !meta[f.key])
   return offending?.key ?? null
 }
 

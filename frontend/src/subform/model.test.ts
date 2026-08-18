@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CountryOption, DetailLineState, TripListItem } from '../api/types'
 import { MONTH_KEYS } from '../grid/model'
 import { blankLayer } from '../grid/testUtils'
+import { ENTERTAINMENT_EXTERNAL_VALUES } from './glDropdownConstants'
 import {
   blankDetailDraft,
   blankManualLineDraft,
@@ -19,6 +20,7 @@ import {
   fieldFreeText,
   fieldSelectValue,
   firstBlankFreeTextField,
+  firstUnselectedRequiredField,
   indexDetailLinesByTrip,
   isTripMonthActive,
   manualLineDraftFromServerLine,
@@ -131,6 +133,53 @@ describe('free-text plate helpers (ทะเบียนรถ อื่นๆ)'
     expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: 'กข-1234' })).toBeNull()
     expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: '6ขผ-3918' })).toBeNull()
     expect(firstBlankFreeTextField(fields, {})).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// firstUnselectedRequiredField — bug-entertainment-blank-type-400: a
+// `required` select field left on the blank placeholder must block the save
+// the same way a blank free-text field does, BEFORE any network call.
+// ---------------------------------------------------------------------------
+
+describe('firstUnselectedRequiredField', () => {
+  const requiredSelect: DetailFieldSpec = { key: 'ประเภทการรับรอง', kind: 'select', options: ['Customer'], required: true }
+  const optionalText: DetailFieldSpec = { key: 'รายละเอียด', kind: 'text' }
+  const fields = [requiredSelect, optionalText]
+
+  it('blocks when the required field is missing entirely (never touched)', () => {
+    expect(firstUnselectedRequiredField(fields, {})).toBe('ประเภทการรับรอง')
+  })
+
+  it('blocks when the required field is an explicit empty string (picked, then reset to "— เลือก —")', () => {
+    expect(firstUnselectedRequiredField(fields, { ประเภทการรับรอง: '' })).toBe('ประเภทการรับรอง')
+  })
+
+  it('passes once a value is chosen, and a non-required blank field never blocks', () => {
+    expect(firstUnselectedRequiredField(fields, { ประเภทการรับรอง: 'Customer' })).toBeNull()
+    expect(firstUnselectedRequiredField([optionalText], {})).toBeNull()
+  })
+})
+
+describe('detailFieldsFor Entertainment — external/internal split is driven by the shared GL list', () => {
+  it('marks ประเภทการรับรอง as required (bug-entertainment-blank-type-400)', () => {
+    const fields = detailFieldsFor('Entertainment', '5211900030')
+    expect(fields.find((f) => f.key === 'ประเภทการรับรอง')?.required).toBe(true)
+  })
+
+  it('classifies by membership in the shared ENTERTAINMENT_INTERNAL_GLS constant, not an independently-derived suffix guess', () => {
+    // Regression pin for the frontend/backend asymmetry (endsWith('900031')
+    // vs exact-set membership): a GL that merely ENDS WITH '900031' but is
+    // NOT in the parity-tested ENTERTAINMENT_INTERNAL_GLS list must render
+    // the EXTERNAL dropdown — the same set the backend's `special_gl.py`
+    // (validated against the identical fixture-backed list) would accept
+    // for it. The old suffix-based rule would have wrongly rendered the
+    // internal (2-option) dropdown here, an asymmetry that only surfaces
+    // when the two sides' classification rules can diverge.
+    const unlistedGlEndingIn900031 = '5211900031'
+    const fields = detailFieldsFor('Entertainment', unlistedGlEndingIn900031)
+    const dd = fields.find((f) => f.key === 'ประเภทการรับรอง')
+    expect(dd?.options).toEqual(Array.from(ENTERTAINMENT_EXTERNAL_VALUES))
   })
 })
 

@@ -132,6 +132,53 @@ describe('DetailSubform', () => {
     expect(Array.from(select.options).map((o) => o.value)).toContain('หน่วยงานราชการ')
   })
 
+  describe('Entertainment ประเภทการรับรอง — required dropdown blocks a blank save (bug-entertainment-blank-type-400)', () => {
+    it('leaving ประเภทการรับรอง on "— เลือก —" blocks the save with a Thai message and calls the API zero times', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch with client' } })
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกประเภทการรับรอง')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('picking a value unblocks the save and the payload carries it', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(blankLine({ meta_json: { ประเภทการรับรอง: 'Customer' } }))
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ประเภทการรับรอง).toBe('Customer')
+    })
+  })
+
   it('Lease & Rental non-vehicle GL greys out ประเภทรถ/ทะเบียนรถ', async () => {
     vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
       blankLine({ gl_account: '6211200020', gl_group: 'Lease & Rental' }),
@@ -154,7 +201,9 @@ describe('DetailSubform', () => {
 
   it('adds a blank row, fills it, saves it, and calls onSaved', async () => {
     vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
-    vi.mocked(subformApi.saveDetailLine).mockResolvedValue(blankLine({ detail_id: 99, meta_json: { รายละเอียด: 'lunch' } }))
+    vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+      blankLine({ detail_id: 99, meta_json: { ประเภทการรับรอง: 'Customer', รายละเอียด: 'lunch' } }),
+    )
     const onSaved = vi.fn()
     render(
       <DetailSubform
@@ -170,13 +219,14 @@ describe('DetailSubform', () => {
     await waitFor(() => expect(screen.getByText(/ยังไม่มีรายการ/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /เพิ่มรายการ/ }))
+    fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
     fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
     fireEvent.click(screen.getByTestId('save-all'))
 
     await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
     const payload = vi.mocked(subformApi.saveDetailLine).mock.calls[0][0]
     expect(payload.detail_id).toBeNull()
-    expect(payload.meta_json).toEqual({ รายละเอียด: 'lunch' })
+    expect(payload.meta_json).toEqual({ ประเภทการรับรอง: 'Customer', รายละเอียด: 'lunch' })
     expect(onSaved).toHaveBeenCalled()
   })
 
@@ -198,6 +248,7 @@ describe('DetailSubform', () => {
       />,
     )
     await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
     fireEvent.click(screen.getByTestId('save-all'))
 
     await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
@@ -228,6 +279,9 @@ describe('DetailSubform', () => {
       const onSaved = vi.fn()
       renderTwoRows(onClose, onSaved)
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-2')).toBeInTheDocument())
+      for (const select of screen.getAllByLabelText('ประเภทการรับรอง')) {
+        fireEvent.change(select, { target: { value: 'Customer' } })
+      }
 
       fireEvent.click(screen.getByTestId('save-all'))
 
@@ -245,6 +299,9 @@ describe('DetailSubform', () => {
       const onSaved = vi.fn()
       renderTwoRows(onClose, onSaved)
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-2')).toBeInTheDocument())
+      for (const select of screen.getAllByLabelText('ประเภทการรับรอง')) {
+        fireEvent.change(select, { target: { value: 'Customer' } })
+      }
 
       fireEvent.click(screen.getByTestId('save-all'))
 

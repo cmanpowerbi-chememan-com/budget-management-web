@@ -84,9 +84,18 @@ def classify_special_gl(gl_group: str | None) -> str | None:
 
 def validate_entertainment_meta(gl_account: str, meta: dict[str, Any]) -> None:
     """`ประเภทการรับรอง` switches on the 030 (External) / 031 (Internal) GL
-    suffix. A missing key is a no-op (nothing chosen yet)."""
+    suffix. Nothing chosen yet is a no-op — whether the key is MISSING
+    (never touched) or an explicit `''` (bug-entertainment-blank-type-400:
+    the frontend's blank placeholder option, or a stale client resetting a
+    prior selection) — both mean the same thing to the user, so both must
+    be treated identically. Before this fix only `None` was a no-op; `''`
+    fell through to the allowed-value check below and raised a raw English
+    `MetaValidationError` straight to the UI. The frontend now also blocks
+    an empty save client-side (`model.ts`'s `firstUnselectedRequiredField`)
+    — this stays permissive server-side as defense-in-depth for any older
+    client, never a scary error for "nothing selected"."""
     value = meta.get("ประเภทการรับรอง")
-    if value is None:
+    if not value:
         return
     if gl_account in _ENTERTAINMENT_EXTERNAL_GLS:
         allowed = _ENTERTAINMENT_EXTERNAL_VALUES

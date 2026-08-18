@@ -71,6 +71,28 @@ def test_entertainment_missing_value_key_is_a_noop():
     validate_entertainment_meta("5211900030", {})
 
 
+def test_entertainment_empty_string_value_is_a_noop_same_as_missing():
+    """Regression for bug-entertainment-blank-type-400: an explicit '' (the
+    blank placeholder option's value, e.g. a client that never adds a
+    'required' guard, or resets the dropdown back to "— เลือก —") must be
+    treated exactly like a never-touched key — both mean "nothing chosen
+    yet". Before this fix, only `None` (missing key) was a no-op; '' fell
+    through to the allowed-value check and raised
+    `'' is not a valid ประเภทการรับรอง for GL 6211900030` — a raw English
+    string a Thai-speaking user should never see."""
+    validate_entertainment_meta("6211900030", {"ประเภทการรับรอง": ""})
+    validate_entertainment_meta("6211900031", {"ประเภทการรับรอง": ""})
+
+
+def test_entertainment_valid_value_still_saves_unchanged_after_blank_fix():
+    """Regression guard: widening the blank check (None or '') must not
+    loosen validation for an ACTUAL value — a real, listed selection still
+    passes and a real, wrong-side selection still raises."""
+    validate_entertainment_meta("6211900030", {"ประเภทการรับรอง": "Customer"})
+    with pytest.raises(MetaValidationError):
+        validate_entertainment_meta("6211900030", {"ประเภทการรับรอง": "พนักงานบริษัท"})
+
+
 # ---------------------------------------------------------------------------
 # Lease & Rental — suffix drives dropdown vs free vs grey
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import {
   fieldFreeText,
   fieldSelectValue,
   firstBlankFreeTextField,
+  firstUnselectedRequiredField,
   type DetailLineDraft,
 } from './model'
 
@@ -145,6 +146,16 @@ export function DetailSubform({
         if (blankFreeText) {
           anyError = true
           nextRows[i] = { ...row, status: 'error', errorText: `กรุณาพิมพ์${blankFreeText}` }
+          continue
+        }
+        // A required dropdown (e.g. Entertainment's ประเภทการรับรอง) left on
+        // the blank placeholder must never reach the API — a doomed save
+        // used to sail past here and 400 on the server (bug-entertainment-
+        // blank-type-400). Same guard shape/Thai voice as the free-text check.
+        const blankRequired = firstUnselectedRequiredField(fields, row.draft.meta)
+        if (blankRequired) {
+          anyError = true
+          nextRows[i] = { ...row, status: 'error', errorText: `กรุณาเลือก${blankRequired}` }
           continue
         }
         try {
