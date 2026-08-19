@@ -165,6 +165,33 @@ describe('UserBar', () => {
     await waitFor(() => expect(screen.getByTestId('v3-gl-count')).toHaveTextContent('2'))
   })
 
+  // laddawank-no-division-chip: a manager with no Fill scope (not a Filler
+  // anywhere) but a real See scope shows her real สายงาน/ฝ่าย instead of
+  // "ไม่ระบุสายงาน", while still NOT getting the Fill-only Cost
+  // Centers/GL Codes pills — the existing "ดูอย่างเดียว" role badge (not a
+  // new label) is what marks this as viewing, not editing.
+  it('See-only user (empty Fill, real See scope) shows their real สายงาน/ฝ่าย, not "ไม่ระบุสายงาน"', async () => {
+    stubFetch({
+      departments: [{ cost_center: '10IT011300', department: 'Data & Analytic', division: 'Digital Technology', c_level: null }],
+    })
+
+    render(
+      <UserBar
+        email="laddawank@chememan.com"
+        authLoading={false}
+        authError={null}
+        scope={scope({ role: 'see_only', fillCostCenters: [], seeCostCenters: ['10IT011300'] })}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText('Digital Technology')).toBeInTheDocument())
+    expect(screen.queryByText('ไม่ระบุสายงาน')).not.toBeInTheDocument()
+    expect(screen.getByText('Data & Analytic')).toBeInTheDocument()
+    expect(screen.getByText('ดูอย่างเดียว')).toBeInTheDocument() // existing role badge marks this as view-only
+    expect(screen.queryByText('Cost Centers')).not.toBeInTheDocument() // Fill-gated pills stay hidden
+    expect(screen.queryByText('GL Codes')).not.toBeInTheDocument()
+  })
+
   it('does not render the ฝ่าย/CC/GL segments at all when the caller has no Fill cost centers', () => {
     stubFetch({ departments: [] })
 

@@ -1,8 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-19T12:01:41+0700",
+  "updated": "2026-08-19T14:46:01+0700",
   "tasks": [
+    {
+      "id": "mgr-see-rule-company-audit",
+      "state": "done",
+      "created": "2026-08-19T14:46:01+0700",
+      "updated": "2026-08-19T14:46:01+0700",
+      "ai": "COMPANY-WIDE AUDIT of jakkaritw's rule (filler <-> ฝ่าย, and the filler's DIRECT MANAGER <-> the same ฝ่าย), run against the live DB 2026-08-19 by replaying backend/app/rls.py's own two queries (_FILL_SQL and _MANAGER_SEE_ADD_SQL) over every employee. VERDICT: the rule applies cleanly across the whole company -- there is NO data that breaks it. Base data: dbo.cc_filler_map 213 CCs / 98 distinct fillers / 114 ฝ่าย; dbo.v_employee_budget_01 493 rows / 492 distinct emails. Four failure modes checked, ALL zero: fillers with a blank/unknown manager_email = 0; fillers absent from v_employee_budget_01 so the join silently drops them = 0; employees who are their own manager = 0; ฝ่าย whose filler has no manager (i.e. nobody would ever get the manager view) = 0 of 114 -> 100% coverage. 48 managers gain See through the rule: 27 are ALSO fillers (their chip behaviour is unchanged by the frontend fix, which only falls back to See when Fill is empty) and 21 are SEE-ONLY (these are the ones the fix actually rescues from 'ไม่ระบุสายงาน'). NOT A BUG BUT NEEDS A DISPLAY DECISION: the rule legitimately fans out for senior managers, and the สายงาน chip joins names with ' · ' so it can get very long -- bunpotk@chememan.com sees 45 ฝ่าย across 9 สายงาน = a 174-character chip; piyadad 4 div/7 dept = 89 chars; sinaynidhk 4 div/4 dept = 63 chars; the remaining 18 see-only managers are all <= 58 chars and fine. jakkaritw's own screenshot of warapornt (5 dept / 4 div) already shows the 4-name form and he confirmed that concept is correct, so multi-name is WANTED -- the open question is only what to do past ~3 names (truncate with a +N more, wrap, or tooltip). Also expected-by-design, not a defect: 7 managers fill ฝ่าย A while managing a filler of ฝ่าย B (e.g. kwanreuthaih fills Quality Assurance/Quality and Standards and additionally sees the 5 Quality Management ฝ่าย; piyanuchp fills Chief People Officer and sees 9 more), which is exactly the manager-plus-filler case the See/Fill split exists for. Audit scripts left in scratchpad as mgr_audit.py and mgr_display.py."
+    },
+    {
+      "id": "laddawank-no-division-chip",
+      "state": "done",
+      "created": "2026-08-19T14:19:44+0700",
+      "updated": "2026-08-19T14:40:34+0700",
+      "ai": "Fixed frontend-only, NOT committed. Root cause confirmed: backend already correct (routers/reference.py:116 passes scope.see_cost_centers, not fill-only, to fetch_departments -- GET /scope/departments already returns See-only rows via dbo.cc_filler_map keyed by cost_center, independent of caller identity). Bug was purely frontend/src/userbar/model.ts deriveScopeSummary() filtering to Fill-only. FIX: added optional 3rd param seeCostCenters (default []); rule = Fill non-empty -> Fill only (unchanged, regression-safe); Fill empty + See non-empty -> fall back to See so a manager/see_only user (e.g. laddawank) sees their real สายงาน/ฝ่าย instead of the 'ไม่ระบุสายงาน' fallback; both empty -> empty arrays (unchanged). Wired scope.seeCostCenters through in UserBar.tsx (was already on ScopeState/ScopeResponse, just not passed to deriveScopeSummary). Did NOT add a new role label/badge -- reused the EXISTING role-badge text 'ดูอย่างเดียว' (role=see_only, already computed correctly by backend rls.py) as the visual fill-vs-see distinction; Cost Centers/GL Codes pills stay Fill-gated so a see_only user never gets pills implying edit ability. No backend change, no RLS change, no new colors/tokens (contrast-baseline.json untouched). TDD: RED confirmed both at model level (model.test.ts, 'expected [] to deeply equal [Digital Technology]') and component level (UserBar.test.tsx, chip rendered literal 'ไม่ระบุสายงาน' while role badge correctly showed 'ดูอย่างเดียว') before the fix; GREEN after. +5 tests (4 model.test.ts: See-fallback, Fill-non-empty-ignores-See regression pin, no-dup Fill subset of See, both-empty; 1 UserBar.test.tsx: laddawank-shaped see_only render). Verify: npx next build clean (typecheck), vitest run x2 = 688/688 both times (683 baseline +5, no flake), playwright test = 36/36 incl contrast ratchet + no-scope-empty-state (test 35) + edge-states 4.6, git status only the 4 intended files (model.ts, model.test.ts, UserBar.tsx, UserBar.test.tsx). Backend untouched, pytest not re-run (nothing to invalidate). Uncommitted per instructions."
+    },
+    {
+      "id": "log-7ba8f49",
+      "state": "done",
+      "created": "2026-08-19T12:15:14+0700",
+      "updated": "2026-08-19T12:15:14+0700",
+      "agent": "autolog",
+      "ai": "fix(subform): let special-GL and trip month amounts take decimals [commit 7ba8f49]"
+    },
     {
       "id": "sit-tc041-run-scoped",
       "state": "done",

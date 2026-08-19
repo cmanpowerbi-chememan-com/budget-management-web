@@ -51,12 +51,18 @@ export interface UserBarProps {
 /** Login-bar area: who am I + what can I access (ADR-0004/0019) — ported
  * from the mockup's V3 layout: avatar/identity | สายงาน › ฝ่าย(n) › Cost
  * Centers(n)/GL Codes(n). The mockup's user-switcher is deliberately
- * omitted (real Entra auth has no persona to switch into). Counts are
- * FILL-scope only — See is broader/viewing and dropped from the header by
- * design. Only a PURE admin (no Fill/See CCs at all, ADR-0014) gets the
- * "sees everything" note in place of the hierarchy; a dual-role admin
- * (e.g. Nipaporn/Waraporn) still sees their own real scope here,
- * independent of whatever `BudgetGrid`'s admin-view toggle is set to. */
+ * omitted (real Entra auth has no persona to switch into). The Cost
+ * Centers(n)/GL Codes(n) pills and the ฝ่าย *count* badge stay FILL-scope
+ * only — See is broader/viewing, so those numbers never imply the ability
+ * to type. The สายงาน/ฝ่าย chip TEXT itself falls back to See when Fill is
+ * empty (`deriveScopeSummary`, `laddawank-no-division-chip`) so a
+ * manager/See-only user reads their real division instead of
+ * "ไม่ระบุสายงาน" — the existing `role-badge` ("ดูอย่างเดียว") is what marks
+ * that case as view-only, not a new label. Only a PURE admin (no Fill/See
+ * CCs at all, ADR-0014) gets the "sees everything" note in place of the
+ * hierarchy; a dual-role admin (e.g. Nipaporn/Waraporn) still sees their
+ * own real scope here, independent of whatever `BudgetGrid`'s admin-view
+ * toggle is set to. */
 export function UserBar({ email, authLoading, authError, scope }: UserBarProps) {
   const isPureAdmin = scope.isAdmin && scope.fillCostCenters.length === 0 && scope.seeCostCenters.length === 0
   const ready = !authLoading && !scope.loading && !authError && !scope.error
@@ -103,7 +109,11 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
   }
 
   const emailLocal = (email ?? '').split('@')[0]
-  const { divisions, departments: departmentNames } = deriveScopeSummary(departments, scope.fillCostCenters)
+  const { divisions, departments: departmentNames } = deriveScopeSummary(
+    departments,
+    scope.fillCostCenters,
+    scope.seeCostCenters,
+  )
   const divisionText =
     divisions.length > 0 ? divisions.join(' · ') : departmentsLoading ? 'กำลังโหลด…' : 'ไม่ระบุสายงาน'
   const glText = glCountLoading ? '…' : glCount === null ? '—' : String(glCount)
