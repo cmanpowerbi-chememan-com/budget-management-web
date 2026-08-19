@@ -192,6 +192,51 @@ describe('UserBar', () => {
     expect(screen.queryByText('GL Codes')).not.toBeInTheDocument()
   })
 
+  // bunpotk@chememan.com pinned: a see-only manager (Fill empty, real See
+  // scope via deriveScopeSummary's fallback) whose scope fans out to 9
+  // สายงาน / 45 ฝ่าย — the real worst case measured live (174 rendered
+  // chars before truncation). Both header chips must collapse to the first
+  // 3 names + a Thai "+N <unit>" suffix; the ฝ่าย COUNT badge stays the
+  // real total (45), only the chip LIST truncates.
+  it('truncates both สายงาน and ฝ่าย chips to 3 names + "+N" suffix for a fanned-out see-only manager (bunpotk shape)', async () => {
+    const departments = Array.from({ length: 9 }, (_, divIdx) =>
+      Array.from({ length: 5 }, (_, deptIdx) => ({
+        cost_center: `CC${divIdx}-${deptIdx}`,
+        department: `ฝ่าย${divIdx}-${deptIdx}`,
+        division: `สายงาน${divIdx}`,
+        c_level: null,
+      })),
+    ).flat()
+    const seeCostCenters = departments.map((d) => d.cost_center)
+
+    stubFetch({ departments })
+
+    render(
+      <UserBar
+        email="bunpotk@chememan.com"
+        authLoading={false}
+        authError={null}
+        scope={scope({ role: 'see_only', fillCostCenters: [], seeCostCenters })}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText('ฝ่าย0-0', { exact: false })).toBeInTheDocument())
+
+    // สายงาน chip: first 3 divisions + "+6 สายงาน", joined the same way as today
+    expect(screen.getByText('สายงาน0 · สายงาน1 · สายงาน2 · +6 สายงาน')).toBeInTheDocument()
+
+    // ฝ่าย chip: only the first 3 department names render as chips…
+    expect(screen.getByText('ฝ่าย0-0')).toBeInTheDocument()
+    expect(screen.getByText('ฝ่าย0-1')).toBeInTheDocument()
+    expect(screen.getByText('ฝ่าย0-2')).toBeInTheDocument()
+    // …the 4th+ department name is NOT rendered as its own chip…
+    expect(screen.queryByText('ฝ่าย0-3')).not.toBeInTheDocument()
+    // …replaced by one "+42 ฝ่าย" suffix chip…
+    expect(screen.getByText('+42 ฝ่าย')).toBeInTheDocument()
+    // …while the count badge still reports the REAL total, unaffected by truncation.
+    expect(screen.getByTestId('v3-dept-count')).toHaveTextContent('45')
+  })
+
   it('does not render the ฝ่าย/CC/GL segments at all when the caller has no Fill cost centers', () => {
     stubFetch({ departments: [] })
 

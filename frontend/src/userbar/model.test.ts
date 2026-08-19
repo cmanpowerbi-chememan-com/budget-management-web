@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BudgetRow, DepartmentRow } from '../api/types'
-import { countDistinctFillGlAccounts, deriveScopeSummary } from './model'
+import { countDistinctFillGlAccounts, deriveScopeSummary, truncateChipNames } from './model'
 
 function dept(cost_center: string, department: string | null, division: string | null): DepartmentRow {
   return { cost_center, department, division, c_level: null }
@@ -109,6 +109,49 @@ describe('deriveScopeSummary', () => {
     const departments = [dept('10CA013000', 'ฝ่ายบัญชี', 'สายงานการเงิน')]
 
     expect(deriveScopeSummary(departments, [], [])).toEqual({ divisions: [], departments: [] })
+  })
+})
+
+describe('truncateChipNames', () => {
+  // jakkaritw, verbatim: "โชว์ 3 ชื่อแรก แล้วต่อท้าย +6 สายงาน" — measured
+  // against live data, bunpotk@chememan.com (9 สายงาน / 45 ฝ่าย, a see-only
+  // manager whose Fill scope is empty) rendered a 174-char chip before this.
+  it('9 สายงาน → keeps the first 3 and appends "+6 สายงาน"', () => {
+    const names = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9']
+
+    expect(truncateChipNames(names, 'สายงาน')).toEqual({
+      shown: ['D1', 'D2', 'D3'],
+      suffix: '+6 สายงาน',
+    })
+  })
+
+  it('7 ฝ่าย → keeps the first 3 and appends "+4 ฝ่าย"', () => {
+    const names = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
+
+    expect(truncateChipNames(names, 'ฝ่าย')).toEqual({
+      shown: ['A1', 'A2', 'A3'],
+      suffix: '+4 ฝ่าย',
+    })
+  })
+
+  it('boundary: exactly 3 names → no suffix, unchanged', () => {
+    const names = ['A1', 'A2', 'A3']
+
+    expect(truncateChipNames(names, 'ฝ่าย')).toEqual({ shown: ['A1', 'A2', 'A3'], suffix: null })
+  })
+
+  it('boundary: exactly 4 names → first 3 + "+1 สายงาน"', () => {
+    const names = ['A1', 'A2', 'A3', 'A4']
+
+    expect(truncateChipNames(names, 'สายงาน')).toEqual({ shown: ['A1', 'A2', 'A3'], suffix: '+1 สายงาน' })
+  })
+
+  it('1 name → unchanged, no suffix', () => {
+    expect(truncateChipNames(['A1'], 'ฝ่าย')).toEqual({ shown: ['A1'], suffix: null })
+  })
+
+  it('0 names → unchanged empty, no suffix', () => {
+    expect(truncateChipNames([], 'ฝ่าย')).toEqual({ shown: [], suffix: null })
   })
 })
 

@@ -1,6 +1,6 @@
 import type { ScopeRole } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
-import { deriveScopeSummary } from './model'
+import { deriveScopeSummary, truncateChipNames } from './model'
 import { useFillGlCount } from './useFillGlCount'
 import { useOwnDepartments } from './useOwnDepartments'
 
@@ -114,8 +114,22 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
     scope.fillCostCenters,
     scope.seeCostCenters,
   )
+  // A senior manager's fallback-to-See chip (deriveScopeSummary, above) can
+  // fan out to 9 สายงาน/45 ฝ่าย and overflow the header (bunpotk@chememan.com,
+  // measured 174 rendered chars) — truncateChipNames caps BOTH chips at the
+  // first 3 names + a Thai "+N <unit>" suffix (jakkaritw, verbatim: "โชว์ 3
+  // ชื่อแรก แล้วต่อท้าย +6 สายงาน"). The full list stays one click away in
+  // the ฝ่าย picker (`DeptPicker`, rendered right below this header in
+  // `BudgetGrid`, searchable and grouped by division) — no title/tooltip
+  // added here on purpose, it would just duplicate that.
+  const { shown: shownDivisions, suffix: divisionSuffix } = truncateChipNames(divisions, 'สายงาน')
   const divisionText =
-    divisions.length > 0 ? divisions.join(' · ') : departmentsLoading ? 'กำลังโหลด…' : 'ไม่ระบุสายงาน'
+    divisions.length > 0
+      ? [...shownDivisions, ...(divisionSuffix ? [divisionSuffix] : [])].join(' · ')
+      : departmentsLoading
+        ? 'กำลังโหลด…'
+        : 'ไม่ระบุสายงาน'
+  const { shown: shownDepartments, suffix: departmentSuffix } = truncateChipNames(departmentNames, 'ฝ่าย')
   const glText = glCountLoading ? '…' : glCount === null ? '—' : String(glCount)
 
   return (
@@ -152,11 +166,16 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
                     </span>
                   </span>
                   <div className="v3-depts">
-                    {departmentNames.map((name) => (
+                    {shownDepartments.map((name) => (
                       <span className="user-chip cc" key={name}>
                         <span className="v">{name}</span>
                       </span>
                     ))}
+                    {departmentSuffix && (
+                      <span className="user-chip cc" data-testid="v3-dept-more">
+                        <span className="v">{departmentSuffix}</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               </>

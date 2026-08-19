@@ -1,8 +1,23 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-19T14:46:01+0700",
+  "updated": "2026-08-19T15:21:21+0700",
   "tasks": [
+    {
+      "id": "userbar-chip-truncate",
+      "state": "done",
+      "created": "2026-08-19T15:10:44+0700",
+      "updated": "2026-08-19T15:21:21+0700",
+      "ai": "Added truncateChipNames(names, unit) in frontend/src/userbar/model.ts, wired into both สายงาน and ฝ่าย chips in UserBar.tsx. TDD: 7 tests RED (TypeError: not a function / all-45-chips-rendered) before impl, GREEN after. vitest 695/695 x2 stable (688+7). next build clean (tsc passed). playwright 36/36 incl contrast ratchet. Only userbar/{model,UserBar}.{ts,tsx,test.ts,test.tsx} touched, styles/contrast-baseline untouched. Not committed (per instructions)."
+    },
+    {
+      "id": "log-4bae6e5",
+      "state": "done",
+      "created": "2026-08-19T14:56:49+0700",
+      "updated": "2026-08-19T14:56:49+0700",
+      "agent": "autolog",
+      "ai": "fix(userbar): show a manager their own สายงาน instead of ไม่ระบุสายงาน [commit 4bae6e5]"
+    },
     {
       "id": "mgr-see-rule-company-audit",
       "state": "done",

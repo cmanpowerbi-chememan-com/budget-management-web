@@ -53,6 +53,32 @@ function distinctSortedTh(values: (string | null)[]): string[] {
   return [...new Set(trimmed)].sort((a, b) => a.localeCompare(b, 'th'))
 }
 
+/** Chip name after truncation: the first names to show, plus an optional
+ * Thai "+N <unit>" suffix for the rest. */
+export interface TruncatedChip {
+  shown: string[]
+  suffix: string | null
+}
+
+/** Number of names a header chip shows before collapsing the rest into a
+ * "+N <unit>" suffix (jakkaritw, verbatim: "โชว์ 3 ชื่อแรก แล้วต่อท้าย +6
+ * สายงาน") — a senior manager's See-fallback สายงาน/ฝ่าย chip
+ * (`deriveScopeSummary`) can otherwise fan out to 9 สายงาน / 45 ฝ่าย and
+ * overflow the header (`bunpotk@chememan.com`, measured 174 rendered
+ * chars). Below this count, both chips render exactly as before — no
+ * suffix. `unit` is the Thai word for what is being counted ("สายงาน" or
+ * "ฝ่าย"); Thai does not inflect for plural, so "+6 สายงาน" needs no
+ * singular/plural handling. */
+export function truncateChipNames(names: string[], unit: string): TruncatedChip {
+  const CHIP_NAME_LIMIT = 3
+  if (names.length <= CHIP_NAME_LIMIT) {
+    return { shown: names, suffix: null }
+  }
+  const shown = names.slice(0, CHIP_NAME_LIMIT)
+  const hiddenCount = names.length - CHIP_NAME_LIMIT
+  return { shown, suffix: `+${hiddenCount} ${unit}` }
+}
+
 /** Distinct GL accounts across every visible row whose cost_center is in
  * the caller's Fill scope — the header's "GL Codes" pill. `rows` comes
  * from `GET /budget` (no department filter), already RLS-scoped
