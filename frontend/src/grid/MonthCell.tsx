@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { formatThb } from './model'
+import { useEffect, useRef, useState } from 'react'
+import { formatThb, sanitizeMonthInput } from './model'
 
 export interface MonthCellProps {
   value: number
@@ -15,33 +15,39 @@ export interface MonthCellProps {
   testId?: string
 }
 
-/** Sanitize free-typed month input: digits + at most one decimal point +
- * at most 2 decimal places. Letters and minus signs are dropped (no
- * negatives per business rule); extra dots beyond the first are dropped
- * rather than resetting the field, so "1.2.3" becomes "1.23" not "1.2". */
-function sanitizeMonthInput(raw: string): string {
-  const digitsAndDot = raw.replace(/[^0-9.]/g, '')
-  const dotIndex = digitsAndDot.indexOf('.')
-  if (dotIndex === -1) return digitsAndDot
-  const intPart = digitsAndDot.slice(0, dotIndex)
-  const fracPart = digitsAndDot.slice(dotIndex + 1).replace(/\./g, '').slice(0, 2)
-  return `${intPart}.${fracPart}`
-}
-
 /** One month's amount, editable or read-only. Pure display + one commit
  * callback — the parent (`GridTable`/`BudgetGrid`) owns save/conflict
  * handling; this component never calls the API. */
 export function MonthCell({ value, editable, onCommit, label, disabledReason, testId }: MonthCellProps) {
   const [draft, setDraft] = useState(String(value))
+  const lastSyncedValue = useRef(value)
 
-  // Re-sync the displayed draft whenever the SERVER-derived value changes
-  // (a successful save's authoritative total, or a 409-conflict revert to
-  // the freshly-refetched row) — an editable cell is otherwise an
+  // Re-sync the displayed draft whenever the SERVER-derived value GENUINELY
+  // changes (a successful save's authoritative total, or a 409-conflict
+  // revert to the freshly-refetched row) — an editable cell is otherwise an
   // uncontrolled input whose local `draft` would never notice an external
   // update on the same component instance (same row key -> same instance
   // across re-renders).
+  //
+  // The `lastSyncedValue` guard (2026-08-19, race fix): without it, this
+  // effect also fires once on mount even though `useState`'s initializer
+  // already set `draft` correctly — a redundant `setDraft` call that is
+  // usually a harmless no-op, but is still a pending passive effect. A row
+  // that mounts as the result of an ASYNC fetch (the normal case — a row
+  // only exists once the parent's own load promise resolves) can have that
+  // pending mount effect flush LATE, and if it lands in the same commit as
+  // a fast `onChange`, the two `setDraft` calls race — the stale mount
+  // effect can win and silently revert what the user just typed
+  // (reproduced via `subform/MonthAmountInput.tsx`, the same pattern,
+  // bug-subform-no-decimals gate feedback). Comparing against the value
+  // last synced FROM makes the mount run a true no-op (skips `setDraft`
+  // entirely — nothing left to race) while a real external change still
+  // resyncs deterministically.
   useEffect(() => {
-    setDraft(String(value))
+    if (value !== lastSyncedValue.current) {
+      lastSyncedValue.current = value
+      setDraft(String(value))
+    }
   }, [value])
 
   if (!editable) {

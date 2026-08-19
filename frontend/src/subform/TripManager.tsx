@@ -10,6 +10,7 @@ import {
   TRAVEL_TYPE_LABEL_TH,
   type TravelExpenseType,
 } from './glDropdownConstants'
+import { MonthAmountInput } from './MonthAmountInput'
 import {
   blankManualLineDraft,
   blankTripDraft,
@@ -796,6 +797,11 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                     </label>
                     <label>
                       TOTAL DAYS / YEAR
+                      {/* Deliberately integer-only — NOT routed through
+                        * MonthAmountInput/sanitizeMonthInput (bug-subform-
+                        * no-decimals, 2026-08-19). Trip days are whole days,
+                        * never a fraction; do not "fix" this to accept a
+                        * decimal point. */}
                       <input
                         aria-label={`days ${card.localId}`}
                         inputMode="numeric"
@@ -954,14 +960,11 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                                 return (
                                   <td key={m}>
                                     {active ? (
-                                      <input
-                                        aria-label={`${type} ${m} ${card.localId}`}
+                                      <MonthAmountInput
+                                        ariaLabel={`${type} ${m} ${card.localId}`}
                                         className="exp-detail-input"
-                                        inputMode="numeric"
-                                        value={card.manual[type].months[m] || ''}
-                                        onChange={(e) =>
-                                          setManualMonth(card.localId, type, m, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)
-                                        }
+                                        value={card.manual[type].months[m]}
+                                        onCommit={(v) => setManualMonth(card.localId, type, m, v)}
                                       />
                                     ) : (
                                       <span title="เดือนนี้ไม่ได้เลือกเดินทาง">—</span>

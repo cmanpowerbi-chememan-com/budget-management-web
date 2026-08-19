@@ -383,6 +383,7 @@ describe('TripManager', () => {
     // m02 is in travel_months (active) -> editable input exists
     const input = screen.getByLabelText('transport m02 existing-10')
     fireEvent.change(input, { target: { value: '1000' } })
+    fireEvent.blur(input) // commits the draft, same shape as grid/MonthCell
     // m01 is NOT in travel_months -> no input for it
     expect(screen.queryByLabelText('transport m01 existing-10')).not.toBeInTheDocument()
 
@@ -713,12 +714,14 @@ describe('TripManager', () => {
       expect(screen.getByTestId('trip-card-existing-11')).toBeInTheDocument()
 
       // Card 11's persisted manual line (500) is cleared to 0 — unsaved.
-      // (The input renders a zero value as '' — `months[m] || ''` — so the
-      // cleared state is an empty box, not a literal "0".)
+      // (bug-subform-no-decimals, 2026-08-19: the input now shows the typed
+      // digit literally via MonthAmountInput's local draft state — "0", not
+      // an empty box — matching grid/MonthCell's own editable-input shape.)
       const input = screen.getByLabelText('transport m02 existing-11')
       expect(input).toHaveValue('500')
       fireEvent.change(input, { target: { value: '0' } })
-      expect(input).toHaveValue('')
+      fireEvent.blur(input) // commits the draft -> manualDirty=true, same as a real tab-away
+      expect(input).toHaveValue('0')
 
       // Delete card 10 (first "ลบทริป" button = the first card) -> 409.
       fireEvent.click(screen.getAllByRole('button', { name: 'ลบทริป' })[0])
@@ -731,9 +734,9 @@ describe('TripManager', () => {
       expect(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' })).toBeInTheDocument()
       // The deleted card stays visible and flagged — never silently wiped.
       expect(screen.getByTestId('trip-card-error-existing-10')).toHaveTextContent('ถูกแก้ไขหรือถูกลบโดยผู้อื่น')
-      // Card 11's cleared-to-0 edit is PRESERVED — still '' (never reverted
-      // back to '500' by a silent load()).
-      expect(screen.getByLabelText('transport m02 existing-11')).toHaveValue('')
+      // Card 11's cleared-to-0 edit is PRESERVED — still "0" (never reverted
+      // back to "500" by a silent load()).
+      expect(screen.getByLabelText('transport m02 existing-11')).toHaveValue('0')
 
       fireEvent.click(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }))
       await waitFor(() => expect(subformApi.fetchTrips).toHaveBeenCalledTimes(2))
@@ -779,7 +782,8 @@ describe('TripManager', () => {
       const input = screen.getByLabelText('transport m02 existing-11')
       expect(input).toHaveValue('500')
       fireEvent.change(input, { target: { value: '0' } })
-      expect(input).toHaveValue('')
+      fireEvent.blur(input) // commits the draft -> manualDirty=true, same as a real tab-away
+      expect(input).toHaveValue('0')
 
       // NOW the delete resolves with a 409.
       rejectDelete(new ApiError(409, 'ถูกแก้ไขโดยผู้อื่น'))
@@ -792,7 +796,7 @@ describe('TripManager', () => {
       expect(screen.getAllByText(/ถูกแก้ไขหรือถูกลบโดยผู้อื่น/).length).toBeGreaterThanOrEqual(2)
       expect(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' })).toBeInTheDocument()
       // Card 11's edit survives — never silently reverted to the stale '500'.
-      expect(screen.getByLabelText('transport m02 existing-11')).toHaveValue('')
+      expect(screen.getByLabelText('transport m02 existing-11')).toHaveValue('0')
     })
 
     it('removes an unsaved (never-persisted) trip card locally without calling the API or confirming', async () => {
@@ -876,7 +880,9 @@ describe('TripManager', () => {
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.other.SGA)).toBeInTheDocument()
 
       fillNewTripBasics()
-      fireEvent.change(screen.getByLabelText('transport m05 new-0'), { target: { value: '400' } })
+      const manualInput = screen.getByLabelText('transport m05 new-0')
+      fireEvent.change(manualInput, { target: { value: '400' } })
+      fireEvent.blur(manualInput) // commits the draft, same shape as grid/MonthCell
       fireEvent.click(saveAllButton())
 
       await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
@@ -961,7 +967,9 @@ describe('TripManager', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
       fillNewTripBasics() // traveler E9, days 3, month "May" (05), destination ประเทศไทย
-      fireEvent.change(screen.getByLabelText('transport m05 new-0'), { target: { value: '1500' } })
+      const manualInput = screen.getByLabelText('transport m05 new-0')
+      fireEvent.change(manualInput, { target: { value: '1500' } })
+      fireEvent.blur(manualInput) // commits the draft, same shape as grid/MonthCell
 
       fireEvent.click(saveAllButton())
 
@@ -988,14 +996,18 @@ describe('TripManager', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
       fillNewTripBasics('new-0', 0)
-      fireEvent.change(screen.getByLabelText('transport m05 new-0'), { target: { value: '700' } })
+      const manualInput0 = screen.getByLabelText('transport m05 new-0')
+      fireEvent.change(manualInput0, { target: { value: '700' } })
+      fireEvent.blur(manualInput0) // commits the draft, same shape as grid/MonthCell
 
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
       pickTraveler('new-1', 'E7')
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '2' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
       fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ประเทศไทย' } })
-      fireEvent.change(screen.getByLabelText('transport m05 new-1'), { target: { value: '300' } })
+      const manualInput1 = screen.getByLabelText('transport m05 new-1')
+      fireEvent.change(manualInput1, { target: { value: '300' } })
+      fireEvent.blur(manualInput1) // commits the draft, same shape as grid/MonthCell
 
       fireEvent.click(saveAllButton())
 
@@ -1087,6 +1099,7 @@ describe('TripManager', () => {
       const input = screen.getByLabelText('transport m02 existing-10')
       fireEvent.change(input, { target: { value: '500' } })
       fireEvent.change(input, { target: { value: '0' } })
+      fireEvent.blur(input) // commits the final draft (0) -> manualDirty=true, same as grid/MonthCell
 
       fireEvent.click(saveAllButton())
 
@@ -1106,6 +1119,7 @@ describe('TripManager', () => {
       const input = screen.getByLabelText('transport m02 existing-10')
       expect(input).toHaveValue('500')
       fireEvent.change(input, { target: { value: '0' } })
+      fireEvent.blur(input) // commits the draft -> manualDirty=true, same as grid/MonthCell
 
       fireEvent.click(saveAllButton())
 
@@ -1114,6 +1128,100 @@ describe('TripManager', () => {
       expect(payload.detail_id).toBe(1) // existing row — an UPDATE, never a second INSERT
       expect(payload.m02).toBe(0)
     })
+
+    // bug-subform-no-decimals (2026-08-19): the manual month input used to
+    // do Number(e.target.value.replace(/[^0-9]/g, '')) on every keystroke,
+    // stripping the decimal point AND coercing immediately. Fixed via the
+    // shared MonthAmountInput (same draft-string-then-commit shape as
+    // grid/MonthCell.tsx).
+    describe('manual month amount input — decimal precision (bug-subform-no-decimals)', () => {
+      it('typing a decimal keeps the fraction and the SAVED payload carries it exactly', async () => {
+        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+        mockNoManualLines()
+        vi.mocked(subformApi.saveDetailLine).mockResolvedValue(detailLine({ m02: 1500.5, total_year: 1500.5 }))
+        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1500.50' } })
+        expect(input.value).toBe('1500.50')
+        fireEvent.blur(input)
+
+        fireEvent.click(saveAllButton())
+
+        await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+        expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].m02).toBe(1500.5)
+      })
+
+      it('a partially typed decimal ("1500.") is not destroyed mid-typing', async () => {
+        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+        mockNoManualLines()
+        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1500.' } })
+        expect(input.value).toBe('1500.')
+      })
+
+      it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 1.23)', async () => {
+        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+        mockNoManualLines()
+        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1.2.3' } })
+        expect(input.value).toBe('1.23')
+        fireEvent.change(input, { target: { value: '-45a6' } })
+        expect(input.value).toBe('456')
+      })
+
+      it('the draft re-syncs to the refetched value after an explicit reload (same trip_id -> same component instance reused)', async () => {
+        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ trip_id: 10 })])
+        vi.mocked(subformApi.fetchDetailLines).mockImplementation(async (_cc, gl) =>
+          gl === TRAVEL_GL_BY_TYPE_SIDE.transport.COST ? [detailLine({ trip_id: 10, m02: 500, total_year: 500 })] : [],
+        )
+        vi.mocked(subformApi.updateTrip).mockRejectedValue(new ApiError(409, 'ถูกแก้ไขโดยผู้อื่น'))
+        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
+        expect(input.value).toBe('500')
+        fireEvent.change(input, { target: { value: '250.75' } }) // uncommitted, never blurred
+
+        // Trigger a batch conflict via the trip header (days) so the card is
+        // flagged — the manual field's own uncommitted draft is untouched by
+        // this save attempt (manualDirty was never set, so no line write is
+        // even attempted; only the trip header's `updateTrip` is called).
+        fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
+        fireEvent.click(saveAllButton())
+        await waitFor(() => expect(screen.getByTestId('trip-card-error-existing-10')).toBeInTheDocument())
+
+        // Server now reports a different m02 for the SAME trip_id.
+        vi.mocked(subformApi.fetchDetailLines).mockImplementation(async (_cc, gl) =>
+          gl === TRAVEL_GL_BY_TYPE_SIDE.transport.COST ? [detailLine({ trip_id: 10, m02: 999.25, total_year: 999.25 })] : [],
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }))
+
+        await waitFor(() => expect(screen.getByLabelText('transport m02 existing-10')).toHaveValue('999.25'))
+      })
+    })
+  })
+
+  // Regression pin: TOTAL DAYS/YEAR is a deliberate exception (task
+  // instruction, 2026-08-19) — whole days only, never routed through the
+  // amount sanitizer/MonthAmountInput. Keeps the next reader from "fixing"
+  // it into accepting decimals.
+  it('regression pin: TOTAL DAYS stays integer-only — a typed decimal point is stripped, not preserved', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+    mockNoManualLines()
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+    const input = screen.getByLabelText('days existing-10') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '9.5' } })
+    expect(input.value).toBe('95')
   })
 
   // 2026-07-19 restyle (mockup 0002.3 gridgeist parity) — new structural

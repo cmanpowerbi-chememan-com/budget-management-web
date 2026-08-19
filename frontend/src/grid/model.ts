@@ -139,6 +139,25 @@ export function clampColumnWidth(width: number): number {
  * here since our identity-column set is fixed, not dynamic. */
 export const COLUMN_WIDTHS_STORAGE_KEY = 'budgetGridColWidths'
 
+/** Sanitize free-typed month input: digits + at most one decimal point +
+ * at most 2 decimal places. Letters and minus signs are dropped (no
+ * negatives per business rule); extra dots beyond the first are dropped
+ * rather than resetting the field, so "1.2.3" becomes "1.23" not "1.2".
+ *
+ * The ONE sanitizer for every money input in the app (grid `MonthCell` +
+ * the special-GL subforms' `MonthAmountInput`) — promoted here from
+ * `MonthCell.tsx` (2026-08-19) so the subform inputs stop each
+ * re-implementing their own broken `Number(raw.replace(/[^0-9]/g,''))`
+ * version, which silently dropped the decimal point on every keystroke. */
+export function sanitizeMonthInput(raw: string): string {
+  const digitsAndDot = raw.replace(/[^0-9.]/g, '')
+  const dotIndex = digitsAndDot.indexOf('.')
+  if (dotIndex === -1) return digitsAndDot
+  const intPart = digitsAndDot.slice(0, dotIndex)
+  const fracPart = digitsAndDot.slice(dotIndex + 1).replace(/\./g, '').slice(0, 2)
+  return `${intPart}.${fracPart}`
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }

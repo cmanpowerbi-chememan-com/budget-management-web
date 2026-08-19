@@ -32,6 +32,7 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
+  sanitizeMonthInput,
   sapCoverageLabel,
   sapFreshnessLine,
   sectionTotals,
@@ -173,6 +174,40 @@ describe('isDeletableRow — grid trailing "ลบ" column eligibility (jakkarit
   it('is NOT deletable for Travelling Expense, even when editable with no SAP/Approved (Trip Manager owns delete there)', () => {
     const r = row({ cost_center: 'CC1', gl_account: '5210400010', editable: true })
     expect(isDeletableRow(r, travelMeta)).toBe(false)
+  })
+})
+
+// Promoted from MonthCell.tsx (was module-private) so DetailSubform's and
+// TripManager's month inputs can reuse the EXACT same rule instead of each
+// re-implementing their own (broken) `Number(raw.replace(/[^0-9]/g,''))`
+// version — see subform/MonthAmountInput.tsx.
+describe('sanitizeMonthInput', () => {
+  it('keeps digits and a single decimal point', () => {
+    expect(sanitizeMonthInput('51000.50')).toBe('51000.50')
+  })
+
+  it('caps to at most 2 decimal places', () => {
+    expect(sanitizeMonthInput('100.567')).toBe('100.56')
+  })
+
+  it('keeps only the first decimal point when multiple dots are typed', () => {
+    expect(sanitizeMonthInput('1.2.3')).toBe('1.23')
+  })
+
+  it('strips letters', () => {
+    expect(sanitizeMonthInput('1a2b3')).toBe('123')
+  })
+
+  it('strips a leading minus sign — negatives are not allowed', () => {
+    expect(sanitizeMonthInput('-50')).toBe('50')
+  })
+
+  it('does not destroy a partially-typed decimal ("51000.") mid-typing', () => {
+    expect(sanitizeMonthInput('51000.')).toBe('51000.')
+  })
+
+  it('passes a lone "." through unchanged (caller resolves it to 0 at commit time)', () => {
+    expect(sanitizeMonthInput('.')).toBe('.')
   })
 })
 

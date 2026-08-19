@@ -3,6 +3,7 @@ import { ApiError } from '../api/client'
 import { deleteDetailLine, fetchDetailLines, saveDetailLine } from '../api/subform'
 import type { DetailLineState } from '../api/types'
 import { formatThb, MONTH_KEYS, MONTH_LABELS } from '../grid/model'
+import { MonthAmountInput } from './MonthAmountInput'
 import {
   blankDetailDraft,
   buildDetailLinePayload,
@@ -352,13 +353,12 @@ export function DetailSubform({
                     })}
                     {MONTH_KEYS.map((m) => (
                       <td key={m} className="month-cell">
-                        <input
-                          aria-label={`${m} ${row.localId}`}
+                        <MonthAmountInput
+                          ariaLabel={`${m} ${row.localId}`}
                           className="detail-input month-input"
-                          inputMode="numeric"
-                          value={row.draft.months[m] || ''}
+                          value={row.draft.months[m]}
                           disabled={readOnly}
-                          onChange={(e) => setMonth(row.localId, m, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                          onCommit={(v) => setMonth(row.localId, m, v)}
                         />
                       </td>
                     ))}
