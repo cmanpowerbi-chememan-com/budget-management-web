@@ -1,8 +1,31 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-19T15:21:21+0700",
+  "updated": "2026-08-19T16:30:44+0700",
   "tasks": [
+    {
+      "id": "sit-round-closed-2026-08-19",
+      "state": "done",
+      "created": "2026-08-19T15:46:39+0700",
+      "updated": "2026-08-19T15:46:39+0700",
+      "ai": "[SIT ROUND CLOSED 2026-08-19] Live workbook audit: 61 cases = 59 Pass + 2 N/A (TC-027 export feature does not exist, TC-042 duplicate of TC-041). Severity column empty on all 61 = no defect raised in the whole round. Per module: Login 5/5, Budget Entry 9/9, Submission 4/4, Approver1 6/6, Approver2/3 4/4, Business Rules 2/2, Security 3/3, Data Integrity 2/2, UI/UX 3/3, Email Alert 15/16 (the 16th is the N/A duplicate), Special GL Subform 6/6. Actual Result now reads 'Pass by AI' on 18 rows and human-written text on 41 — humans re-ran or consolidated most rows after the AI round. TC-029/TC-034 concurrency: jakkaritw reported the two-tab 409 was unreproducible; root cause was ORDER, not the product — tab 2 must be opened BEFORE tab 1 saves, and I verified in code that the grid has NO focus/visibilitychange refetch (only keydown/resize/mouse/touch listeners), so a tab left open genuinely keeps its stale optimistic-lock timestamp. He accepted both as Pass, agreeing the real-world probability is low (needs two people on the identical cost_center+gl+year row, both loaded before either saves) while the guard still matters because the alternative is a silent overwrite of someone's budget figures. REMAINING HOUSEKEEPING, none blocking: 22 rows have no Tester and 23 no Test Date; 7 rows (002/009/010/028/029/030/052) still carry a stale 'ยังต้องให้คน…' remark although they are marked Pass; staging still has the 20-minute cookieExpiration and the 4-persona SIT_IMPERSONATE set (both should be reverted after the human round), setup/_auth_cookie.tmp.txt still on disk, and the Entertainment blank-ประเภทการรับรอง 400 bug is still open (task bug-entertainment-blank-type-400).",
+      "agent": "claude"
+    },
+    {
+      "id": "pending-round-to-hundreds",
+      "state": "done",
+      "created": "2026-08-19T15:27:21+0700",
+      "updated": "2026-08-19T16:30:44+0700",
+      "ai": "Implemented jakkaritw 08-19 rule: Pending amounts round to nearest 100 half-up, no decimals, cap 100,000,000; per-diem exempt. Frontend: sanitizeMonthInput now digit-only (grid/model.ts), new roundPendingAmount() applied on commit (onBlur) in MonthCell.tsx + MonthAmountInput.tsx (shared by DetailSubform+TripManager manual lines); kept 7ba8f49's race-guard (lastSyncedValue) + shared component untouched. Over-cap: frontend clamps silently (no new toast, field shows corrected number, same as round-to-100); backend REJECTS (amount_not_rounded/amount_over_cap, 400) as defense-in-depth, checked LAST in _save_one_pending_row/_save_one_detail_line (after scope/GL/dept-lock/deadline gates) so per-diem (_upsert_trip_detail_line, separate path, PerDiemDirectEditError already blocks GL) and existing incidental non-round test fixtures elsewhere in the pipeline are unaffected. vitest 695->721 (stable x2), next build clean, playwright 36/36 (one unrelated flaky contrast fail on first run, clean on rerun), backend 1072->1097. Fixed 6 pre-existing test fixtures using incidental non-round amounts (test_write_model.py) + 5 GridTable/BudgetGrid vitest fixtures using 750/999 that crossed the new rounding boundary. No prod code changes needed in DetailSubform.tsx/TripManager.tsx (rounding lives entirely in shared MonthAmountInput). git diff: 12 files, +509/-125."
+    },
+    {
+      "id": "log-68592a4",
+      "state": "done",
+      "created": "2026-08-19T15:25:26+0700",
+      "updated": "2026-08-19T15:25:26+0700",
+      "agent": "autolog",
+      "ai": "feat(userbar): cap the scope chips at three names plus a +N tail [commit 68592a4]"
+    },
     {
       "id": "userbar-chip-truncate",
       "state": "done",
@@ -31,14 +54,6 @@
       "created": "2026-08-19T14:19:44+0700",
       "updated": "2026-08-19T14:40:34+0700",
       "ai": "Fixed frontend-only, NOT committed. Root cause confirmed: backend already correct (routers/reference.py:116 passes scope.see_cost_centers, not fill-only, to fetch_departments -- GET /scope/departments already returns See-only rows via dbo.cc_filler_map keyed by cost_center, independent of caller identity). Bug was purely frontend/src/userbar/model.ts deriveScopeSummary() filtering to Fill-only. FIX: added optional 3rd param seeCostCenters (default []); rule = Fill non-empty -> Fill only (unchanged, regression-safe); Fill empty + See non-empty -> fall back to See so a manager/see_only user (e.g. laddawank) sees their real สายงาน/ฝ่าย instead of the 'ไม่ระบุสายงาน' fallback; both empty -> empty arrays (unchanged). Wired scope.seeCostCenters through in UserBar.tsx (was already on ScopeState/ScopeResponse, just not passed to deriveScopeSummary). Did NOT add a new role label/badge -- reused the EXISTING role-badge text 'ดูอย่างเดียว' (role=see_only, already computed correctly by backend rls.py) as the visual fill-vs-see distinction; Cost Centers/GL Codes pills stay Fill-gated so a see_only user never gets pills implying edit ability. No backend change, no RLS change, no new colors/tokens (contrast-baseline.json untouched). TDD: RED confirmed both at model level (model.test.ts, 'expected [] to deeply equal [Digital Technology]') and component level (UserBar.test.tsx, chip rendered literal 'ไม่ระบุสายงาน' while role badge correctly showed 'ดูอย่างเดียว') before the fix; GREEN after. +5 tests (4 model.test.ts: See-fallback, Fill-non-empty-ignores-See regression pin, no-dup Fill subset of See, both-empty; 1 UserBar.test.tsx: laddawank-shaped see_only render). Verify: npx next build clean (typecheck), vitest run x2 = 688/688 both times (683 baseline +5, no flake), playwright test = 36/36 incl contrast ratchet + no-scope-empty-state (test 35) + edge-states 4.6, git status only the 4 intended files (model.ts, model.test.ts, UserBar.tsx, UserBar.test.tsx). Backend untouched, pytest not re-run (nothing to invalidate). Uncommitted per instructions."
-    },
-    {
-      "id": "log-7ba8f49",
-      "state": "done",
-      "created": "2026-08-19T12:15:14+0700",
-      "updated": "2026-08-19T12:15:14+0700",
-      "agent": "autolog",
-      "ai": "fix(subform): let special-GL and trip month amounts take decimals [commit 7ba8f49]"
     },
     {
       "id": "sit-tc041-run-scoped",
@@ -2472,14 +2487,6 @@
       "created": "2026-07-20T16:53:24+0700",
       "updated": "2026-07-20T16:53:24+0700",
       "ai": "TRUNCATE budget.pending_budget_detail(8->0)+pending_budget(6->0)+budget_trip(1->0) on fabric_sql_database-a42ef9f3 (consolidated DB, staging/SIT shared); no FK/no status col so no approved loss; SP cman-fabric-write had TRUNCATE perm; jakkaritw confirmed; clean slate for SIT",
-      "agent": "claude"
-    },
-    {
-      "id": "review-spoof-passakornh",
-      "state": "done",
-      "created": "2026-07-20T16:18:42+0700",
-      "updated": "2026-07-20T16:18:42+0700",
-      "ai": "vite.review.config.ts SPOOF_USER anurakb->passakornh@chememan.com for local staging review; dev-only uncommitted config, needs dev-server restart to apply",
       "agent": "claude"
     },
     {

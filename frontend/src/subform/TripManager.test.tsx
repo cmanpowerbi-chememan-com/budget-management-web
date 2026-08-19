@@ -1129,42 +1129,43 @@ describe('TripManager', () => {
       expect(payload.m02).toBe(0)
     })
 
-    // bug-subform-no-decimals (2026-08-19): the manual month input used to
-    // do Number(e.target.value.replace(/[^0-9]/g, '')) on every keystroke,
-    // stripping the decimal point AND coercing immediately. Fixed via the
-    // shared MonthAmountInput (same draft-string-then-commit shape as
-    // grid/MonthCell.tsx).
-    describe('manual month amount input — decimal precision (bug-subform-no-decimals)', () => {
-      it('typing a decimal keeps the fraction and the SAVED payload carries it exactly', async () => {
+    // jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
+    // (half-up) and has no decimals — SUPERSEDES bug-subform-no-decimals
+    // (7ba8f49, shipped one day earlier), which had allowed a typed decimal
+    // through this same input. Per-diem is NOT affected either way — it
+    // never uses this input (see the read-only per-diem-row tests below).
+    describe('manual month amount input — round to nearest 100, no decimals (jakkaritw 2026-08-19)', () => {
+      it('a non-round typed value rounds on blur and the SAVED payload carries the rounded whole number', async () => {
         vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
         mockNoManualLines()
-        vi.mocked(subformApi.saveDetailLine).mockResolvedValue(detailLine({ m02: 1500.5, total_year: 1500.5 }))
+        vi.mocked(subformApi.saveDetailLine).mockResolvedValue(detailLine({ m02: 1500, total_year: 1500 }))
+        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1479' } })
+        expect(input.value).toBe('1479') // unrounded while typing
+        fireEvent.blur(input)
+        expect(input.value).toBe('1500')
+
+        fireEvent.click(saveAllButton())
+
+        await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+        expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].m02).toBe(1500)
+      })
+
+      it('a typed decimal point never reaches the field — no decimals allowed', async () => {
+        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+        mockNoManualLines()
         render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
         await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
         const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
         fireEvent.change(input, { target: { value: '1500.50' } })
-        expect(input.value).toBe('1500.50')
-        fireEvent.blur(input)
-
-        fireEvent.click(saveAllButton())
-
-        await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
-        expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].m02).toBe(1500.5)
+        expect(input.value).toBe('150050')
       })
 
-      it('a partially typed decimal ("1500.") is not destroyed mid-typing', async () => {
-        vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
-        mockNoManualLines()
-        render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
-        await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
-
-        const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
-        fireEvent.change(input, { target: { value: '1500.' } })
-        expect(input.value).toBe('1500.')
-      })
-
-      it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 1.23)', async () => {
+      it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 123, digits only)', async () => {
         vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
         mockNoManualLines()
         render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
@@ -1172,12 +1173,12 @@ describe('TripManager', () => {
 
         const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
         fireEvent.change(input, { target: { value: '1.2.3' } })
-        expect(input.value).toBe('1.23')
+        expect(input.value).toBe('123')
         fireEvent.change(input, { target: { value: '-45a6' } })
         expect(input.value).toBe('456')
       })
 
-      it('the draft re-syncs to the refetched value after an explicit reload (same trip_id -> same component instance reused)', async () => {
+      it('the draft re-syncs to the refetched value after an explicit reload (same trip_id -> same component instance reused) — a legacy decimal SERVER value displays as-is, unrounded', async () => {
         vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ trip_id: 10 })])
         vi.mocked(subformApi.fetchDetailLines).mockImplementation(async (_cc, gl) =>
           gl === TRAVEL_GL_BY_TYPE_SIDE.transport.COST ? [detailLine({ trip_id: 10, m02: 500, total_year: 500 })] : [],
@@ -1188,7 +1189,7 @@ describe('TripManager', () => {
 
         const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
         expect(input.value).toBe('500')
-        fireEvent.change(input, { target: { value: '250.75' } }) // uncommitted, never blurred
+        fireEvent.change(input, { target: { value: '5000' } }) // uncommitted, never blurred
 
         // Trigger a batch conflict via the trip header (days) so the card is
         // flagged — the manual field's own uncommitted draft is untouched by
@@ -1198,7 +1199,9 @@ describe('TripManager', () => {
         fireEvent.click(saveAllButton())
         await waitFor(() => expect(screen.getByTestId('trip-card-error-existing-10')).toBeInTheDocument())
 
-        // Server now reports a different m02 for the SAME trip_id.
+        // Server now reports a different m02 for the SAME trip_id — a legacy
+        // decimal value (grandfathered data). A mere re-display never
+        // re-rounds it; only a NEW user commit goes through roundPendingAmount.
         vi.mocked(subformApi.fetchDetailLines).mockImplementation(async (_cc, gl) =>
           gl === TRAVEL_GL_BY_TYPE_SIDE.transport.COST ? [detailLine({ trip_id: 10, m02: 999.25, total_year: 999.25 })] : [],
         )

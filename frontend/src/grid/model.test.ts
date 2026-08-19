@@ -32,6 +32,7 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
+  roundPendingAmount,
   sanitizeMonthInput,
   sapCoverageLabel,
   sapFreshnessLine,
@@ -182,16 +183,16 @@ describe('isDeletableRow — grid trailing "ลบ" column eligibility (jakkarit
 // re-implementing their own (broken) `Number(raw.replace(/[^0-9]/g,''))`
 // version — see subform/MonthAmountInput.tsx.
 describe('sanitizeMonthInput', () => {
-  it('keeps digits and a single decimal point', () => {
-    expect(sanitizeMonthInput('51000.50')).toBe('51000.50')
+  it('keeps digits only', () => {
+    expect(sanitizeMonthInput('51000')).toBe('51000')
   })
 
-  it('caps to at most 2 decimal places', () => {
-    expect(sanitizeMonthInput('100.567')).toBe('100.56')
+  it('strips a decimal point — no decimals allowed (2026-08-19, supersedes 7ba8f49)', () => {
+    expect(sanitizeMonthInput('51000.50')).toBe('5100050')
   })
 
-  it('keeps only the first decimal point when multiple dots are typed', () => {
-    expect(sanitizeMonthInput('1.2.3')).toBe('1.23')
+  it('strips every dot when multiple are typed (1.2.3 -> 123)', () => {
+    expect(sanitizeMonthInput('1.2.3')).toBe('123')
   })
 
   it('strips letters', () => {
@@ -202,12 +203,69 @@ describe('sanitizeMonthInput', () => {
     expect(sanitizeMonthInput('-50')).toBe('50')
   })
 
-  it('does not destroy a partially-typed decimal ("51000.") mid-typing', () => {
-    expect(sanitizeMonthInput('51000.')).toBe('51000.')
+  it('a lone "." sanitizes to an empty string (caller resolves it to 0 at commit time)', () => {
+    expect(sanitizeMonthInput('.')).toBe('')
   })
 
-  it('passes a lone "." through unchanged (caller resolves it to 0 at commit time)', () => {
-    expect(sanitizeMonthInput('.')).toBe('.')
+  it('does not round or clamp — that is the commit-time job of roundPendingAmount', () => {
+    expect(sanitizeMonthInput('123456789')).toBe('123456789')
+  })
+})
+
+describe('roundPendingAmount — jakkaritw 2026-08-19: round to nearest 100, half-up, capped at 100,000,000', () => {
+  it.each([
+    // [typed, expected] — half-up: <50 rounds down, >=50 rounds up (jakkaritw: "50 พอดี ปัดขึ้น")
+    [123, 100],
+    [138, 100],
+    [146, 100],
+    [149, 100],
+    [150, 200], // the named half-up boundary — must round UP, not down
+    [158, 200],
+    [179, 200],
+    [186, 200],
+  ])('%i -> %i', (typed, expected) => {
+    expect(roundPendingAmount(typed)).toBe(expected)
+  })
+
+  it.each([
+    [5, 0],
+    [30, 0],
+    [49, 0],
+    [50, 100], // the units/tens digits jakkaritw named as unreachable (5,6,7 / 10,20,30) land on 0 by design
+  ])('sub-100 value %i -> %i', (typed, expected) => {
+    expect(roundPendingAmount(typed)).toBe(expected)
+  })
+
+  it('0 stays 0', () => {
+    expect(roundPendingAmount(0)).toBe(0)
+  })
+
+  it('a round-hundred value is unchanged', () => {
+    expect(roundPendingAmount(1200)).toBe(1200)
+  })
+
+  it('proves rounding happens on commit, not per keystroke: 1234 -> 1200', () => {
+    expect(roundPendingAmount(1234)).toBe(1200)
+  })
+
+  it('accepts exactly the 100,000,000 cap', () => {
+    expect(roundPendingAmount(100_000_000)).toBe(100_000_000)
+  })
+
+  it('a value that rounds down to exactly the cap is accepted, not clamped (100,000,001 -> 100,000,000)', () => {
+    // 1 is < 50 of the next hundred, so half-up rounding alone lands this
+    // exactly on the cap — the clamp is never actually invoked for this
+    // specific value named in the task brief. See the next test for a case
+    // that genuinely exercises the clamp.
+    expect(roundPendingAmount(100_000_001)).toBe(100_000_000)
+  })
+
+  it('a value that rounds UP past the cap is clamped to 100,000,000 (100,000,060 -> 100,000,100 -> clamped)', () => {
+    expect(roundPendingAmount(100_000_060)).toBe(100_000_000)
+  })
+
+  it('a value far over the cap is still clamped, not rejected client-side', () => {
+    expect(roundPendingAmount(999_999_999)).toBe(100_000_000)
   })
 })
 

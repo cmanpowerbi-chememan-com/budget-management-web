@@ -230,15 +230,44 @@ describe('DetailSubform', () => {
     expect(onSaved).toHaveBeenCalled()
   })
 
-  // bug-subform-no-decimals (2026-08-19): the month input used to do
-  // Number(e.target.value.replace(/[^0-9]/g, '')) on every keystroke, which
-  // stripped the decimal point AND coerced immediately — "51000.50" became
-  // 5100050 mid-typing. Fixed via the shared `MonthAmountInput` (same
-  // draft-string-then-commit shape as grid/MonthCell.tsx).
-  describe('month amount input — decimal precision (bug-subform-no-decimals)', () => {
-    it('typing a decimal keeps the fraction and the SAVED payload carries it exactly', async () => {
+  // jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
+  // (half-up) and has no decimals — SUPERSEDES bug-subform-no-decimals
+  // (7ba8f49, shipped one day earlier), which had allowed a typed decimal
+  // through this same input. Rounding/no-decimals is applied via the
+  // shared `MonthAmountInput` (its own test file has the full round-to-100
+  // table); these tests prove it end-to-end through the real save payload.
+  describe('month amount input — round to nearest 100, no decimals (jakkaritw 2026-08-19)', () => {
+    it('a non-round typed value rounds on blur and the SAVED payload carries the rounded whole number', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
-      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(blankLine({ m01: 51000.5, total_year: 51000.5 }))
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(blankLine({ m01: 100, total_year: 100 }))
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '146' } })
+      expect(input.value).toBe('146') // unrounded while typing — rounding is commit-time only
+      fireEvent.blur(input)
+      expect(input.value).toBe('100')
+
+      fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].m01).toBe(100)
+    })
+
+    it('a typed decimal point never reaches the field — no decimals allowed', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
       render(
         <DetailSubform
           costCenter="CC1"
@@ -254,37 +283,10 @@ describe('DetailSubform', () => {
 
       const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
       fireEvent.change(input, { target: { value: '51000.50' } })
-      expect(input.value).toBe('51000.50')
-      fireEvent.blur(input)
-
-      fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
-      fireEvent.click(screen.getByTestId('save-all'))
-
-      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
-      expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].m01).toBe(51000.5)
+      expect(input.value).toBe('5100050')
     })
 
-    it('a partially typed decimal ("51000.") is not destroyed mid-typing', async () => {
-      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
-      render(
-        <DetailSubform
-          costCenter="CC1"
-          glAccount="5211900030"
-          glGroup="Entertainment"
-          glName={null}
-          fiscalYear={2027}
-          onClose={vi.fn()}
-          onSaved={vi.fn()}
-        />,
-      )
-      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
-
-      const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
-      fireEvent.change(input, { target: { value: '51000.' } })
-      expect(input.value).toBe('51000.')
-    })
-
-    it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 1.23)', async () => {
+    it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 123, digits only)', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
       render(
         <DetailSubform
@@ -301,12 +303,12 @@ describe('DetailSubform', () => {
 
       const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
       fireEvent.change(input, { target: { value: '1.2.3' } })
-      expect(input.value).toBe('1.23')
+      expect(input.value).toBe('123')
       fireEvent.change(input, { target: { value: '-45a6' } })
       expect(input.value).toBe('456')
     })
 
-    it('the draft re-syncs to the refetched value after a save conflict (same detail_id -> same component instance reused)', async () => {
+    it('the draft re-syncs to the refetched value after a save conflict (same detail_id -> same component instance reused) — a legacy decimal SERVER value displays as-is, unrounded', async () => {
       vi.mocked(subformApi.fetchDetailLines)
         .mockResolvedValueOnce([blankLine({ m01: 100, total_year: 100 })])
         .mockResolvedValueOnce([blankLine({ m01: 999.25, total_year: 999.25 })])
@@ -326,13 +328,16 @@ describe('DetailSubform', () => {
 
       const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
       expect(input.value).toBe('100')
-      fireEvent.change(input, { target: { value: '250.75' } }) // uncommitted, never blurred
-      expect(input.value).toBe('250.75')
+      fireEvent.change(input, { target: { value: '5000' } }) // uncommitted, never blurred
+      expect(input.value).toBe('5000')
 
       fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
+      // 999.25 is a legacy/already-stored server value (e.g. from before this
+      // rule, or an admin import) — a mere re-display never re-rounds it;
+      // only a NEW user commit goes through roundPendingAmount.
       await waitFor(() => expect(screen.getByLabelText('m01 existing-1')).toHaveValue('999.25'))
     })
   })

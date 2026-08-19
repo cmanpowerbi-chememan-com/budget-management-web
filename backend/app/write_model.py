@@ -166,6 +166,27 @@ class NegativeMonthError(ValueError):
     """A month amount was negative."""
 
 
+class MonthAmountNotRoundedError(ValueError):
+    """jakkaritw, 2026-08-19: a Pending month amount was not a whole
+    multiple of 100 (the app's round-to-nearest-100-half-up rule). Rejected
+    as a business rule the same way `NegativeMonthError` is, not silently
+    re-rounded like `_quantize_month`'s 2dp cleanup — this is a deliberate
+    policy about which amounts are valid at all, not incidental float noise.
+    Unreachable via the normal UI: the frontend rounds every Pending figure
+    on commit (`grid/model.ts:roundPendingAmount`), so this only fires for a
+    non-UI caller — defense-in-depth. Per-diem amounts never reach this
+    check (`_upsert_trip_detail_line` writes them via a separate path that
+    never calls this module's amount guards, ADR-0015)."""
+
+
+class MonthAmountOverCapError(ValueError):
+    """jakkaritw, 2026-08-19: a Pending month amount exceeded the
+    100,000,000 (100 ล้าน) per-cell cap. Same posture as
+    `MonthAmountNotRoundedError` — unreachable via the normal UI (the
+    frontend clamps to the cap on commit), defense-in-depth only, and never
+    applied to per-diem amounts."""
+
+
 class RowConflictError(RuntimeError):
     """Row-grain optimistic lock lost: stale `_updated_at`, or the row was
     created/deleted concurrently -> 409, no write performed."""
@@ -230,6 +251,8 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "not_special_gl": 400,
     "per_diem_direct_edit": 400,
     "negative_month": 400,
+    "amount_not_rounded": 400,
+    "amount_over_cap": 400,
     "trip_not_found": 400,
     "trip_side_mismatch": 400,
     "traveler_not_found": 400,
@@ -254,6 +277,8 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     NotSpecialGlError: "not_special_gl",
     PerDiemDirectEditError: "per_diem_direct_edit",
     NegativeMonthError: "negative_month",
+    MonthAmountNotRoundedError: "amount_not_rounded",
+    MonthAmountOverCapError: "amount_over_cap",
     TripNotFoundError: "trip_not_found",
     TripSideMismatchError: "trip_side_mismatch",
     TravelerNotFoundError: "traveler_not_found",
@@ -370,6 +395,30 @@ def _ensure_year_open_for_write(conn: pyodbc.Connection, fiscal_year: int, scope
 def _ensure_no_negative_months(months: list[Decimal]) -> None:
     if any(v < 0 for v in months):
         raise NegativeMonthError("month amounts must be >= 0")
+
+
+# jakkaritw, 2026-08-19: every Pending month must be a whole multiple of 100
+# THB and must not exceed 100,000,000 (100 ล้าน) per cell. Called from
+# `_save_one_pending_row`/`_save_one_detail_line` LAST — after scope, GL,
+# department-lock, and deadline gates — so a request that is ALSO wrong for
+# one of those more specific reasons still gets that more actionable
+# diagnostic first, and so a value the caller merely typed into an
+# otherwise-blocked cell never before that. Both checks operate on the
+# ALREADY-quantized (2dp) Decimal, never the raw float, matching
+# `_ensure_no_negative_months`. Per-diem amounts never reach either
+# function — see the docstrings on the two exceptions raised below.
+_PENDING_ROUND_TO_HUNDRED = Decimal("100")
+_PENDING_MAX_AMOUNT = Decimal("100000000")  # 100,000,000 / 100 ล้าน
+
+
+def _ensure_months_round_hundred(months: list[Decimal]) -> None:
+    if any(v % _PENDING_ROUND_TO_HUNDRED != 0 for v in months):
+        raise MonthAmountNotRoundedError("month amounts must be a whole multiple of 100")
+
+
+def _ensure_months_within_cap(months: list[Decimal]) -> None:
+    if any(v > _PENDING_MAX_AMOUNT for v in months):
+        raise MonthAmountOverCapError(f"month amounts must not exceed {_PENDING_MAX_AMOUNT}")
 
 
 def _lookup_gl_group(
@@ -621,6 +670,11 @@ def _save_one_pending_row(
 
     _ensure_department_not_locked(conn, row.cost_center, row.fiscal_year, scope, department=dims["department"])
     _ensure_year_open_for_write(conn, row.fiscal_year, scope)
+    # jakkaritw 2026-08-19: round-to-100 + cap, checked LAST (see the two
+    # helpers' docstring) — right before the write, after every more
+    # specific gate above has already had first refusal.
+    _ensure_months_round_hundred(months)
+    _ensure_months_within_cap(months)
 
     cursor = conn.cursor()
     try:
@@ -981,6 +1035,12 @@ def _save_one_detail_line(
 
     _ensure_department_not_locked(conn, line.cost_center, line.fiscal_year, scope, department=dims["department"])
     _ensure_year_open_for_write(conn, line.fiscal_year, scope)
+    # jakkaritw 2026-08-19: round-to-100 + cap, checked LAST — see the two
+    # helpers' docstring. Per-diem lines never reach this function at all
+    # (`PerDiemDirectEditError` above already refused them), so this can
+    # never re-round a server-derived per-diem amount.
+    _ensure_months_round_hundred(months)
+    _ensure_months_within_cap(months)
 
     cursor = conn.cursor()
     try:

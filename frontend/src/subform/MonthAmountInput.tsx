@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { sanitizeMonthInput } from '../grid/model'
+import { roundPendingAmount, sanitizeMonthInput } from '../grid/model'
 
 export interface MonthAmountInputProps {
   value: number
@@ -64,7 +64,16 @@ export function MonthAmountInput({ value, onCommit, ariaLabel, className, disabl
         // A bad partial input (e.g. a lone "." left after sanitizing) must
         // never reach onCommit as NaN — NaN !== value is always true, which
         // would fire an invalid commit regardless of the current value.
-        const parsed = draft === '' || Number.isNaN(n) ? 0 : n
+        const typed = draft === '' || Number.isNaN(n) ? 0 : n
+        // jakkaritw 2026-08-19: round to the nearest 100 (half-up) and clamp
+        // to the 100,000,000 cap ON COMMIT — same rule/placement as
+        // `grid/MonthCell.tsx`'s editable input (this component IS the
+        // shared implementation for the special-GL subform and Trip
+        // Manager's manual travel-line months; per-diem never reaches this
+        // component at all — it renders via a read-only `<span>`). The
+        // field always redraws to the CORRECTED number, no separate toast.
+        const parsed = roundPendingAmount(typed)
+        setDraft(String(parsed))
         if (parsed !== value) onCommit(parsed)
       }}
     />

@@ -24,9 +24,9 @@ describe('MonthCell', () => {
     const onCommit = vi.fn()
     render(<MonthCell value={500} editable={true} onCommit={onCommit} label="Jan pending" />)
     const input = screen.getByRole('textbox')
-    fireEvent.change(input, { target: { value: '750' } })
+    fireEvent.change(input, { target: { value: '700' } })
     fireEvent.blur(input)
-    expect(onCommit).toHaveBeenCalledWith(750)
+    expect(onCommit).toHaveBeenCalledWith(700)
   })
 
   it('does not call onCommit on blur when the value is unchanged', () => {
@@ -45,30 +45,20 @@ describe('MonthCell', () => {
     expect(input.value).toBe('123')
   })
 
-  it('preserves the decimal point when typing a fractional value (bug fix: was stripped to 1005)', () => {
+  it('strips a decimal point as the user types — no decimals allowed (2026-08-19, supersedes 7ba8f49)', () => {
     const onCommit = vi.fn()
     render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
     const input = screen.getByRole('textbox') as HTMLInputElement
     fireEvent.change(input, { target: { value: '100.5' } })
-    expect(input.value).toBe('100.5')
-    fireEvent.blur(input)
-    expect(onCommit).toHaveBeenCalledWith(100.5)
+    expect(input.value).toBe('1005')
   })
 
-  it('caps typed input to at most 2 decimal places', () => {
-    const onCommit = vi.fn()
-    render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
-    fireEvent.change(input, { target: { value: '100.567' } })
-    expect(input.value).toBe('100.56')
-  })
-
-  it('keeps only the first decimal point when multiple dots are typed', () => {
+  it('strips every dot when multiple are typed (1.2.3 -> 123, digits only)', () => {
     const onCommit = vi.fn()
     render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
     const input = screen.getByRole('textbox') as HTMLInputElement
     fireEvent.change(input, { target: { value: '1.2.3' } })
-    expect(input.value).toBe('1.23')
+    expect(input.value).toBe('123')
   })
 
   it('strips a leading minus sign — negatives are not allowed', () => {
@@ -79,11 +69,12 @@ describe('MonthCell', () => {
     expect(input.value).toBe('50')
   })
 
-  it('regression: a lone "." commits 0, never NaN (Number(".") is NaN, must not reach onCommit)', () => {
+  it('regression: a lone "." sanitizes to empty and commits 0, never NaN', () => {
     const onCommit = vi.fn()
     render(<MonthCell value={500} editable={true} onCommit={onCommit} label="Jan pending" />)
     const input = screen.getByRole('textbox') as HTMLInputElement
     fireEvent.change(input, { target: { value: '.' } })
+    expect(input.value).toBe('')
     fireEvent.blur(input)
     expect(onCommit).toHaveBeenCalledTimes(1)
     expect(onCommit).toHaveBeenCalledWith(0)
@@ -105,6 +96,76 @@ describe('MonthCell', () => {
     fireEvent.change(input, { target: { value: '999' } }) // user typed a stale edit, never committed
     rerender(<MonthCell value={777} editable={true} onCommit={vi.fn()} label="Jan pending" />)
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('777')
+  })
+
+  // jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
+  // (half-up) and is capped at 100,000,000 — applied on COMMIT (blur), never
+  // per keystroke, so the field visibly shows the corrected number.
+  describe('round-to-100 on commit (jakkaritw 2026-08-19)', () => {
+    it('rounds a typed value on blur and REDRAWS the field to the corrected number (146 -> 100)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '146' } })
+      expect(input.value).toBe('146') // unrounded while typing — proves rounding is not per keystroke
+      fireEvent.blur(input)
+      expect(input.value).toBe('100')
+      expect(onCommit).toHaveBeenCalledWith(100)
+    })
+
+    it('the named half-up boundary rounds UP, not down (150 -> 200)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '150' } })
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(200)
+    })
+
+    it('a sub-50 units/tens value lands on 0 by design (jakkaritw: 5,6,7 / 10,20,30 unreachable)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={500} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '30' } })
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(0)
+    })
+
+    it('proves rounding happens on commit, not per keystroke: typing 1234 stays reachable, then becomes 1200 on blur', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '1' } })
+      expect(input.value).toBe('1')
+      fireEvent.change(input, { target: { value: '12' } })
+      expect(input.value).toBe('12')
+      fireEvent.change(input, { target: { value: '123' } })
+      expect(input.value).toBe('123')
+      fireEvent.change(input, { target: { value: '1234' } })
+      expect(input.value).toBe('1234') // the 4th digit is still reachable — a per-keystroke round would have collapsed this to 100
+      fireEvent.blur(input)
+      expect(input.value).toBe('1200')
+      expect(onCommit).toHaveBeenCalledWith(1200)
+    })
+
+    it('accepts exactly the 100,000,000 cap', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '100000000' } })
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(100_000_000)
+    })
+
+    it('clamps a value that rounds past the cap to 100,000,000, shown in the field', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '100000060' } })
+      fireEvent.blur(input)
+      expect(input.value).toBe('100000000')
+      expect(onCommit).toHaveBeenCalledWith(100_000_000)
+    })
   })
 
   it('renders disabled with a tooltip when a special-GL row blocks direct edit', () => {

@@ -65,9 +65,9 @@ describe('GridTable', () => {
     const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })]
     render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={onCommitMonth} />)
     const input = screen.getByTestId('pending-input-CC1-5211800030-m01')
-    fireEvent.change(input, { target: { value: '750' } })
+    fireEvent.change(input, { target: { value: '700' } })
     fireEvent.blur(input)
-    expect(onCommitMonth).toHaveBeenCalledWith(rows[0], 'm01', 750)
+    expect(onCommitMonth).toHaveBeenCalledWith(rows[0], 'm01', 700)
   })
 
   it('does not render an input for a non-editable row (See-only scope)', () => {
@@ -805,9 +805,9 @@ describe('GridTable', () => {
       clickFirstCollapseButton()
 
       const input = screen.getByTestId('pending-input-CC1-5211800030-m01')
-      fireEvent.change(input, { target: { value: '750' } })
+      fireEvent.change(input, { target: { value: '700' } })
       fireEvent.blur(input)
-      expect(onCommitMonth).toHaveBeenCalledWith(rows[0], 'm01', 750)
+      expect(onCommitMonth).toHaveBeenCalledWith(rows[0], 'm01', 700)
     })
 
     it('a glGroup filter stays applied after collapsing (a filter on a now-hidden column is not cleared)', () => {

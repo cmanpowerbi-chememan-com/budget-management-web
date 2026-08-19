@@ -92,15 +92,15 @@ describe('BudgetGrid', () => {
     ])
     vi.mocked(budgetApi.saveRow).mockResolvedValue({
       cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
-      m01: 999, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-      total_year: 999, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+      m01: 900, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+      total_year: 900, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
       updated_at: '2026-01-02T00:00:00Z',
     })
 
     render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
     const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
-    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.change(input, { target: { value: '900' } })
     fireEvent.blur(input)
 
     await waitFor(() =>
@@ -109,7 +109,7 @@ describe('BudgetGrid', () => {
           cost_center: 'CC1',
           gl_account: '5211800030',
           fiscal_year: 2027,
-          m01: 999,
+          m01: 900,
           expected_updated_at: '2026-01-01T00:00:00Z',
         }),
       ),
@@ -165,14 +165,14 @@ describe('BudgetGrid', () => {
     render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
     const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
-    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.change(input, { target: { value: '900' } })
     fireEvent.blur(input)
 
     await waitFor(() => expect(screen.getByText(/หมดเวลาการเข้าใช้งาน/)).toBeInTheDocument())
     // Never refetches on this error kind (unlike 409) — the optimistic
     // value is simply left in place, not reconciled against the server.
     expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('999')
+    expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('900')
   })
 
   describe('grid trailing "ลบ" column — deleting a manually-added row', () => {
@@ -971,20 +971,20 @@ describe('BudgetGrid', () => {
     it('a month-cell edit still commits through the normal save path while fullscreen', async () => {
       vi.mocked(budgetApi.saveRow).mockResolvedValue({
         cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
-        m01: 999, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-        total_year: 999, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        m01: 900, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 900, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
         updated_at: '2026-01-02T00:00:00Z',
       })
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
       await enterFullscreen()
 
       const input = screen.getByTestId('pending-input-CC1-5211800030-m01')
-      fireEvent.change(input, { target: { value: '999' } })
+      fireEvent.change(input, { target: { value: '900' } })
       fireEvent.blur(input)
 
       await waitFor(() =>
         expect(budgetApi.saveRow).toHaveBeenCalledWith(
-          expect.objectContaining({ cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027, m01: 999 }),
+          expect.objectContaining({ cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027, m01: 900 }),
         ),
       )
     })

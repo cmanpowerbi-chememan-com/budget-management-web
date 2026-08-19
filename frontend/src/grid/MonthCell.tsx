@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatThb, sanitizeMonthInput } from './model'
+import { formatThb, roundPendingAmount, sanitizeMonthInput } from './model'
 
 export interface MonthCellProps {
   value: number
@@ -73,7 +73,14 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
         // A bad partial input (e.g. a lone "." left after sanitizing) must
         // never reach onCommit as NaN — NaN !== value is always true, which
         // would fire an invalid commit regardless of the current value.
-        const parsed = draft === '' || Number.isNaN(n) ? 0 : n
+        const typed = draft === '' || Number.isNaN(n) ? 0 : n
+        // jakkaritw 2026-08-19: round to the nearest 100 (half-up) and clamp
+        // to the 100,000,000 cap ON COMMIT, never per keystroke (typing 1234
+        // must stay reachable, not collapse to 100 after the 3rd digit). The
+        // field always redraws to the CORRECTED number — that is the user
+        // feedback for both the round and the clamp, no separate toast.
+        const parsed = roundPendingAmount(typed)
+        setDraft(String(parsed))
         if (parsed !== value) onCommit(parsed)
       }}
     />

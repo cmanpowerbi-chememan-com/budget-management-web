@@ -131,6 +131,112 @@ def test_negative_month_rejected_no_db_call():
     conn.cursor.assert_not_called()
 
 
+# ---------------------------------------------------------------------------
+# jakkaritw, 2026-08-19: every Pending month must round-trip as a whole
+# multiple of 100 (half-up on the CLIENT — the backend does not re-round, it
+# REJECTS anything that isn't already exact, same posture as
+# NegativeMonthError) and must not exceed the 100,000,000 cap. Checked LAST
+# in `_save_one_pending_row`/`_save_one_detail_line` (after scope/GL/
+# department-lock/deadline), so these fixtures mock through to that point —
+# unlike the negative-month check above, which runs before any DB call.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "amount",
+    [123, 138, 146, 149, 150, 158, 179, 186, 5, 30, 49, 1, 10, 20, 50, 999999],
+)
+def test_month_amount_not_a_multiple_of_100_rejected(amount):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=amount)], "filler@chememan.com", scope)
+    assert results[0].error == "amount_not_rounded", f"{amount} should be rejected, got {results[0].error}"
+    conn.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("amount", [0, 100, 200, 5000, 100_000_000])
+def test_month_amount_round_hundred_within_cap_accepted(amount):
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=amount)], "filler@chememan.com", scope)
+    assert results[0].ok is True, f"{amount} should be accepted, got error={results[0].error}"
+
+
+def test_month_amount_over_cap_rejected():
+    """A value that IS a clean multiple of 100 but still exceeds the
+    100,000,000 (100 ล้าน) cap — isolates the cap check from the
+    round-to-100 check (both apply to this same amount otherwise)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100_000_100)], "filler@chememan.com", scope)
+    assert results[0].error == "amount_over_cap"
+    conn.commit.assert_not_called()
+
+
+def test_detail_line_month_amount_not_rounded_rejected():
+    """Same rule, the detail-line path (special-GL subform saves)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
+    scope = _scope()
+    results = save_detail_lines(conn, [_detail(m01=138)], "filler@chememan.com", scope)
+    assert results[0].error == "amount_not_rounded"
+    conn.commit.assert_not_called()
+
+
+def test_detail_line_month_amount_over_cap_rejected():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("Entertainment", "Entertainment Expense"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
+    scope = _scope()
+    results = save_detail_lines(conn, [_detail(m01=100_000_100)], "filler@chememan.com", scope)
+    assert results[0].error == "amount_over_cap"
+    conn.commit.assert_not_called()
+
+
+def test_per_diem_write_with_non_round_hundred_amounts_is_never_rejected_by_the_round_to_100_guard():
+    """jakkaritw 2026-08-19: the round-to-100/cap rule is Pending-only.
+    Per-diem is server-derived and must NEVER be re-rounded or rejected by
+    it — `_upsert_trip_detail_line` (the per-diem write path) is a wholly
+    separate function that never calls `_ensure_months_round_hundred`/
+    `_ensure_months_within_cap` (those only run inside
+    `_save_one_pending_row`/`_save_one_detail_line`, and
+    `PerDiemDirectEditError` already refuses a per-diem GL on the detail-line
+    path). Proven end-to-end with the SAME non-round 3-way split
+    (3333.33/3333.33/3333.34 THB — none are multiples of 100) as
+    test_per_diem.py's test_last_selected_month_absorbs_the_rounding_remainder,
+    now carried all the way through save_trip."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Somchai", "Manager"),                 # traveler lookup
+        (None, 100, None),                        # per_diem_rate (asian=100)
+        (10,),                                     # FX lookup -> fx_rate=10
+        ("deptA", "divA", "clA"),                  # cc_dims lookup for department-lock check
+        None,                                      # department-lock check -> not locked
+        _OPEN_DEADLINE,                             # deadline check -> open
+        None,                                      # existing trip-detail lookup -> none, will INSERT
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),  # dims for the per-diem GL
+        (3333.33, 0, 0, 0, 3333.33, 0, 0, 0, 0, 0, 0, 3333.34),  # SUM(...) recompute
+    ]
+    cursor.fetchval.return_value = 77  # OUTPUT INSERTED.trip_id
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(days=10, country_group=2, travel_months=["01", "05", "12"])],
+        "filler@chememan.com", scope,
+    )
+    result = results[0]
+    assert result.ok is True, f"per-diem write must never be rejected by the round-to-100 guard, got error={result.error}"
+    assert result.trip.per_diem_months["m01"] == 3333.33
+    assert result.trip.per_diem_months["m05"] == 3333.33
+    assert result.trip.per_diem_months["m12"] == 3333.34
+
+
 def test_unknown_gl_account_rejected():
     conn = MagicMock()
     cursor = conn.cursor.return_value
@@ -281,7 +387,7 @@ def test_update_succeeds_when_lock_matches():
     cursor.fetchone.side_effect = [("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"), None, _OPEN_DEADLINE]
     cursor.rowcount = 1
     scope = _scope()
-    results = save_pending_rows(conn, [_row(m01=50, expected_updated_at=STALE)], "filler@chememan.com", scope)
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=STALE)], "filler@chememan.com", scope)
     assert results[0].ok is True
     conn.commit.assert_called_once()
     update_sql = cursor.execute.call_args_list[-1].args[0]
@@ -300,8 +406,8 @@ def test_two_rows_in_one_batch_succeed_and_fail_independently():
     ]
     cursor.rowcount = 0  # only consumed by row B's UPDATE (row A does a plain INSERT)
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
-    row_a = _row(cost_center="CC1", gl_account="GLA", m01=10, expected_updated_at=None)
-    row_b = _row(cost_center="CC2", gl_account="GLB", m01=20, expected_updated_at=STALE)
+    row_a = _row(cost_center="CC1", gl_account="GLA", m01=100, expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", m01=200, expected_updated_at=STALE)
     results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
     assert results[0].ok is True
     assert results[0].cost_center == "CC1"
@@ -372,7 +478,7 @@ def test_data_overflow_pyodbc_error_becomes_per_item_400_not_500_and_batch_conti
     ]
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
     row_a = _row(cost_center="CC1", gl_account="GLA", remark="ok", expected_updated_at=None)
-    row_b = _row(cost_center="CC2", gl_account="GLB", m01=10, expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", m01=100, expected_updated_at=None)
     results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
     assert results[0].ok is False
     assert results[0].error == "data_overflow"
@@ -517,7 +623,7 @@ def test_two_rows_different_fiscal_years_one_past_deadline_blocks_independently(
     ]
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
     row_a = _row(cost_center="CC1", gl_account="GLA", fiscal_year=2020, m01=10, expected_updated_at=None)
-    row_b = _row(cost_center="CC2", gl_account="GLB", fiscal_year=2028, m01=20, expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", fiscal_year=2028, m01=200, expected_updated_at=None)
     results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
     assert results[0].ok is False
     assert results[0].error == "past_deadline"
@@ -1756,7 +1862,7 @@ def test_two_pending_rows_one_department_locked_blocks_independently():
     ]
     scope = _scope(fill_cost_centers=["CC1", "CC2"], see_cost_centers=["CC1", "CC2"])
     row_a = _row(cost_center="CC1", gl_account="GLA", m01=10, expected_updated_at=None)
-    row_b = _row(cost_center="CC2", gl_account="GLB", m01=20, expected_updated_at=None)
+    row_b = _row(cost_center="CC2", gl_account="GLB", m01=200, expected_updated_at=None)
     results = save_pending_rows(conn, [row_a, row_b], "filler@chememan.com", scope)
     assert results[0].ok is False
     assert results[0].error == "department_locked"

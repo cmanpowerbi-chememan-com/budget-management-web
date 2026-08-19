@@ -139,23 +139,66 @@ export function clampColumnWidth(width: number): number {
  * here since our identity-column set is fixed, not dynamic. */
 export const COLUMN_WIDTHS_STORAGE_KEY = 'budgetGridColWidths'
 
-/** Sanitize free-typed month input: digits + at most one decimal point +
- * at most 2 decimal places. Letters and minus signs are dropped (no
- * negatives per business rule); extra dots beyond the first are dropped
- * rather than resetting the field, so "1.2.3" becomes "1.23" not "1.2".
+/** Sanitize free-typed month input: digits only. Letters, minus signs, and
+ * (since jakkaritw's 2026-08-19 "round to the nearest 100" rule) the
+ * decimal point itself are all dropped — a Pending amount is a whole baht
+ * value, never a fraction, so there is nothing a decimal point could ever
+ * mean here; the keystroke filter simply removes it rather than letting a
+ * user type one that visibly does nothing.
+ *
+ * This SUPERSEDES the 2dp-decimal support commit 7ba8f49 shipped one day
+ * earlier — today's rule reverses that specific allowance. Kept from that
+ * commit: the "one sanitizer, one shared draft-string-then-commit input"
+ * shape (`MonthCell` + the special-GL subforms'/Trip Manager's shared
+ * `MonthAmountInput`) and the mount-effect race fix in both components —
+ * neither is a decimal concern, both stay as-is.
+ *
+ * Only strips what can NEVER be valid. The 100-rounding and the
+ * 100,000,000 cap are business rules about the FINAL typed number, not
+ * about individual characters, so they belong in each input's onBlur
+ * commit path (`roundPendingAmount` below), never here — rounding on every
+ * keystroke would make a value like 1234 unreachable (it would collapse to
+ * 100 after the 3rd digit).
  *
  * The ONE sanitizer for every money input in the app (grid `MonthCell` +
- * the special-GL subforms' `MonthAmountInput`) — promoted here from
- * `MonthCell.tsx` (2026-08-19) so the subform inputs stop each
- * re-implementing their own broken `Number(raw.replace(/[^0-9]/g,''))`
- * version, which silently dropped the decimal point on every keystroke. */
+ * the special-GL subforms' and Trip Manager's shared `MonthAmountInput`). */
 export function sanitizeMonthInput(raw: string): string {
-  const digitsAndDot = raw.replace(/[^0-9.]/g, '')
-  const dotIndex = digitsAndDot.indexOf('.')
-  if (dotIndex === -1) return digitsAndDot
-  const intPart = digitsAndDot.slice(0, dotIndex)
-  const fracPart = digitsAndDot.slice(dotIndex + 1).replace(/\./g, '').slice(0, 2)
-  return `${intPart}.${fracPart}`
+  return raw.replace(/[^0-9]/g, '')
+}
+
+/** jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
+ * (half-up — 150 rounds UP to 200, "50 พอดี ปัดขึ้น") and is capped at
+ * 100,000,000 (100 ล้าน) per cell. */
+export const PENDING_AMOUNT_ROUND_TO = 100
+export const PENDING_AMOUNT_MAX = 100_000_000
+
+/** Rounds a Pending amount to the nearest 100, half-up, then clamps to the
+ * 100,000,000 cap. Called ONLY on commit (blur/save) by `MonthCell` and
+ * `MonthAmountInput` — never per keystroke (see `sanitizeMonthInput`
+ * above). The field re-displays the corrected number after this runs
+ * (e.g. 146 visibly becomes 100) — that IS the feedback; no separate
+ * toast/dialog for either the round or the cap clamp, matching how this
+ * app already prefers showing a corrected value over inventing a new UI
+ * surface (same reasoning `clampColumnWidth` uses for a dragged column
+ * width). A 400 for an out-of-rule amount is still enforced server-side
+ * (write_model.py) as defense-in-depth for a non-UI caller — see the
+ * backend report for that half of this rule.
+ *
+ * `Math.round(value / 100) * 100` is deliberately NOT used: at these
+ * magnitudes `value / 100` can land a hair off an exact `.5` in binary
+ * floating point (the classic `1.005` trap), and `Math.round` breaks ties
+ * DOWN on the negative side of that error, silently flipping a boundary
+ * case like 150 to 100 instead of 200. `Math.floor(value / 100 + 0.5)`
+ * both rounds half-up deterministically AND is immune to that trap here:
+ * every input is already a whole-baht integer (the sanitizer above forbids
+ * a decimal point), so `value / 100` carries at most 2 fractional digits —
+ * nowhere near the ~1e-13 relative error floating point could introduce at
+ * these magnitudes, which is many orders of magnitude smaller than the 0.5
+ * boundary width being tested. */
+export function roundPendingAmount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const roundedToHundred = Math.floor(value / PENDING_AMOUNT_ROUND_TO + 0.5) * PENDING_AMOUNT_ROUND_TO
+  return Math.min(roundedToHundred, PENDING_AMOUNT_MAX)
 }
 
 function isFiniteNumber(value: unknown): value is number {
