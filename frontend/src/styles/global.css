@@ -1735,6 +1735,13 @@ th.total-year-col {
   font-weight: 700;
   font-family: var(--mono);
 }
+/* The money figure is now wrapped in the shared `.month-value` pill (2026-08-20
+   fix — needed so a total's width is measurable, same as any data-row cell)
+   — its own base font-weight (500) is more specific than the inherited 700
+   above, so restore the bold here. */
+.subtotal-row .month-value {
+  font-weight: 700;
+}
 .row-message {
   font-size: 12px;
   padding: 6px 10px !important;

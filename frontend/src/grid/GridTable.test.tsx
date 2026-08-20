@@ -23,6 +23,14 @@ function getIdentityCols(table: HTMLTableElement): HTMLTableColElement[] {
   return ([...table.querySelectorAll('colgroup col')] as HTMLTableColElement[]).slice(0, 4)
 }
 
+function getTotalYearCol(table: HTMLTableElement): HTMLTableColElement {
+  return table.querySelector('colgroup col.total-year-col') as HTMLTableColElement
+}
+
+function getMonthCols(table: HTMLTableElement): HTMLTableColElement[] {
+  return [...table.querySelectorAll('colgroup col.m-col:not(.total-year-col)')] as HTMLTableColElement[]
+}
+
 describe('GridTable', () => {
   it('renders all 3 layers for a row (SAP/Approved/Pending)', () => {
     const rows = [
@@ -477,6 +485,68 @@ describe('GridTable', () => {
       const newRows = [makeRow({ cost_center: 'CC-DIFFERENT', gl_account: '5211800030', editable: true })]
       rerender(<GridTable rows={newRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       expect(getIdentityCols(getTable('side-section-COST'))[0].style.width).toBe(draggedWidth)
+    })
+  })
+
+  describe('money column width — total row never overflows into the next cell (bug fix 2026-08-20)', () => {
+    const bothSidesRows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }),
+      makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
+    ]
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('defaults month/total-year columns to the unchanged CSS floor (98px/112px) when nothing overflows', () => {
+      // jsdom never lays out real text (every measurement reads 0, same
+      // caveat the identity-column fit-to-content tests document above) —
+      // this pins the deterministic floor so a real browser's growth (proved
+      // in e2e/edge-states.spec.ts 4.7) is a pure ADDITION on top, never a
+      // silent regression to a smaller default.
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const table = getTable('side-section-COST')
+      expect(getTotalYearCol(table).style.width).toBe('112px')
+      getMonthCols(table).forEach((col) => expect(col.style.width).toBe('98px'))
+    })
+
+    it('the grand-total row now wraps its money text in a .month-value span, same as every data-row cell', () => {
+      render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const cost = screen.getByTestId('side-section-COST')
+      const grandSapRow = within(cost).getByText('รวมทั้งหมด · SAP · ใช้จริง').closest('tr') as HTMLElement
+      const yearCell = grandSapRow.querySelector('td.total-year-cell') as HTMLElement
+      // Before the fix this was a bare text node directly in the <td> — a
+      // subtotal figure was invisible to any content-aware measurement
+      // because there was no element to measure at all.
+      expect(yearCell.querySelector('span.month-value')).not.toBeNull()
+    })
+
+    it('a huge rendered total-year figure grows col.total-year-col beyond the 112px floor (stubbed real-browser geometry)', () => {
+      // Simulates what e2e/edge-states.spec.ts 4.7 proves against a real
+      // browser: stub every .month-value pill's natural width the way a
+      // real font would render it (proportional to its own text length),
+      // so a 12-digit total measures far wider than an ordinary figure.
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const width = this.classList?.contains('month-value') ? this.textContent!.length * 8 : 0
+        return { width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => undefined }
+      })
+      const rows = [
+        makeRow({
+          cost_center: 'CC1',
+          gl_account: '5211800030',
+          editable: true,
+          sap: sapLayer({ total_year: 121394056573.9, m01: 3601222.21 }),
+        }),
+      ]
+      render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+
+      const table = getTable('side-section-COST')
+      // "121,394,056,573.90" = 19 chars * 8px = 152px stubbed width; fitColumnWidth
+      // adds the 32px cell-padding allowance -> 184px, well past the 112px floor.
+      expect(parseInt(getTotalYearCol(table).style.width, 10)).toBeGreaterThan(112)
+      // Every month col shares ONE width (the widest candidate across the
+      // whole grid) — still floors correctly for the untouched columns.
+      getMonthCols(table).forEach((col) => expect(parseInt(col.style.width, 10)).toBeGreaterThanOrEqual(98))
     })
   })
 

@@ -301,6 +301,27 @@ export function fitColumnWidth(rawTextWidth: number): number {
   return clampColumnWidth(Math.ceil(rawTextWidth) + COLUMN_WIDTH_MEASURE_PADDING)
 }
 
+/** Money-column (12 months + รวมทั้งปี) floor widths — mirror
+ * `.data-table col.m-col`/`col.total-year-col` in global.css (98px/112px).
+ * `GridTable.tsx`'s money-column fit-to-content pass (`measureMoneyColumnWidths`)
+ * never shrinks a column below these, only grows one to fit an outsized
+ * total (2026-08-20 bug, jakkaritw: a grand-total figure like
+ * 121,394,056,573.90 painted straight over the next cell — these two
+ * columns were pure fixed CSS, the only ones in the grid never accounted
+ * for by any fit-to-content pass; see GridTable.tsx for the measurement).
+ * Kept as JS constants rather than read from a `<col>`'s computed style: a
+ * `<col>` element's own layout box is UA-inconsistent for
+ * `getComputedStyle`, so a live read would trade one hand-copied number for
+ * a new source of flakiness — the same tradeoff `DEFAULT_COLUMN_WIDTHS`
+ * already makes for the identity columns' pre-measurement placeholder. */
+export const MONTH_COLUMN_WIDTH_FLOOR = 98
+export const TOTAL_YEAR_COLUMN_WIDTH_FLOOR = 112
+
+export interface MoneyColumnWidths {
+  month: number
+  totalYear: number
+}
+
 /** Bounded set of "longest unique" candidate strings per identity column,
  * fed to the hidden DOM measurement pass (GridTable.tsx). A column's natural
  * fit width is driven by its LONGEST value, so measuring every row would be

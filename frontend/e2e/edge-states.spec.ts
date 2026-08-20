@@ -99,4 +99,50 @@ test.describe('edge states', () => {
     await expect(link).toBeVisible()
     await expect(link).toHaveAttribute('href', '/.auth/logout')
   })
+
+  test('4.7 a grand-total figure this large never overflows into the next cell (no clipping either) — jakkaritw 2026-08-20', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[
+        makeBudgetRow({
+          costCenter: CC,
+          glAccount: GL_OFFICE_COST,
+          // Real staging figures jakkaritw reported: a total_year this large
+          // ran straight into the small January figure beside it, no gap, no
+          // wrap — the "121,394,056,573.9" / "3,601,222.21" pair.
+          sap: { total_year: 121394056573.9, m01: 3601222.21 },
+        }),
+      ]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await expect(page.getByText('รวมทั้งหมด · SAP · ใช้จริง')).toBeVisible()
+
+    // Range-based geometry measurement, not a screenshot: the content's own
+    // painted extent inside each cell — works whether the figure is a bare
+    // text node or wrapped in a .month-value span — proves each cell's
+    // content stays inside its own box, i.e. never bleeds into its
+    // neighbour.
+    const overflow = await page.evaluate(() => {
+      const row = [...document.querySelectorAll('tr')].find((tr) =>
+        tr.textContent?.includes('รวมทั้งหมด · SAP · ใช้จริง'),
+      )
+      if (!row) throw new Error('grand-total SAP row not found')
+      const yearCell = row.querySelector('td.total-year-cell') as HTMLElement
+      const janCell = row.querySelector('td.month-cell:not(.total-year-cell)') as HTMLElement
+      const measure = (cell: HTMLElement) => {
+        const range = document.createRange()
+        range.selectNodeContents(cell)
+        const content = range.getBoundingClientRect()
+        const box = cell.getBoundingClientRect()
+        return { contentRight: content.right, cellRight: box.right, cellLeft: box.left }
+      }
+      return { year: measure(yearCell), jan: measure(janCell) }
+    })
+
+    // The huge total_year figure must stay inside its OWN cell...
+    expect(overflow.year.contentRight).toBeLessThanOrEqual(overflow.year.cellRight + 0.5)
+    // ...which means it can never have painted over Jan's cell either.
+    expect(overflow.year.contentRight).toBeLessThanOrEqual(overflow.jan.cellLeft + 0.5)
+  })
 })

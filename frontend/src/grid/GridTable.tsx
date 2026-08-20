@@ -33,6 +33,7 @@ import {
   isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
+  MONTH_COLUMN_WIDTH_FLOOR,
   MONTH_KEYS,
   MONTH_LABELS,
   nowMonthKey,
@@ -41,10 +42,12 @@ import {
   sectionTotals,
   selectMeasureCandidates,
   subtotalLabelColSpan,
+  TOTAL_YEAR_COLUMN_WIDTH_FLOOR,
   type ColumnFilters,
   type ColumnWidthKey,
   type ColumnWidths,
   type MonthKey,
+  type MoneyColumnWidths,
   type SapTotals,
 } from './model'
 
@@ -168,6 +171,38 @@ function measureColumnWidths(container: HTMLElement | null): ColumnWidths {
     gl: fitColumnWidth(maxWidth('gl')),
     glGroup: fitColumnWidth(maxWidth('glGroup')),
     remark: fitColumnWidth(maxWidth('remark')),
+  }
+}
+
+/** Reads the REAL rendered `.month-value` pills — data rows AND (via the
+ * `SubtotalRow` fix below) every subtotal/grand-total row, i.e. every money
+ * figure the grid ever paints — and returns the widest natural content
+ * width per money-column type, floored at today's CSS default so a page of
+ * ordinary-sized values never SHRINKS a column.
+ *
+ * Unlike `measureColumnWidths` above (identity columns, an off-screen
+ * hidden duplicate pass), this measures the ALREADY-VISIBLE cells directly:
+ * `table-layout: fixed` still lets an inline-block `.month-value` span
+ * render at its own natural width even when that exceeds its `<td>`'s
+ * fixed box (overflow is never `hidden` here — a budget figure must never
+ * be half-shown), so reading it straight back via `getBoundingClientRect`
+ * gives exactly the width needed to stop the overflow, with no parallel
+ * off-screen markup to keep in sync with whatever the real totals turn out
+ * to be. */
+function measureMoneyColumnWidths(container: HTMLElement | null): MoneyColumnWidths {
+  const floors: MoneyColumnWidths = { month: MONTH_COLUMN_WIDTH_FLOOR, totalYear: TOTAL_YEAR_COLUMN_WIDTH_FLOOR }
+  if (!container) return floors
+  const maxWidth = (selector: string): number => {
+    const nodes = container.querySelectorAll<HTMLElement>(selector)
+    let max = 0
+    nodes.forEach((node) => {
+      max = Math.max(max, node.getBoundingClientRect().width)
+    })
+    return max
+  }
+  return {
+    month: Math.max(MONTH_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.month-cell:not(.total-year-cell) .month-value'))),
+    totalYear: Math.max(TOTAL_YEAR_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.total-year-cell .month-value'))),
   }
 }
 
@@ -725,11 +760,18 @@ function SubtotalRow({
           {label}
         </td>
         <td className="month-cell total-year-cell">
-          {formatThb(amounts.total_year)}
+          {/* .month-value wrapper (2026-08-20 fix): matches every data-row
+             cell, gives the figure the same pill treatment, AND makes it
+             measurable by `measureMoneyColumnWidths` — an un-wrapped total
+             was invisible to any fit-to-content pass, so a grand total this
+             large painted straight over the next cell (bold restored via
+             `.subtotal-row .month-value` in global.css, since the span's
+             own base weight is lighter than this row's normal bold). */}
+          <span className="month-value">{formatThb(amounts.total_year)}</span>
         </td>
         {MONTH_KEYS.map((m) => (
           <td key={m} className={`month-cell${amounts[m] === null ? ' month-hidden' : ''}`}>
-            {formatSapMonth(amounts[m])}
+            <span className="month-value">{formatSapMonth(amounts[m])}</span>
           </td>
         ))}
         <td className="action-cell" />
@@ -921,6 +963,34 @@ export function GridTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, glRef])
 
+  // Money-column (12 months + รวมทั้งปี) widths — content-aware, like
+  // `colWidths` above, but deliberately its OWN separate piece of state:
+  // these 2 columns are never user-resizable (no drag handle, no
+  // localStorage override, no "Reset columns" concept), so there is nothing
+  // to protect from being re-measured on every data change. Read via
+  // `measureMoneyColumnWidths` off the REAL rendered `.grid-sides` subtree
+  // (both side-tables' data rows AND every subtotal/grand-total row) rather
+  // than the hidden off-screen measurer, since those cells are already
+  // live in the DOM by the time this runs.
+  const [moneyColWidths, setMoneyColWidths] = useState<MoneyColumnWidths>({
+    month: MONTH_COLUMN_WIDTH_FLOOR,
+    totalYear: TOTAL_YEAR_COLUMN_WIDTH_FLOOR,
+  })
+  const gridSidesRef = useRef<HTMLDivElement | null>(null)
+
+  useLayoutEffect(() => {
+    if (rows.length === 0) return
+    setMoneyColWidths(measureMoneyColumnWidths(gridSidesRef.current))
+    // Reacts to DATA changes only (rows/glRef drive every money figure the
+    // grid paints, body cells AND every subtotal/grand-total row) — a
+    // single measure-then-set-then-repaint cycle per change: growing a
+    // column's box never changes a `.month-value` span's OWN natural
+    // width, so a follow-up run of this same effect (if it re-fired) would
+    // compute the identical number and React bails out on the unchanged
+    // primitive, with no risk of a resize loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, glRef])
+
   // Which handle is CURRENTLY being dragged, purely for the accent-hairline
   // visual state (mockup `.col-resize.is-dragging::after`) — `null` when no
   // drag is active. Separate from `dragStateRef` below (that ref drives the
@@ -1081,7 +1151,7 @@ export function GridTable({
   return (
     <>
       <ColumnWidthMeasurer containerRef={measureContainerRef} candidates={measureCandidates} />
-      <div className="grid-sides">
+      <div className="grid-sides" ref={gridSidesRef}>
         {(['COST', 'SGA'] as const).map((side) => {
         if (sidesWithData[side].length === 0) return null
         const groups = sections[side]
@@ -1159,9 +1229,9 @@ export function GridTable({
                         <col className="status-col" />
                       </>
                     )}
-                    <col className="m-col total-year-col" />
+                    <col className="m-col total-year-col" style={{ width: moneyColWidths.totalYear }} />
                     {MONTH_KEYS.map((m) => (
-                      <col key={m} className="m-col" />
+                      <col key={m} className="m-col" style={{ width: moneyColWidths.month }} />
                     ))}
                     <col className="action-col" />
                   </colgroup>
