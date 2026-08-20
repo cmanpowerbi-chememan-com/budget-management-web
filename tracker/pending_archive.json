@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-18T23:27:21+0700",
+  "updated": "2026-08-20T20:58:45+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -675,6 +675,62 @@
       "created": "2026-07-19T14:49:51+0700",
       "updated": "2026-07-19T17:53:34+0700",
       "ai": "DONE + COMMITTED. Restyle TripManager to mockup (A/B/C legend, section A/B, uppercase labels, Per Diem read-only table row, GL-code col, ยอดรวม/ทริป col, รายละเอียด placeholder). TSX committed in 2b6b345 (folded with save-all). global.css (subform CSS) left UNCOMMITTED — shared w/ grid session per jakkaritw. gate APPROVE, financial never-cut held.",
+      "agent": "claude"
+    },
+    {
+      "id": "review-spoof-passakornh",
+      "state": "done",
+      "created": "2026-07-20T16:18:42+0700",
+      "updated": "2026-07-20T16:18:42+0700",
+      "ai": "vite.review.config.ts SPOOF_USER anurakb->passakornh@chememan.com for local staging review; dev-only uncommitted config, needs dev-server restart to apply",
+      "agent": "claude"
+    },
+    {
+      "id": "trip-delete-stale-editor",
+      "state": "done",
+      "created": "2026-07-21T11:37:52+0700",
+      "updated": "2026-07-21T11:37:52+0700",
+      "ai": "User reported budget_trip row 'not deleted'. Investigated: NOT a bug. Delete works. Backend+SQL editor both point at fabric_sql_database (GUID a42ef9f3, cman-dw-ws) — unique item across 4 workspaces. budget.budget_trip=0 rows now (COUNT, sys.partitions, GET /budget/trip all=0). Delete-completed fingerprint: pending_budget SGA travel GLs 6210400010/020/030/999 for CC 10IT012000 zeroed to 0.00 (by-design: parent kept+zeroed on trip delete). Root cause = STALE Fabric SQL editor result grid (user didn't re-Run SELECT after delete). No code change.",
+      "agent": "claude"
+    },
+    {
+      "id": "vite-bind-ipv4",
+      "state": "done",
+      "created": "2026-07-21T11:15:30+0700",
+      "updated": "2026-07-21T11:15:30+0700",
+      "ai": "Fix ERR_CONNECTION_REFUSED at 127.0.0.1:5173 — Vite v8 default 'localhost' bound IPv6 ::1 only on Windows. Added server.host='127.0.0.1' in frontend/vite.config.ts. Both 127.0.0.1 & localhost:5173 now 200. Uncommitted.",
+      "agent": "claude"
+    },
+    {
+      "id": "grid-delete-web-txn",
+      "state": "done",
+      "created": "2026-07-20T20:11:48+0700",
+      "updated": "2026-07-20T21:24:19+0700",
+      "ai": "DEPLOYED to staging + VERIFIED. Commit ab99edd. rev cman-budget-web-stg--0000007 (Running/active/traffic100, image budget-web:ab99edd). verify-deploy-landed: /health 200; /health?deep=1 {status:ok,db:ok} (Fabric SQL reachable); DELETE /budget/rows -> 401 (method exists; old image=405) => endpoint LIVE + auth enforced. Reconcile N/A (code-only deploy, no data/schema change). Delete functional on review 5173/5180 via vite spoof-proxy. Rollback: containerapp update --image budget-web:cc40d39 (rev 0000006). NOT pushed to origin (ab99edd local-only).",
+      "agent": "claude"
+    },
+    {
+      "id": "truncate-budget-txn-tables",
+      "state": "done",
+      "created": "2026-07-20T16:53:24+0700",
+      "updated": "2026-07-20T16:53:24+0700",
+      "ai": "TRUNCATE budget.pending_budget_detail(8->0)+pending_budget(6->0)+budget_trip(1->0) on fabric_sql_database-a42ef9f3 (consolidated DB, staging/SIT shared); no FK/no status col so no approved loss; SP cman-fabric-write had TRUNCATE perm; jakkaritw confirmed; clean slate for SIT",
+      "agent": "claude"
+    },
+    {
+      "id": "log-71f67e5",
+      "state": "done",
+      "created": "2026-07-21T20:56:36+0700",
+      "updated": "2026-07-21T20:56:36+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log compact-mode + kimi-batch push (be898d9) [commit 71f67e5]"
+    },
+    {
+      "id": "grid-collapse-columns",
+      "state": "done",
+      "created": "2026-07-21T20:08:11+0700",
+      "updated": "2026-07-21T20:56:34+0700",
+      "ai": "DONE + PUSHED be898d9. Compact-mode toggle (collapse btn on Status th -> CC+GL+12mo, expand on GL th, special up-btn to GL cell, no persistence) commit 1bd9236 with frz-5 status freeze + seam z-fix (group-head th.frz 17->22, headless 8/8). Backend orphan-parent delete e6f669b. Picker force-first-dept d835310 (jakkaritw confirmed supersede; memory updated). Front chores 009cb48, setup scripts + --yes guard 9741c09, plan/graphify ff965a6, merge be898d9. Gate APPROVE-WITH-SUGGESTIONS: FE 475/475, tsc clean, BE 672 pass. Leftover: parallel session's in-flight GridTable status-cell-content wrap left UNCOMMITTED (theirs); root package-lock stub deleted; e2e-tmp-border.mjs belongs to parallel session.",
       "agent": "claude"
     }
   ]

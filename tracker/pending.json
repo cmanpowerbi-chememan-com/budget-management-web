@@ -1,8 +1,77 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-19T16:30:44+0700",
+  "updated": "2026-08-20T21:25:19+0700",
   "tasks": [
+    {
+      "id": "log-36af1e0",
+      "state": "done",
+      "created": "2026-08-20T21:25:19+0700",
+      "updated": "2026-08-20T21:25:19+0700",
+      "agent": "autolog",
+      "ai": "fix(subform): require every enterable field before a special-GL row saves [commit 36af1e0]"
+    },
+    {
+      "id": "log-30841c3",
+      "state": "done",
+      "created": "2026-08-20T21:24:40+0700",
+      "updated": "2026-08-20T21:24:40+0700",
+      "agent": "autolog",
+      "ai": "fix(grid): size month and total columns to their rendered numbers [commit 30841c3]"
+    },
+    {
+      "id": "sit-workbook-pass13-tc013-images",
+      "state": "done",
+      "created": "2026-08-20T21:20:51+0700",
+      "updated": "2026-08-20T21:24:38+0700",
+      "ai": "PASS 13 UPLOADED + VERIFIED LIVE ON SHAREPOINT (2026-08-20T14:23:32Z, 314,244 bytes). First upload attempt hit HTTP 423 resourceLocked (file open in Excel); jakkaritw closed it, retry succeeded. Live read-back proves: TC-013 Remarks row16 purple FF7030A0 with the Infinity note (fixed by 52e60d8, live stg rev 0000054, asks for re-test) - Status/Actual Result left as Pornthip's; both evidence PNGs anchored on '2. Test Cases' at r51c11 (TC-048) + r56c11 (TC-053), sha256-matched to the local files; the 6 pictures belonging to someone else still on 'Note' untouched; docMetadata/LabelInfo.xml + 9 customXml parts PRESENT. Script (setup/fill_sit_test_case_gaps.py) permanently changed: RESULTS retired to _DELIVERED_RESULTS (pass 9-12 set no longer re-applied - it would refill cells a human CLEARED), _save_workbook/_preserve_sharepoint_parts now the only save path (splices customXml/* + sensitivity label back with fresh rel ids + Content_Types overrides), verify_binary_parts added (fails on any lost preserved part, any dropped picture by sha256, sheet-list change, or another sheet's picture count moving). Package independently validated: XML well-formed, 27 rel targets resolve, ids unique, all parts have content types, label byte-identical, 0 problems. NOT COMMITTED to git yet (frontend tree is another session's; only setup/fill_sit_test_case_gaps.py + the xlsx are mine). Leftover workbook housekeeping still open (raised, never ordered): Test Date missing on ~11 rows; 7 rows (002/009/010/028/029/030/052) keep a stale 'ยังต้องให้คน...' remark though marked Pass.",
+      "agent": "claude"
+    },
+    {
+      "id": "stg-revert-session-and-sit-impersonate",
+      "state": "done",
+      "created": "2026-08-20T20:58:45+0700",
+      "updated": "2026-08-20T20:58:45+0700",
+      "ai": "REVERTED ON STAGING 2026-08-20 per jakkaritw ('คืนค่า staging: อายุ session 20 นาที -> ค่าเดิม · ลบ SIT_IMPERSONATE'). (1) SESSION LIFETIME: the login.cookieExpiration block is GONE, so staging is back on the Container Apps platform default (~8h) exactly as it was before 2026-08-18 -- it never had a cookieExpiration, which is why the revert had to REMOVE the block, not set it to 8h. az containerapp auth update --set could not delete a node and 'az rest --method patch' returns 405 Method Not Allowed on authConfigs, so the working route was: GET the authConfig via az rest, strip properties.login.cookieExpiration in python, PUT the whole object back (api-version 2024-03-01). Verified after: login = {preserveUrlFragmentsForLogins:false} only; unauthenticatedClientAction still RedirectToLoginPage; platform.enabled still true; AAD clientId still 7035aa47-0398-4b71-8411-7fc372e82123 -> the login config was NOT damaged. (2) SIT_IMPERSONATE env var REMOVED via az containerapp update --remove-env-vars SIT_IMPERSONATE; it had held jakkaritw@chememan.com:pornthipp,laddawank,nipapornt,warapornt. Remaining env unchanged: APP_ENV=local, NOTIFICATIONS_DRY_RUN=false. That rolled a new revision cman-budget-web-stg--0000055 (image budget-web:52e60d8, same image as 0000054), waited for it: Running / Healthy / traffic 100; anonymous curl = 401 so Easy Auth still enforces. CONSEQUENCE FOR SIT: testers now get the ~8h session again (TC-005's 20-minute expiry check can no longer be exercised on staging without re-applying the setting), and the SIT impersonation alias is dead -- every tester is now strictly themselves, so any case that relied on jakkaritw impersonating pornthipp/laddawank/nipapornt/warapornt must be re-planned or run by those people directly. PRODUCTION untouched throughout (still image 77308d7, cookie 14:00:00, no SIT_IMPERSONATE)."
+    },
+    {
+      "id": "deploy-52e60d8-stg-verify",
+      "state": "done",
+      "created": "2026-08-20T20:51:29+0700",
+      "updated": "2026-08-20T20:51:29+0700",
+      "ai": "VERIFY-DEPLOY-LANDED ONLY - this session deployed NOTHING (jakkaritw asked to deploy stg for the TC-013 Infinity fix, then flagged that another session was already deploying; checked first, found it done, so no duplicate build/update was issued). Staging IS on 52e60d8: ACR run cm1h Succeeded image budget-web:52e60d8 (2026-08-20 12:45-12:47 UTC = 19:45-19:47 BKK), revision cman-budget-web-stg--0000054 active/traffic 100/image confirmed, created 12:47:48 UTC; prior rev was 0000053 (4f54681). git: origin/main == HEAD == 52e60d8, 0/0. Staging FQDN anonymous = 401 (Easy Auth enforcing), 25s cold start. Delta staging gained over 4f54681 = 4 commits: 7ba8f49 subform decimals, 4bae6e5 userbar manager sai-ngan, 68592a4 userbar chip cap, 52e60d8 pending amounts whole-hundreds + 100M cap (the TC-013 fix: roundPendingAmount returns 0 on !Number.isFinite and Math.min-caps at PENDING_AMOUNT_MAX, called onBlur by grid/MonthCell.tsx and subform/MonthAmountInput.tsx). NO deploy tracker entry was written by the deploying session as of this check - this entry stands in for it; if that session logs its own, keep both. WARNING FOR PARALLEL SESSIONS: the working tree is DIRTY with that session's newer, still-uncommitted work (frontend grid GridTable.tsx/model.ts/global.css + subform DetailSubform.tsx/model.ts + their tests + 2 e2e specs = tasks grid-total-cell-number-overlap 20:16 and subform-require-all-fields 20:34, both marked done but NOT committed). Do NOT build from the dirty main tree - use a clean detached worktree at an explicit sha (see reference_staging_deploy_recipe). PRODUCTION NOT TOUCHED. Open: human re-test of SIT TC-013 on staging (workbook row currently Status=Pass, Severity=None, remark 'exp infinity').",
+      "agent": "claude"
+    },
+    {
+      "id": "tc013-infinity-triage",
+      "state": "done",
+      "created": "2026-08-20T20:40:45+0700",
+      "updated": "2026-08-20T20:51:29+0700",
+      "ai": "[CROSS-SESSION UPDATE 52e60d8 2026-08-20 20:5x] STALE CORRECTED: the 'staging still runs 4f54681 / ACTION NEEDED: deploy stg' line below is WRONG. Another session ALREADY built and deployed 52e60d8 to staging at 2026-08-20 19:45-19:47 BKK, before this triage was written; the tracker simply had no deploy entry yet. Evidence: ACR task run cm1h Succeeded -> budget-web:52e60d8 (12:45-12:47 UTC); revision cman-budget-web-stg--0000054 active=True traffic=100 image cmanbudgetacr.azurecr.io/budget-web:52e60d8 created 12:47:48 UTC; origin/main == local HEAD == 52e60d8 (0 ahead/0 behind); backend/Dockerfile stage 1 builds frontend (npm run build:ci -> /fe/out -> ./static) so the clamp ships inside that image by construction; anonymous curl on the stg FQDN = 401 (Easy Auth ON, 25s cold start from ScaledToZero). So TC-013's Infinity fix IS LIVE on staging -> only a human re-test of TC-013 remains. NO duplicate deploy was run by this session. ORIGINAL ENTRY FOLLOWS: TRIAGE ONLY, no code change. Human tester (Pornthip) flagged TC-013: big number renders as Infinity glyph. Root cause: formatThb() has no finite guard, and pre-52e60d8 there was no commit-time clamp, so a >1e308 typed value reached the formatter. ALREADY FIXED IN GIT by 52e60d8 (2026-08-19) - roundPendingAmount() returns 0 on !Number.isFinite and Math.min-caps at PENDING_AMOUNT_MAX=100_000_000; both MonthCell.tsx and subform/MonthAmountInput.tsx call it onBlur. BUT staging still runs 4f54681 (last stg deploy 2026-08-19T00:05) - 4 commits behind (7ba8f49, 4bae6e5, 68592a4, 52e60d8), so the tester saw the pre-fix build. ACTION NEEDED: deploy stg (awaits jakkaritw approval) then re-test TC-013. Workbook row currently Status=Pass, Severity=None, Tester=Pornthip.",
+      "agent": "claude"
+    },
+    {
+      "id": "wipe-data-analytic-2027-clean-slate",
+      "state": "done",
+      "created": "2026-08-20T20:32:52+0700",
+      "updated": "2026-08-20T20:32:52+0700",
+      "ai": "[WIPED ON EXPLICIT INSTRUCTION 2026-08-20, option ข chosen by jakkaritw] Data & Analytic / FY2027 reset to a blank sheet so the team can start entering real figures. Deleted 18 pending_budget rows (total_year had reached 121,401,665,172.60 THB, dominated by one junk cell: GL 6211100110 m05 = 121,387,903,545.88), 18 pending_budget_detail lines, 2 budget_trip rows (trip 40 'Data Platform Phase 2' 5 days, trip 41 Papua New Guinea 88 days whose project field held the <script>alert(1)</script> XSS probe), plus one leftover approval_status row that a human re-created mid-cleanup (REJECTED, submitted 2026-08-20 12:54, rejected 12:55). SAFETY STEPS TAKEN: verified via dbo.cc_filler_map that both cost centers 10IT011300 / 10IT013000 belong to this department ONLY (script aborts if a CC is shared), and dumped every row to plan/sit/evidence/ai-round-20260818/wipe_backup_data_analytic_2027.json BEFORE deleting — full column-level JSON, so anything needed can be re-created. budget.approval_log audit trail KEPT (9 rows). NOTE FOR CONTEXT: after the wipe, budget.pending_budget holds 0 rows for FY2027 across ALL 114 departments — this test department was the only one with any FY2027 data, so the planning year is now genuinely empty and the filler round starts from zero. Also done this session: setup/_auth_cookie.tmp.txt deleted (both pasted cookies had already expired on their own). Entertainment blank-type bug confirmed FIXED and live on staging (3852f1b server-side treats '' as not-chosen, 4f54681 same for Lease, frontend now requires every enterable field; stg runs image 4f54681). Staging env revert (20-minute cookie + SIT_IMPERSONATE) is being handled by another session — deliberately not touched here.",
+      "agent": "claude"
+    },
+    {
+      "id": "subform-require-all-fields",
+      "state": "done",
+      "created": "2026-08-20T20:20:29+0700",
+      "updated": "2026-08-20T20:34:19+0700",
+      "ai": "Root cause: DetailFieldSpec.required was opt-in and only 2 of ~9 enterable fields across the 5 non-travel groups used it (Entertainment ประเภทการรับรอง, Lease สถานที่ใช้งาน); plain text fields (รายละเอียด/กิจกรรม/Project/หลักสูตรอบรม) and Training's Method select had zero guard -> saveable blank, matching jakkaritw's 2 staging screenshots (GL 5211200030 machinery: ประเภทรถ+กิจกรรม blank saved; TC060 GL 6211200060: กิจกรรม blank saved). Fix (subform/model.ts): removed DetailFieldSpec.required entirely (audit of detailFieldsFor found 0 fields need to opt out -- every enterable field is required by default now); added isFieldEnterable(field)=kind!=='locked' (the ONE predicate) + firstIncompleteField(fields,meta) (the ONE guard, replaces firstBlankFreeTextField+firstUnselectedRequiredField, both removed) returning the offending FIELD so caller picks Thai verb by kind. DetailSubform.tsx saveAll: 2 messages only -- select->กรุณาเลือก, text->กรุณากรอก; folded the old 3rd message กรุณาพิมพ์ (free-text-trigger-blank) into กรุณาเลือก since it IS still an incomplete select (disclosed simplification, matches task's explicit 2-verb design). No new network call when blocked (same status='error' per-row path, no toast/dialog). Trip Manager manual lines (transport/accommodation/other) have NO meta fields at all (ManualLineDraft=detail_id+months only) -- rule N/A there; trip header fields already fully required via pre-existing validateTripDraft. Backend untouched (server tolerates blank per 3852f1b/4f54681 by design, not reversed) -- recommend server-side enforcement as a future follow-up, not implemented here. RED-GREEN: 6 new DetailSubform.test.tsx cases reproducing jakkaritw's exact screenshots, confirmed 5/6 failed pre-fix, all pass post-fix. Updated 12 pre-existing tests that saved while leaving a newly-required field blank (fill it in) + model.test.ts's required/.firstBlankFreeTextField/firstUnselectedRequiredField assertions rewritten around isFieldEnterable/firstIncompleteField. subform suite 175/175 (was fewer before +new tests). Files: frontend/src/subform/model.ts, DetailSubform.tsx, model.test.ts, DetailSubform.test.tsx. Not committed per instructions."
+    },
+    {
+      "id": "grid-total-cell-number-overlap",
+      "state": "done",
+      "created": "2026-08-20T20:05:10+0700",
+      "updated": "2026-08-20T20:16:10+0700",
+      "ai": "Root cause: table-layout:fixed col.m-col(98px)/col.total-year-col(112px) were pure fixed CSS never accounting for content, AND SubtotalRow rendered raw text (no .month-value span) so totals were invisible to any fit-to-content pass -> a 12-digit grand total painted over the next cell. Fix: SubtotalRow wraps values in span.month-value (font-weight:700 restored via .subtotal-row .month-value CSS rule since span's own 500 would otherwise win); new measureMoneyColumnWidths(GridTable.tsx) reads REAL rendered .month-value getBoundingClientRect (not a hidden duplicate measurer) across data+subtotal+grand-total rows, floored at MONTH_COLUMN_WIDTH_FLOOR=98/TOTAL_YEAR_COLUMN_WIDTH_FLOOR=112 (model.ts), applied via inline style on <col> (separate state moneyColWidths, NOT part of ColumnWidths/drag/localStorage -- month cols stay non-resizable by design). No number-format change (kept 2-decimal formatThb per jakkaritw 2026-08-10 decision, noted not changed). No new color (contrast-baseline.json untouched). RED-GREEN: e2e/edge-states.spec.ts 4.7 (Range-based real-browser geometry, jakkaritw's exact 121,394,056,573.9/3,601,222.21 figures) failed pre-fix (759.7 > 738.5, ~21px bleed) then passed post-fix. Added 3 vitest cases (GridTable.test.tsx, stubbed getBoundingClientRect) as fast permanent regression coverage alongside the e2e proof. vitest 721->724 (all new, 0 regressions, 2 consecutive full runs both 724). next build clean. Files: frontend/src/grid/model.ts (+MONTH_COLUMN_WIDTH_FLOOR/TOTAL_YEAR_COLUMN_WIDTH_FLOOR/MoneyColumnWidths), frontend/src/grid/GridTable.tsx (measureMoneyColumnWidths, moneyColWidths state+effect, colgroup inline widths, SubtotalRow span wrap), frontend/src/styles/global.css (+.subtotal-row .month-value bold rule), frontend/e2e/edge-states.spec.ts (+4.7), frontend/src/grid/GridTable.test.tsx (+3 tests, +getTotalYearCol/getMonthCols helpers). Not committed per instructions."
+    },
     {
       "id": "sit-round-closed-2026-08-19",
       "state": "done",
@@ -19,27 +88,11 @@
       "ai": "Implemented jakkaritw 08-19 rule: Pending amounts round to nearest 100 half-up, no decimals, cap 100,000,000; per-diem exempt. Frontend: sanitizeMonthInput now digit-only (grid/model.ts), new roundPendingAmount() applied on commit (onBlur) in MonthCell.tsx + MonthAmountInput.tsx (shared by DetailSubform+TripManager manual lines); kept 7ba8f49's race-guard (lastSyncedValue) + shared component untouched. Over-cap: frontend clamps silently (no new toast, field shows corrected number, same as round-to-100); backend REJECTS (amount_not_rounded/amount_over_cap, 400) as defense-in-depth, checked LAST in _save_one_pending_row/_save_one_detail_line (after scope/GL/dept-lock/deadline gates) so per-diem (_upsert_trip_detail_line, separate path, PerDiemDirectEditError already blocks GL) and existing incidental non-round test fixtures elsewhere in the pipeline are unaffected. vitest 695->721 (stable x2), next build clean, playwright 36/36 (one unrelated flaky contrast fail on first run, clean on rerun), backend 1072->1097. Fixed 6 pre-existing test fixtures using incidental non-round amounts (test_write_model.py) + 5 GridTable/BudgetGrid vitest fixtures using 750/999 that crossed the new rounding boundary. No prod code changes needed in DetailSubform.tsx/TripManager.tsx (rounding lives entirely in shared MonthAmountInput). git diff: 12 files, +509/-125."
     },
     {
-      "id": "log-68592a4",
-      "state": "done",
-      "created": "2026-08-19T15:25:26+0700",
-      "updated": "2026-08-19T15:25:26+0700",
-      "agent": "autolog",
-      "ai": "feat(userbar): cap the scope chips at three names plus a +N tail [commit 68592a4]"
-    },
-    {
       "id": "userbar-chip-truncate",
       "state": "done",
       "created": "2026-08-19T15:10:44+0700",
       "updated": "2026-08-19T15:21:21+0700",
       "ai": "Added truncateChipNames(names, unit) in frontend/src/userbar/model.ts, wired into both สายงาน and ฝ่าย chips in UserBar.tsx. TDD: 7 tests RED (TypeError: not a function / all-45-chips-rendered) before impl, GREEN after. vitest 695/695 x2 stable (688+7). next build clean (tsc passed). playwright 36/36 incl contrast ratchet. Only userbar/{model,UserBar}.{ts,tsx,test.ts,test.tsx} touched, styles/contrast-baseline untouched. Not committed (per instructions)."
-    },
-    {
-      "id": "log-4bae6e5",
-      "state": "done",
-      "created": "2026-08-19T14:56:49+0700",
-      "updated": "2026-08-19T14:56:49+0700",
-      "agent": "autolog",
-      "ai": "fix(userbar): show a manager their own สายงาน instead of ไม่ระบุสายงาน [commit 4bae6e5]"
     },
     {
       "id": "mgr-see-rule-company-audit",
@@ -238,8 +291,8 @@
       "id": "sit-tc040-041-055-fix",
       "state": "doing",
       "created": "2026-08-17T12:53:25+0700",
-      "updated": "2026-08-18T10:06:42+0700",
-      "ai": "Pass 11 uploaded+verified live (114 cells). Pass 12 attempt (TC-001, TC-004) hit 2 real blockers, both correctly caught by the guard, not silently overwritten: (1) TC-001's Actual Result/Status were ALREADY human-filled ('sign in ด้วย email chememan...'/'Pass') before any of my passes - guard protected both, but I DID add the new Remarks note (cell was blank) = 1 purple cell written; flagging since the premise (nobody tested this yet) doesn't match reality (human already passed it independently). (2) TC-004's Actual Result ('No log out button' - human, matches the AI's own finding independently) AND Remarks ('edit program' - human) were BOTH already filled - guard blocked the new Remarks note entirely, TC-004 got ZERO writes this pass; coordinator's ask for TC-004 not fulfilled, needs a decision (cannot overwrite human content without explicit override instruction). Verified TC-041/042 untouched, both images anchors unchanged (row51/col10, row56/col10), max_row 64. Total purple cells THIS pass = 1 (not the ~3 expected). HOLDING - did NOT run --upload, reporting blockers instead of guessing.",
+      "updated": "2026-08-20T20:33:46+0700",
+      "ai": "STOPPED per coordinator's own explicit instruction ('if the cell reports already filled, stop and tell me what it contains'). TC-039 Status is ALREADY 'Pass' (purple FF7030A0, matches AI's own historical write convention) - not blank as coordinator believed - zero write needed/performed. MAJOR DISCOVERY while verifying: the live workbook has diverged heavily from what was last confirmed live (pass 11): (1) TC-048/TC-053 evidence images are GONE from '2. Test Cases' - ws._images count = 0, contradicting coordinator's 'verified live... both images' claims for passes 10/11; (2) a NEW 4th sheet 'Note' was added, now holds all 6 images in the workbook (3+ human-added, unrelated anchors/content) - confirmed via raw zip + workbook.xml inspection, not an openpyxl parsing bug; (3) a NEW 'PIC' column was inserted into '2. Test Cases' at col4 (shifted all columns after it) - script's header-name resolution handled this correctly, no functional risk, but flagging the structural change; (4) extensive real human SIT execution has overwritten dozens of the AI's 'Pass by AI' placeholders with genuine human-written results across TC-006 through TC-061, including at least one real bug flagged (TC-013: large numbers display as infinity) and other genuine findings - this is NOT something I did, discovered via the guard's own skip-log. TC-041/042 confirmed still fully untouched. max_row still 64. Did NOT upload, did NOT attempt to fix/restore images or touch anything else - reporting all findings for jakkaritw's decision.",
       "agent": "claude"
     },
     {
@@ -2439,54 +2492,6 @@
       "created": "2026-07-22T03:04:48+0700",
       "updated": "2026-07-22T05:32:46+0700",
       "ai": "Ran docs/test/ui-test-plan.md end-to-end against 127.0.0.1:5180. KEY: 5180 = vite.review.config.ts -> proxies to STAGING container + injects spoof header suchanyay (NOT local :8000). Result 103 plan items: 98 PASS / 2 FAIL / 3 SKIP. FAIL 10.4 = GL_EDIT_BY_ENABLED off on staging (12 edit_by=admin GLs visible to filler; local backend correct). FAIL 12.3 = e2e 20/23 (2 stale selectors /ปีงบประมาณ/ vs new YearPicker aria-label; 1 real drift: role=none still fires 1 /scope/departments). SKIP 9.1/9.3/11.8 = no SharePoint upload (irreversible, needs jakkaritw ok). 12.1 vitest 475 pass, 12.2 pytest 672 pass, 12.4 build clean. FINDINGS: approver2/3 (Nipaporn/Waraporn) cannot reach Solution Delivery in UI (CC not in See scope) - steps 2/3 only via API; vite.review overwrites identity header so multi-persona UI testing needs a 2nd dev server; StrictMode double-load wipes subform drafts in dev; /budget/detail does not expose is_auto_calc. Test data on 10IT012000/FY2027 fully cleaned (0 rows in pending_budget/detail/trip/approval_status+log). Results: docs/test/ui-test-results-2026-07-22.md + .jsonl. Harness in scratchpad uitest/.",
-      "agent": "claude"
-    },
-    {
-      "id": "log-71f67e5",
-      "state": "done",
-      "created": "2026-07-21T20:56:36+0700",
-      "updated": "2026-07-21T20:56:36+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): log compact-mode + kimi-batch push (be898d9) [commit 71f67e5]"
-    },
-    {
-      "id": "grid-collapse-columns",
-      "state": "done",
-      "created": "2026-07-21T20:08:11+0700",
-      "updated": "2026-07-21T20:56:34+0700",
-      "ai": "DONE + PUSHED be898d9. Compact-mode toggle (collapse btn on Status th -> CC+GL+12mo, expand on GL th, special up-btn to GL cell, no persistence) commit 1bd9236 with frz-5 status freeze + seam z-fix (group-head th.frz 17->22, headless 8/8). Backend orphan-parent delete e6f669b. Picker force-first-dept d835310 (jakkaritw confirmed supersede; memory updated). Front chores 009cb48, setup scripts + --yes guard 9741c09, plan/graphify ff965a6, merge be898d9. Gate APPROVE-WITH-SUGGESTIONS: FE 475/475, tsc clean, BE 672 pass. Leftover: parallel session's in-flight GridTable status-cell-content wrap left UNCOMMITTED (theirs); root package-lock stub deleted; e2e-tmp-border.mjs belongs to parallel session.",
-      "agent": "claude"
-    },
-    {
-      "id": "trip-delete-stale-editor",
-      "state": "done",
-      "created": "2026-07-21T11:37:52+0700",
-      "updated": "2026-07-21T11:37:52+0700",
-      "ai": "User reported budget_trip row 'not deleted'. Investigated: NOT a bug. Delete works. Backend+SQL editor both point at fabric_sql_database (GUID a42ef9f3, cman-dw-ws) — unique item across 4 workspaces. budget.budget_trip=0 rows now (COUNT, sys.partitions, GET /budget/trip all=0). Delete-completed fingerprint: pending_budget SGA travel GLs 6210400010/020/030/999 for CC 10IT012000 zeroed to 0.00 (by-design: parent kept+zeroed on trip delete). Root cause = STALE Fabric SQL editor result grid (user didn't re-Run SELECT after delete). No code change.",
-      "agent": "claude"
-    },
-    {
-      "id": "vite-bind-ipv4",
-      "state": "done",
-      "created": "2026-07-21T11:15:30+0700",
-      "updated": "2026-07-21T11:15:30+0700",
-      "ai": "Fix ERR_CONNECTION_REFUSED at 127.0.0.1:5173 — Vite v8 default 'localhost' bound IPv6 ::1 only on Windows. Added server.host='127.0.0.1' in frontend/vite.config.ts. Both 127.0.0.1 & localhost:5173 now 200. Uncommitted.",
-      "agent": "claude"
-    },
-    {
-      "id": "grid-delete-web-txn",
-      "state": "done",
-      "created": "2026-07-20T20:11:48+0700",
-      "updated": "2026-07-20T21:24:19+0700",
-      "ai": "DEPLOYED to staging + VERIFIED. Commit ab99edd. rev cman-budget-web-stg--0000007 (Running/active/traffic100, image budget-web:ab99edd). verify-deploy-landed: /health 200; /health?deep=1 {status:ok,db:ok} (Fabric SQL reachable); DELETE /budget/rows -> 401 (method exists; old image=405) => endpoint LIVE + auth enforced. Reconcile N/A (code-only deploy, no data/schema change). Delete functional on review 5173/5180 via vite spoof-proxy. Rollback: containerapp update --image budget-web:cc40d39 (rev 0000006). NOT pushed to origin (ab99edd local-only).",
-      "agent": "claude"
-    },
-    {
-      "id": "truncate-budget-txn-tables",
-      "state": "done",
-      "created": "2026-07-20T16:53:24+0700",
-      "updated": "2026-07-20T16:53:24+0700",
-      "ai": "TRUNCATE budget.pending_budget_detail(8->0)+pending_budget(6->0)+budget_trip(1->0) on fabric_sql_database-a42ef9f3 (consolidated DB, staging/SIT shared); no FK/no status col so no approved loss; SP cman-fabric-write had TRUNCATE perm; jakkaritw confirmed; clean slate for SIT",
       "agent": "claude"
     },
     {
