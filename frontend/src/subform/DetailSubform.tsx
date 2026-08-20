@@ -12,8 +12,7 @@ import {
   draftFromServerLine,
   fieldFreeText,
   fieldSelectValue,
-  firstBlankFreeTextField,
-  firstUnselectedRequiredField,
+  firstIncompleteField,
   type DetailLineDraft,
 } from './model'
 
@@ -141,22 +140,14 @@ export function DetailSubform({
     try {
       for (let i = 0; i < snapshot.length; i++) {
         const row = snapshot[i]
-        // A free-text trigger option ('อื่นๆ') with nothing typed must never
-        // be sent — the API expects the actual plate, not the trigger literal.
-        const blankFreeText = firstBlankFreeTextField(fields, row.draft.meta)
-        if (blankFreeText) {
+        // Every ENTERABLE field must be filled/chosen before a row can save
+        // (jakkaritw 2026-08-20) — a `locked` field is never checked, so
+        // this can never block on something the user has no way to fill.
+        const incomplete = firstIncompleteField(fields, row.draft.meta)
+        if (incomplete) {
           anyError = true
-          nextRows[i] = { ...row, status: 'error', errorText: `กรุณาพิมพ์${blankFreeText}` }
-          continue
-        }
-        // A required dropdown (e.g. Entertainment's ประเภทการรับรอง) left on
-        // the blank placeholder must never reach the API — a doomed save
-        // used to sail past here and 400 on the server (bug-entertainment-
-        // blank-type-400). Same guard shape/Thai voice as the free-text check.
-        const blankRequired = firstUnselectedRequiredField(fields, row.draft.meta)
-        if (blankRequired) {
-          anyError = true
-          nextRows[i] = { ...row, status: 'error', errorText: `กรุณาเลือก${blankRequired}` }
+          const message = incomplete.kind === 'select' ? `กรุณาเลือก${incomplete.key}` : `กรุณากรอก${incomplete.key}`
+          nextRows[i] = { ...row, status: 'error', errorText: message }
           continue
         }
         try {

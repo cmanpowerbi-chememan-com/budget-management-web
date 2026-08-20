@@ -19,9 +19,9 @@ import {
   draftFromTripListItem,
   fieldFreeText,
   fieldSelectValue,
-  firstBlankFreeTextField,
-  firstUnselectedRequiredField,
+  firstIncompleteField,
   indexDetailLinesByTrip,
+  isFieldEnterable,
   isTripMonthActive,
   manualLineDraftFromServerLine,
   manualLineTotal,
@@ -73,24 +73,22 @@ describe('detailFieldsFor', () => {
     expect(fields.find((f) => f.key === 'กิจกรรม')?.kind).toBe('text')
   })
 
-  describe('Lease & Rental สถานที่ใช้งาน — required, ประเภทรถ is not (bug-lease-blank-dropdown-400)', () => {
-    it('marks สถานที่ใช้งาน as required for every sub-category — vehicle, machinery, and non-vehicle', () => {
+  describe('Lease & Rental — สถานที่ใช้งาน is enterable (required) everywhere; ประเภทรถ/ทะเบียนรถ are locked (never required) for their non-applicable suffixes (bug-lease-blank-dropdown-400, extended 2026-08-20)', () => {
+    it('สถานที่ใช้งาน is enterable for every sub-category — vehicle, machinery, and non-vehicle', () => {
       for (const gl of ['6211200060', '6211200030', '6211200020']) {
         const fields = detailFieldsFor('Lease & Rental', gl)
-        expect(fields.find((f) => f.key === 'สถานที่ใช้งาน')?.required).toBe(true)
+        expect(isFieldEnterable(fields.find((f) => f.key === 'สถานที่ใช้งาน')!)).toBe(true)
       }
     })
 
-    it('does NOT mark ประเภทรถ as required, even when it is an enterable select (vehicle/machinery)', () => {
-      // สถานที่ใช้งาน applies to every sub-category and is the row's one
-      // universal classification field (parity with Entertainment's single
-      // required dropdown); ประเภทรถ is a refinement the backend explicitly
-      // allows blank (test_lease_meta_with_no_values_yet_is_valid_all_none) —
-      // marking it required would also be undemandable for the 5 suffixes
-      // where it renders `locked`, so it stays optional everywhere.
-      expect(detailFieldsFor('Lease & Rental', '6211200060').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
-      expect(detailFieldsFor('Lease & Rental', '6211200030').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
-      expect(detailFieldsFor('Lease & Rental', '6211200020').find((f) => f.key === 'ประเภทรถ')?.required).toBeFalsy()
+    it('ประเภทรถ is enterable (hence required) only where it is NOT locked — vehicle and machinery, not non-vehicle', () => {
+      // 2026-08-20: every ENTERABLE field is required now (jakkaritw) — the
+      // ONLY thing that can still exempt a field is `kind: 'locked'`, which
+      // `detailFieldsFor` already assigns per-suffix. `isFieldEnterable` is
+      // the single source of truth for "must this be filled".
+      expect(isFieldEnterable(detailFieldsFor('Lease & Rental', '6211200060').find((f) => f.key === 'ประเภทรถ')!)).toBe(true)
+      expect(isFieldEnterable(detailFieldsFor('Lease & Rental', '6211200030').find((f) => f.key === 'ประเภทรถ')!)).toBe(true)
+      expect(isFieldEnterable(detailFieldsFor('Lease & Rental', '6211200020').find((f) => f.key === 'ประเภทรถ')!)).toBe(false)
     })
   })
 
@@ -148,44 +146,57 @@ describe('free-text plate helpers (ทะเบียนรถ อื่นๆ)'
     expect(fieldSelectValue(plainSpec, null)).toBe('')
   })
 
-  it('firstBlankFreeTextField blocks the bare อื่นๆ (nothing typed) and passes a typed plate / listed plate / unset', () => {
+  it('firstIncompleteField blocks a free-text field stuck on its bare trigger (nothing typed), and passes once it resolves to a real plate', () => {
     const fields = [plateSpec, { key: 'กิจกรรม', kind: 'text' } as DetailFieldSpec]
-    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: 'อื่นๆ' })).toBe('ทะเบียนรถ')
-    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: 'กข-1234' })).toBeNull()
-    expect(firstBlankFreeTextField(fields, { ทะเบียนรถ: '6ขผ-3918' })).toBeNull()
-    expect(firstBlankFreeTextField(fields, {})).toBeNull()
+    expect(firstIncompleteField(fields, { ทะเบียนรถ: 'อื่นๆ', กิจกรรม: 'x' })?.key).toBe('ทะเบียนรถ')
+    expect(firstIncompleteField(fields, { กิจกรรม: 'x' })?.key).toBe('ทะเบียนรถ') // unset also blocks
+    expect(firstIncompleteField(fields, { ทะเบียนรถ: 'กข-1234', กิจกรรม: 'x' })).toBeNull()
+    expect(firstIncompleteField(fields, { ทะเบียนรถ: '6ขผ-3918', กิจกรรม: 'x' })).toBeNull()
   })
 })
 
 // ---------------------------------------------------------------------------
-// firstUnselectedRequiredField — bug-entertainment-blank-type-400: a
-// `required` select field left on the blank placeholder must block the save
-// the same way a blank free-text field does, BEFORE any network call.
+// firstIncompleteField — jakkaritw, 2026-08-20 (verbatim: "SPECIAL FORM
+// บังคับกรอก หรือ เลือกดรอปดาวทั้งหมด ไม่งั้น ไม่ไห้บันทึก"): every ENTERABLE
+// field must be filled/chosen before a row can save — replaces the old
+// opt-in `required` flag (removed) + the 2 separate guards
+// (`firstBlankFreeTextField`/`firstUnselectedRequiredField`, both removed)
+// with ONE guard for every field kind. A `locked` field is the ONLY
+// exemption (`isFieldEnterable`).
 // ---------------------------------------------------------------------------
 
-describe('firstUnselectedRequiredField', () => {
-  const requiredSelect: DetailFieldSpec = { key: 'ประเภทการรับรอง', kind: 'select', options: ['Customer'], required: true }
-  const optionalText: DetailFieldSpec = { key: 'รายละเอียด', kind: 'text' }
-  const fields = [requiredSelect, optionalText]
+describe('firstIncompleteField — every ENTERABLE field is required, kind decides the caller message', () => {
+  const selectField: DetailFieldSpec = { key: 'ประเภทการรับรอง', kind: 'select', options: ['Customer'] }
+  const textField: DetailFieldSpec = { key: 'รายละเอียด', kind: 'text' }
+  const lockedField: DetailFieldSpec = { key: 'ทะเบียนรถ', kind: 'locked' }
+  const fields = [selectField, textField, lockedField]
 
-  it('blocks when the required field is missing entirely (never touched)', () => {
-    expect(firstUnselectedRequiredField(fields, {})).toBe('ประเภทการรับรอง')
+  it('blocks on a missing select field — never touched, or an explicit empty string (picked, then reset to "— เลือก —")', () => {
+    expect(firstIncompleteField(fields, {})?.key).toBe('ประเภทการรับรอง')
+    expect(firstIncompleteField(fields, { ประเภทการรับรอง: '' })?.key).toBe('ประเภทการรับรอง')
   })
 
-  it('blocks when the required field is an explicit empty string (picked, then reset to "— เลือก —")', () => {
-    expect(firstUnselectedRequiredField(fields, { ประเภทการรับรอง: '' })).toBe('ประเภทการรับรอง')
+  it('blocks on a missing TEXT field too, once the select ahead of it is filled — text fields had no guard at all before this fix', () => {
+    expect(firstIncompleteField(fields, { ประเภทการรับรอง: 'Customer' })?.key).toBe('รายละเอียด')
+    expect(firstIncompleteField(fields, { ประเภทการรับรอง: 'Customer', รายละเอียด: '' })?.key).toBe('รายละเอียด')
   })
 
-  it('passes once a value is chosen, and a non-required blank field never blocks', () => {
-    expect(firstUnselectedRequiredField(fields, { ประเภทการรับรอง: 'Customer' })).toBeNull()
-    expect(firstUnselectedRequiredField([optionalText], {})).toBeNull()
+  it('passes once every enterable field is filled — a locked field is never checked, whatever value it holds', () => {
+    expect(firstIncompleteField(fields, { ประเภทการรับรอง: 'Customer', รายละเอียด: 'lunch' })).toBeNull()
+    expect(firstIncompleteField(fields, { ประเภทการรับรอง: 'Customer', รายละเอียด: 'lunch', ทะเบียนรถ: '' })).toBeNull()
+  })
+
+  it('isFieldEnterable is the ONE predicate deciding what gets checked — false only for kind:"locked"', () => {
+    expect(isFieldEnterable(selectField)).toBe(true)
+    expect(isFieldEnterable(textField)).toBe(true)
+    expect(isFieldEnterable(lockedField)).toBe(false)
   })
 })
 
 describe('detailFieldsFor Entertainment — external/internal split is driven by the shared GL list', () => {
-  it('marks ประเภทการรับรอง as required (bug-entertainment-blank-type-400)', () => {
+  it('ประเภทการรับรอง is an enterable select (never locked) — required by the firstIncompleteField default (bug-entertainment-blank-type-400)', () => {
     const fields = detailFieldsFor('Entertainment', '5211900030')
-    expect(fields.find((f) => f.key === 'ประเภทการรับรอง')?.required).toBe(true)
+    expect(isFieldEnterable(fields.find((f) => f.key === 'ประเภทการรับรอง')!)).toBe(true)
   })
 
   it('classifies by membership in the shared ENTERTAINMENT_INTERNAL_GLS constant, not an independently-derived suffix guess', () => {

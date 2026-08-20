@@ -157,7 +157,9 @@ describe('DetailSubform', () => {
 
     it('picking a value unblocks the save and the payload carries it', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
-      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(blankLine({ meta_json: { ประเภทการรับรอง: 'Customer' } }))
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        blankLine({ meta_json: { ประเภทการรับรอง: 'Customer', รายละเอียด: 'lunch' } }),
+      )
       render(
         <DetailSubform
           costCenter="CC1"
@@ -172,10 +174,179 @@ describe('DetailSubform', () => {
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
       fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
       expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ประเภทการรับรอง).toBe('Customer')
+    })
+  })
+
+  describe('every ENTERABLE field is required, or the save is blocked (jakkaritw 2026-08-20, verbatim: "บังคับกรอก หรือ เลือกดรอปดาวทั้งหมด ไม่งั้น ไม่ไห้บันทึก")', () => {
+    it('Lease & Rental machinery GL 5211200030 — ประเภทรถ blank + กิจกรรม blank both block the save (real staging report)', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '5211200030', gl_group: 'Lease & Rental' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211200030"
+          glGroup="Lease & Rental"
+          glName="เครื่องจักร/อุปกรณ์โรงงาน"
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      // ทะเบียนรถ renders `locked` for the machinery suffix — never rendered,
+      // never demanded. ประเภทรถ/สถานที่ใช้งาน/กิจกรรม are all enterable here.
+      expect(screen.queryByLabelText('ทะเบียนรถ')).not.toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      // ประเภทรถ comes first in field order — reported before กิจกรรม.
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกประเภทรถ')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('the SAME row also blocks on กิจกรรม once ประเภทรถ is filled — a plain text field was never guarded before this fix', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '5211200030', gl_group: 'Lease & Rental' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211200030"
+          glGroup="Lease & Rental"
+          glName="เครื่องจักร/อุปกรณ์โรงงาน"
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Forklift' } })
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      // กิจกรรม (text) left blank on purpose.
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(screen.getByText('กรุณากรอกกิจกรรม')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('TC060 case: GL 6211200060 row with ประเภทรถ/ทะเบียนรถ(custom)/สถานที่ใช้งาน filled still blocks on a blank กิจกรรม', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '6211200060', gl_group: 'Lease & Rental' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="6211200060"
+          glGroup="Lease & Rental"
+          glName="ยานพาหนะ"
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
+      fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'hello' } })
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      // กิจกรรม left blank — this is exactly jakkaritw's TC060 report.
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(screen.getByText('กรุณากรอกกิจกรรม')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('filling every enterable field (incl. กิจกรรม) unblocks the save', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '6211200060', gl_group: 'Lease & Rental' }),
+      ])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        blankLine({
+          gl_account: '6211200060',
+          gl_group: 'Lease & Rental',
+          meta_json: { ประเภทรถ: 'Car', ทะเบียนรถ: 'hello', สถานที่ใช้งาน: 'BK', กิจกรรม: 'รับ-ส่งผู้บริหาร' },
+        }),
+      )
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="6211200060"
+          glGroup="Lease & Rental"
+          glName="ยานพาหนะ"
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
+      fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'hello' } })
+      fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
+
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+    })
+
+    it('Professional & Legal Fee — both Project and รายละเอียด are plain text fields, both now block a blank save', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '6210700030', gl_group: 'Professional & Legal Fee' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="6210700030"
+          glGroup="Professional & Legal Fee"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByTestId('save-all'))
+      await waitFor(() => expect(screen.getByText('กรุณากรอกProject')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+
+      fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'ERP rollout' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+      await waitFor(() => expect(screen.getByText('กรุณากรอกรายละเอียด')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
+    })
+
+    it('Training & Seminar — Method (a select with no `required` flag today) now blocks a blank save too', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        blankLine({ gl_account: '6210100150', gl_group: 'Training & Seminar' }),
+      ])
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="6210100150"
+          glGroup="Training & Seminar"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('หลักสูตรอบรม'), { target: { value: 'Excel ขั้นสูง' } })
+
+      fireEvent.click(screen.getByTestId('save-all'))
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกMethod')).toBeInTheDocument())
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
     })
   })
 
@@ -260,6 +431,7 @@ describe('DetailSubform', () => {
       expect(input.value).toBe('100')
 
       fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
@@ -332,6 +504,7 @@ describe('DetailSubform', () => {
       expect(input.value).toBe('5000')
 
       fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
@@ -361,6 +534,7 @@ describe('DetailSubform', () => {
     )
     await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+    fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
     fireEvent.click(screen.getByTestId('save-all'))
 
     await waitFor(() => expect(subformApi.fetchDetailLines).toHaveBeenCalledTimes(2))
@@ -394,6 +568,9 @@ describe('DetailSubform', () => {
       for (const select of screen.getAllByLabelText('ประเภทการรับรอง')) {
         fireEvent.change(select, { target: { value: 'Customer' } })
       }
+      for (const input of screen.getAllByLabelText('รายละเอียด')) {
+        fireEvent.change(input, { target: { value: 'lunch' } })
+      }
 
       fireEvent.click(screen.getByTestId('save-all'))
 
@@ -413,6 +590,9 @@ describe('DetailSubform', () => {
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-2')).toBeInTheDocument())
       for (const select of screen.getAllByLabelText('ประเภทการรับรอง')) {
         fireEvent.change(select, { target: { value: 'Customer' } })
+      }
+      for (const input of screen.getAllByLabelText('รายละเอียด')) {
+        fireEvent.change(input, { target: { value: 'lunch' } })
       }
 
       fireEvent.click(screen.getByTestId('save-all'))
@@ -467,27 +647,36 @@ describe('DetailSubform', () => {
       renderVehicle()
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
+      // ประเภทรถ/สถานที่ใช้งาน/กิจกรรม are ALSO required now (jakkaritw
+      // 2026-08-20) — filled so this test isolates the plate behaviour it's
+      // actually about.
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
       expect(screen.queryByPlaceholderText('พิมพ์ทะเบียนรถ')).not.toBeInTheDocument()
-      // สถานที่ใช้งาน is a required field (bug-lease-blank-dropdown-400) — pick
-      // one so this test isolates the plate behaviour it's actually about.
       fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
 
       fireEvent.click(screen.getByTestId('save-all'))
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
       expect(vi.mocked(subformApi.saveDetailLine).mock.calls[0][0].meta_json?.ทะเบียนรถ).toBe('6ขผ-3918')
     })
 
-    it('picking อื่นๆ reveals a REQUIRED free-text plate input — saving while blank is blocked, no API call', async () => {
+    it('picking อื่นๆ reveals a free-text plate input — saving while blank is blocked, no API call', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([vehicleLine()])
       renderVehicle()
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
+      // ประเภทรถ filled so ทะเบียนรถ (still stuck on the bare trigger, nothing
+      // typed) is genuinely the FIRST incomplete field this assertion is about.
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
       expect(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ')).toBeInTheDocument()
 
       fireEvent.click(screen.getByTestId('save-all'))
-      await waitFor(() => expect(screen.getByText('กรุณาพิมพ์ทะเบียนรถ')).toBeInTheDocument())
+      // A select stuck on its free-text trigger with nothing typed IS still
+      // an incomplete SELECT — same "กรุณาเลือก" message as any other blank
+      // select (2026-08-20 unification; no separate "กรุณาพิมพ์" message).
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกทะเบียนรถ')).toBeInTheDocument())
       expect(subformApi.saveDetailLine).not.toHaveBeenCalled()
     })
 
@@ -499,9 +688,11 @@ describe('DetailSubform', () => {
       renderVehicle()
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
       fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: 'อื่นๆ' } })
       fireEvent.change(screen.getByPlaceholderText('พิมพ์ทะเบียนรถ'), { target: { value: 'กข-1234' } })
       fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
@@ -538,6 +729,10 @@ describe('DetailSubform', () => {
         />,
       )
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      // ประเภทรถ/ทะเบียนรถ/กิจกรรม all filled so this test isolates
+      // สถานที่ใช้งาน specifically (2026-08-20: they are ALSO required now).
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
       fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
 
       fireEvent.click(screen.getByTestId('save-all'))
@@ -566,7 +761,10 @@ describe('DetailSubform', () => {
       )
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
 
+      fireEvent.change(screen.getByLabelText('ประเภทรถ'), { target: { value: 'Car' } })
+      fireEvent.change(screen.getByLabelText('ทะเบียนรถ'), { target: { value: '6ขผ-3918' } })
       fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'BK' } })
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'รับ-ส่งผู้บริหาร' } })
       fireEvent.click(screen.getByTestId('save-all'))
 
       await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
@@ -578,7 +776,7 @@ describe('DetailSubform', () => {
         blankLine({ gl_account: BUILDING_GL, gl_group: 'Lease & Rental' }),
       ])
       vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
-        blankLine({ gl_account: BUILDING_GL, gl_group: 'Lease & Rental', meta_json: { สถานที่ใช้งาน: 'TK' } }),
+        blankLine({ gl_account: BUILDING_GL, gl_group: 'Lease & Rental', meta_json: { สถานที่ใช้งาน: 'TK', กิจกรรม: 'ซ่อมหลังคา' } }),
       )
       render(
         <DetailSubform
@@ -594,6 +792,7 @@ describe('DetailSubform', () => {
       await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
       expect(screen.queryByLabelText('ประเภทรถ')).not.toBeInTheDocument() // locked — not even rendered as an input
       expect(screen.queryByLabelText('ทะเบียนรถ')).not.toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText('กิจกรรม'), { target: { value: 'ซ่อมหลังคา' } })
 
       fireEvent.change(screen.getByLabelText('สถานที่ใช้งาน'), { target: { value: 'TK' } })
       fireEvent.click(screen.getByTestId('save-all'))

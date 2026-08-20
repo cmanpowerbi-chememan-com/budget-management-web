@@ -186,7 +186,7 @@ test.describe('filler journey', () => {
           detail_id: 777, cost_center: CC, gl_account: GL_ENTERTAIN_EXT, fiscal_year: PLANNING_YEAR, trip_id: null, gl_group: 'Entertainment',
           line_label: null,
           m01: 5000, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-          total_year: 5000, meta_json: { 'ประเภทการรับรอง': 'Customer' }, updated_at: 'DETAIL-TOKEN-1',
+          total_year: 5000, meta_json: { 'ประเภทการรับรอง': 'Customer', 'รายละเอียด': 'lunch with client' }, updated_at: 'DETAIL-TOKEN-1',
         }),
       ],
     })
@@ -205,6 +205,9 @@ test.describe('filler journey', () => {
     expect(options).toEqual(['— เลือก —', ...ENTERTAINMENT_EXTERNAL_VALUES])
 
     await dropdown.selectOption('Customer')
+    // รายละเอียด (text) is required too now (jakkaritw 2026-08-20) — every
+    // enterable field must be filled or the save is blocked client-side.
+    await page.getByLabel('รายละเอียด').fill('lunch with client')
     await page.getByLabel('m01 new-0').fill('5000')
     await page.getByTestId('save-all').click()
 

@@ -39,20 +39,12 @@ export interface DetailFieldSpec {
   key: string
   kind: DetailFieldKind
   options?: readonly string[]
-  /** A select option that, when chosen, reveals a REQUIRED free-text input
-   * whose typed value is what actually gets stored/sent (ทะเบียนรถ อื่นๆ →
-   * custom plate; the literal trigger is never sent). The trigger itself is
-   * stored only while the box is empty — `firstBlankFreeTextField` blocks
-   * saving in that state. */
+  /** A select option that, when chosen, reveals a free-text input whose
+   * typed value is what actually gets stored/sent (ทะเบียนรถ อื่นๆ → custom
+   * plate; the literal trigger is never sent). The trigger itself is stored
+   * only while the box is empty — `firstIncompleteField` treats that as
+   * "not filled yet" the same as a blank field. */
   freeTextOption?: string
-  /** Marks a plain `select` field (no `freeTextOption`) the user must
-   * actually pick a value for before saving — enforced by
-   * `firstUnselectedRequiredField`, blocking the save client-side the same
-   * way a blank free-text field does (bug-entertainment-blank-type-400).
-   * The backend still tolerates a blank value as "not provided" (defense
-   * in depth for an older client) — this flag is what makes a FRESH save
-   * actually require the choice. */
-  required?: boolean
 }
 
 /** Resolves the special-GL group's detail columns for ONE gl_account —
@@ -79,7 +71,6 @@ export function detailFieldsFor(glGroup: string, glAccount: string): DetailField
         key: 'ประเภทการรับรอง',
         kind: 'select',
         options: isInternal ? ENTERTAINMENT_INTERNAL_VALUES : ENTERTAINMENT_EXTERNAL_VALUES,
-        required: true,
       },
       { key: 'รายละเอียด', kind: 'text' },
     ]
@@ -102,15 +93,11 @@ export function detailFieldsFor(glGroup: string, glAccount: string): DetailField
       typeField,
       plateField,
       // สถานที่ใช้งาน is the ONE field every Lease & Rental sub-category
-      // renders as an enterable select (never locked) — the row's universal
-      // classification attribute, so it is required the same way
-      // Entertainment's ประเภทการรับรอง is (bug-lease-blank-dropdown-400).
-      // ประเภทรถ is NOT marked required: it renders `locked` for 5 of the 7
-      // suffixes (a locked field must never be demanded), and the backend
-      // explicitly allows it blank even where it IS enterable — it is a
-      // refinement, not the row's sole identity (that comes from the GL
-      // account's own suffix).
-      { key: 'สถานที่ใช้งาน', kind: 'select', options: LEASE_PLANTS, required: true },
+      // renders as an enterable select (never locked) — every OTHER
+      // enterable field is required too now (jakkaritw 2026-08-20,
+      // firstIncompleteField below); ประเภทรถ/ทะเบียนรถ simply render
+      // `locked` (never demanded) for the suffixes where they don't apply.
+      { key: 'สถานที่ใช้งาน', kind: 'select', options: LEASE_PLANTS },
       { key: 'กิจกรรม', kind: 'text' },
     ]
   }
@@ -149,25 +136,49 @@ export function fieldFreeText(spec: DetailFieldSpec, value: string | null): stri
   return value
 }
 
-/** The free-text input is REQUIRED once its trigger option is picked — the
- * literal trigger ('อื่นๆ') must never be sent as the value. Returns the
- * first offending field key so the caller can block the save with a message
- * naming it, or `null` when every free-text field is satisfied. */
-export function firstBlankFreeTextField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): string | null {
-  const offending = fields.find((f) => f.freeTextOption !== undefined && meta[f.key] === f.freeTextOption)
-  return offending?.key ?? null
+/** Whether a field can actually be interacted with for this GL — a `locked`
+ * field renders as an em-dash (greyed, "ไม่ใช้กับ GL นี้") and must NEVER be
+ * demanded; every other kind is enterable. The one place that answers "is
+ * this field enterable" — `firstIncompleteField` below is its only caller. */
+export function isFieldEnterable(field: DetailFieldSpec): boolean {
+  return field.kind !== 'locked'
 }
 
-/** A `required` select field (`DetailFieldSpec.required`) left on the blank
- * "— เลือก —" placeholder — value missing entirely OR an explicit `''` —
- * must block the save the same way `firstBlankFreeTextField` blocks an
- * empty free-text box (bug-entertainment-blank-type-400: a blank
- * ประเภทการรับรอง used to sail past the frontend and 400 on the server).
- * Returns the first offending field key, or `null` when every required
- * select is set. */
-export function firstUnselectedRequiredField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): string | null {
-  const offending = fields.find((f) => f.required && !meta[f.key])
-  return offending?.key ?? null
+/** Whether an ENTERABLE field's current value counts as "filled": a plain
+ * text/select value must be non-blank, and a free-text-behind-a-trigger
+ * field (ทะเบียนรถ อื่นๆ → custom plate) must additionally not still be
+ * sitting on the bare trigger literal with nothing typed into the
+ * companion box — the trigger string itself is truthy, so a plain blank
+ * check alone would miss that case. */
+function isFieldFilled(field: DetailFieldSpec, value: string | null): boolean {
+  if (!value) return false
+  if (field.freeTextOption !== undefined && value === field.freeTextOption) return false
+  return true
+}
+
+/** jakkaritw, 2026-08-20, verbatim: "SPECIAL FORM บังคับกรอก หรือ เลือกดรอปดาว
+ * ทั้งหมด ไม่งั้น ไม่ไห้บันทึก" — every ENTERABLE field (`isFieldEnterable`)
+ * must be filled/chosen before a row can save. A `locked` field is never
+ * checked, because it can never be filled in the first place — that is
+ * exactly what made a naive "make everything required" pass dangerous:
+ * blocking on ประเภทรถ/ทะเบียนรถ would have made saving impossible for 5 of
+ * Lease & Rental's 7 GL suffixes, where those two render `locked`.
+ *
+ * Replaces `firstBlankFreeTextField` + `firstUnselectedRequiredField` (both
+ * removed) with the ONE completeness guard for every field kind;
+ * `DetailFieldSpec.required` is gone too — after this change every
+ * enterable field is required by default, and an audit of all 5 non-travel
+ * groups (`detailFieldsFor`) found no field that still needs to opt OUT.
+ * Should a genuinely optional field turn up later, that is a fresh,
+ * disclosed decision (e.g. an explicit `optional` flag inverting this
+ * default) — not something to pre-build speculatively now.
+ *
+ * Returns the first offending FIELD (not just its key) so the caller can
+ * pick the right Thai verb from `kind` — "กรุณาเลือก" for a select
+ * (including one stuck on a free-text trigger — it IS still an incomplete
+ * select), "กรุณากรอก" for text — or `null` when the row is complete. */
+export function firstIncompleteField(fields: readonly DetailFieldSpec[], meta: Record<string, string | null>): DetailFieldSpec | null {
+  return fields.find((f) => isFieldEnterable(f) && !isFieldFilled(f, meta[f.key] ?? null)) ?? null
 }
 
 // ---------------------------------------------------------------------------
