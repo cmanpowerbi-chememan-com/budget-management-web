@@ -71,22 +71,43 @@ input:focus-visible {
   margin: 0 auto;
   padding: 0 28px;
 }
-/* Wordmark (frontend/public/chememan-full-logo-white.png, source 1190x616,
-   1.93:1, white knockout on the Sea Green shell) sits left of the text
-   lockup below (jakkaritw, 2026-08-15). height + width:auto only — never a
-   fixed width, so the aspect ratio can't distort; flex-shrink:0 so a narrow
-   viewport squeezes the text lockup, not the logo.
-   44px, not 36px (measured, 2026-08-15): at 36px on a STANDARD (1x) DPI
-   monitor the wordmark's fine strokes render into only ~21% crisp
-   near-white pixels (rest anti-aliased blend) — measurably soft. The exact
-   same 36px on a 2x/retina display renders ~38% crisp, and a 44px render
-   at 1x DPI matches that same ~39% — i.e. 44px on an ordinary monitor reads
-   as crisp as 36px already does on a retina one. Still comfortably inside
-   the 64px bar and clearly taller than the ~27px two-line text block. */
-.nav-logo {
-  height: 44px;
-  width: auto;
+/* Light plate behind the original logo (2026-08-21, jakkaritw verbatim:
+   "logo เอาแบบ original") — supersedes the 44px white-knockout tuning this
+   comment block used to describe (that reasoning no longer applies: the
+   mark isn't a white silhouette any more). frontend/public/
+   chememan-full-logo.png (1190x616, 1.93:1) is full-colour; its dark-green
+   ink only reaches 1.89:1 on the CI green shell (#00805e) — nearly the
+   shell's own hue — so it needs its own light ground, the same way the
+   mark is dropped onto any coloured surface in the brand system.
+   --surface reused (pure white, already the app's card-background token —
+   no new colour, so frontend/e2e/contrast-baseline.json needed no touch).
+   Fixed 85px width = 44 * (1190 / 616), the EXACT pixel width the old
+   un-plated logo rendered at (44px was the prior tuned height) — the
+   plate takes over that same flex-row slot 1:1, so the text lockup two
+   nodes over does not shift ("layout ยึดแบบเดิม", jakkaritw). No hairline
+   border: solid white already reads cleanly against the saturated green
+   shell on its own (measured, see plan.md) — --line-on-shell was
+   considered and left out as an unneeded accessory. flex-shrink:0 so a
+   narrow viewport squeezes the text lockup, not the plate. */
+.nav-logo-plate {
+  width: 85px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: var(--r);
   flex-shrink: 0;
+}
+/* height dropped 44px -> 38px so the artwork plus the plate's own
+   (flex-centered) breathing room both fit inside the fixed 85x48 plate
+   without overflowing it — the crisp-edge tuning the old 44px value was
+   picked for was about the white-knockout PNG's anti-aliasing, not
+   relevant to the full-colour artwork now in use. width:auto only, never
+   fixed, so the aspect ratio can't distort. */
+.nav-logo {
+  height: 38px;
+  width: auto;
 }
 .nav-logo-text {
   display: flex;
@@ -138,12 +159,15 @@ input:focus-visible {
   font-size: clamp(34px, 4.9vw, 60px);
   line-height: 0.98;
   letter-spacing: -0.025em;
-  font-weight: 400;
+  font-weight: var(--fw-medium);
   color: var(--accent-on-shell);
 }
+/* 2026-08-21 (ref-alignment): was italic — the ref's CI typography treats
+   the emphasized word as upright/thin, not italic. */
 .page-title em {
-  font-style: italic;
-  color: var(--accent-on-shell);
+  font-style: normal;
+  font-weight: var(--fw-thin);
+  color: var(--ink-on-shell);
   opacity: 0.85;
 }
 
@@ -160,8 +184,13 @@ input:focus-visible {
   filter: none;
   text-shadow: none;
 }
+/* 2026-08-21 (ref-alignment): was italic — same reasoning as .page-title
+   em above; this rule is the one that actually wins the cascade (equal
+   specificity, later in source) since the real markup carries BOTH classes
+   (`<h1 className="page-title glassy">`, App.tsx). */
 .glassy em {
-  font-style: italic;
+  font-style: normal;
+  font-weight: var(--fw-thin);
   color: var(--ink-on-shell);
 }
 
@@ -593,7 +622,10 @@ input:focus-visible {
   appearance: none;
   -webkit-appearance: none;
   min-width: 120px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399A1B0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* Arrow stroke hardcoded to hex (2026-08-21, ref-alignment) — data-URIs
+     can't reference CSS custom properties; #3a4864 is --ink-2's literal
+     value under the CI palette (was an unrelated leftover blue-grey). */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233a4864' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -1533,9 +1565,15 @@ body.col-dragging * {
    grid; only the 6 special GL groups get a chip (groupChipClass), everything
    else stays plain text in the frozen white .gl-group-cell band. */
 .gl-group-cell .gl-chip.special-gl-group {
-  --chip-bg: #888;
+  /* Default (2026-08-21, ref-alignment) — navy, not grey; only visible if a
+     special-GL group ever renders without one of the specific gl-* color
+     classes below, which currently never happens (model.ts always pairs
+     one). The 6 specific overrides are UNCHANGED except .gl-green (below),
+     the only one the ref's sample data exercises — see plan.md/final report
+     for why the other 5 are left as-is pending ref coverage. */
+  --chip-bg: var(--ink-2);
   --chip-fg: #fff;
-  --chip-glow: rgba(0, 0, 0, 0.25);
+  --chip-glow: rgba(27, 53, 100, 0.28);
   background: var(--chip-bg);
   color: var(--chip-fg);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -1574,10 +1612,12 @@ body.col-dragging * {
   --chip-fg: #fff;
   --chip-glow: rgba(59, 130, 246, 0.5);
 }
+/* CI green, not lime (2026-08-21, ref-alignment — the only gl-* chip color
+   the ref's sample data exercises, Travelling Expense). */
 .gl-group-cell .gl-chip.gl-green {
-  --chip-bg: #22c55e;
+  --chip-bg: var(--accent);
   --chip-fg: #fff;
-  --chip-glow: rgba(34, 197, 94, 0.5);
+  --chip-glow: rgba(0, 128, 94, 0.45);
 }
 /* Status indicator — swatch + text, never color alone (mockup 0002.3
    lines 457-466). The td itself stays a NORMAL table-cell (never
@@ -2418,7 +2458,12 @@ th.total-year-col {
    opaque light card of its own — same appearance as before (--surface is
    close to the old --paper), safe on any background behind it. */
 .status-chip-pending {
-  color: #8a5a12;
+  /* 2026-08-21 (ref-alignment): --c-gold moved to the CI brown and --surface
+     to pure white, which together lightened this tint enough to drop the
+     old #8a5a12 text under AA (4.40:1, caught by the contrast ratchet as a
+     NEW violation). Darkened just enough to clear 4.5:1 with margin
+     (5.09:1 measured against the new tint) — same hue, not a redesign. */
+  color: #80500d;
   background: color-mix(in oklab, var(--c-gold) 18%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--c-gold) 50%, var(--line));
 }
@@ -2541,8 +2586,10 @@ th.total-year-col {
 }
 .btn-reject:hover {
   color: #fff;
-  background: #a8443a;
-  border-color: #a8443a;
+  /* Was a hardcoded duplicate of --status-rejected's own hex — reads the
+     token directly now (2026-08-21) so the two never drift again. */
+  background: var(--status-rejected);
+  border-color: var(--status-rejected);
 }
 .reject-panel {
   /* Full-width line under the right-aligned .approval-bar flex row */
@@ -2598,7 +2645,9 @@ th.total-year-col {
 }
 .pp.wait {
   background: color-mix(in oklab, var(--c-gold) 18%, transparent);
-  color: #8a5a12;
+  /* Same fix + reasoning as .status-chip-pending above — shares the
+     identical --c-gold-tinted-text pattern. */
+  color: #80500d;
   border: 1px solid color-mix(in oklab, var(--c-gold) 50%, var(--line));
 }
 .pp.wait::before {

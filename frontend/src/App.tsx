@@ -27,17 +27,25 @@ function App() {
 
       <nav className="nav">
         <div className="nav-inner">
-          {/* White knockout variant (2026-08-15, jakkaritw: "ทำโลโก้สีขาวใหม่")
-              — the stock artwork's dark-green wordmark only reached 2.84:1 on
-              the #2E8B57 shell. -white.png reverses the ink to solid white
-              while keeping the artwork's own white areas transparent (shell
-              shows through), so it reads at the same 4.25:1 ceiling as every
-              other on-shell element. Original /chememan-full-logo.png kept in
-              public/ for any future light-shell use — not deleted. */}
+          {/* Original full-colour wordmark (2026-08-21, jakkaritw verbatim:
+              "logo เอาแบบ original") — supersedes the 2026-08-15
+              white-knockout call this comment used to describe. Source:
+              /chememan-full-logo.png, byte-identical to the DS (design
+              system) repo's assets/logo/chememan-full-logo.png. Its
+              dark-green ink only reaches 1.89:1 on the CI green shell
+              (#00805e) — nearly the shell's own hue now, effectively
+              invisible on its own — so it sits on a small white plate
+              (.nav-logo-plate, global.css) below it, the standard brand
+              treatment for dropping the mark onto a colored surface.
+              /chememan-full-logo-white.png stays in public/, unused by
+              this file today, kept for any future plain-shell placement —
+              not deleted. */}
           {/* alt="" (2026-08-15 gate finding): decorative — the "Chememan"
               text two nodes below already carries this for screen readers,
               so a real alt would announce it twice. */}
-          <img src="/chememan-full-logo-white.png" alt="" className="nav-logo" />
+          <div className="nav-logo-plate">
+            <img src="/chememan-full-logo.png" alt="" className="nav-logo" />
+          </div>
           <div className="nav-logo-text">
             <span className="name">Budget Management</span>
             <span className="sub">Chememan</span>

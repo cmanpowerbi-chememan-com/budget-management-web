@@ -1,138 +1,140 @@
-/* ─── Design tokens — Chememan theme, Sea Green shell (2026-08-15, jakkaritw
-   request; local-only, not yet approved for deploy). Accent tier repoints to
-   Sea Green (#2E8B57 / #3fa06e hover, jakkaritw-picked shade) — lighter than
-   the Supply Chain green (#1a472a) explored earlier the same day; --sans
-   stays on the Bootstrap 5.3.2 default system stack (Supply Chain app
-   declares no custom font). Was previously ported from the canonical mockup
-   (design/mockups/0002claude design/0002.3budget-export.html) — that file is
-   untouched, still terracotta/serif; this token file has diverged from it on
-   purpose for this preview.
-   #2E8B57 is too light for any dark ink, so on-shell text is now white
-   (--ink-on-shell/--ink-on-shell-2/--accent-on-shell all #ffffff) and the
-   gold on-shell accent (#d4ac52) is RETIRED — see the "On-shell text roles"
-   comment below for the accepted 4.25:1 ceiling this trades off.
+/* ─── Design tokens — Chememan theme, CI Green shell (2026-08-21, jakkaritw
+   request: "adjust font color or size, other items color align to ref;
+   layout ยึดแบบเดิม [keep the existing layout]"). Source of truth for this
+   pass: design/mockups/0002claude design/0002.4budget-stg-snapshot.html,
+   whose :root remaps every app token below onto the REAL CHEMEMAN CI palette
+   (cman-ci-typography.css, www.chememan.com, 20 Aug 2026) — replacing the
+   Sea Green preview (#2E8B57, 2026-08-15) that was never the brand color,
+   just a placeholder shade picked before the CI palette was available.
+   Layout/spacing/markup are UNCHANGED by this pass — only color, font
+   family, size, weight and letter-spacing move; see global.css for the
+   handful of typography rules (page-title weight, .page-title em style)
+   that changed to match the ref's CSS.
    One theme only — dark mode was removed 2026-08-15 (jakkaritw: one theme,
-   Sea Green, light).
+   light) and stays removed; this pass does not reopen that.
    Do NOT rename or add tokens speculatively — extend only when actually
    needed. ─── */
 :root {
-  --c-gold: #a8763a;
-  --accent: #2E8B57;
-  --accent-2: #3fa06e;
+  /* ── Chememan CI palette (raw brand hexes, cman-ci-typography.css) — the
+     ONLY place these literal hex/named colors are allowed to live; every
+     other rule below reaches them through the semantic tokens further down,
+     never directly. ── */
+  --cman-green: #00805e;
+  --cman-green-dark: #09532d;
+  --cman-navy: #1b3564;
+  --cman-blue: #2f61ac;
+  --cman-navy-80: #3a4864;
+  --cman-navy-ink: #1c2331;
+  --cman-brown: #734f21;
+  --cman-yellow: #fdcb35;
+  --cman-ink: #1c1c1c;
+  --cman-text: #212529;
+  --cman-bg-green-tint: #f3f7f5;
+  --cman-bg-blue-tint: #e5eefa;
+  --cman-white: #ffffff;
 
-  --ink: #1c1a16;
-  --ink-2: #4a463d;
-  --ink-3: #86806f;
-  /* --paper = the page SHELL (2026-08-15, jakkaritw): repointed from cream
-     to green so the app reads as light cards floating on a Sea Green
-     field. --paper-2/--surface (the light card family) are UNCHANGED — most
-     of the app still renders on them, unaffected by this. Anything that
-     used to paint text/borders directly on --paper (no light-card ancestor)
-     needed its own fix — see the on-shell tokens below and the global.css
-     call sites that reference them (.nav, .page-title/.glassy, the
-     approval-bar's shell-direct text, the 3 status chips' backgrounds). */
-  --paper: #2E8B57;
-  --paper-2: #eae4d7;
-  --surface: #fbf9f3;
-  --line: rgba(28, 26, 22, 0.14);
-  --line-2: rgba(28, 26, 22, 0.07);
+  /* ── App tokens, remapped onto the CI palette above (2026-08-21) — every
+     call site elsewhere in the app is unchanged; only what these resolve to
+     moved. ── */
+  --c-gold: var(--cman-brown);
+  --accent: var(--cman-green);
+  --accent-2: color-mix(in oklab, var(--cman-green) 80%, white);
 
-  --status-sap: #5e7a50;
-  --status-approved: #4a5e80;
+  --ink: var(--cman-ink);
+  --ink-2: var(--cman-navy-80);
+  --ink-3: color-mix(in oklab, var(--cman-navy-ink) 58%, var(--cman-white));
+  /* --paper = the page SHELL (unchanged mechanism since 2026-08-15: light
+     cards float on a colored field) — now the real CI green, not the Sea
+     Green placeholder. --paper-2 moves from the old cream tint to the CI
+     blue tint (--cman-bg-blue-tint); --surface moves from off-white cream
+     to pure white (--cman-white). Both are still the light-card family most
+     of the app renders on, unaffected in mechanism by this swap. */
+  --paper: var(--cman-green);
+  --paper-2: var(--cman-bg-blue-tint);
+  --surface: var(--cman-white);
+  --line: rgba(28, 35, 49, 0.14);
+  --line-2: rgba(28, 35, 49, 0.07);
+
+  --status-sap: var(--cman-green-dark);
+  --status-approved: var(--cman-blue);
   --status-pending: var(--ink);
-  /* Own hue, not --accent (2026-08-15 gate MED-4) — the rejected chip used
-     to just reuse --accent/--accent-text, so once --accent became green it
-     read as a second "approved-ish" chip. Reuses the existing reject-action
-     red (.btn-reject:hover background) so "reject" the verb and "rejected"
-     the state share one identity. */
-  --status-rejected: #a8443a;
-  --special-bg: #f0e7d3;
-  --special-edge: #c9a24b;
+  /* Own hue, not --accent (2026-08-15 gate MED-4, still true post-CI-swap):
+     reuses the reject-action red idiom (.btn-reject:hover in global.css now
+     reads this token directly instead of duplicating the hex). */
+  --status-rejected: oklch(0.5 0.155 28);
+  --special-bg: color-mix(in oklab, var(--cman-yellow) 24%, var(--cman-white));
+  --special-edge: color-mix(in oklab, var(--cman-yellow) 58%, var(--cman-brown));
 
-  /* ─── On-shell text roles (2026-08-15, repointed for the Sea Green
-     #2E8B57 shell) — for the FEW spots that paint directly on --paper (now
-     Sea Green) with no light-card ancestor. Do NOT use these inside a card
-     (--surface/--paper-2 already contrast fine with the plain
-     --ink/--ink-2/--accent-text tokens below). ───
-     #2E8B57 is lighter than the earlier #1a472a shell, so no light ink
-     clears WCAG AA (4.5:1) here any more — pure white tops out at 4.25:1,
-     the best any light ink can reach. jakkaritw signed off on that ceiling
-     2026-08-15 rather than darkening the shell back: --ink-on-shell(-2) and
-     --accent-on-shell all collapse to plain #ffffff (the old cream
-     #f2eee5/muted #c6c0b2 tier and the gold #d4ac52 accent are ALL RETIRED —
-     none of them clears 4.25:1 either, so there is no reason to keep a
-     separate muted or accent hue here). This is an accepted small-text AA
-     miss, not a bug — do not "fix" it by re-darkening --paper.
-     WARNING (2026-08-15 gate finding 1): because all three names below
-     collapse to the SAME #ffffff, they can never visually distinguish two
-     on-shell states from each other — that trap already fired once
-     (.approval-bar's normal vs error status line were pixel-identical, both
-     resolving through --ink-on-shell-2 / --accent-on-shell). Do not repoint
-     one of these three to signal a NEW state; add a dedicated token instead
-     (see --error-on-shell below for the pattern this gate fix introduced).
-     --accent-text: what --accent becomes when used as TEXT on a light card
-     (jakkaritw's literal ask: green text -> terracotta, "swallowed
-     otherwise") — 5.40:1 on --surface. Unrelated role, unchanged by this pass.
-     --line-on-shell: hairline dividers drawn directly on --paper — plain
-     --line/--line-2 are low-alpha DARK and disappear on green. Was 55%-alpha
-     white; measured live on nav.nav's own border-bottom (blended against its
-     own green background, the only call site) that is 2.37:1, NOT the 3:1
-     non-text minimum this comment used to claim (gate finding, 2026-08-15).
-     Raised to 75%-alpha — 3.11:1 measured the same way — so the claim is
-     actually true, rather than downgrading the comment to admit a sub-3:1
-     decorative line. Card-internal borders (the vast majority) are
-     untouched — a border only ever needs to read against the box's OWN
-     background, and every card's own background is still the light
-     --surface/--paper-2 family. */
+  /* ─── On-shell text roles — for the FEW spots that paint directly on
+     --paper (now the CI green #00805e) with no light-card ancestor. Do NOT
+     use these inside a card (--surface/--paper-2 already contrast fine with
+     the plain --ink/--ink-2/--accent-text tokens above). ───
+     White text on #00805e measures 4.94:1 — clears WCAG AA (4.5:1) and is a
+     real improvement over the Sea Green shell's 4.25:1 ceiling (measured
+     2026-08-21; verified with the same formula the 2026-08-15 comment used).
+     --ink-on-shell(-2)/--accent-on-shell stay collapsed to plain #ffffff —
+     same three-way collapse the 2026-08-15 gate flagged (WARNING below still
+     applies: do not repoint one of these three to signal a NEW state; add a
+     dedicated token instead, see --error-on-shell).
+     --accent-text: what --accent becomes when used as TEXT on a light card —
+     now the CI navy (--cman-navy), not the terracotta the Sea Green pass
+     introduced; navy is the CI-documented "accent text" role.
+     --line-on-shell: hairline dividers drawn directly on --paper — value
+     unchanged (75%-alpha white, ~3:1 measured against either green shell). */
   --ink-on-shell: #ffffff;
   --ink-on-shell-2: #ffffff;
-  --accent-text: #b24222;
+  --accent-text: var(--cman-navy);
   --accent-on-shell: #ffffff;
   --line-on-shell: rgba(255, 255, 255, 0.75);
-  /* --error-on-shell (2026-08-15 gate finding 1 — the on-shell approval-bar
-     error state was pixel-identical to its own normal status line, both
-     white): the one on-shell error treatment that does NOT collapse to
-     --accent-on-shell's plain white. Colour is deliberately not the only
-     cue — .approval-bar .act-status-error (global.css) pairs this with
-     bold weight and a darkened plate, since a colour-only signal fails
-     colour-blind readers and red-on-green is the worst-case hue pair for
-     exactly that. On the plate (its real, shipped background) the text
-     measures 5.89:1 — comfortably clears AA; on raw --paper alone, with no
-     plate, it would only be 3.53:1 (why the plate exists — see the call
-     site comment for the exact blend). */
+  /* --error-on-shell (2026-08-15 gate finding 1) — the on-shell approval-bar
+     error state must NOT collapse to the same white as --accent-on-shell
+     (colour is never the only cue: global.css pairs this with bold weight +
+     a darkened plate). Value unchanged by the CI-palette swap — it is a
+     warm off-white chosen to differ from plain white, not a --cman-* brand
+     hue; still clears AA on the darkened plate under the new (lighter)
+     green shell, same mechanism as before. */
   --error-on-shell: #ffe4e1;
-  /* --accent-2-text (2026-08-15, jakkaritw: "แก้ — ให้สีของตัวเอง" — same
-     treatment as --status-rejected getting its own hue): --accent-2 (#3fa06e,
-     the bright hover-mint) reads fine as a light *tint* background but fails
-     WCAG AA as TEXT/solid-fill-with-white-text on the four sites that used it
-     raw (.user-avatar, .role-badge.user, .v3-count, .dept-picker-badge —
-     2.63-3.25:1) plus one more the audit didn't reach (.v3-gl-pill, same
-     raw-fill pattern). Unlike --accent-text (which deliberately swapped to
-     terracotta, "swallowed otherwise" per jakkaritw), this one is asked to
-     STAY in the green family, just darker: a deep pine green, 6.16:1 on
-     --surface as text (6.48:1 is the same hex measured against pure white,
-     not --surface — corrected 2026-08-15 gate finding) and used as a solid
-     fill with white text at the same ratio (symmetric formula) — clears
-     4.5:1 with margin, distinct from --accent (#2E8B57, lighter/greyer),
-     --status-approved (blue), --status-rejected (red) and the pending chip
-     (--ink). */
-  --accent-2-text: #1f6b42;
+  /* --accent-2-text (2026-08-15 rule: a tint and its own text always mix
+     from the SAME base token) — now the CI green-dark, not the bespoke pine
+     green the Sea Green pass introduced; same role (a --accent companion
+     dark enough to clear 4.5:1 as solid-fill text). */
+  --accent-2-text: var(--cman-green-dark);
 
   /* --focus-ring: keyboard focus outline (global.css `:focus-visible`).
-     Defaults to --accent-text — right for the vast majority of controls,
-     which sit inside a --surface/--paper-2 card. The few containers with
-     NO card ancestor (.side-heading-row, .approval-bar) repoint this
-     to --accent-on-shell locally in global.css, right where each is
-     defined. (.nav dropped from this list 2026-08-15 gate finding — it lost
-     its only focusable child, ThemeToggle, when dark mode was removed, and
-     no longer repoints --focus-ring at all.) */
-  --focus-ring: var(--accent-text);
+     Now the CI green (--accent) directly, per the ref — was --accent-text
+     (navy) during the Sea Green pass; --accent on --surface/--paper-2 still
+     clears the 3:1 non-text minimum. The few shell-context containers with
+     no card ancestor (.side-heading-row, .approval-bar) still repoint this
+     locally in global.css. */
+  --focus-ring: var(--accent);
 
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans',
-    'Liberation Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-    'Segoe UI Symbol', 'Noto Color Emoji';
-  --serif: var(--sans); /* Supply Chain app has no serif face — collapses to body sans */
-  --mono: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  /* CI font: FC Minimal (licensed, not available to self-host) with IBM
+     Plex Sans Thai / Noto Sans Thai as the CI-documented free fallback, and
+     IBM Plex Mono for --mono. None of the three are installed on a typical
+     Windows/Mac machine and this app deliberately loads NO webfonts (no
+     Google Fonts / CDN `<link>` — that "zero external requests" property is
+     intentional, see frontend/src/app/layout.tsx) — so in practice every
+     user still sees the SAME system font stack as before this change
+     (Segoe UI / San Francisco / Roboto / etc., appended below, unchanged).
+     The CI names are declared for correctness/documentation and in case a
+     machine happens to have them installed locally; they are not expected
+     to render for most users. */
+  --sans:
+    'FC Minimal', 'IBM Plex Sans Thai', 'Noto Sans Thai', system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --serif: var(--sans); /* app has no distinct serif face — collapses to body sans, unchanged */
+  --mono:
+    'IBM Plex Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  /* Font-weight roles (ref's --fw-*) — wired into the 2 rules the ref ties
+     them to (.page-title / .page-title em in global.css); not retrofitted
+     onto every existing numeric font-weight in global.css (unrelated to
+     this pass, unnecessary diff). */
+  --fw-thin: 100;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
 
   --r: 6px;
 }

@@ -1,0 +1,633 @@
+<!--
+  Snapshot of STAGING UI — captured 2026-08-20.
+  Source: stg container app (Sea Green / cman-design-system theme).
+  Reference only — a frozen picture of the live grid at this date, NOT
+  production code. Tokens/markup ported verbatim from:
+    frontend/src/styles/tokens.css + global.css (live theme)
+    frontend/src/userbar/UserBar.tsx, frontend/src/grid/GridTable.tsx,
+    frontend/src/grid/BudgetGrid.tsx, frontend/src/approval/ApprovalActionBar.tsx
+  Data shown (CC 10IT013000 / 3 GL rows) matches the 2026-08-20 screenshot
+  jakkaritw supplied. No JS framework — plain HTML + inline CSS. Filter
+  inputs / column-resize handles / dept picker / reset button are visual
+  only (non-functional) — this file never calls the real app.
+-->
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@100;200;300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>OPEX Management — Chememan (Staging Snapshot 2026-08-20)</title>
+<style>
+  /* ─── Design tokens — Chememan theme, Sea Green shell ───
+     Ported verbatim from frontend/src/styles/tokens.css (live, 2026-08-15). */
+  :root {
+    /* ── CHEMEMAN CI palette — cman-ci-typography.css (www.chememan.com, 20 ส.ค. 2026) ── */
+    --cman-green: #00805e;
+    --cman-green-dark: #09532d;
+    --cman-navy: #1b3564;
+    --cman-blue: #2f61ac;
+    --cman-navy-80: #3a4864;
+    --cman-navy-ink: #1c2331;
+    --cman-brown: #734f21;
+    --cman-yellow: #fdcb35;
+    --cman-ink: #1c1c1c;
+    --cman-text: #212529;
+    --cman-bg-green-tint: #f3f7f5;
+    --cman-bg-blue-tint: #e5eefa;
+    --cman-white: #ffffff;
+
+    /* ── App tokens remapped onto CI palette · layout/spacing unchanged ── */
+    --c-gold: var(--cman-brown);
+    --accent: var(--cman-green);
+    --accent-2: color-mix(in oklab, var(--cman-green) 80%, white);
+    --ink: var(--cman-ink);
+    --ink-2: var(--cman-navy-80);
+    --ink-3: color-mix(in oklab, var(--cman-navy-ink) 58%, var(--cman-white));
+    --paper: var(--cman-green);
+    --paper-2: var(--cman-bg-blue-tint);
+    --surface: var(--cman-white);
+    --line: rgba(28, 35, 49, 0.14);
+    --line-2: rgba(28, 35, 49, 0.07);
+    --status-sap: var(--cman-green-dark);
+    --status-approved: var(--cman-blue);
+    --status-pending: var(--ink);
+    --status-rejected: oklch(0.5 0.155 28);
+    --special-bg: color-mix(in oklab, var(--cman-yellow) 24%, var(--cman-white));
+    --special-edge: color-mix(in oklab, var(--cman-yellow) 58%, var(--cman-brown));
+    --ink-on-shell: #ffffff;
+    --ink-on-shell-2: #ffffff;
+    --accent-text: var(--cman-navy);
+    --accent-on-shell: #ffffff;
+    --line-on-shell: rgba(255, 255, 255, 0.75);
+    --accent-2-text: var(--cman-green-dark);
+    --focus-ring: var(--cman-green);
+    /* CI font: FC Minimal (licensed) → IBM Plex Sans Thai = CI-recommended free fallback */
+    --sans: "FC Minimal", "IBM Plex Sans Thai", "Noto Sans Thai", Helvetica, Arial, sans-serif;
+    --serif: var(--sans);
+    --mono: "IBM Plex Mono", SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    --fw-thin: 100; --fw-regular: 400; --fw-medium: 500; --fw-bold: 700;
+    --r: 6px;
+    /* Frozen-column left offsets (GridTable.tsx computes these from real
+       measured widths; hardcoded here since this snapshot has no JS). */
+    --frz1: 0px; --frz2: 118px; --frz3: 308px; --frz4: 518px; --frz5: 688px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font-family: inherit; color: inherit; }
+  a { color: inherit; }
+  button:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: 2px;
+  }
+
+  /* ─── Nav ─── */
+  .nav { position: sticky; top: 0; z-index: 100; background: var(--paper); border-bottom: 1px solid var(--line-on-shell); }
+  .nav-inner { display: flex; align-items: center; gap: 14px; height: 64px; max-width: 1980px; margin: 0 auto; padding: 0 28px; }
+  .nav-mark {
+    height: 40px; width: 40px; flex-shrink: 0; border-radius: var(--r);
+    background: rgba(255,255,255,0.14); border: 1.5px solid var(--line-on-shell);
+    display: grid; place-items: center;
+  }
+  .nav-mark span { font-family: var(--mono); font-weight: 800; font-size: 17px; color: #fff; }
+  .nav-logo-text { display: flex; flex-direction: column; line-height: 1.05; gap: 1px; }
+  .nav-logo-text .name { font-weight: 600; font-size: 14.5px; letter-spacing: -0.005em; color: var(--ink-on-shell); }
+  .nav-logo-text .sub { font-size: 10.5px; color: var(--ink-on-shell-2); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* ─── Page shell ─── */
+  .wrap { max-width: 1980px; margin: 0 auto; padding: 0 28px; }
+  .page-head { padding: 32px 0 22px; display: flex; flex-direction: column; gap: 16px; }
+  .page-title-row { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  .page-title { font-family: var(--serif); font-size: clamp(34px, 4.9vw, 60px); line-height: 0.98; letter-spacing: -0.025em; font-weight: var(--fw-medium); color: var(--accent-on-shell); }
+  .page-title em { font-style: normal; font-weight: var(--fw-thin); color: var(--ink-on-shell); opacity: 0.85; }
+
+  /* ─── User bar v3 ─── */
+  .user-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 13px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+  .user-bar.v3 { gap: 0; row-gap: 14px; }
+  .v3-id { display: flex; align-items: center; gap: 11px; flex-shrink: 0; padding-right: 18px; margin-right: 20px; border-right: 1px solid var(--line-2); }
+  .user-avatar { width: 42px; height: 42px; border-radius: var(--r); flex-shrink: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 15px; color: #fff; text-transform: uppercase; background: var(--accent-2-text); }
+  .v3-id-text { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .v3-name { font-weight: 700; font-size: 13.5px; letter-spacing: -0.01em; color: var(--ink); line-height: 1.2; }
+  .v3-email { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.01em; line-height: 1; }
+  .role-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 999px; align-self: flex-start; }
+  .role-badge.user { background: color-mix(in oklab, var(--accent-2-text) 16%, transparent); color: var(--accent-2-text); border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line)); }
+  .v3-flow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+  .v3-seg { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .v3-arrow { color: var(--ink-3); opacity: 0.45; flex-shrink: 0; }
+  .meta-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; padding: 2px 7px; border-radius: var(--r); background: var(--paper-2); border: 1px solid var(--line-2); white-space: nowrap; }
+  .v3-division { font-family: var(--serif); font-size: 20px; line-height: 1; color: var(--accent-text); letter-spacing: -0.01em; white-space: nowrap; }
+  .v3-label-wrap { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .v3-count { font-family: var(--mono); font-size: 9.5px; font-weight: 800; line-height: 1; color: var(--accent-2-text); background: color-mix(in oklab, var(--accent-2-text) 15%, transparent); border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line)); border-radius: 999px; min-width: 17px; height: 17px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .v3-depts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .user-chip.cc { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--r); border: 1px solid color-mix(in oklab, var(--accent-2) 30%, var(--line)); background: color-mix(in oklab, var(--accent-2) 6%, var(--surface)); }
+  .user-chip.cc .v { font-family: var(--sans); font-size: 11.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+  .v3-metrics { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .v3-cc-pill, .v3-gl-pill { display: inline-flex; align-items: baseline; gap: 6px; flex-shrink: 0; padding: 5px 13px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); white-space: nowrap; }
+  .v3-cc-pill { background: var(--accent); color: #fff; }
+  .v3-gl-pill { background: var(--accent-2-text); color: #fff; }
+  .v3-cc-pill .n, .v3-gl-pill .n { font-family: var(--mono); font-size: 13px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .v3-cc-pill .t, .v3-gl-pill .t { font-family: var(--mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.86; }
+  .v3-logout { margin-left: auto; flex-shrink: 0; padding: 4px 2px; font-family: var(--sans); font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-decoration: none; border-radius: var(--r); }
+
+  /* ─── Toolbar ─── */
+  .budget-grid { margin: 20px 0 60px; display: flex; flex-direction: column; gap: 16px; }
+  .grid-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+  .year-select { padding: 9px 30px 9px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; font-weight: 500; cursor: pointer; appearance: none; -webkit-appearance: none; min-width: 120px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233a4864' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+  .dept-picker-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 200px; text-align: left; padding: 9px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .dept-picker-trigger svg { width: 12px; height: 12px; color: var(--ink-3); flex-shrink: 0; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: var(--r); font-size: 13px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--ink); background: var(--paper-2); }
+  .legend { display: flex; align-items: center; gap: 20px; padding: 0 6px; font-size: 16px; color: var(--ink-3); font-family: var(--mono); letter-spacing: 0.02em; }
+  .legend-item { display: inline-flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .legend-dot.sap { background: var(--status-sap); }
+  .legend-dot.approved { background: var(--status-approved); }
+  .legend-dot.pending { background: var(--status-pending); }
+
+  /* ─── Side heading + Reset columns ─── */
+  .side-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .side-heading { font-family: var(--serif); font-size: 20px; font-weight: 500; color: var(--ink-on-shell); margin: 0; }
+  .btn-sm { padding: 7px 12px; font-size: 12px; border-radius: var(--r); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-on-shell-2); }
+  .btn-ghost:hover { color: var(--ink-on-shell); background: transparent; }
+  .btn-ghost svg { width: 13px; height: 13px; }
+
+  /* ─── Table ─── */
+  .table-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .table-wrap { overflow: auto; max-height: 640px; }
+  .data-table { width: 100%; min-width: 2200px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12.5px; background: var(--surface); }
+  col.cc-col { width: 118px; }
+  col.gl-col { width: 190px; }
+  col.glgroup-col { width: 210px; }
+  col.remark-col { width: 170px; }
+  col.status-col { width: 180px; }
+  col.total-year-col { width: 112px; }
+  col.m-col { width: 98px; }
+  col.action-col { width: 52px; }
+
+  .data-table thead th { position: sticky; top: 0; z-index: 10; background: var(--paper-2); font-weight: 600; color: var(--ink-2); font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .data-table thead th .th-label { display: block; line-height: 1.2; }
+  .data-table thead tr.group-head-row th { position: sticky; top: 0; z-index: 22; height: 22px; padding: 5px 10px; text-align: center; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); background: var(--paper-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .data-table thead tr.group-head-row th.frz { text-align: left; }
+  .data-table thead tr.group-head-row th.month-group-label { font-family: var(--serif); font-size: 16px; font-weight: 500; letter-spacing: -0.005em; text-transform: none; color: var(--ink); }
+  .data-table thead tr.col-row th { top: 22px; }
+  .col-filter { display: block; width: 100%; margin-top: 6px; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r); font-size: 11px; background: var(--surface); color: var(--ink); outline: none; font-weight: 400; text-transform: none; letter-spacing: normal; box-sizing: border-box; }
+  .col-filter::placeholder { color: var(--ink-3); font-size: 10.5px; }
+  .col-filter-spacer { height: 27px; margin-top: 6px; }
+  .col-toggle-btn { position: absolute; top: 4px; right: 12px; width: 18px; height: 18px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--ink-3); cursor: pointer; }
+  .col-toggle-btn svg { width: 11px; height: 11px; }
+  .fs-toggle-btn { position: absolute; top: 2px; left: 8px; width: 18px; height: 18px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--ink-3); cursor: pointer; }
+  .fs-toggle-btn svg { width: 11px; height: 11px; }
+
+  .data-table th.frz, .data-table td.frz { position: sticky; z-index: 5; background: var(--surface); }
+  .data-table thead th.frz { z-index: 16; background: var(--paper-2); }
+  .data-table thead tr.group-head-row th.frz { z-index: 22; }
+  .data-table .frz-1 { left: var(--frz1); }
+  .data-table .frz-2 { left: var(--frz2); }
+  .data-table .frz-3 { left: var(--frz3); }
+  .data-table .frz-4 { left: var(--frz4); }
+  .data-table .frz-5 { left: var(--frz5); }
+  .data-table .frz-5, .data-table .frz-edge { box-shadow: 6px 0 8px -6px rgba(0,0,0,0.28); }
+
+  .data-table th.month-col, .data-table th.total-year-col { text-align: right; }
+  .data-table thead th.month-col .th-label, .data-table thead th.total-year-col .th-label { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; text-transform: none; }
+  .data-table thead th.total-year-col .th-label { font-size: 14.7px; font-weight: 800; }
+  .data-table td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .txn-row.first td { border-top: 2px solid var(--line); }
+
+  .idx-cell { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gl-code-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gl-name { color: var(--ink-3); font-size: 11px; margin-top: 2px; }
+
+  .gl-chip.special-gl-group { --chip-bg:var(--cman-navy-80); --chip-fg:#fff; --chip-glow:rgba(27,53,100,0.28); background: var(--chip-bg); color: var(--chip-fg); text-shadow: 0 1px 2px rgba(0,0,0,0.2); padding: 5px 11px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25); font-weight: 700; font-size: 11.5px; display: inline-block; letter-spacing: -0.005em; box-shadow: 0 0 12px var(--chip-glow), 0 1px 0 rgba(255,255,255,0.2) inset; }
+  .gl-chip.gl-green { --chip-bg:var(--cman-green); --chip-fg:#fff; --chip-glow:rgba(0,128,94,0.45); }
+
+  .status-cell { background: var(--surface); font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; color: var(--ink-3); }
+  .status-cell-content { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .status-cell-content::before { content: ''; width: 7px; height: 7px; flex-shrink: 0; background: currentColor; }
+  .status-cell.sap { color: var(--status-sap); }
+  .status-cell.approved { color: var(--status-approved); }
+  .status-cell.pending { color: var(--status-pending); }
+
+  .data-table tr[data-status='sap'] td:not(.frz):not(.status-cell):not(.action-cell) { background: color-mix(in oklab, var(--status-sap) 9%, var(--surface)); }
+  .data-table tr[data-status='approved'] td:not(.frz):not(.status-cell):not(.action-cell) { background: color-mix(in oklab, var(--status-approved) 9%, var(--surface)); }
+  .data-table tr[data-status='pending'] td:not(.frz):not(.status-cell):not(.action-cell) { background: color-mix(in oklab, var(--ink) 9%, var(--surface)); }
+
+  .month-cell { text-align: right; }
+  .total-year-cell .month-value { font-weight: 700; }
+  .total-year-cell { border-right: 1px solid var(--line-2); }
+  th.total-year-col { border-right: 1px solid var(--line-2); }
+  .month-value { font-family: var(--mono); font-size: 11.5px; font-weight: 500; padding: 4px 8px; border-radius: var(--r); display: inline-block; min-width: 60px; text-align: right; }
+  .month-value.sap { color: var(--status-sap); background: color-mix(in oklab, var(--status-sap) 10%, transparent); }
+  .month-value.approved-ro { color: var(--status-approved); background: color-mix(in oklab, var(--status-approved) 10%, transparent); }
+  .month-value.dash { color: var(--ink-3); background: transparent; font-weight: 400; opacity: 0.6; }
+  .month-input { width: 78px; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-2); color: var(--ink); font-weight: 600; outline: none; min-width: unset; text-align: right; font-family: var(--mono); font-size: 11.5px; }
+  .month-input:focus { border-color: var(--accent); background: var(--surface); }
+
+  .remark-text { font-size: 12px; color: var(--ink-2); line-height: 1.4; }
+  .remark-input { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-2); color: var(--ink); font-size: 12px; outline: none; box-sizing: border-box; }
+  .remark-input:focus { border-color: var(--accent); background: var(--surface); }
+
+  .subtotal-row td { background: var(--paper-2); font-weight: 700; font-family: var(--mono); }
+  .subtotal-row .month-value { font-weight: 700; }
+  .data-table .subtotal-row td.frz { background: var(--paper-2); }
+
+  .special-open-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; padding: 2px 8px; border: 1px solid var(--special-edge); border-radius: 999px; background: color-mix(in oklab, var(--special-bg) 55%, var(--surface)); color: var(--special-edge); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer; }
+  .special-open-btn:hover { background: var(--special-bg); border-color: var(--ink); }
+
+  .action-cell { text-align: center; padding: 0 8px; background: var(--surface); }
+  .action-col-head { text-align: center; }
+
+  /* ─── Approval bar (bottom-right, sticky per staging layout) ─── */
+  .approval-bar { position: sticky; bottom: 14px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; margin-top: 18px; padding: 10px 4px; }
+  .status-chip { font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; padding: 5px 11px; border-radius: 999px; white-space: nowrap; }
+  .status-chip-draft { color: var(--ink-3); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 16px -6px rgba(0,0,0,0.35); }
+  .btn-submit { display: inline-flex; align-items: center; gap: 10px; padding: 13px 26px; border-radius: var(--r); font-size: 14px; font-weight: 700; letter-spacing: -0.005em; cursor: pointer; white-space: nowrap; border: 1px solid var(--ink-on-shell); color: #fff; background: var(--accent); box-shadow: 0 10px 24px -8px rgba(0,0,0,0.45); }
+  .btn-submit svg { width: 15px; height: 15px; color: #fff; }
+  .btn-submit:hover { background: color-mix(in oklab, var(--accent) 78%, black); }
+</style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="nav-mark" aria-hidden="true"><span>C</span></div>
+      <div class="nav-logo-text">
+        <span class="name">Budget Management</span>
+        <span class="sub">Chememan</span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <header class="page-head">
+      <section class="user-bar v3">
+        <div class="v3-id">
+          <div class="user-avatar" aria-hidden="true">P0</div>
+          <div class="v3-id-text">
+            <span class="v3-name">pornthipp</span>
+            <span class="v3-email">pornthipp@chememan.com</span>
+            <span class="role-badge user">ผู้กรอกงบประมาณ</span>
+          </div>
+        </div>
+        <div class="v3-flow">
+          <div class="v3-seg">
+            <span class="meta-tag">สายงาน</span>
+            <span class="v3-division">Digital Technology</span>
+          </div>
+          <svg class="v3-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="v3-seg">
+            <span class="v3-label-wrap">
+              <span class="meta-tag">ฝ่าย</span>
+              <span class="v3-count">1</span>
+            </span>
+            <div class="v3-depts">
+              <span class="user-chip cc"><span class="v">Data &amp; Analytic</span></span>
+            </div>
+          </div>
+          <svg class="v3-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="v3-metrics">
+            <span class="v3-cc-pill"><span class="n">2</span><span class="t">Cost Centers</span></span>
+            <span class="v3-gl-pill"><span class="n">3</span><span class="t">GL Codes</span></span>
+          </div>
+        </div>
+        <a href="#" class="v3-logout">ออกจากระบบ</a>
+      </section>
+
+      <div class="page-title-row">
+        <h1 class="page-title">OPEX <em>Management.</em></h1>
+      </div>
+    </header>
+
+    <div class="budget-grid">
+      <div class="grid-toolbar">
+        <select class="year-select"><option selected>Year 2026</option></select>
+        <button type="button" class="dept-picker-trigger">
+          Data &amp; Analytic
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="btn btn-add">+ เพิ่ม Transaction</button>
+        <button type="button" class="btn btn-attach">แนบไฟล์</button>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot sap"></span>SAP · ใช้จริง (2026)</span>
+          <span class="legend-item"><span class="legend-dot approved"></span>Approved · งบอนุมัติ (2026)</span>
+          <span class="legend-item"><span class="legend-dot pending"></span>Pending · งบรออนุมัติ (2027)</span>
+        </div>
+      </div>
+
+      <div class="side-section" data-testid="side-section-SGA">
+        <div class="side-heading-row">
+          <h2 class="side-heading">ฝั่งบริหาร / ขาย · SG&amp;A (6xxx)</h2>
+          <button type="button" class="btn btn-sm btn-ghost" title="รีเซ็ตความกว้างคอลัมน์ให้พอดีเนื้อหา">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3v5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Reset columns
+          </button>
+        </div>
+
+        <div class="table-panel">
+          <div class="table-wrap">
+            <table class="data-table">
+              <colgroup>
+                <col class="cc-col" />
+                <col class="gl-col" />
+                <col class="glgroup-col" />
+                <col class="remark-col" />
+                <col class="status-col" />
+                <col class="total-year-col" />
+                <col class="m-col" /><col class="m-col" /><col class="m-col" /><col class="m-col" />
+                <col class="m-col" /><col class="m-col" /><col class="m-col" /><col class="m-col" />
+                <col class="m-col" /><col class="m-col" /><col class="m-col" /><col class="m-col" />
+                <col class="action-col" />
+              </colgroup>
+              <thead>
+                <tr class="group-head-row">
+                  <th colspan="4" class="frz frz-1">
+                    <button type="button" class="fs-toggle-btn" title="ขยายเต็มจอ" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                  </th>
+                  <th class="frz frz-5 frz-edge"></th>
+                  <th class="month-group-label"><span class="th-label">รวมทั้งปี</span></th>
+                  <th colspan="12" class="month-group-label"><span class="th-label">งบประมาณรายเดือน (บาท)</span></th>
+                  <th class="action-col-head" aria-hidden="true"></th>
+                </tr>
+                <tr class="col-row">
+                  <th class="frz frz-1"><span class="th-label">Cost Center</span><input type="text" class="col-filter" placeholder="กรอง…" /></th>
+                  <th class="frz frz-2"><span class="th-label">GL Code</span><input type="text" class="col-filter" placeholder="กรอง…" /></th>
+                  <th class="frz frz-3"><span class="th-label">GL Group</span><input type="text" class="col-filter" placeholder="กรอง…" /></th>
+                  <th class="frz frz-4"><span class="th-label">Remark</span><input type="text" class="col-filter" placeholder="กรอง…" /></th>
+                  <th class="frz frz-5">
+                    <span class="th-label">Status</span>
+                    <button type="button" class="col-toggle-btn" title="ซ่อนคอลัมน์" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <input type="text" class="col-filter" placeholder="กรอง…" />
+                  </th>
+                  <th class="total-year-col"><span class="th-label">Jan–Dec</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Jan</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Feb</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Mar</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Apr</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">May</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Jun</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Jul</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Aug</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Sep</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Oct</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Nov</span><div class="col-filter-spacer"></div></th>
+                  <th class="month-col"><span class="th-label">Dec</span><div class="col-filter-spacer"></div></th>
+                  <th class="action-col-head"><div class="col-filter-spacer"></div></th>
+                </tr>
+              </thead>
+
+              <!-- ── Row group 1: 6211100110 · Maintenance - License for software ── -->
+              <tbody class="txn-block">
+                <tr class="txn-row first" data-status="sap">
+                  <td class="idx-cell frz frz-1">10IT013000</td>
+                  <td class="gl-cell frz frz-2"><span class="gl-code-text">6211100110</span><div class="gl-name">ค่าซ่อมบำรุง - ซอฟต์แวร์</div></td>
+                  <td class="gl-group-cell frz frz-3">Maintenance - License for software</td>
+                  <td class="remark-cell frz frz-4"><input type="text" class="remark-input" value="" aria-label="Remark 10IT013000 6211100110" /></td>
+                  <td class="status-cell sap frz frz-5"><span class="status-cell-content">SAP · ใช้จริง</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value sap">844.91</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value sap">844.91</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td rowspan="3" class="action-cell"></td>
+                </tr>
+                <tr class="txn-row" data-status="approved">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell approved frz frz-5"><span class="status-cell-content">Approved · งบ</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                </tr>
+                <tr class="txn-row last" data-status="pending">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell pending frz frz-5"><span class="status-cell-content">Pending · รออนุมัติ</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                </tr>
+              </tbody>
+              <tbody>
+                <tr class="subtotal-row" data-layer="pending">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวม Maintenance - License for software · Pending</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+              </tbody>
+
+              <!-- ── Row group 2: 6211400010 · Other admin. Expenses ── -->
+              <tbody class="txn-block">
+                <tr class="txn-row first" data-status="sap">
+                  <td class="idx-cell frz frz-1">10IT013000</td>
+                  <td class="gl-cell frz frz-2"><span class="gl-code-text">6211400010</span><div class="gl-name">ค่าวารสารและสมาชิก</div></td>
+                  <td class="gl-group-cell frz frz-3">Other admin. Expenses</td>
+                  <td class="remark-cell frz frz-4"><input type="text" class="remark-input" value="" aria-label="Remark 10IT013000 6211400010" /></td>
+                  <td class="status-cell sap frz frz-5"><span class="status-cell-content">SAP · ใช้จริง</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td rowspan="3" class="action-cell"></td>
+                </tr>
+                <tr class="txn-row" data-status="approved">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell approved frz frz-5"><span class="status-cell-content">Approved · งบ</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                </tr>
+                <tr class="txn-row last" data-status="pending">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell pending frz frz-5"><span class="status-cell-content">Pending · รออนุมัติ</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                  <td class="month-cell"><input type="text" class="month-value month-input" value="0" /></td>
+                </tr>
+              </tbody>
+              <tbody>
+                <tr class="subtotal-row" data-layer="pending">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวม Other admin. Expenses · Pending</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+              </tbody>
+
+              <!-- ── Row group 3 (SPECIAL): 6210400010 · Travelling Expense ── -->
+              <tbody class="txn-block">
+                <tr class="txn-row first" data-status="sap">
+                  <td class="idx-cell frz frz-1">10IT013000</td>
+                  <td class="gl-cell frz frz-2"><span class="gl-code-text">6210400010</span><div class="gl-name">เบี้ยเลี้ยง</div></td>
+                  <td class="gl-group-cell frz frz-3"><span class="gl-chip special-gl-group gl-green">Travelling Expense</span></td>
+                  <td class="remark-cell frz frz-4"><span class="remark-text">—</span></td>
+                  <td class="status-cell sap frz frz-5"><span class="status-cell-content">SAP · ใช้จริง</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value sap">500.00</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value sap">500.00</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td rowspan="3" class="action-cell"></td>
+                </tr>
+                <tr class="txn-row" data-status="approved">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell approved frz frz-5"><span class="status-cell-content">Approved · งบ</span></td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                </tr>
+                <tr class="txn-row last" data-status="pending">
+                  <td colspan="4" class="frz frz-1"></td>
+                  <td class="status-cell pending frz frz-5">
+                    <span class="status-cell-content">
+                      Pending · รออนุมัติ
+                      <button type="button" class="special-open-btn">แก้ไขผ่านฟอร์มย่อย ↗</button>
+                    </span>
+                  </td>
+                  <td class="month-cell total-year-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td><td class="month-cell"><span class="month-value dash">–</span></td>
+                  <td class="month-cell"><span class="month-value dash">–</span></td>
+                </tr>
+              </tbody>
+              <tbody>
+                <tr class="subtotal-row" data-layer="pending">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวม Travelling Expense · Pending</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+              </tbody>
+
+              <!-- ── Grand totals (side-wide) ── -->
+              <tbody>
+                <tr class="subtotal-row grand-total" data-layer="sap">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวมทั้งหมด · SAP · ใช้จริง (Jan-Mar)</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">1,344.91</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">1,344.91</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+                <tr class="subtotal-row grand-total" data-layer="board">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวมทั้งหมด · Approved · งบ</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+                <tr class="subtotal-row grand-total" data-layer="pending">
+                  <td colspan="5" class="frz frz-1 frz-edge">รวมทั้งหมด · Pending · รออนุมัติ</td>
+                  <td class="month-cell total-year-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td><td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="month-cell"><span class="month-value">–</span></td>
+                  <td class="action-cell"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="approval-bar">
+        <span class="status-chip status-chip-draft">แบบร่าง (ยังไม่ส่งอนุมัติ)</span>
+        <button type="button" class="btn-submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          <span>ส่งอนุมัติ</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+</body>
+</html>
