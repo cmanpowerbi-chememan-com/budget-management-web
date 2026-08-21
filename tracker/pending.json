@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-21T13:30:22+0700",
+  "updated": "2026-08-21T13:35:46+0700",
   "tasks": [
     {
       "id": "deploy-1b537f9-prd",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-21T13:30:22+0700",
-      "updated": "2026-08-21T13:30:22+0700",
-      "ai": "PRD DEPLOY APPROVED by jakkaritw ('deal', 2026-08-21). Target: cman-budget-web-prd 77308d7 rev0000024 -> budget-web:1b537f9. No DDL, no new env. Verify plan: tag exists in ACR -> update -> revision Running/Healthy/traffic100 -> anon curl 401 -> startup log clean -> LIVE probe that /sit is dead on prd.",
+      "updated": "2026-08-21T13:35:46+0700",
+      "ai": "PRD DEPLOY LANDED + VERIFIED 2026-08-21T06:32Z. cman-budget-web-prd--0000025 active, image cmanbudgetacr.azurecr.io/budget-web:1b537f9, RunningAtMaxScale/Healthy/traffic 100; old 0000024 (77308d7) demoted to traffic 0 and kept for instant rollback. Verify evidence: anonymous curl 401 on /api/me AND /sit/impersonate AND /health AND the logo asset (Easy Auth fronts everything, so the test endpoint is unreachable without a company login and the guard 404s an authenticated one); startup log clean on both workers - fabric conn 0.95s, gold conn 0.39s, SAP caches primed fiscal_year=2026 watermark=2026-04-29 visible_months=[1,2,3], warmup total 3.28s/3.62s, zero errors. Tag pre-verified present in ACR before the update. Tracker committed cf4afcb (only tracker/pending.json + pending_archive.json staged; the 21 design/mockup deletions, .claude/plan.md, .gitignore, setup/phase2_harness_dkl.py and the SIT xlsx belong to parallel sessions and were left untouched). ROLLBACK: az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --image cmanbudgetacr.azurecr.io/budget-web:77308d7. STILL OPEN, gates go-live: stg and prd share Fabric SQL DB a42ef9f3 so SIT rows are visible to production - owned by wipe-data-analytic-2027-clean-slate. NOT DONE by design: FC Minimal declared but no font files vendored; 5 gl-* chip hues unaligned (no reference); chememan-full-logo-white.png ships unused. cf4afcb not pushed (jakkaritw's keep-local rule).",
       "agent": "claude"
     },
     {
