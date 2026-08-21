@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-20T20:58:45+0700",
+  "updated": "2026-08-21T09:32:27+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -731,6 +731,14 @@
       "created": "2026-07-21T20:08:11+0700",
       "updated": "2026-07-21T20:56:34+0700",
       "ai": "DONE + PUSHED be898d9. Compact-mode toggle (collapse btn on Status th -> CC+GL+12mo, expand on GL th, special up-btn to GL cell, no persistence) commit 1bd9236 with frz-5 status freeze + seam z-fix (group-head th.frz 17->22, headless 8/8). Backend orphan-parent delete e6f669b. Picker force-first-dept d835310 (jakkaritw confirmed supersede; memory updated). Front chores 009cb48, setup scripts + --yes guard 9741c09, plan/graphify ff965a6, merge be898d9. Gate APPROVE-WITH-SUGGESTIONS: FE 475/475, tsc clean, BE 672 pass. Leftover: parallel session's in-flight GridTable status-cell-content wrap left UNCOMMITTED (theirs); root package-lock stub deleted; e2e-tmp-border.mjs belongs to parallel session.",
+      "agent": "claude"
+    },
+    {
+      "id": "ui-test-plan-run",
+      "state": "done",
+      "created": "2026-07-22T03:04:48+0700",
+      "updated": "2026-07-22T05:32:46+0700",
+      "ai": "Ran docs/test/ui-test-plan.md end-to-end against 127.0.0.1:5180. KEY: 5180 = vite.review.config.ts -> proxies to STAGING container + injects spoof header suchanyay (NOT local :8000). Result 103 plan items: 98 PASS / 2 FAIL / 3 SKIP. FAIL 10.4 = GL_EDIT_BY_ENABLED off on staging (12 edit_by=admin GLs visible to filler; local backend correct). FAIL 12.3 = e2e 20/23 (2 stale selectors /ปีงบประมาณ/ vs new YearPicker aria-label; 1 real drift: role=none still fires 1 /scope/departments). SKIP 9.1/9.3/11.8 = no SharePoint upload (irreversible, needs jakkaritw ok). 12.1 vitest 475 pass, 12.2 pytest 672 pass, 12.4 build clean. FINDINGS: approver2/3 (Nipaporn/Waraporn) cannot reach Solution Delivery in UI (CC not in See scope) - steps 2/3 only via API; vite.review overwrites identity header so multi-persona UI testing needs a 2nd dev server; StrictMode double-load wipes subform drafts in dev; /budget/detail does not expose is_auto_calc. Test data on 10IT012000/FY2027 fully cleaned (0 rows in pending_budget/detail/trip/approval_status+log). Results: docs/test/ui-test-results-2026-07-22.md + .jsonl. Harness in scratchpad uitest/.",
       "agent": "claude"
     }
   ]

@@ -1,15 +1,31 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-21T11:30:05+0700",
+  "updated": "2026-08-21T13:30:22+0700",
   "tasks": [
     {
-      "id": "log-8013391",
+      "id": "deploy-1b537f9-prd",
+      "state": "doing",
+      "created": "2026-08-21T13:30:22+0700",
+      "updated": "2026-08-21T13:30:22+0700",
+      "ai": "PRD DEPLOY APPROVED by jakkaritw ('deal', 2026-08-21). Target: cman-budget-web-prd 77308d7 rev0000024 -> budget-web:1b537f9. No DDL, no new env. Verify plan: tag exists in ACR -> update -> revision Running/Healthy/traffic100 -> anon curl 401 -> startup log clean -> LIVE probe that /sit is dead on prd.",
+      "agent": "claude"
+    },
+    {
+      "id": "compare-stg-prd-predeploy",
       "state": "done",
-      "created": "2026-08-21T11:30:05+0700",
-      "updated": "2026-08-21T11:30:05+0700",
-      "agent": "autolog",
-      "ai": "feat(theme): repaint onto the real CHEMEMAN CI palette [commit 8013391]"
+      "created": "2026-08-21T12:10:46+0700",
+      "updated": "2026-08-21T13:22:02+0700",
+      "ai": "PRE-PRD DIFF COMPLETE, no deploy done (awaiting jakkaritw). prd=77308d7 rev0000024 vs stg=1b537f9 rev0000058, 23 commits / 7 backend/app files / 38 src files. NO DDL: db/schema.sql delta is comment-only (reminder_day meaning); every DB object the delta touches already exists (budget.approval_status, budget.pending_budget, dbo.gl_group, dbo.submission_deadline); budget.reminder_log is jobs-only, app never touches it. NO new required env: only new Setting is reminder_interval_minutes default 10080 = exactly the old hardcoded 7d, prd leaves unset. TEST-ONLY CODE = routers/sit.py ONLY; proven inert under prd env by scratchpad/prd_sit_guard.py: _sit_guard_ok False for all 3 admins, sit_targets_for None, and False even when SIT_IMPERSONATE is force-set (app_env=production checked first); DEV_AUTH needs is_local which is False. Runtime image ships only backend/app + backend/jobs + built static out/ (no tests/e2e/src). Unused asset chememan-full-logo-white.png ships harmlessly. Env drift stg-only: DEV_AUTH_EMAIL, SIT_IMPERSONATE, APP_ENV=local vs production; EasyAuth cookieExpiration prd 14:00:00 vs stg platform default. FLAG: stg and prd point at the SAME Fabric SQL DB a42ef9f3 (identical server+db), so SIT-written rows are already visible to prd - clean-slate is owned by the parallel wipe-data-analytic-2027-clean-slate entry. Tests green at HEAD: backend 1097 passed/48 deselected, frontend vitest 731 passed/34 files; types proven by the successful ACR build cm1k. No container app JOBS exist in the RG so the reminders cadence change is dormant; budget-automations.yml cron stays dry-run (no --execute). Workflow deletions (master-tables-deploy, sync_employees) already live on origin - repo-level, unaffected by the container deploy.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-1b537f9-stg",
+      "state": "done",
+      "created": "2026-08-21T11:36:10+0700",
+      "updated": "2026-08-21T11:36:10+0700",
+      "ai": "DEPLOYED TO STAGING + PUSHED + VERIFIED LANDED 2026-08-21, jakkaritw approved ('deal'). COMMITS: 8013391 feat(theme) repaint onto the real CHEMEMAN CI palette (18 files: tokens.css, global.css, App.tsx, layout.tsx, contrast-baseline.json, the 0002.4 ref snapshot, 12 theme-ci-green-*.png) + 1b537f9 chore(tracker) logged separately. Push 4bf1d82..1b537f9, origin/main == local HEAD == 1b537f9, 0 ahead. SCOPE GUARD: at git add time TWENTY-ONE staged deletions belonging to a PARALLEL session (design/mockups/theme-final-*.png, theme-shell-green-*, session-expiry-dialog-variants.png, theme-delete-dark-mode-prompt.md) were sitting in the index from before this session; I git restore --staged'd every one of them so they did NOT ride along in my commit -- they remain unstaged for whoever owns them. BUILD: clean detached worktree at 1b537f9 (0 dirty), ACR run cm1k Succeeded, tag budget-web:1b537f9 confirmed present via az acr repository show-tags (the az CLI exited on the usual cp1252 warn-glyph trap; judged by list-runs + the manifest, never by exit code); worktree removed + pruned. DEPLOY: revision cman-budget-web-stg--0000058 Running / Healthy / traffic 100, image confirmed = budget-web:1b537f9; anonymous curl = 401 so Easy Auth still enforces; startup log clean, warmup total 13.8-13.9s, SAP caches primed for fiscal_year=2026, zero errors. WHAT SHIPPED: shell #2E8B57 -> CI green #00805e, --surface -> pure white, --paper-2 -> CI blue tint #e5eefa, --accent-text -> CI navy #1b3564, --status-sap -> #09532d, --status-approved -> #2f61ac, --special-bg/-edge onto CI yellow #fdcb35; the nav now shows the ORIGINAL full-colour logo (byte-identical to cman-design-system assets/logo, sha256 1b65b0c22985fff6, verified against the git blob not just the local copy) on an 85x48 white plate built from --surface + --r, measured plate-vs-shell 4.94:1 and wordmark-vs-plate 5.46:1, with the nav geometry proven unchanged to the decimal (nav-inner 64px, .nav-logo-text x=131 y=18.375 w=140.25 before AND after). PRE-PUSH GATES re-run by me: next build clean, vitest 731, playwright 37/37 including the contrast ratchet, backend 1097 untouched. A REAL regression was caught BEFORE the baseline was regenerated rather than absorbed by it: the pending chip's gold text measured 4.40:1 on the new white surface and was darkened to #80500d = 5.09:1. Baseline went 193 -> 107 entries, 0 added, 1 worsened (the decorative .admin-zone hairline 1.34 -> 1.23). NOT DONE, deliberately: FC Minimal / IBM Plex Sans Thai are declared per the ref but NOT loaded -- no CDN link, no vendored file exists in this repo or in cman-design-system (which now carries only assets/logo and assets/characters), so users still see the system fallback and nothing changed visually about the type; and the five remaining gl-* chip hues keep their colours because the ref has no counterpart for them. PRODUCTION UNTOUCHED (still 77308d7, cookie 14:00:00, no SIT_IMPERSONATE) and not approved. KNOWN PRE-EXISTING, not from this change: vitest has a load-sensitive flake (a TripManager per-diem test exceeding its timeout when the machine is busy; 11 failures once when run concurrently with playwright, 1 failure once standalone, clean otherwise) -- jsdom applies no cascade so a CSS-only change cannot cause it.",
+      "agent": "claude"
     },
     {
       "id": "nav-logo-original-on-ci-green",
