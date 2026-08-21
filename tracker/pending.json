@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-21T13:35:46+0700",
+  "updated": "2026-08-21T13:51:28+0700",
   "tasks": [
+    {
+      "id": "sit-leftover-audit-prd",
+      "state": "done",
+      "created": "2026-08-21T13:49:07+0700",
+      "updated": "2026-08-21T13:51:28+0700",
+      "ai": "[DECISION 2026-08-21, jakkaritw: 'pass'] LEAVE BOTH LEFTOVERS IN PLACE - do NOT delete. No cleanup write was made against the shared DB. Rationale accepted: the single pending_budget row (cc 10IT013000 / gl 6211100110 / FY2027 / Data & Analytic / all months and total_year 0.00) is invisible to users under the per-month net-zero row-hide, and approval_log's 9 SIT rows are never rendered by any route and are worth keeping as an audit trail. AUDIT RESULT unchanged: budget.approval_status = 0 rows, so NOTHING is stuck in a รออนุมัติ state; raw counts approval_status=0, approval_log=9, pending_budget=1, pending_budget_detail=0, budget_trip=0, reminder_log=0. No SIT data in the analytical layer - the app writes only budget.* (verified across write_model.py + approval.py), never gold and never dbo.board_budget; Approved layer = dbo.board_budget admin Excel import, actuals = gold.fact_gl_trans, both read-only. Temp probe scripts DELETED from the scratchpad (supersedes this entry's earlier 'say the word to promote them' note - nothing to promote now); to re-run, connect with the SP pyodbc pattern to SERVER v5o4qez3u4cupase7cogkwvyke-bby6xlm3ncqexly4ozejod2vqe.database.fabric.microsoft.com DATABASE fabric_sql_database-a42ef9f3-f190-464a-8d5e-c0d41ef9ce42 (HARDCODE it, local .env still points at the retired DB1) and COUNT(*) the 6 tables above.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-79ed6f0",
+      "state": "done",
+      "created": "2026-08-21T13:36:03+0700",
+      "updated": "2026-08-21T13:36:03+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): record that 1b537f9 landed on production as revision 0000025 [commit 79ed6f0]"
+    },
     {
       "id": "deploy-1b537f9-prd",
       "state": "done",
