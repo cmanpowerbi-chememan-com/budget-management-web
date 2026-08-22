@@ -1,14 +1,22 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-22T20:36:37+0700",
+  "updated": "2026-08-22T22:36:14+0700",
   "tasks": [
     {
+      "id": "dep-cryptography-cve-bump",
+      "state": "willdo",
+      "created": "2026-08-22T22:36:14+0700",
+      "updated": "2026-08-22T22:36:14+0700",
+      "ai": "pip-audit during the 08-22 tier-3 security gate flagged PRE-EXISTING deps: cryptography==48.0.1 (3 CVEs incl CVE-2026-69247 Bleichenbacher-style PKCS7 decrypt oracle; fixed >=50.0.0) + pytest==9.0.2 (local /tmp DoS, dev-only; fixed 9.0.3). Unrelated to the tier-3 change. Action: bump backend/requirements.txt cryptography >=50, rerun suite, redeploy with the next release train.",
+      "agent": "claude"
+    },
+    {
       "id": "country-group-other-16",
-      "state": "doing",
+      "state": "done",
       "created": "2026-08-22T13:47:47+0700",
-      "updated": "2026-08-22T20:36:37+0700",
-      "ai": "PAUSED->RESUMING 08-22: workflow wf_218d14ef-9a3 (country-group-other-tier, 4 phases: implement/verify/review/fix) was killed when the CC process exited; git status confirms ZERO code edits landed (backend/app/reference_data.py + frontend/src/subform untouched). Master country.xlsx edit from step 2 is LIVE and unaffected (29 rows). Next step = relaunch Workflow with scriptPath country-group-other-tier-wf_218d14ef-9a3.js + resumeFromRunId wf_218d14ef-9a3; nothing to recover from cache. Still pending after that: run NB_budget_masters_sync only_spec=Budget_Masters_country_group + stg/prd deploy (both need jakkaritw approval).",
+      "updated": "2026-08-22T22:36:14+0700",
+      "ai": "COMPLETE + SHIPPED BOTH ENVS 08-22. Chain: (1) master country.xlsx 13->29 rows (16 tier-3 English, label ต่างประเทศ-อื่นๆ, script setup/add_country_master_other_group.py, sensitivity label intact); (2) code commit f32dcc7 — backend _COUNTRY_GROUP_BY_NAME += 'other':3 (reference_data.py; unknown labels still skip+warn), frontend synthetic 'อื่นๆ (Other)' option REMOVED, legacy stored destination renders '<name> (ค่าเดิม)' fallback and round-trips unchanged, CountryOption.country_group 1|2->1|2|3; (3) gates: backend pytest 1100 pass (4 new TDD tests), vitest 732 pass, next build clean, Playwright filler-journey 10/10, 3-lens adversarial review -> 1 LOW doc fix applied, 07 security GATE PASS; (4) sync NB_budget_masters_sync only_spec=Budget_Masters_country_group Completed -> live dbo.country_group = 1 domestic/12 asian/16 other verified by direct SQL; (5) deploy image budget-web:f32dcc7 (ACR run cm1m, clean worktree) -> stg rev 0000059 Healthy/100% -> prd rev 0000026 Healthy/100%, both anon 401. jakkaritw approved deploy this session. LEFTOVER: none for this feature. NOT pushed to origin (keep-local rule).",
       "agent": "claude"
     },
     {
