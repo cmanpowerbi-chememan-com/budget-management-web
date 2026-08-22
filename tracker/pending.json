@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-22T22:36:14+0700",
+  "updated": "2026-08-22T22:36:33+0700",
   "tasks": [
+    {
+      "id": "log-c747bff",
+      "state": "done",
+      "created": "2026-08-22T22:36:33+0700",
+      "updated": "2026-08-22T22:36:33+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): close the tier-3 country ship — f32dcc7 live on stg 0000059 + prd 0000026 [commit c747bff]"
+    },
     {
       "id": "dep-cryptography-cve-bump",
       "state": "willdo",
