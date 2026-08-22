@@ -149,12 +149,15 @@ export interface TravelerOption {
   email: string
 }
 
-/** `GET /reference/countries` — destination master. The API returns groups
- * 1 (domestic) and 2 (asian) ONLY; the UI appends its own "อื่นๆ (Other)"
- * → group 3 entry (see `subform/model.countryOptionsWithOther`). */
+/** `GET /reference/countries` — destination master. Until 2026-08-22 the API
+ * only ever returned groups 1 (domestic)/2 (asian) and the UI appended its
+ * own synthetic "อื่นๆ (Other)" → group 3 entry; the SharePoint master
+ * (country.xlsx) now carries real tier-3 countries too, so group 3 is just
+ * another row from this same list — no client-side append left (removed
+ * from `subform/model.ts`, jakkaritw's decision). */
 export interface CountryOption {
   country: string
-  country_group: 1 | 2
+  country_group: 1 | 2 | 3
 }
 
 /** `PUT /budget/rows` request body (`write_model.PendingRowInput`). All 12

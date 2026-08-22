@@ -590,19 +590,60 @@ describe('TripManager', () => {
       expect(payload.country_group).toBe(2)
     })
 
-    it('picking อื่นๆ (Other) auto-sets country_group 3', async () => {
+    // 2026-08-22: country.xlsx (the SharePoint master) grew 16 real tier-3
+    // rows and the frontend-synthetic "อื่นๆ (Other)" entry was removed
+    // (jakkaritw, locked) — group 3 now comes from the API list exactly
+    // like groups 1/2, no client-side append left.
+    it('picking a real tier-3 master country (e.g. United States) auto-sets country_group 3 — no client-side synthetic entry needed', async () => {
+      vi.mocked(referenceApi.fetchCountries).mockResolvedValue([...COUNTRIES, { country: 'United States', country_group: 3 }])
       mockCreateOk()
       await renderEmpty()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
 
       fillNewTripBasics()
-      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'อื่นๆ (Other)' } })
+      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'United States' } })
       fireEvent.click(saveAllButton())
 
       await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
       const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
-      expect(payload.destination).toBe('อื่นๆ (Other)')
+      expect(payload.destination).toBe('United States')
       expect(payload.country_group).toBe(3)
+    })
+
+    it('a NEW trip never offers the old synthetic อื่นๆ (Other) option — the picker shows only what the master serves', async () => {
+      await renderEmpty()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      expect(screen.queryByRole('option', { name: /อื่นๆ \(Other\)/ })).not.toBeInTheDocument()
+    })
+
+    it('an existing trip whose stored destination fell out of the master (e.g. a legacy อื่นๆ (Other) trip) still shows it in the picker, clearly marked, and keeps its stored country_group across an unrelated save', async () => {
+      // tripItem()'s default destination 'Japan' is NOT in the COUNTRIES
+      // fixture — exactly the shape of every trip saved before today under
+      // the old client-invented option, or any country an admin later
+      // removes from the master.
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      vi.mocked(subformApi.updateTrip).mockResolvedValue({ ...tripItem(), days: 9 } as never)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      expect(screen.getByLabelText('destination existing-10')).toHaveValue('Japan')
+      // a real, still-selectable <option> — never a hack — but its label
+      // marks it as a stored legacy value so it can't be mistaken for a
+      // normal pick when creating a NEW trip.
+      const legacyOption = screen.getByRole('option', { name: /Japan.*ค่าเดิม/ }) as HTMLOptionElement
+      expect(legacyOption.value).toBe('Japan')
+
+      // editing an unrelated field and saving must NOT re-tier this trip —
+      // its stored country_group (2) survives untouched.
+      fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
+      fireEvent.click(saveAllButton())
+
+      await waitFor(() => expect(subformApi.updateTrip).toHaveBeenCalled())
+      const payload = vi.mocked(subformApi.updateTrip).mock.calls[0][0]
+      expect(payload.destination).toBe('Japan')
+      expect(payload.country_group).toBe(2)
     })
 
     it('project and purpose inputs are included in the payload', async () => {

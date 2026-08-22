@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import { fetchCountries, fetchTravelers } from '../api/reference'
 import { createTrip, deleteTrip, fetchDetailLines, fetchTrips, saveDetailLine, updateTrip } from '../api/subform'
-import type { DetailLineState, TravelerOption, TripListItem, TripState } from '../api/types'
+import type { CountryOption, DetailLineState, TravelerOption, TripListItem, TripState } from '../api/types'
 import { formatThb, MONTH_KEYS, MONTH_LABELS, type MonthKey } from '../grid/model'
 import {
   MANUAL_TRAVEL_TYPES,
@@ -17,7 +17,6 @@ import {
   buildManualLinePayload,
   buildTripPayload,
   countryGroupFor,
-  countryOptionsWithOther,
   draftFromTripListItem,
   indexDetailLinesByTrip,
   isTripMonthActive,
@@ -26,7 +25,6 @@ import {
   resolveTravelerDisplay,
   shouldWriteManualLine,
   validateTripDraft,
-  type DestinationOption,
   type ManualLineDraft,
   type TripDraft,
   type TripSide,
@@ -332,7 +330,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
   const [newTripCounter, setNewTripCounter] = useState(0)
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
   const [travelers, setTravelers] = useState<TravelerOption[]>([])
-  const [destinationOptions, setDestinationOptions] = useState<DestinationOption[]>([])
+  const [destinationOptions, setDestinationOptions] = useState<CountryOption[]>([])
   /** True only while `saveAll` is in flight — disables the whole card list
    * (via `<fieldset>`) plus the footer buttons so no edit is made mid-batch
    * and lost by the final `setCards`. */
@@ -351,7 +349,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
       const index = indexDetailLinesByTrip(manualLines)
       setCards(trips.map((t) => cardFromServerTrip(t, index)))
       setTravelers(travelerList)
-      setDestinationOptions(countryOptionsWithOther(countryList))
+      setDestinationOptions(countryList)
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : 'โหลดข้อมูลทริปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
@@ -771,7 +769,16 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                             — เลือกปลายทาง —
                           </option>
                         )}
-                        {destinationFallback && <option value={destinationFallback}>{destinationFallback}</option>}
+                        {destinationFallback && (
+                          // Clearly marked, not silently blended in with the
+                          // real master rows — a round-trippable, still-
+                          // pickable <option> (never a hack), but its label
+                          // says this is a STORED value, not one to pick for
+                          // a NEW trip (e.g. every pre-2026-08-22 "อื่นๆ
+                          // (Other)" trip, or a country later removed from
+                          // the master).
+                          <option value={destinationFallback}>{destinationFallback} (ค่าเดิม)</option>
+                        )}
                         {destinationOptions.map((o) => (
                           <option key={o.country} value={o.country}>
                             {o.country}

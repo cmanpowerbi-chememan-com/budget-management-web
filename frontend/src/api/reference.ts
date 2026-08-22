@@ -12,8 +12,9 @@ export function fetchTravelers(costCenter: string): Promise<TravelerOption[]> {
   return apiFetch<TravelerOption[]>(`/reference/travelers?${search.toString()}`)
 }
 
-/** `GET /reference/countries` — destination country master (groups 1
- * domestic / 2 asian only; group 3 "อื่นๆ (Other)" is appended client-side). */
+/** `GET /reference/countries` — destination country master, all 3 groups
+ * (1 domestic / 2 asian / 3 other) served straight from `dbo.country_group`
+ * since 2026-08-22 (see `CountryOption`) — no client-side append. */
 export function fetchCountries(): Promise<CountryOption[]> {
   return apiFetch<CountryOption[]>('/reference/countries')
 }

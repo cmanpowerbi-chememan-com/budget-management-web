@@ -11,7 +11,6 @@ import {
   buildManualLinePayload,
   buildTripPayload,
   countryGroupFor,
-  countryOptionsWithOther,
   deriveTravelSideFromGl,
   detailFieldsFor,
   detailLineTotal,
@@ -26,7 +25,6 @@ import {
   manualLineDraftFromServerLine,
   manualLineTotal,
   manualTravelTypeForGl,
-  OTHER_COUNTRY_OPTION,
   resolveTravelerDisplay,
   validateTripDraft,
   type DetailFieldSpec,
@@ -216,26 +214,22 @@ describe('detailFieldsFor Entertainment — external/internal split is driven by
 })
 
 describe('destination country options (auto country_group)', () => {
+  // 2026-08-22: the master (`dbo.country_group`, synced from country.xlsx)
+  // now serves all 3 tiers itself — 'United States' is one of the 16 real
+  // tier-3 rows added today (setup/add_country_master_other_group.py). The
+  // old frontend-synthetic "อื่นๆ (Other)" entry is gone; there is nothing
+  // left to append client-side, so this list IS the picker's option list.
   const API_COUNTRIES: CountryOption[] = [
     { country: 'ประเทศไทย', country_group: 1 },
     { country: 'ญี่ปุ่น', country_group: 2 },
+    { country: 'United States', country_group: 3 },
   ]
 
-  it('appends อื่นๆ (Other) as group 3 after the API list, preserving order', () => {
-    const options = countryOptionsWithOther(API_COUNTRIES)
-    expect(options).toEqual([
-      { country: 'ประเทศไทย', country_group: 1 },
-      { country: 'ญี่ปุ่น', country_group: 2 },
-      { country: OTHER_COUNTRY_OPTION, country_group: 3 },
-    ])
-  })
-
-  it('countryGroupFor resolves 1/2/3 by country name and null for an unknown (legacy) name', () => {
-    const options = countryOptionsWithOther(API_COUNTRIES)
-    expect(countryGroupFor(options, 'ประเทศไทย')).toBe(1)
-    expect(countryGroupFor(options, 'ญี่ปุ่น')).toBe(2)
-    expect(countryGroupFor(options, OTHER_COUNTRY_OPTION)).toBe(3)
-    expect(countryGroupFor(options, 'Japan')).toBeNull()
+  it('countryGroupFor resolves 1/2/3 straight from the master list, and null for a name outside it (a legacy destination)', () => {
+    expect(countryGroupFor(API_COUNTRIES, 'ประเทศไทย')).toBe(1)
+    expect(countryGroupFor(API_COUNTRIES, 'ญี่ปุ่น')).toBe(2)
+    expect(countryGroupFor(API_COUNTRIES, 'United States')).toBe(3)
+    expect(countryGroupFor(API_COUNTRIES, 'Japan')).toBeNull()
   })
 })
 

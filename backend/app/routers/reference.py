@@ -62,9 +62,10 @@ class TravelerRow(BaseModel):
 
 class CountryRow(BaseModel):
     country: str
-    # 1 = domestic, 2 = asian (mapped from dbo.country_group's stored NAMES).
-    # Group 3 ("other") is a FRONTEND-ADDED choice — every country outside
-    # this master list — so it never appears in this response.
+    # 1 = domestic, 2 = asian, 3 = other (mapped from dbo.country_group's
+    # stored NAMES — see app.reference_data._COUNTRY_GROUP_BY_NAME). All 3
+    # tiers live in the master since 2026-08-22; before that, group 3 was a
+    # FRONTEND-ADDED synthetic choice and never appeared in this response.
     country_group: int
 
 

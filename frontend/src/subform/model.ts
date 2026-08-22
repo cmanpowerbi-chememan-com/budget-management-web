@@ -185,25 +185,23 @@ export function firstIncompleteField(fields: readonly DetailFieldSpec[], meta: R
 // Destination country options (Trip Manager) — country_group is DERIVED from
 // the picked country, never chosen by hand (wrong group = wrong per-diem).
 // ---------------------------------------------------------------------------
-
-/** The one client-side extra destination — the API only serves groups 1
- * (domestic) and 2 (asian); anywhere else books at the group-3 rate. */
-export const OTHER_COUNTRY_OPTION = 'อื่นๆ (Other)'
-
-export interface DestinationOption {
-  country: string
-  country_group: 1 | 2 | 3
-}
-
-/** The full destination dropdown = the API's country master + อื่นๆ (Other). */
-export function countryOptionsWithOther(countries: readonly CountryOption[]): DestinationOption[] {
-  return [...countries, { country: OTHER_COUNTRY_OPTION, country_group: 3 }]
-}
+//
+// 2026-08-22: until today the API only ever served groups 1 (domestic)/2
+// (asian), so this module appended its own synthetic "อื่นๆ (Other)" -> group
+// 3 entry (`OTHER_COUNTRY_OPTION`/`countryOptionsWithOther`, both now
+// removed). The SharePoint master (country.xlsx) grew 16 real tier-3 country
+// rows the same day, so the API's own `CountryOption` list is the WHOLE
+// picker now — nothing left to append. `countryOptionsWithOther` would have
+// become a pure identity function (`(x) => x`), so it is deleted rather than
+// kept as a hollow wrapper; callers use the `CountryOption[]` from
+// `fetchCountries` directly.
 
 /** Resolves the per-diem country group for a picked destination; `null` for
- * a name outside the list (a legacy free-typed destination on an existing
- * trip — its stored group is kept until the user re-picks). */
-export function countryGroupFor(options: readonly DestinationOption[], country: string): 1 | 2 | 3 | null {
+ * a name outside the list (a legacy destination on an existing trip — one
+ * saved under the old synthetic "อื่นๆ (Other)" option, or any country an
+ * admin later removes from the master — its stored group is kept until the
+ * user re-picks). */
+export function countryGroupFor(options: readonly CountryOption[], country: string): 1 | 2 | 3 | null {
   return options.find((o) => o.country === country)?.country_group ?? null
 }
 

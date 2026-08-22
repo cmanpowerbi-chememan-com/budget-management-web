@@ -583,10 +583,13 @@ Table dbo.per_diem_rate {
   rate_other    decimal(18,2)        // USD/day (country_group 'other')
 }
 
-// country → per-diem group — from country.xlsx; DEFAULT-TO-OTHER (only domestic + asian listed)
+// country → per-diem group — from country.xlsx; all 3 tiers are explicit master rows
+// since 2026-08-22 (13→29 rows: 16 real 'other' countries added, English names, under
+// the Excel label 'ต่างประเทศ-อื่นๆ') — see backend/app/reference_data.py's
+// _COUNTRY_GROUP_BY_NAME comment for the live sync detail.
 Table dbo.country_group {
   country nvarchar [pk]
-  grp     nvarchar          // 'domestic' | 'asian' — any country NOT in this table = 'other' (sync maps the Thai labels ในประเทศ/ต่างประเทศ-อาเซียน → codes)
+  grp     nvarchar          // 'domestic' | 'asian' | 'other' (sync maps the Thai labels ในประเทศ/ต่างประเทศ-อาเซียน/ต่างประเทศ-อื่นๆ → codes; any UNRECOGNISED label is skipped with a warning, never guessed)
 }
 
 // yearly avg USD→THB — from อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx (cast text→decimal at sync; app FAILS LOUD if the planning-year row is missing, ADR-0015)

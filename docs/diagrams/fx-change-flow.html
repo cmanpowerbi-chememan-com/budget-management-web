@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>FX 33→35 — อะไรเปลี่ยน อะไรไม่เปลี่ยน</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px; width: 1360px; font-family: "Segoe UI", "Sarabun", Tahoma, sans-serif;
+         background: #ffffff; color: #14231b; }
+  h1 { font-size: 25px; margin: 0 0 4px; letter-spacing: -0.2px; }
+  .sub { font-size: 15px; color: #4b5f54; margin: 0 0 22px; }
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .lane { border: 2px solid #2E8B57; border-radius: 10px; padding: 16px 18px 20px; }
+  .lane.write { border-color: #8a6d1f; }
+  .lane-title { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+                color: #2E8B57; margin: 0 0 4px; }
+  .lane.write .lane-title { color: #8a6d1f; }
+  .lane-note { font-size: 13px; color: #4b5f54; margin: 0 0 16px; }
+  .box { border: 1.5px solid #c3d3c9; border-radius: 8px; padding: 11px 13px; background: #f7faf8; }
+  .box .tbl { font-family: Consolas, "Courier New", monospace; font-size: 13.5px; color: #14231b; font-weight: 700; }
+  .box .what { font-size: 13px; color: #4b5f54; margin-top: 3px; }
+  .box .val { font-size: 19px; font-weight: 700; margin-top: 7px; }
+  .val.new { color: #1c6b41; }
+  .val.old { color: #a3341f; }
+  .arrow { text-align: center; font-size: 20px; color: #2E8B57; margin: 7px 0; line-height: 1.1; }
+  .arrow small { display: block; font-size: 12.5px; color: #4b5f54; font-family: Consolas, monospace; }
+  .lane.write .arrow { color: #8a6d1f; }
+  .mirror { margin-top: 12px; border: 1.5px dashed #7fa78f; border-radius: 8px; padding: 10px 13px;
+            background: #f2f7f4; font-size: 13px; color: #2b4436; }
+  .cut { margin: 24px 0 6px; border: 2px dashed #a3341f; border-radius: 10px; padding: 14px 18px;
+         background: #fdf5f3; }
+  .cut b { color: #a3341f; }
+  .cut .line { font-size: 15px; }
+  .cut .why { font-size: 13.5px; color: #55403b; margin-top: 6px; }
+  .fix { margin-top: 18px; border: 2px solid #2E8B57; border-radius: 10px; padding: 14px 18px; background: #f2f9f5; }
+  .fix .line { font-size: 15px; }
+  .fix code { font-family: Consolas, monospace; background: #e2efe8; padding: 1px 5px; border-radius: 4px; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px;
+         border-radius: 20px; margin-bottom: 6px; }
+  .tag.ro { background: #e2efe8; color: #1c6b41; }
+  .tag.rw { background: #f5ecd2; color: #7a5f14; }
+</style>
+</head>
+<body>
+  <h1>แก้ FX 33 → 35 แล้วอะไรเปลี่ยน อะไรไม่เปลี่ยน</h1>
+  <p class="sub">2 ฝั่งนี้อยู่ใน DB เดียวกัน (fabric_sql_database) แต่ <b>ไม่มีสายเชื่อมกันในระดับข้อมูล</b> — เชื่อมกันแค่ตอนโปรแกรมคำนวณเท่านั้น</p>
+
+  <div class="lanes">
+    <!-- LEFT: synced master -->
+    <div class="lane">
+      <span class="tag ro">dbo.* = ข้อมูล sync เข้ามา · แอปอ่านเท่านั้น</span>
+      <p class="lane-title">ฝั่งซ้าย — ตารางเรท (master)</p>
+      <p class="lane-note">เจ้าของคือ admin + notebook ฝั่ง DW</p>
+
+      <div class="box">
+        <div class="tbl">Excel บน SharePoint</div>
+        <div class="what">อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx</div>
+        <div class="val new">33 → 35</div>
+      </div>
+      <div class="arrow">▼<small>NB_budget_masters_sync (MERGE ทับแถว)</small></div>
+      <div class="box">
+        <div class="tbl">dbo.master_currency_rate</div>
+        <div class="what">FY2026 · usd_thb</div>
+        <div class="val new">35.00 ✔ เปลี่ยนแล้ว</div>
+      </div>
+      <div class="mirror">
+        ▼ <b>OneLake mirror</b> — SQL DB คัดลอก <b>ออก</b> ไปเป็น delta ให้ฝั่ง analytics<br>
+        เป็นทางเดียว (ออกจาก DB) <b>ไม่ไหลกลับเข้ามาเขียนตารางไหนเลย</b>
+      </div>
+    </div>
+
+    <!-- RIGHT: app-written transactional -->
+    <div class="lane write">
+      <span class="tag rw">budget.* = ข้อมูลที่แอปเขียน · ผู้ใช้กดบันทึก</span>
+      <p class="lane-title">ฝั่งขวา — ตัวเลขงบที่เก็บไว้</p>
+      <p class="lane-note">เจ้าของคือ filler + backend ของแอปนี้</p>
+
+      <div class="box">
+        <div class="tbl">budget.budget_trip</div>
+        <div class="what">1 วัน · Vietnam (กลุ่ม 2) · เดือน 01 — ไม่มีคอลัมน์เงิน</div>
+        <div class="val">ไม่เกี่ยวกับ FX</div>
+      </div>
+      <div class="arrow">▼<small>ตอนกดบันทึก (ครั้งนั้น FX ยัง 33) เขียนเงินลง DB</small></div>
+      <div class="box">
+        <div class="tbl">budget.pending_budget_detail</div>
+        <div class="what">GL 6210400010 · m01 · ไม่มีคอลัมน์ fx</div>
+        <div class="val old">2,640.00 ✖ ค้างเลขเดิม</div>
+      </div>
+      <div class="arrow">▼<small>_recompute_parent_cell → SUM ลง cell ที่ grid วาด</small></div>
+      <div class="box">
+        <div class="tbl">budget.pending_budget</div>
+        <div class="what">(CC, 2026, 6210400010, m01) — grid อ่านตัวนี้ตรงๆ ไม่คำนวณ</div>
+        <div class="val old">2,640.00 ✖ ค้างเลขเดิม</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cut">
+    <div class="line"><b>✖ ไม่มีลูกศรจากซ้ายไปขวา</b> — ตารางเรทกับตารางเงินเป็นคนละตาราง ไม่มี view ไม่มี trigger ไม่มี join ที่ผูกกันไว้</div>
+    <div class="why">แก้ตารางเรทจึงไม่มีอะไรวิ่งไปแก้เลข 2,640 ที่เขียนเก็บไว้แล้ว เหมือนแก้ราคาในตารางราคา แต่ใบเสร็จที่พิมพ์ไปแล้วไม่เปลี่ยนตาม</div>
+  </div>
+
+  <div class="fix">
+    <div class="line">✔ ทางเดียวที่ 2,640 จะกลายเป็น 2,800 = <b>ต้องมีโค้ดคำนวณแล้วเขียนทับ</b> ซึ่งมี 3 ที่:</div>
+    <div class="line" style="margin-top:8px">
+      1) <b>เปิดแบบฟอร์มย่อย</b> → คำนวณสดตอนอ่าน (recompute-on-read) → <b>เห็น 2,800 ทันที แต่ไม่ได้เขียน DB</b><br>
+      2) <b>กดบันทึกทริปใหม่</b> → คำนวณ + เขียนทับ → grid เปลี่ยน (ทีละใบ)<br>
+      3) <b>รัน job</b> <code>python -m jobs.repersist_perdiem_fx --fiscal-year 2026 --run</code> → คำนวณ + เขียนทับทุกทริปของปีนั้น → grid เปลี่ยนทั้งปี
+    </div>
+  </div>
+</body>
+</html>

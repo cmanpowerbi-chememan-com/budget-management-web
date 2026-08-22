@@ -25,7 +25,8 @@ master read:
   filler must never lose the ability to pick (never an empty list where the
   old code returned rows).
 - `fetch_countries` — Trip Manager's destination-country picker from
-  `dbo.country_group` (group NAME → per-diem group int).
+  `dbo.country_group` (group NAME → per-diem group int; all 3 tiers —
+  domestic/asian/other — live in the master since 2026-08-22).
 
 gl_group/cc_filler_map columns were already exercised by A4/A5's live
 integration tests; v_employee_primary/country_group columns were freshly
@@ -43,9 +44,16 @@ logger = logging.getLogger(__name__)
 
 # Live dbo.country_group stores NAMES (introspected 2026-07-17: 'domestic' 1
 # row, 'asian' 12 rows); the API/per-diem contract is ints (TripInput
-# .country_group). Group 3 ("other") is deliberately NOT here — it is a
-# frontend-added choice covering every country outside this master list.
-_COUNTRY_GROUP_BY_NAME: dict[str, int] = {"domestic": 1, "asian": 2}
+# .country_group). Until 2026-08-22 group 3 ("other") was NOT in the master
+# at all — the frontend invented a single synthetic dropdown option covering
+# every country outside this list. On 2026-08-22, setup/add_country_master_
+# other_group.py added 16 real countries to the SharePoint master under the
+# Excel label 'ต่างประเทศ-อื่นๆ'; the DW sync notebook's map_country_group maps
+# 'ในประเทศ'->'domestic', 'ต่างประเทศ-อาเซียน'->'asian', and its else-branch
+# turns everything else (incl. 'ต่างประเทศ-อื่นๆ') into the STRING 'other' — so
+# 'other' now arrives here the same way 'domestic'/'asian' always have, and
+# must map to country_group 3.
+_COUNTRY_GROUP_BY_NAME: dict[str, int] = {"domestic": 1, "asian": 2, "other": 3}
 
 
 def fetch_gl_accounts(conn: pyodbc.Connection, *, include_edit_by: bool = False, is_admin: bool = False) -> list[dict]:
@@ -233,10 +241,11 @@ def fetch_travelers(conn: pyodbc.Connection, cost_center: str, caller_email: str
 
 def fetch_countries(conn: pyodbc.Connection) -> list[dict]:
     """Country → per-diem group list, ints per the API contract (1=domestic,
-    2=asian; group 3 "other" is frontend-added, never stored). A row whose
-    group name is not recognised is SKIPPED with a warning — a typo'd master
-    row must surface as a visible picker gap, never silently mis-map to a
-    per-diem bucket (and never 500 the whole list)."""
+    2=asian, 3=other — all 3 tiers are stored in dbo.country_group since
+    2026-08-22, see the module-level comment on `_COUNTRY_GROUP_BY_NAME`).
+    A row whose group name is not recognised is SKIPPED with a warning — a
+    typo'd master row must surface as a visible picker gap, never silently
+    mis-map to a per-diem bucket (and never 500 the whole list)."""
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT country, country_group FROM dbo.country_group")

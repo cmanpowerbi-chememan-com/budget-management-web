@@ -1,8 +1,32 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-21T13:51:28+0700",
+  "updated": "2026-08-22T20:36:37+0700",
   "tasks": [
+    {
+      "id": "country-group-other-16",
+      "state": "doing",
+      "created": "2026-08-22T13:47:47+0700",
+      "updated": "2026-08-22T20:36:37+0700",
+      "ai": "PAUSED->RESUMING 08-22: workflow wf_218d14ef-9a3 (country-group-other-tier, 4 phases: implement/verify/review/fix) was killed when the CC process exited; git status confirms ZERO code edits landed (backend/app/reference_data.py + frontend/src/subform untouched). Master country.xlsx edit from step 2 is LIVE and unaffected (29 rows). Next step = relaunch Workflow with scriptPath country-group-other-tier-wf_218d14ef-9a3.js + resumeFromRunId wf_218d14ef-9a3; nothing to recover from cache. Still pending after that: run NB_budget_masters_sync only_spec=Budget_Masters_country_group + stg/prd deploy (both need jakkaritw approval).",
+      "agent": "claude"
+    },
+    {
+      "id": "fx-change-flow-explainer",
+      "state": "done",
+      "created": "2026-08-21T15:17:33+0700",
+      "updated": "2026-08-21T15:18:05+0700",
+      "ai": "Q&A only, ZERO code/schema change. Answered: per-diem shows only after Save (server-computed, TripManager.tsx:913 + tests); domestic uses rate_domestic THB with FX=1; Vietnam(grp2) 1d x 80USD x FX33 = 2640.00 (80/33 REVERSE-DERIVED from the screenshot, live per_diem_rate/master_currency_rate NOT queried - Bash classifier blocked every live DB probe this session; local .env still points at retired DB1 036a3270, real DB = fabric_sql_database-a42ef9f3 on ...bby6xlm3ncqexly4ozejod2vqe). FX 33->35 propagation: SharePoint xlsx -> NB_budget_masters_sync full-replace MERGE -> dbo.master_currency_rate=35 -> OneLake mirror (one-way OUT) -> subform 2800 instantly (recompute-on-read, no backend FX cache) BUT budget.pending_budget_detail/pending_budget stay 2640 until re-save or 'python -m jobs.repersist_perdiem_fx --fiscal-year N --run' (re-prices ALL incl APPROVED per 07-24 GATE). NEW ARTIFACT (uncommitted): docs/diagrams/fx-change-flow.html + .png explainer. jakkaritw verdict 08-21: gap ACCEPTABLE, 'ไม่ต้องแก้' - declined (a) auto-triggering the job from the DW sync notebook, (b) stamping fx_rate/rate_per_day onto pending_budget_detail (so an approved amount is NOT auditable back to its rate; master is overwritten with no history). Do NOT re-propose either; memory project_fx_change_gap_accepted.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-6aa5189",
+      "state": "done",
+      "created": "2026-08-21T13:51:46+0700",
+      "updated": "2026-08-21T13:51:46+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): record the SIT-leftover audit and the decision to keep both [commit 6aa5189]"
+    },
     {
       "id": "sit-leftover-audit-prd",
       "state": "done",
@@ -2471,115 +2495,11 @@
       "agent": "kimi"
     },
     {
-      "id": "spot-test-2-admin-jakkaritw",
-      "state": "done",
-      "created": "2026-07-23T17:54:55+0700",
-      "updated": "2026-07-23T17:54:55+0700",
-      "ai": "Spot test #2 ADMIN surface, user jakkaritw@chememan.com (admin-wide). Ran vs :3000 (next dev, spoof header x-ms-client-principal-name=jakkaritw) + direct-DB oracle. Guardrails HELD: no 10IT012000 write, no /approval/* call, all writes cleaned to 0 + logged. RESULTS 5/5 PASS: A1 admin-wide year=2027 web==DB: rows 1041, CC 164, GL 116, SAP 70,612,040.65, Approved 205,307,324.11 (=raw board_budget FY2026 master-filtered SUM); editable=true all rows. A2 toggle: admin_view_enabled=false->0 rows (jakkaritw fill=[]/see=[]), true->1041; frontend toggle=sessionStorage (useAdminViewToggle.ts/usePersistedToggle.ts) survives reload gone-on-tab-close. A3 admin-locked GLs: gl-accounts admin 146 vs filler 134 (12 locked); admin-wide grid shows 49 rows on the 12 admin GLs (hidden from fillers). 12 GLs=severance(5210100070/6210100070)+Insurance Premium(5211300010-999,6211300010-040)+Depreciation-SGA(6410102430). A4 admin wrote admin-locked GL 5210100070 on 10AC010000 FY2099 (m01=12345.67 decimal preserved, total 13345.67) HTTP200 -> verified DB -> cleanup 0; filler-contrast 403 'not in Fill scope'. A5 org-wide + sample CC 10AC010000(SAP 3,106,018.60/Appr 7,445,000) 10AC011000(SAP 600/Appr 65,000) web==DB. No prod code changed. Complements Kimi approver round (no collision).",
-      "agent": "claude"
-    },
-    {
-      "id": "grid-month-decimal-fix",
-      "state": "done",
-      "created": "2026-07-23T16:30:48+0700",
-      "updated": "2026-07-23T17:17:37+0700",
-      "ai": "DONE + committed e575d58 (main, not pushed). Grid month cells: sanitizeMonthInput accepts digits+one dot+max2dp, strips '-'/letters; onBlur NaN guard (lone '.'->0, never commits NaN — regression flagged by gate, fixed). formatThb shows decimals only when fractional (whole=no .00, frac=2dp, 0='—', float-safe round). Fixes 100.5->1005 corruption bug. Frontend only, backend DECIMAL(18,2)+bounds untouched. Gate 06/07/08 APPROVE; tests 488/488, tsc/oxlint clean. Display Option B + screenshot signed off by jakkaritw (B Pass). Files: frontend/src/grid/{MonthCell.tsx,MonthCell.test.tsx,model.ts,model.test.ts}, .claude/plan.md.",
-      "agent": "claude"
-    },
-    {
-      "id": "deeplink-year-label-align",
-      "state": "done",
-      "created": "2026-07-23T15:52:46+0700",
-      "updated": "2026-07-23T16:13:54+0700",
-      "ai": "DONE + committed a02ec3c (main, not pushed). deep-link ?year= off-by-one fix: deepLink.parseYear returns planning=label+1; build_deep_link emits year=fiscal_year-1 (inverse round-trip); email _year_phrase shows planning + '(หน้าจอ: Year label)'. Gate 06 APPROVE/07 PASS/08 PASS; FE 18/18, BE test_notifications 21/21, full BE 678 pass/46 deselected. Files: frontend/src/filters/deepLink.ts(+test), backend/app/notifications.py(+test), .claude/plan.md. Convenience-only, server re-checks scope; no migration (app undeployed, dry-run). Deploy = separate, awaits jakkaritw.",
-      "agent": "claude"
-    },
-    {
-      "id": "spot-test-suchanya-2026",
-      "state": "done",
-      "created": "2026-07-23T14:41:13+0700",
-      "updated": "2026-07-23T15:23:29+0700",
-      "ai": "Spot test #1 suchanyay@chememan.com, 'Year 2026'=API year=2027 (planning; SAP/Approved layer=FY2026). Ran vs live Fabric SQL DB + local uvicorn(:8011 flag OFF)+built out/ via node playwright. RESULTS 17/17 core PASS: (1)dept default single-dept auto Solution Delivery ok (2)CC=1 10IT012000 (3)GL=8 (4)SAP=539,118.41 web==gold FY2026 (5)Approved=1,480,104.00 web==board_budget FY2026 (7/16)FE==DB: browser /budget JSON cent-exact + DOM grand-total 1,042,175 baht==DB 1,042,174.32 (15)neg-RLS foreign dept/CC=0 rows no leak (6)filled 4 normal rows(20 cells)+ProfLegal detail(3mo)+2 trips; (6.2/14)per-diem domestic 5*250*1=1250 split 416.66/416.66/416.68, foreign asian 4*80*FX33.0=10,560 in DB (FX applied) (8)deep-link honored (9)F5 ok (10)theme persists dark (11)401->/.auth/login/aad (12.1 409/12.2 403-locked/12.3 422 field-named)ok (13)console clean (17)cleanup deleted detail3/trip2/pending6 -> 0 residue baseline restored. FINDINGS: (a)deep-link ?year=2026 fed raw as planning-year -> renders 'Year 2025' Approved empty, mismatches picker label 'Year 2026'=API2027 (off-by-one deep-link vs YearPicker label). (b)12.3 negative -> HTTP400 generic 'คำขอไม่ถูกต้อง' no field name (but grid input strips non-digits so unreachable via UI; over-max 422 IS field-named). (c)admin-GL-hidden moot: none of 12 admin GLs in her data; flag OFF does NOT hide them (only flag ON strips) -> if a CC had admin-GL data + flag off they'd show. (d)header 'Master FX FY2026' label while pending trips use FY2027 FX(33.0). No prod code changed. Temp files in scratchpad; frontend .cjs removed; next-env.d.ts reverted.",
-      "agent": "claude"
-    },
-    {
-      "id": "log-6c65953",
-      "state": "done",
-      "created": "2026-07-23T14:25:10+0700",
-      "updated": "2026-07-23T14:25:10+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): nextjs migration merged to main (0aa911e) [commit 6c65953]"
-    },
-    {
-      "id": "log-153f355",
-      "state": "done",
-      "created": "2026-07-23T14:22:32+0700",
-      "updated": "2026-07-23T14:22:32+0700",
-      "agent": "autolog",
-      "ai": "merge origin/main (nightly graphify) into nextjs-migration [commit 153f355]"
-    },
-    {
-      "id": "log-a7ea9c1",
-      "state": "done",
-      "created": "2026-07-23T14:21:13+0700",
-      "updated": "2026-07-23T14:21:13+0700",
-      "agent": "autolog",
-      "ai": "docs(back): finish dist->out doc sweep in mount_frontend (kimi nit) [commit a7ea9c1]"
-    },
-    {
-      "id": "log-0a61603",
-      "state": "done",
-      "created": "2026-07-23T13:43:57+0700",
-      "updated": "2026-07-23T13:43:57+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): close nextjs-backend-static-wiring (774e8ad) [commit 0a61603]"
-    },
-    {
-      "id": "nextjs-backend-static-wiring",
-      "state": "done",
-      "created": "2026-07-23T13:35:23+0700",
-      "updated": "2026-07-23T13:51:53+0700",
-      "ai": "KIMI REVIEW VERDICT #2 (2026-07-23, reviewer=kimi) on commit 774e8ad (steps 9+9b): APPROVE — branch feat/frontend-nextjs-migration is MERGE-READY.\n\nIndependently verified (diff read + re-ran tests myself, no edits): (1) backend/Dockerfile — stage-1 ENV CI=true before build:ci, stage-2 COPY /fe/dist→/fe/out, comments updated (G5 colorama class). (2) config.py — static_dir fallback frontend/dist→frontend/out; STATIC_DIR env override still wins. (3) static.py — /_next/static long-cache mount added BEFORE the SPA catch-all (registration order safe, no API shadowing), /assets mount kept for rollback (no-ops when dir absent). (4) New test test_static_dir_present_serves_next_asset_with_long_cache present and passing — re-ran: 19/19 (test_static+test_security_headers) and full mocked suite 673 passed/46 deselected — both EXACT match with claims. (5) Sweep confirmed: main.py + test_security_headers.py doc/comment dist→out. Stat confirms zero API/router/DB logic changes (6 files: Dockerfile, config.py, main.py docstring, static.py, 2 test files). Working tree clean except tracker autolog (expected post-commit hook artifact).\n\nNits (non-blocking, no re-work needed): static.py mount_frontend docstring still says 'Vite serves the frontend on its own port' — one stale word, cosmetic.\n\nREMAINING GATES (jakkaritw decisions, not code): (a) push + merge to main — git mutation, awaiting explicit go; (b) az acr build/deploy — separate approval per A14 runbook; Dockerfile correctness is only provable at that build (no local Docker). Follow-ups already tracked: #e2e-stale-specs-fix (3 pre-existing drifted specs), oxlint 2 pre-existing findings in e2e/ (suggested in verdict #1), :5180 staging-review proxy needs a next.config equivalent before next staging click-through.",
-      "agent": "kimi"
-    },
-    {
-      "id": "log-af1ac51",
-      "state": "done",
-      "created": "2026-07-23T13:29:37+0700",
-      "updated": "2026-07-23T13:29:37+0700",
-      "agent": "autolog",
-      "ai": "chore(tracker): close nextjs-migration-impl + log e2e-stale-specs-fix [commit af1ac51]"
-    },
-    {
       "id": "e2e-stale-specs-fix",
       "state": "done",
       "created": "2026-07-23T13:29:26+0700",
       "updated": "2026-07-24T20:47:43+0700",
       "ai": "DONE (round2 item4). e2e suite GREEN 23/23 (was 10 failing). App fix d73deb6 (fix(userbar): skip /scope/departments for no-scope callers — root cause of edge-states 4.1 double-fetch + Kimi's no-scope reproduce-live bug; 1-line wantsScopeData += scope.role!=='none', matches BudgetGrid hasNoScope invariant, vitest 488/488 unaffected). Spec commit 5467ef5 (5 files: auto-select expectation 2.1/4.4, deep-link label-year DEEP_LINK_YEAR=PLANNING_YEAR-1 per a02ec3c, YearPicker /ปีงบประมาณ/->/ปีฐาน/). No assertion weakened (2 strengthened). Gate 06 APPROVE/07 PASS/08 PASS (vitest 488, e2e 23/23 re-run). Both commits unpushed.",
-      "agent": "claude"
-    },
-    {
-      "id": "nextjs-migration-impl",
-      "state": "done",
-      "created": "2026-07-23T12:53:47+0700",
-      "updated": "2026-07-23T14:25:00+0700",
-      "ai": "MERGED + PUSHED to origin/main @0aa911e (2026-07-23). Kimi APPROVE round 2 (independent diff + re-run: build/out ok, vitest 475, full backend 673, static tests 19, all confirmed). Fixed kimi nit (mount_frontend docstring Vite->Next). Merged origin/main nightly graphify (resolved toward nightly). Branch feat/frontend-nextjs-migration deleted. Frontend=Next.js static export + backend static-serving wired (out/, /_next/static mount). REMAINING: (1) az acr build to verify Dockerfile + deploy = needs jakkaritw approval (still not deployed); (2) #e2e-stale-specs-fix willdo (3 pre-existing drift specs); (3) vite.review.config.ts :5180 broken - rebuild as next equivalent if staging click-through needed.",
-      "agent": "kimi"
-    },
-    {
-      "id": "nextjs-plan-arch-blend",
-      "state": "done",
-      "created": "2026-07-23T11:05:52+0700",
-      "updated": "2026-07-23T11:05:52+0700",
-      "ai": "Analyzed frontend architecture via 43-improve-codebase-architecture (Workflow: 6 dims x adversarial verify, 28 agents, 21/22 findings survived), blended into plan/vite-to-nextjs-migration.md. Verdict: keep migration a PURE framework swap - verify pass confirmed ~all deepenings touch files migration never opens. Revised plan: (1) top provenance note-block; (2) sharpened G1 - only App.tsx:19 readStoredTheme + :44 parseDeepLink genuinely crash prerender (model.ts/useAdminViewToggle already try/catch-guarded), ssr:false wrapper covers all, NO platform/ seam required to ship; (3) new Step 3[ARCH-a/b/c]: pre-paint theme script (DO, ssr:false worsens dark FOUC), usePersistedToggle + platform/location (OPTIONAL); (4) new section 8 Architecture backlog: 8.B ranked independent PRs (STRONG: describeApiError 10 copies, useResizableColumns extraction; WORTH: columnWidthStorage, useAsyncResource, subform saveAll drift fix[needs signoff], isConflict, planningYear/standingYear), 8.C two real bugs (loadGrid+ApprovalActionBar cancelled-guard race; /scope/departments double-fetch), 8.D rejected seams w/ deletion-test reasons (fat batch engine, shared conflict hook, platform/dialogs, hookify colFilters, collapse api wrappers), 8.E sequencing. NOTE: plan file was independently deepened on disk mid-edit (added backend coupling G9 + Step 9b) - preserved. Not committed.",
-      "agent": "claude"
-    },
-    {
-      "id": "arch-review-deletion-sweep",
-      "state": "done",
-      "created": "2026-07-23T10:54:40+0700",
-      "updated": "2026-07-23T10:54:53+0700",
-      "ai": "delivered 7 findings via StructuredOutput: (1) missing department-fetch seam + role=none leak bug, (2) resolveInitialDept orchestration in deptResolved flag, (3) clock-coupled year semantics x4, (4) persisted-toggle dup theme/admin, (5) theme FOUC under Next ssr:false, (6) useFillGlCount fetches whole grid for scalar, (7) glDropdownConstants partial parity. no code changed.",
       "agent": "claude"
     },
     {

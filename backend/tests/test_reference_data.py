@@ -177,6 +177,60 @@ def test_fetch_countries_maps_group_names_to_ints_and_sorts_domestic_first():
     ]
 
 
+def test_fetch_countries_maps_other_group_name_to_group_3():
+    """2026-08-22: setup/add_country_master_other_group.py added 16 rows to
+    the live SharePoint master under the Excel label 'ต่างประเทศ-อื่นๆ', which
+    the DW sync notebook's else-branch (map_country_group) stores as the
+    STRING 'other'. A live-shaped row must map to country_group 3, not be
+    dropped by the unrecognised-label guard."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [("United States", "other")]
+    rows = fetch_countries(conn)
+    assert rows == [{"country": "United States", "country_group": 3}]
+
+
+def test_fetch_countries_sorts_all_three_tiers_by_group_then_country():
+    """All three tiers together, out of order and out of alphabetical order
+    within a tier — sort must be (country_group, country), never insertion
+    order or a partial sort of only the tiers seen before 2026-08-22."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        ("United Kingdom", "other"),
+        ("China", "asian"),
+        ("Thailand", "domestic"),
+        ("United States", "other"),
+        ("Cambodia", "asian"),
+    ]
+    rows = fetch_countries(conn)
+    assert rows == [
+        {"country": "Thailand", "country_group": 1},
+        {"country": "Cambodia", "country_group": 2},
+        {"country": "China", "country_group": 2},
+        {"country": "United Kingdom", "country_group": 3},
+        {"country": "United States", "country_group": 3},
+    ]
+
+
+def test_fetch_countries_skips_unrecognised_thai_label_not_yet_mapped(caplog):
+    """Defensive floor for `_COUNTRY_GROUP_BY_NAME`: the DW notebook's
+    else-branch already collapses every Excel label except 'ในประเทศ'/
+    'ต่างประเทศ-อาเซียน' into the STRING 'other' before this code ever reads
+    `dbo.country_group`, so a stored value like 'ต่างประเทศ-ยุโรป' should not
+    arise via that pipeline today — but this function must not TRUST that
+    invariant (a stale row from before the notebook existed, a manual edit,
+    or a future notebook change could still land one). Any value outside the
+    3 known strings stays SKIPPED + WARNED, never guessed."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        ("France", "ต่างประเทศ-ยุโรป"),
+        ("Thailand", "domestic"),
+    ]
+    with caplog.at_level(logging.WARNING):
+        rows = fetch_countries(conn)
+    assert rows == [{"country": "Thailand", "country_group": 1}]
+    assert "ต่างประเทศ-ยุโรป" in caplog.text
+
+
 def test_fetch_countries_queries_dbo_country_group():
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = []
