@@ -307,6 +307,140 @@ function TravelerField({ ariaLabel, travelers, value, onChange, fallback }: Trav
   )
 }
 
+interface DestinationFieldProps {
+  ariaLabel: string
+  /** The full master list (`/reference/countries`) — 29 rows across all 3
+   * tiers as of 2026-08-22 (f32dcc7), too many for a plain `<select>` to
+   * stay quick to use by typing. */
+  options: readonly CountryOption[]
+  /** Committed destination, `null`/`''` = none picked yet. This IS the
+   * display text shown in the closed field — a country's own name doubles
+   * as its label, unlike TravelerField (which shows a name looked up by a
+   * separate empcode). */
+  value: string | null
+  /** Fires ONLY when a real option is picked (click or Enter-on-match) —
+   * never from typed text alone, so a query that matches nothing can never
+   * commit a value outside the master (financial never-cut: a free-typed
+   * destination would silently book the wrong per-diem country_group). */
+  onChange: (country: string) => void
+  /** A trip's own stored destination once it has fallen out of `options`
+   * (removed from the master, or a pre-2026-08-22 legacy "อื่นๆ (Other)"
+   * trip) — unioned into the LIST only, its label suffixed "(ค่าเดิม)" so
+   * browsing the list never confuses it with a normal master pick. The
+   * closed field and the committed value stay the plain country name either
+   * way — only the list row is decorated. */
+  fallback: string | null
+}
+
+/** Searchable destination picker — replaces a `<select>` that grew to 29
+ * countries after the tier-3 ("other") master rows landed (jakkaritw,
+ * 2026-08-23; f32dcc7 shipped the master data the day before). Deliberately
+ * a SEPARATE small component from `TravelerField` above rather than one
+ * generalized combobox: the two option shapes genuinely differ (a traveler
+ * needs a 2-line name+email render and a separate display-name lookup by
+ * empcode; a destination's own name IS its display value, one line, and the
+ * only per-row decoration is a static "(ค่าเดิม)" suffix) — forcing them
+ * behind one shared render-prop would only add a layer of indirection for
+ * two call sites. The interaction shape is copy-pasted on purpose (type to
+ * filter, `role="combobox"`/`listbox`/`option`, ↑/↓/Enter/Esc, blur/Escape
+ * closes, explicit empty-state row) — this codebase already keeps
+ * `.gl-combo` (AddTransactionForm) and `.traveler-combo` as separate,
+ * similarly-shaped blocks rather than one shared primitive; a third follows
+ * the same precedent. */
+function DestinationField({ ariaLabel, options, value, onChange, fallback }: DestinationFieldProps) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const listId = useId()
+
+  const listOptions = (
+    fallback && !options.some((o) => o.country === fallback) ? [{ country: fallback, label: `${fallback} (ค่าเดิม)` }] : []
+  ).concat(options.map((o) => ({ country: o.country, label: o.country })))
+
+  const query = search.trim().toLowerCase()
+  const filtered = query ? listOptions.filter((o) => o.label.toLowerCase().includes(query)) : listOptions
+
+  function pick(country: string) {
+    onChange(country)
+    setSearch('')
+    setOpen(false)
+  }
+
+  function optionId(country: string) {
+    return `${listId}-${country}`
+  }
+
+  return (
+    <div className="destination-combo">
+      <input
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && filtered[activeIndex] ? optionId(filtered[activeIndex].country) : undefined}
+        className="destination-combo-input"
+        placeholder="— เลือกปลายทาง — พิมพ์เพื่อค้นหา —"
+        value={open ? search : value ?? ''}
+        onFocus={() => {
+          setOpen(true)
+          setSearch('')
+          setActiveIndex(0)
+        }}
+        onChange={(e) => {
+          // Same reopen-on-every-keystroke fix as TravelerField (2026-08-04):
+          // without it, typing right after Escape looked dead because the
+          // closed display (the committed value) never reflected the draft.
+          setOpen(true)
+          setSearch(e.target.value)
+          setActiveIndex(0)
+        }}
+        // preventDefault on the option's onMouseDown (below) keeps this
+        // input focused through the click, so onBlur only fires for a
+        // genuine outside click/tab-away — snapping back to the committed
+        // `value` is exactly what closes the "free text alone never
+        // commits" loophole on blur.
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setOpen(true)
+            setActiveIndex((i) => Math.max(0, Math.min(i + 1, filtered.length - 1)))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActiveIndex((i) => Math.max(i - 1, 0))
+          } else if (e.key === 'Enter') {
+            if (open && filtered[activeIndex]) {
+              e.preventDefault()
+              pick(filtered[activeIndex].country)
+            }
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+      />
+      {open && (
+        <ul id={listId} role="listbox" className="destination-combo-list" aria-label="ตัวเลือกปลายทาง">
+          {filtered.length === 0 && <li className="destination-combo-empty">ไม่พบประเทศที่ค้นหา</li>}
+          {filtered.map((o, idx) => (
+            <li
+              key={o.country}
+              id={optionId(o.country)}
+              role="option"
+              aria-selected={o.country === value}
+              className={`destination-combo-option${idx === activeIndex ? ' active' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(o.country)}
+            >
+              {o.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /** Trip Manager (A9) — "1 ทริป = กรอกครั้งเดียว": one trip header (traveler,
  * destination, days, travel months, accounting side) auto-derives per-diem
  * server-side (ADR-0005/0015); the 3 manual expense types (transport/
@@ -750,41 +884,27 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                     </label>
                     <label>
                       DESTINATION · ปลายทาง
-                      {/* Picking a country ALSO sets country_group (1/2/3) — the
-                        * old manual group select is gone: a hand-picked wrong
-                        * group meant a wrong per-diem rate. A legacy free-typed
-                        * destination keeps its stored group until re-picked. */}
-                      <select
-                        aria-label={`destination ${card.localId}`}
-                        value={card.draft.destination ?? ''}
-                        onChange={(e) =>
+                      {/* Searchable combobox (2026-08-23) — replaces the old
+                        * plain <select>, which grew to 29 countries after the
+                        * tier-3 master rows landed (f32dcc7) and became slow
+                        * to scan by eye. Picking a country ALSO sets
+                        * country_group (1/2/3) via DestinationField's
+                        * onChange — the manual group select is still gone: a
+                        * hand-picked wrong group meant a wrong per-diem rate.
+                        * A legacy/free-typed-in-the-old-days destination
+                        * keeps its stored group until re-picked. */}
+                      <DestinationField
+                        ariaLabel={`destination ${card.localId}`}
+                        options={destinationOptions}
+                        value={card.draft.destination}
+                        fallback={destinationFallback}
+                        onChange={(country) =>
                           updateTripField(card.localId, (d) => {
-                            const group = countryGroupFor(destinationOptions, e.target.value)
-                            return { ...d, destination: e.target.value || null, country_group: group ?? d.country_group }
+                            const group = countryGroupFor(destinationOptions, country)
+                            return { ...d, destination: country, country_group: group ?? d.country_group }
                           })
                         }
-                      >
-                        {card.draft.destination === null && (
-                          <option value="" disabled>
-                            — เลือกปลายทาง —
-                          </option>
-                        )}
-                        {destinationFallback && (
-                          // Clearly marked, not silently blended in with the
-                          // real master rows — a round-trippable, still-
-                          // pickable <option> (never a hack), but its label
-                          // says this is a STORED value, not one to pick for
-                          // a NEW trip (e.g. every pre-2026-08-22 "อื่นๆ
-                          // (Other)" trip, or a country later removed from
-                          // the master).
-                          <option value={destinationFallback}>{destinationFallback} (ค่าเดิม)</option>
-                        )}
-                        {destinationOptions.map((o) => (
-                          <option key={o.country} value={o.country}>
-                            {o.country}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </label>
                     <label>
                       PROJECT · โครงการ

@@ -289,11 +289,12 @@ test.describe('filler journey', () => {
     const card = page.getByTestId('trip-card-new-0')
     await expect(card).toContainText('ระบบจะคำนวณให้หลังกดบันทึก')
 
-    // traveler = searchable combobox from /reference/travelers, NOT a native
-    // <select> (jakkaritw, 2026-08-04, commit 1e441de) — type to filter, then
-    // click the matching option; position auto-displays read-only; destination
-    // dropdown AUTO-SETS country_group (ญี่ปุ่น → 2) — the manual group select
-    // no longer exists.
+    // traveler AND destination are both searchable comboboxes, NOT native
+    // <select>s (traveler: jakkaritw, 2026-08-04, commit 1e441de; destination:
+    // jakkaritw, 2026-08-23, same interaction shape) — type to filter, then
+    // click the matching option. Position auto-displays read-only; the
+    // destination pick AUTO-SETS country_group (ญี่ปุ่น → 2) — the manual
+    // group select no longer exists.
     const travelerInput = card.getByLabel('traveler_empcode new-0')
     await travelerInput.click()
     await travelerInput.fill('สมชาย')
@@ -301,7 +302,11 @@ test.describe('filler journey', () => {
     await expect(travelerInput).toHaveValue('สมชาย ทดสอบ')
     await expect(card.getByTestId('position-new-0')).toHaveText('Officer')
     expect(await card.getByLabel('country_group new-0').count()).toBe(0)
-    await card.getByLabel('destination new-0').selectOption('ญี่ปุ่น')
+    const destinationInput = card.getByLabel('destination new-0')
+    await destinationInput.click()
+    await destinationInput.fill('ญี่ปุ่น')
+    await card.getByRole('option', { name: 'ญี่ปุ่น' }).click()
+    await expect(destinationInput).toHaveValue('ญี่ปุ่น')
     await card.getByLabel('days new-0').fill('5')
     await card.getByRole('button', { name: 'Mar', exact: true }).click()
     await card.getByRole('button', { name: 'Apr', exact: true }).click()

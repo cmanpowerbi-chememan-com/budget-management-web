@@ -2233,6 +2233,52 @@ th.total-year-col {
   color: var(--ink-3);
   font-size: 12px;
 }
+
+/* Destination combobox (Trip Manager DESTINATION · ปลายทาง, 2026-08-23) —
+   same searchable-list pattern as .traveler-combo above and .gl-combo
+   (AddTransactionForm) further up this file; kept as its own small block
+   rather than sharing class names, matching how those two coexist. One line
+   per option (no secondary line — a country's name IS its whole label), so
+   no *-option-name/-email split is needed here. */
+.trip-field-grid .destination-combo {
+  position: relative;
+  text-transform: none; /* same reset as .traveler-combo — see its comment */
+}
+.destination-combo-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.destination-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow: auto;
+  z-index: 30;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 8px 20px rgba(30, 25, 20, 0.12);
+}
+.destination-combo-option {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.destination-combo-option:hover,
+.destination-combo-option.active {
+  background: var(--paper-2);
+}
+.destination-combo-empty {
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
 .trip-months-label {
   font-family: var(--mono);
   font-size: 10.5px;

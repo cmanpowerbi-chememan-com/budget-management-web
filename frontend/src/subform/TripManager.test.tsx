@@ -80,6 +80,19 @@ function pickTraveler(localId: string, empcode: string, query?: string) {
   fireEvent.click(screen.getByRole('option', { name: optionName }))
 }
 
+/** Picks a destination through the searchable combobox (replaced the old
+ * `<select>`, 2026-08-23 — same reuse of TravelerField's interaction shape):
+ * type the country name, then click the matching option. Mirrors
+ * `pickTraveler` above; a real user can never commit a value except this way
+ * (free text alone never sets `draft.destination`, see the "destination
+ * combobox" describe block). */
+function pickDestination(localId: string, country: string) {
+  const input = screen.getByLabelText(`destination ${localId}`)
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: country } })
+  fireEvent.click(screen.getByRole('option', { name: country }))
+}
+
 /** New-trip happy-path prerequisites: traveler + days + a month + destination
  * (ประเทศไทย → group 1). Tests asserting a specific field override after.
  * `monthButtonIndex` = which card's m05 toggle (multi-card tests). */
@@ -87,7 +100,7 @@ function fillNewTripBasics(localId = 'new-0', monthButtonIndex = 0) {
   pickTraveler(localId, 'E9')
   fireEvent.change(screen.getByLabelText(`days ${localId}`), { target: { value: '3' } })
   fireEvent.click(screen.getAllByRole('button', { name: 'May' })[monthButtonIndex])
-  fireEvent.change(screen.getByLabelText(`destination ${localId}`), { target: { value: 'ประเทศไทย' } })
+  pickDestination(localId, 'ประเทศไทย')
 }
 
 function detailLine(overrides: Partial<DetailLineState> = {}): DetailLineState {
@@ -283,7 +296,7 @@ describe('TripManager', () => {
     pickTraveler('new-1', 'E7')
     fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '4' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
-    fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ญี่ปุ่น' } })
+    pickDestination('new-1', 'ญี่ปุ่น')
     fireEvent.click(saveAllButton())
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(2))
 
@@ -422,8 +435,11 @@ describe('TripManager', () => {
 
       fireEvent.focus(input)
       const listbox = screen.getByRole('listbox')
-      // destination/side <select>s also render native role="option" — scope
-      // to THIS combobox's listbox so it can't accidentally count them.
+      // ฝั่งบัญชี is still a native <select> — its <option>s render
+      // role="option" too, always in the DOM regardless of focus — scope to
+      // THIS combobox's own listbox so it can't accidentally count them.
+      // (destination's own combobox listbox, if any card has one open, would
+      // also qualify — none does here, since only THIS input is focused.)
       expect(within(listbox).getAllByRole('option')).toHaveLength(TRAVELERS.length)
 
       // Typing free text alone never sets a traveler — only picking an
@@ -581,7 +597,7 @@ describe('TripManager', () => {
       expect(screen.queryByLabelText('country_group new-0')).not.toBeInTheDocument()
 
       fillNewTripBasics()
-      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'ญี่ปุ่น' } })
+      pickDestination('new-0', 'ญี่ปุ่น')
       fireEvent.click(saveAllButton())
 
       await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
@@ -601,7 +617,7 @@ describe('TripManager', () => {
       fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
 
       fillNewTripBasics()
-      fireEvent.change(screen.getByLabelText('destination new-0'), { target: { value: 'United States' } })
+      pickDestination('new-0', 'United States')
       fireEvent.click(saveAllButton())
 
       await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
@@ -628,12 +644,22 @@ describe('TripManager', () => {
       render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
-      expect(screen.getByLabelText('destination existing-10')).toHaveValue('Japan')
-      // a real, still-selectable <option> — never a hack — but its label
+      const input = screen.getByLabelText('destination existing-10') as HTMLInputElement
+      expect(input.value).toBe('Japan')
+
+      // a real, still-selectable option — never a hack — but its LIST label
       // marks it as a stored legacy value so it can't be mistaken for a
-      // normal pick when creating a NEW trip.
-      const legacyOption = screen.getByRole('option', { name: /Japan.*ค่าเดิม/ }) as HTMLOptionElement
-      expect(legacyOption.value).toBe('Japan')
+      // normal pick when creating a NEW trip. Picking it round-trips the
+      // plain name, never the decorated "(ค่าเดิม)" label, back into the
+      // closed field (2026-08-23: combobox conversion; the old assertion
+      // read a native <option>'s `.value` attribute directly — there is no
+      // such attribute on a combobox's <li>, so this proves the same
+      // guarantee behaviorally instead: click it, then check what actually
+      // lands in the field).
+      fireEvent.focus(input)
+      const legacyOption = screen.getByRole('option', { name: /Japan.*ค่าเดิม/ })
+      fireEvent.click(legacyOption)
+      expect(input.value).toBe('Japan')
 
       // editing an unrelated field and saving must NOT re-tier this trip —
       // its stored country_group (2) survives untouched.
@@ -673,6 +699,98 @@ describe('TripManager', () => {
 
       await waitFor(() => expect(screen.getByText('กรุณาเลือกปลายทาง')).toBeInTheDocument())
       expect(subformApi.createTrip).not.toHaveBeenCalled()
+    })
+  })
+
+  // Destination converted from a plain <select> (29 countries after tier-3,
+  // f32dcc7) to the SAME searchable-combobox pattern as TravelerField
+  // (jakkaritw, 2026-08-23) — typing a name for 29 rows was the trigger; the
+  // <select> physically could not produce a value outside its <option> list,
+  // and this conversion must preserve that exact invariant (never-cut: a
+  // wrong/free-typed destination would silently book the wrong per-diem
+  // group). Most "picks a destination" coverage already lives above via
+  // `pickDestination`/`fillNewTripBasics` (now routed through the combobox);
+  // this block covers the combobox's OWN interaction contract.
+  describe('destination combobox (2026-08-23 — searchable, mirrors TravelerField)', () => {
+    async function renderEmptyForDestination() {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    }
+
+    it('is a searchable combobox (input, not a native select) fed by /reference/countries — free text alone never sets a destination', async () => {
+      await renderEmptyForDestination()
+      const input = screen.getByLabelText('destination new-0') as HTMLInputElement
+      expect(input.tagName).toBe('INPUT')
+      expect(input).toHaveAttribute('role', 'combobox')
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'ไม่มีประเทศนี้แน่นอน' } })
+      expect(screen.getByText('ไม่พบประเทศที่ค้นหา')).toBeInTheDocument()
+      fireEvent.blur(input)
+
+      // Typing alone never committed a destination — save-all still blocks
+      // on the same client-side validation as an untouched field.
+      pickTraveler('new-0', 'E9')
+      fireEvent.change(screen.getByLabelText('days new-0'), { target: { value: '3' } })
+      fireEvent.click(screen.getByRole('button', { name: 'May' }))
+      fireEvent.click(saveAllButton())
+      await waitFor(() => expect(screen.getByText('กรุณาเลือกปลายทาง')).toBeInTheDocument())
+      expect(subformApi.createTrip).not.toHaveBeenCalled()
+    })
+
+    it('typing filters the option list to the matching substring, case-insensitively', async () => {
+      await renderEmptyForDestination()
+      const input = screen.getByLabelText('destination new-0')
+
+      fireEvent.focus(input)
+      expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(COUNTRIES.length)
+
+      fireEvent.change(input, { target: { value: 'ญี่' } }) // substring of 'ญี่ปุ่น' only
+      const options = within(screen.getByRole('listbox')).getAllByRole('option')
+      expect(options).toHaveLength(1)
+      expect(options[0]).toHaveTextContent('ญี่ปุ่น')
+    })
+
+    it('picking an option closes the list and sets the input to the picked value', async () => {
+      await renderEmptyForDestination()
+      pickDestination('new-0', 'ญี่ปุ่น')
+
+      const input = screen.getByLabelText('destination new-0') as HTMLInputElement
+      expect(input.value).toBe('ญี่ปุ่น')
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    it('blurring with an uncommitted query snaps the input back to the last committed destination', async () => {
+      await renderEmptyForDestination()
+      pickDestination('new-0', 'ประเทศไทย')
+      const input = screen.getByLabelText('destination new-0') as HTMLInputElement
+      expect(input.value).toBe('ประเทศไทย')
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'บาดเบิด' } })
+      expect(input.value).toBe('บาดเบิด')
+      fireEvent.blur(input)
+      expect(input.value).toBe('ประเทศไทย') // reverted — the uncommitted query never persisted
+    })
+
+    it('shows the empty-state row "ไม่พบประเทศที่ค้นหา" when the query matches nothing, and never clears an already-committed destination', async () => {
+      await renderEmptyForDestination()
+      pickDestination('new-0', 'ประเทศไทย')
+      const input = screen.getByLabelText('destination new-0') as HTMLInputElement
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'zzzznotacountry' } })
+      expect(screen.getByText('ไม่พบประเทศที่ค้นหา')).toBeInTheDocument()
+      // Scoped to THIS combobox's own listbox — ฝั่งบัญชี is a native
+      // <select> whose <option>s also carry role="option", always in the
+      // DOM regardless of focus (same caveat as the traveler test above).
+      expect(within(screen.getByRole('listbox')).queryByRole('option')).not.toBeInTheDocument()
+
+      fireEvent.blur(input)
+      expect(input.value).toBe('ประเทศไทย') // the earlier pick is never lost to a no-match query
     })
   })
 
@@ -1045,7 +1163,7 @@ describe('TripManager', () => {
       pickTraveler('new-1', 'E7')
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '2' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
-      fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ประเทศไทย' } })
+      pickDestination('new-1', 'ประเทศไทย')
       const manualInput1 = screen.getByLabelText('transport m05 new-1')
       fireEvent.change(manualInput1, { target: { value: '300' } })
       fireEvent.blur(manualInput1) // commits the draft, same shape as grid/MonthCell
@@ -1079,7 +1197,7 @@ describe('TripManager', () => {
       pickTraveler('new-1', 'E9')
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '3' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
-      fireEvent.change(screen.getByLabelText('destination new-1'), { target: { value: 'ประเทศไทย' } })
+      pickDestination('new-1', 'ประเทศไทย')
 
       fireEvent.click(saveAllButton())
 
