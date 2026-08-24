@@ -20,15 +20,26 @@ const BASE_STATUS_LABEL_TH: Record<string, string> = {
  * resolve to the two fixed budget-dept approvers (their empcode never
  * varies); position 1 varies per submission and the state only ever
  * carries an empcode for it, so it falls back to a role label rather than
- * showing a raw employee code to the user. */
+ * showing a raw employee code to the user.
+ *
+ * The parenthesised job title is the ENGLISH title from the HR master
+ * (`dbo.employee_master.position_name_en`, role part only — the trailing
+ * "- Budgeting and Management Accounting" is dropped, it is redundant in a
+ * budget-approval chip). Verified against the live master 2026-08-24:
+ * 101032 = "Senior Associate - Budgeting and Management Accounting",
+ * 100427 = "Assistant Department Head - Budgeting and Management Accounting".
+ * These replace an earlier hand-written Thai gloss ("ผู้จัดการฝ่ายงบประมาณ")
+ * that overstated Waraporn's grade. Titles are still hardcoded, not read from
+ * the DB: `dbo.v_employee_budget_01` exposes only `job_level_name_en`, so a
+ * DB-driven label would need that view widened first. */
 export function approverLabel(position: 1 | 2 | 3 | null, approverEmpcode: string | null): string {
-  if (position === 2 || approverEmpcode === NIPAPORN_EMPCODE) return 'นิภาพร ทองกิ่ง (ฝ่ายงบประมาณ)'
-  if (position === 3 || approverEmpcode === WARAPORN_EMPCODE) return 'วราพร ติรสิทธิ์ (ผู้จัดการฝ่ายงบประมาณ)'
+  if (position === 2 || approverEmpcode === NIPAPORN_EMPCODE) return 'นิภาพร ทองกิ่ง (Senior Associate)'
+  if (position === 3 || approverEmpcode === WARAPORN_EMPCODE) return 'วราพร ติรสิทธิ์ (Assistant Department Head)'
   if (position === 1) return 'ผู้บังคับบัญชาสายตรง'
   return ''
 }
 
-/** The status chip's full label, e.g. "รออนุมัติ · ขั้น 2 (นิภาพร ทองกิ่ง...)". */
+/** The status chip's full label, e.g. "รออนุมัติ · ขั้น 2 (นิภาพร ทองกิ่ง (Senior Associate))". */
 export function statusChipLabel(state: Pick<ApprovalStatusState, 'status' | 'current_position' | 'current_approver_empcode'>): string {
   if (state.status in BASE_STATUS_LABEL_TH && state.current_position === null) {
     return BASE_STATUS_LABEL_TH[state.status]

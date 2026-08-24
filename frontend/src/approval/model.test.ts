@@ -20,6 +20,13 @@ describe('approverLabel', () => {
     expect(approverLabel(3, '100427')).toContain('วราพร')
   })
 
+  // The job title must stay the ENGLISH master title (position_name_en, role
+  // part) — an invented Thai gloss overstated Waraporn's grade once already.
+  it('titles both fixed approvers from the HR master, in English', () => {
+    expect(approverLabel(2, '101032')).toBe('นิภาพร ทองกิ่ง (Senior Associate)')
+    expect(approverLabel(3, '100427')).toBe('วราพร ติรสิทธิ์ (Assistant Department Head)')
+  })
+
   it('falls back to a generic role label at position 1 (no name available)', () => {
     const label = approverLabel(1, '200')
     expect(label).not.toContain('200')
