@@ -2852,3 +2852,54 @@ th.total-year-col {
   border: 1px dashed var(--line);
   border-radius: var(--r);
 }
+
+/* ─── Transient notices (platform/NoticeToasts.tsx) ───
+   Bottom-right stack, above the fullscreen grid overlay (z300) and an open
+   subform modal (z500) — an amount input inside either can publish one — but
+   BELOW the session-expiry dialog (z600), which must never be talked over.
+   Fixed to the viewport: no ancestor carries transform/filter, same
+   verification `.budget-grid.is-fullscreen` relies on. */
+.notice-stack {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 550;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Never wider than a small phone's screen, never wider than a comfortable
+     reading measure on a desktop. */
+  max-width: min(420px, calc(100vw - 40px));
+}
+.notice-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px 11px 14px;
+  /* Dark plate + white ink: --paper is the CI GREEN shell, not a light
+     surface, so the light role here is --surface (#ffffff → 15.9:1 on
+     --ink #1c1c1c). */
+  background: var(--ink);
+  color: var(--surface);
+  border-radius: var(--r);
+  box-shadow: 0 6px 20px rgba(28, 26, 22, 0.28);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.notice-toast-text {
+  flex: 1;
+}
+.notice-toast-close {
+  flex-shrink: 0;
+  padding: 0 2px;
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.notice-toast-close:hover {
+  opacity: 1;
+}

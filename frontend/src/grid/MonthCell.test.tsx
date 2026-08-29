@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NoticeToasts } from '../platform/NoticeToasts'
 import { MonthCell } from './MonthCell'
 
 describe('MonthCell', () => {
@@ -165,6 +166,61 @@ describe('MonthCell', () => {
       fireEvent.blur(input)
       expect(input.value).toBe('100000000')
       expect(onCommit).toHaveBeenCalledWith(100_000_000)
+    })
+  })
+
+  // 2026-08-29: the corrected number redrawn in the field was judged too easy
+  // to miss, so a commit that CHANGED what was typed also raises a toast.
+  // Rendered together with the real `NoticeToasts` host — asserting the
+  // published text through the actual UI, not a spy on the bus.
+  describe('rounding toast', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    function renderCellWithToasts(value: number) {
+      render(
+        <>
+          <MonthCell value={value} editable={true} onCommit={vi.fn()} label="Jan pending" />
+          <NoticeToasts />
+        </>,
+      )
+      return screen.getByRole('textbox')
+    }
+
+    it('announces a rounded amount', () => {
+      const input = renderCellWithToasts(0)
+      fireEvent.change(input, { target: { value: '146' } })
+      fireEvent.blur(input)
+      expect(screen.getByRole('status')).toHaveTextContent('กรอก 146 · ระบบปรับเป็น 100 (ปัดเศษเป็นหลักร้อย)')
+    })
+
+    it('announces a sub-100 amount landing on 0 with its own wording', () => {
+      const input = renderCellWithToasts(0)
+      fireEvent.change(input, { target: { value: '30' } })
+      fireEvent.blur(input)
+      expect(screen.getByRole('status')).toHaveTextContent('ระบบบันทึกเป็น 0 (กรอกได้ตั้งแต่ 100 ขึ้นไป)')
+    })
+
+    it('stays silent when the typed amount was already valid', () => {
+      const input = renderCellWithToasts(0)
+      fireEvent.change(input, { target: { value: '1200' } })
+      fireEvent.blur(input)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('still announces when the rounded value equals what the cell already held (nothing commits, but the typing WAS corrected)', () => {
+      const onCommit = vi.fn()
+      render(
+        <>
+          <MonthCell value={100} editable={true} onCommit={onCommit} label="Jan pending" />
+          <NoticeToasts />
+        </>,
+      )
+      const input = screen.getByRole('textbox')
+      fireEvent.change(input, { target: { value: '146' } })
+      fireEvent.blur(input)
+      expect(onCommit).not.toHaveBeenCalled()
+      expect(screen.getByRole('status')).toHaveTextContent('ระบบปรับเป็น 100')
     })
   })
 

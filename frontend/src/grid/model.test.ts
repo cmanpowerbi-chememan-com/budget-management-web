@@ -35,6 +35,7 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
+  pendingAmountNoticeTh,
   roundPendingAmount,
   sanitizeMonthInput,
   sapCoverageLabel,
@@ -269,6 +270,43 @@ describe('roundPendingAmount — jakkaritw 2026-08-19: round to nearest 100, hal
 
   it('a value far over the cap is still clamped, not rejected client-side', () => {
     expect(roundPendingAmount(999_999_999)).toBe(100_000_000)
+  })
+})
+
+describe('pendingAmountNoticeTh — jakkaritw 2026-08-29: say what the commit-time correction did', () => {
+  it('is silent when the typed number survived untouched (the overwhelmingly common case)', () => {
+    expect(pendingAmountNoticeTh(1200, 1200)).toBeNull()
+    expect(pendingAmountNoticeTh(0, 0)).toBeNull()
+  })
+
+  it('names the rounding, quoting both the typed and the committed number', () => {
+    expect(pendingAmountNoticeTh(146, 100)).toBe('กรอก 146 · ระบบปรับเป็น 100 (ปัดเศษเป็นหลักร้อย)')
+  })
+
+  it('covers the half-up direction too — rounding UP is just as surprising as down', () => {
+    expect(pendingAmountNoticeTh(150, 200)).toBe('กรอก 150 · ระบบปรับเป็น 200 (ปัดเศษเป็นหลักร้อย)')
+  })
+
+  it('a sub-100 value landing on 0 gets its OWN message — losing the amount is not the same surprise as rounding it', () => {
+    expect(pendingAmountNoticeTh(30, 0)).toBe('กรอก 30 ซึ่งต่ำกว่า 100 · ระบบบันทึกเป็น 0 (กรอกได้ตั้งแต่ 100 ขึ้นไป)')
+  })
+
+  it('the cap clamp names the cap, with both numbers grouped for readability', () => {
+    expect(pendingAmountNoticeTh(999_999_999, 100_000_000)).toBe(
+      'กรอก 999,999,999 ซึ่งเกินเพดาน 100 ล้านต่อช่อง · ระบบบันทึกเป็น 100,000,000',
+    )
+  })
+
+  it('never renders a committed 0 as formatThb would (em-dash) — the user must see their own keystrokes', () => {
+    expect(pendingAmountNoticeTh(5, 0)).toContain('กรอก 5 ')
+  })
+
+  it('reports every rounding decision roundPendingAmount actually makes, and only those', () => {
+    for (const typed of [1, 49, 50, 99, 123, 150, 1234, 100_000_060]) {
+      const committed = roundPendingAmount(typed)
+      const notice = pendingAmountNoticeTh(typed, committed)
+      expect(typed === committed ? notice === null : typeof notice === 'string').toBe(true)
+    }
   })
 })
 

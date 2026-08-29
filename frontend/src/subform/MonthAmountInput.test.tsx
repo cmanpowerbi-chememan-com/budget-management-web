@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NoticeToasts } from '../platform/NoticeToasts'
 import { MonthAmountInput } from './MonthAmountInput'
 
 // Same draft-string-then-commit shape as grid/MonthCell.tsx's editable
@@ -113,6 +114,39 @@ describe('MonthAmountInput', () => {
     fireEvent.change(input, { target: { value: '999' } }) // stale local edit, never committed
     rerender(<MonthAmountInput value={777} onCommit={vi.fn()} ariaLabel="m01 row-1" />)
     expect((screen.getByLabelText('m01 row-1') as HTMLInputElement).value).toBe('777')
+  })
+
+  // 2026-08-29: the subform/Trip-Manager inputs raise the SAME rounding toast
+  // as the grid's own cells — one rule, one message, two entry points.
+  describe('rounding toast', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it('announces a rounded amount from inside a subform too', () => {
+      render(
+        <>
+          <MonthAmountInput value={0} onCommit={vi.fn()} ariaLabel="m01 row-1" />
+          <NoticeToasts />
+        </>,
+      )
+      const input = screen.getByRole('textbox')
+      fireEvent.change(input, { target: { value: '1234' } })
+      fireEvent.blur(input)
+      expect(screen.getByRole('status')).toHaveTextContent('กรอก 1,234 · ระบบปรับเป็น 1,200 (ปัดเศษเป็นหลักร้อย)')
+    })
+
+    it('stays silent for an already-valid amount', () => {
+      render(
+        <>
+          <MonthAmountInput value={0} onCommit={vi.fn()} ariaLabel="m01 row-1" />
+          <NoticeToasts />
+        </>,
+      )
+      const input = screen.getByRole('textbox')
+      fireEvent.change(input, { target: { value: '5000' } })
+      fireEvent.blur(input)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
   })
 
   it('passes through className/testId/disabled unchanged (preserves subform styling + contrast baseline selectors)', () => {

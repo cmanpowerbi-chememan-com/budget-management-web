@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { roundPendingAmount, sanitizeMonthInput } from '../grid/model'
+import { pendingAmountNoticeTh, roundPendingAmount, sanitizeMonthInput } from '../grid/model'
+import { publishNotice } from '../platform/notice'
 
 export interface MonthAmountInputProps {
   value: number
@@ -71,9 +72,13 @@ export function MonthAmountInput({ value, onCommit, ariaLabel, className, disabl
         // shared implementation for the special-GL subform and Trip
         // Manager's manual travel-line months; per-diem never reaches this
         // component at all — it renders via a read-only `<span>`). The
-        // field always redraws to the CORRECTED number, no separate toast.
+        // field always redraws to the CORRECTED number, and since 2026-08-29
+        // a toast says what was corrected too (see `MonthCell`'s copy of this
+        // block for why it is keyed on typed-vs-parsed).
         const parsed = roundPendingAmount(typed)
         setDraft(String(parsed))
+        const notice = pendingAmountNoticeTh(typed, parsed)
+        if (notice) publishNotice(notice)
         if (parsed !== value) onCommit(parsed)
       }}
     />

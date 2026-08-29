@@ -201,6 +201,38 @@ export function roundPendingAmount(value: number): number {
   return Math.min(roundedToHundred, PENDING_AMOUNT_MAX)
 }
 
+/** Whole-baht display for the notice below — NOT `formatThb`, which renders 0
+ * as an em-dash and always shows 2 decimals. A notice quoting the user's own
+ * keystrokes must show them back unchanged ("30", not "—"). */
+function formatWholeBaht(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+/** The Thai toast text for a Pending amount the commit path CHANGED, or
+ * `null` when it committed exactly what was typed (the overwhelmingly common
+ * case — no toast).
+ *
+ * jakkaritw, 2026-08-29: the corrected number redrawn in the field was judged
+ * too easy to miss, so every correction now also says what happened. The
+ * BEHAVIOR is untouched — the same 2026-08-19 rules still decide the number
+ * (`roundPendingAmount` above), including sub-100 landing on 0, which jakkaritw
+ * re-confirmed this same day when offered a 100-minimum instead. This function
+ * only narrates the result.
+ *
+ * Three distinct outcomes, three messages — a value silently becoming 0 is a
+ * different surprise from one rounding down by 46 baht, and neither is the cap
+ * clamp: */
+export function pendingAmountNoticeTh(typed: number, committed: number): string | null {
+  if (!Number.isFinite(typed) || typed === committed) return null
+  if (committed === 0) {
+    return `กรอก ${formatWholeBaht(typed)} ซึ่งต่ำกว่า 100 · ระบบบันทึกเป็น 0 (กรอกได้ตั้งแต่ 100 ขึ้นไป)`
+  }
+  if (typed > PENDING_AMOUNT_MAX) {
+    return `กรอก ${formatWholeBaht(typed)} ซึ่งเกินเพดาน 100 ล้านต่อช่อง · ระบบบันทึกเป็น ${formatWholeBaht(committed)}`
+  }
+  return `กรอก ${formatWholeBaht(typed)} · ระบบปรับเป็น ${formatWholeBaht(committed)} (ปัดเศษเป็นหลักร้อย)`
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }

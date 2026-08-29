@@ -6,6 +6,7 @@ import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
 import { UserBar } from './userbar/UserBar'
 import { currentSearch } from './platform/location'
+import { NoticeToasts } from './platform/NoticeToasts'
 
 function App() {
   // Parsed once on load — ADR-0016 deep-link is convenience-only, the
@@ -24,6 +25,11 @@ function App() {
           render even when the very first boot call (GET /me, useAuth) is
           what raises the session-expiry latch, before BudgetGrid mounts. */}
       <SessionExpiredDialog />
+
+      {/* Same reasoning as the dialog above — mounted unconditionally and
+          outside `main`, because the amount inputs that publish notices live
+          both in the page and inside a fullscreen/modal layer. */}
+      <NoticeToasts />
 
       <nav className="nav">
         <div className="nav-inner">

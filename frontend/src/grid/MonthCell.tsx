@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatThb, roundPendingAmount, sanitizeMonthInput } from './model'
+import { publishNotice } from '../platform/notice'
+import { formatThb, pendingAmountNoticeTh, roundPendingAmount, sanitizeMonthInput } from './model'
 
 export interface MonthCellProps {
   value: number
@@ -77,10 +78,16 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
         // jakkaritw 2026-08-19: round to the nearest 100 (half-up) and clamp
         // to the 100,000,000 cap ON COMMIT, never per keystroke (typing 1234
         // must stay reachable, not collapse to 100 after the 3rd digit). The
-        // field always redraws to the CORRECTED number — that is the user
-        // feedback for both the round and the clamp, no separate toast.
+        // field always redraws to the CORRECTED number.
         const parsed = roundPendingAmount(typed)
         setDraft(String(parsed))
+        // ...and since 2026-08-29 a toast also SAYS what was corrected — the
+        // redrawn number alone was too easy to miss. Keyed on typed-vs-parsed,
+        // NOT on parsed-vs-value: retyping 146 over a cell that already holds
+        // 100 commits nothing, yet the user's 146 still became 100 and they
+        // should be told.
+        const notice = pendingAmountNoticeTh(typed, parsed)
+        if (notice) publishNotice(notice)
         if (parsed !== value) onCommit(parsed)
       }}
     />
