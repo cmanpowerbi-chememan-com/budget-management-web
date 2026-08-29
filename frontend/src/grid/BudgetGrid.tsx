@@ -490,19 +490,28 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           </button>
         )}
         {isDualRoleAdmin && <AdminModeToggle enabled={adminModeOn} onChange={handleAdminModeToggle} />}
-        <div className="legend" data-testid="status-legend">
-          <span className="legend-item">
-            <span className="legend-dot sap" />
-            SAP · ใช้จริง ({year - 1})
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot approved" />
-            Approved · งบอนุมัติ ({year - 1})
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot pending" />
-            Pending · งบรออนุมัติ ({year})
-          </span>
+        <div className="legend-block">
+          <div className="legend" data-testid="status-legend">
+            <span className="legend-item">
+              <span className="legend-dot sap" />
+              SAP · ใช้จริง ({year - 1})
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot approved" />
+              Approved · งบอนุมัติ ({year - 1})
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot pending" />
+              Pending · งบรออนุมัติ ({year})
+            </span>
+          </div>
+          {/* States the PENDING_AMOUNT_ROUND_TO rule (model.ts) up front so the
+              filler is not surprised when a typed 146 commits as 100 — the
+              rounding itself is silent by design (no toast). */}
+          <p className="legend-note" data-testid="pending-rounding-note">
+            <strong>หมายเหตุ:</strong> กรอกได้ตั้งแต่ <strong>100</strong> ขึ้นไป
+            {' '}โดยระบบจะปรับตัวเลข 2 หลักสุดท้ายเป็น <strong>00</strong> โดยอัตโนมัติ
+          </p>
         </div>
       </div>
 

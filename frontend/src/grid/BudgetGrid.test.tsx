@@ -839,6 +839,19 @@ describe('BudgetGrid', () => {
     expect(items[2]).toHaveTextContent('Pending · งบรออนุมัติ (2027)')
   })
 
+  it('spells out the 100-rounding rule under the legend (fillers must not be surprised by the silent round on commit)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const note = await screen.findByTestId('pending-rounding-note')
+    expect(note.textContent?.replace(/\s+/g, ' ')).toBe(
+      'หมายเหตุ: กรอกได้ตั้งแต่ 100 ขึ้นไป โดยระบบจะปรับตัวเลข 2 หลักสุดท้ายเป็น 00 โดยอัตโนมัติ',
+    )
+  })
+
   it('a non-admin, non-dual-role user never sees the admin-mode toggle', async () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
