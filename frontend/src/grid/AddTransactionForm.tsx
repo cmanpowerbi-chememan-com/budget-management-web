@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import type { BudgetRow, GlAccount } from '../api/types'
-import { ALL_COST_CENTERS_LOCKED_REASON_TH, YEAR_NOT_OPEN_ADD_REASON_TH, validateNewTransaction } from './model'
+import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
+import {
+  ALL_COST_CENTERS_LOCKED_REASON_TH, DEPT_DATA_UNAVAILABLE_REASON_TH, YEAR_NOT_OPEN_ADD_REASON_TH,
+  isGlPickableForCostCenter, validateNewTransaction,
+} from './model'
 
 export interface AddResult {
   ok: boolean
@@ -38,6 +41,21 @@ export interface AddTransactionFormProps {
    * Centers are individually locked. Optional/defaults to `false` — "the
    * year is open", the pre-existing behavior. */
   yearNotOpen?: boolean
+  /** One row per Cost Center in the caller's scope (`GET /scope/departments`,
+   * already fetched by `BudgetGrid`) — resolves the picked Cost Center's
+   * department for `DEPT_RESTRICTED_GL_GROUPS` (jakkaritw 2026-08-29:
+   * Training & Seminar is pickable only on Talent & Culture cost centers).
+   * Optional/defaults to `[]`, which hides the restricted GLs — the safe
+   * side, since only they depend on it. */
+  departments?: DepartmentRow[]
+  /** Admins pick any GL on any Cost Center — they bypass the department
+   * restriction above. Optional/defaults to `false`. */
+  isAdmin?: boolean
+  /** `true` when `GET /scope/departments` failed — `BudgetGrid` catches that
+   * error and carries on with an empty list, so without this flag a withheld
+   * restricted GL would look identical to one an admin had deleted. Optional/
+   * defaults to `false`. */
+  departmentsLoadFailed?: boolean
 }
 
 /** "+ เพิ่ม transaction" — picks a Cost Center + a GL code (Fill scope
@@ -51,6 +69,7 @@ export interface AddTransactionFormProps {
  * first match, Esc closes, click also picks. */
 export function AddTransactionForm({
   fillCostCenters, glRef, existingRows, onAdd, lockedCostCenters = {}, yearNotOpen = false,
+  departments = [], isAdmin = false, departmentsLoadFailed = false,
 }: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
   const [costCenter, setCostCenter] = useState('')
@@ -67,19 +86,40 @@ export function AddTransactionForm({
   // this component's props) — filter by substring on the code itself.
   const filteredCcs = ccQuery ? fillCostCenters.filter((cc) => cc.toLowerCase().includes(ccQuery)) : fillCostCenters
 
-  function pickCc(cc: string) {
+  const selectedGl = glRef.find((g) => g.gl_code === glAccount)
+
+  /** Every path that changes the Cost Center goes through here — picking one
+   * from the list, and typing free text (which un-picks it). A GL the new Cost
+   * Center may not use is dropped on the spot: otherwise a user could pick the
+   * Talent & Culture cost center + the seminar GL, switch to another cost
+   * center, and save the exact combination the rule forbids. */
+  function changeCostCenter(cc: string) {
     setCostCenter(cc)
+    if (selectedGl && !isGlPickableForCostCenter(selectedGl, cc, departments, isAdmin)) {
+      setGlAccount('')
+      setGlSearch('')
+    }
+  }
+
+  function pickCc(cc: string) {
+    changeCostCenter(cc)
     setCcSearch(cc)
     setCcListOpen(false)
   }
 
-  const selectedGl = glRef.find((g) => g.gl_code === glAccount)
   const query = glSearch.trim().toLowerCase()
+  // Eligibility BEFORE the search filter, so a GL this Cost Center's department
+  // may not budget for cannot be typed back into view either.
+  const pickableGls = glRef.filter((g) => isGlPickableForCostCenter(g, costCenter, departments, isAdmin))
   // Match code, name AND group — the label shows only name, but users also
   // search by group (e.g. "office" for the Office Expenses GLs).
   const filteredGls = query
-    ? glRef.filter((g) => `${g.gl_code} ${g.gl_name ?? ''} ${g.gl_group}`.toLowerCase().includes(query))
-    : glRef
+    ? pickableGls.filter((g) => `${g.gl_code} ${g.gl_name ?? ''} ${g.gl_group}`.toLowerCase().includes(query))
+    : pickableGls
+  // Only when something is ACTUALLY being withheld: an admin (or a GL master
+  // with no restricted group in it) loses nothing to a failed department fetch,
+  // so they get no warning about it.
+  const withholdingOnStaleDeptData = departmentsLoadFailed && pickableGls.length < glRef.length
 
   function glLabel(g: GlAccount): string {
     return `${g.gl_code} — ${g.gl_name ?? g.gl_group}${g.edit_by === 'admin' ? ' (เฉพาะแอดมิน)' : ''}`
@@ -104,7 +144,9 @@ export function AddTransactionForm({
   }
 
   async function handleSubmit() {
-    const validation = validateNewTransaction({ costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters, yearNotOpen })
+    const validation = validateNewTransaction({
+      costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters, yearNotOpen, departments, isAdmin,
+    })
     if (!validation.ok) {
       setError(validation.errorTh ?? 'ข้อมูลไม่ถูกต้อง')
       return
@@ -160,7 +202,7 @@ export function AddTransactionForm({
               // Free text is never a selection by itself — the CC only
               // counts once the user picks it from the filtered list.
               setCcSearch(e.target.value)
-              setCostCenter('')
+              changeCostCenter('')
             }}
             onBlur={() => setCcListOpen(false)}
             onKeyDown={(e) => {
@@ -222,7 +264,13 @@ export function AddTransactionForm({
           />
           {glListOpen && (
             <div className="gl-combo-list" role="listbox" aria-label="ตัวเลือก GL Code">
-              {filteredGls.length === 0 && <div className="gl-combo-empty">ไม่พบ GL Code ที่ค้นหา</div>}
+              {/* Replaces the "not found" line rather than stacking with it:
+                  "no such GL" is the wrong story when the GL exists and the
+                  department data is what failed. */}
+              {withholdingOnStaleDeptData && <div className="gl-combo-empty">{DEPT_DATA_UNAVAILABLE_REASON_TH}</div>}
+              {filteredGls.length === 0 && !withholdingOnStaleDeptData && (
+                <div className="gl-combo-empty">ไม่พบ GL Code ที่ค้นหา</div>
+              )}
               {filteredGls.map((g) => (
                 <button
                   key={g.gl_code}

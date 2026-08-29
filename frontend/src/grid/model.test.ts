@@ -10,6 +10,8 @@ import {
   COLUMN_WIDTH_MIN,
   COLUMN_WIDTHS_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
+  DEPT_RESTRICTED_GL_GROUPS,
+  DEPT_RESTRICTED_GL_REASON_TH,
   filterRows,
   fitColumnWidth,
   formatSapMonth,
@@ -26,6 +28,7 @@ import {
   isCostCenterLocked,
   isDeletableRow,
   isEditableCell,
+  isGlPickableForCostCenter,
   loadStoredColumnWidths,
   lockedCostCenterDepartments,
   mergeSavedRow,
@@ -404,6 +407,119 @@ describe('validateNewTransaction', () => {
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
     })
     expect(result.ok).toBe(true)
+  })
+
+  // Gate finding LOW-4: a GL code that vanished from `dbo.gl_group` between the
+  // pick and the save (glRef refetches on the admin-hat toggle) used to fall
+  // through EVERY remaining check — restriction and duplicate alike — and reach
+  // the API.
+  it('rejects a picked GL that is no longer in the GL master', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '9999999999', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('GL นี้ไม่มีอยู่ในรายการ GL แล้ว กรุณาเลือกใหม่')
+  })
+
+  // Department-restricted GL groups (jakkaritw 2026-08-29). The picker already
+  // hides these, so this check only catches a STALE selection (pick the HR cost
+  // center + the seminar GL, then switch cost center).
+  describe('department-restricted GL groups', () => {
+    const glRef: GlAccount[] = [
+      ...GL_REF,
+      { gl_code: '5210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' },
+    ]
+    const departments: DepartmentRow[] = [
+      { cost_center: '10HR012000', department: 'Talent & Culture', division: 'Corporate Affairs', c_level: null },
+      { cost_center: '10AC012000', department: 'Accounting', division: 'Finance', c_level: null },
+    ]
+    const fillCostCenters = ['10HR012000', '10AC012000']
+
+    it('rejects a restricted GL on a cost center outside its owning department', () => {
+      const result = validateNewTransaction({
+        costCenter: '10AC012000', glAccount: '5210100150', fillCostCenters, glRef, existingRows: [], departments,
+      })
+      expect(result.ok).toBe(false)
+      expect(result.errorTh).toBe('GL ค่าอบรมและสัมมนา ใช้ได้เฉพาะ Cost Center ของฝ่าย Talent & Culture')
+      expect(result.errorTh).toBe(DEPT_RESTRICTED_GL_REASON_TH)
+    })
+
+    it('accepts the same restricted GL on a cost center inside the owning department', () => {
+      const result = validateNewTransaction({
+        costCenter: '10HR012000', glAccount: '5210100150', fillCostCenters, glRef, existingRows: [], departments,
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('an admin may pick a restricted GL on any cost center', () => {
+      const result = validateNewTransaction({
+        costCenter: '10AC012000', glAccount: '5210100150', fillCostCenters, glRef, existingRows: [], departments,
+        isAdmin: true,
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('leaves every non-restricted GL alone on the very same cost center', () => {
+      const result = validateNewTransaction({
+        costCenter: '10AC012000', glAccount: '5210400010', fillCostCenters, glRef, existingRows: [], departments,
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('fails CLOSED when departments is omitted — a restricted GL cannot be validated, so it is refused', () => {
+      const result = validateNewTransaction({
+        costCenter: '10HR012000', glAccount: '5210100150', fillCostCenters, glRef, existingRows: [],
+      })
+      expect(result.ok).toBe(false)
+      expect(result.errorTh).toBe(DEPT_RESTRICTED_GL_REASON_TH)
+    })
+  })
+})
+
+describe('isGlPickableForCostCenter', () => {
+  const seminarGl: GlAccount = {
+    gl_code: '5210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user',
+  }
+  const plainGl: GlAccount = { gl_code: '5211800030', gl_group: 'Office expenses', gl_name: 'Office COST', is_special: false }
+  const departments: DepartmentRow[] = [
+    { cost_center: '10HR012000', department: 'Talent & Culture', division: 'Corporate Affairs', c_level: null },
+    { cost_center: '10AC012000', department: 'Accounting', division: 'Finance', c_level: null },
+  ]
+
+  it('maps the Training & Seminar group to the Talent & Culture department', () => {
+    expect(DEPT_RESTRICTED_GL_GROUPS['Training & Seminar']).toBe('Talent & Culture')
+  })
+
+  it('true for a restricted GL on a cost center of the owning department', () => {
+    expect(isGlPickableForCostCenter(seminarGl, '10HR012000', departments)).toBe(true)
+  })
+
+  it('false for a restricted GL on a cost center of any other department', () => {
+    expect(isGlPickableForCostCenter(seminarGl, '10AC012000', departments)).toBe(false)
+  })
+
+  it('false for a restricted GL while no cost center is picked yet — it must never appear and then vanish', () => {
+    expect(isGlPickableForCostCenter(seminarGl, '', departments)).toBe(false)
+  })
+
+  it('false for a restricted GL whose cost center has no department row (unresolvable — fail closed)', () => {
+    expect(isGlPickableForCostCenter(seminarGl, '10ZZ999000', departments)).toBe(false)
+  })
+
+  it('true for a restricted GL when the caller is an admin, on any cost center', () => {
+    expect(isGlPickableForCostCenter(seminarGl, '10AC012000', departments, true)).toBe(true)
+    expect(isGlPickableForCostCenter(seminarGl, '', departments, true)).toBe(true)
+  })
+
+  it('true for a non-restricted GL in every case — no cost center, wrong department, empty master', () => {
+    expect(isGlPickableForCostCenter(plainGl, '', departments)).toBe(true)
+    expect(isGlPickableForCostCenter(plainGl, '10AC012000', departments)).toBe(true)
+    expect(isGlPickableForCostCenter(plainGl, '10AC012000', [])).toBe(true)
+  })
+
+  it('true for a GL with no group at all (never crashes on a null gl_group)', () => {
+    const noGroup: GlAccount = { gl_code: '9999999999', gl_group: null, gl_name: null, is_special: false }
+    expect(isGlPickableForCostCenter(noGroup, '10AC012000', departments)).toBe(true)
   })
 })
 

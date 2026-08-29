@@ -54,6 +54,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const [deptResolved, setDeptResolved] = useState(false)
 
   const [departments, setDepartments] = useState<DepartmentRow[]>([])
+  // The department fetch below fails soft (empty list, no banner) so the grid
+  // still loads — but "no departments" then looks the same as a real empty
+  // scope. The GL picker needs to tell those apart to explain a withheld GL.
+  const [departmentsLoadFailed, setDepartmentsLoadFailed] = useState(false)
   const [glRef, setGlRef] = useState<GlAccount[]>([])
   const [rows, setRows] = useState<BudgetRow[]>([])
   const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
@@ -151,6 +155,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     fetchDepartments(adminViewEnabled)
       .then((data) => {
         setDepartments(data)
+        setDepartmentsLoadFailed(false) // a later refetch (admin-hat toggle) clears an earlier failure
         if (!deptResolved) {
           setDepartment(resolveInitialDept(buildDeptHierarchy(data), initialFilter.dept))
           setDeptResolved(true)
@@ -158,6 +163,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       })
       .catch(() => {
         setDepartments([])
+        setDepartmentsLoadFailed(true)
         // Even on failure, unblock the grid-load gate below — a broken
         // department list must never leave the grid stuck in "loading"
         // forever (it just loads with department=null, same as a >1-ฝ่าย
@@ -483,6 +489,9 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           onAdd={handleAddTransaction}
           lockedCostCenters={lockedCostCenters}
           yearNotOpen={yearNotOpen}
+          departments={departments}
+          isAdmin={scope.isAdmin}
+          departmentsLoadFailed={departmentsLoadFailed}
         />
         {department && (
           <button type="button" className="btn btn-attach" onClick={() => setAttachmentsOpen(true)}>

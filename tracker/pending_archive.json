@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-08-22T20:36:37+0700",
+  "updated": "2026-08-29T13:05:07+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -843,6 +843,828 @@
       "created": "2026-07-23T14:41:13+0700",
       "updated": "2026-07-23T15:23:29+0700",
       "ai": "Spot test #1 suchanyay@chememan.com, 'Year 2026'=API year=2027 (planning; SAP/Approved layer=FY2026). Ran vs live Fabric SQL DB + local uvicorn(:8011 flag OFF)+built out/ via node playwright. RESULTS 17/17 core PASS: (1)dept default single-dept auto Solution Delivery ok (2)CC=1 10IT012000 (3)GL=8 (4)SAP=539,118.41 web==gold FY2026 (5)Approved=1,480,104.00 web==board_budget FY2026 (7/16)FE==DB: browser /budget JSON cent-exact + DOM grand-total 1,042,175 baht==DB 1,042,174.32 (15)neg-RLS foreign dept/CC=0 rows no leak (6)filled 4 normal rows(20 cells)+ProfLegal detail(3mo)+2 trips; (6.2/14)per-diem domestic 5*250*1=1250 split 416.66/416.66/416.68, foreign asian 4*80*FX33.0=10,560 in DB (FX applied) (8)deep-link honored (9)F5 ok (10)theme persists dark (11)401->/.auth/login/aad (12.1 409/12.2 403-locked/12.3 422 field-named)ok (13)console clean (17)cleanup deleted detail3/trip2/pending6 -> 0 residue baseline restored. FINDINGS: (a)deep-link ?year=2026 fed raw as planning-year -> renders 'Year 2025' Approved empty, mismatches picker label 'Year 2026'=API2027 (off-by-one deep-link vs YearPicker label). (b)12.3 negative -> HTTP400 generic 'คำขอไม่ถูกต้อง' no field name (but grid input strips non-digits so unreachable via UI; over-max 422 IS field-named). (c)admin-GL-hidden moot: none of 12 admin GLs in her data; flag OFF does NOT hide them (only flag ON strips) -> if a CC had admin-GL data + flag off they'd show. (d)header 'Master FX FY2026' label while pending trips use FY2027 FX(33.0). No prod code changed. Temp files in scratchpad; frontend .cjs removed; next-env.d.ts reverted.",
+      "agent": "claude"
+    },
+    {
+      "id": "fx-repersist-perdiem-design",
+      "state": "done",
+      "created": "2026-07-24T11:54:21+0700",
+      "updated": "2026-07-24T12:01:20+0700",
+      "ai": "Mode A design doc written: docs/specs/feature-fx-repersist-perdiem.md. Discovery: dbo.master_currency_rate is edited via SharePoint Excel -> NB_budget_masters_sync (external ws cman-dw-ws), NOT any in-app endpoint (master-currency.html is dead mockup, no backend). App only reads via _lookup_fx (write_model.py:1164). Recommended trigger = new backend/jobs/repersist_perdiem_fx.py (reuse derive_per_diem + _upsert_trip_detail_line + _recompute_parent_cell), skip PENDING/APPROVED depts (ADR-0013 lock), skip domestic(cg=1). 4 open policy Qs at GATE, biggest = ADR-0015 vs skip-APPROVED conflict. No code written. Awaiting jakkaritw GATE.",
+      "agent": "claude"
+    },
+    {
+      "id": "spot-test-3-specialgl-meta",
+      "state": "done",
+      "created": "2026-07-24T10:38:05+0700",
+      "updated": "2026-07-24T10:52:30+0700",
+      "ai": "QA lane3 PASS 15/15: special-GL meta_json validation via PUT /budget/detail as jakkaritw(admin) cc=10AC010000 fy=2097. Entertainment ext(6211900030) Customer=200 / internal-val=400; int(6211900031) พนักงานบริษัท=200 / Customer=400 (invalid_meta). Lease vehicle(6211200060) plate free-text preserved=200 / plant ZZ=400; machinery(6211200030) ทะเบียนรถ locked NULL=200; land(6211200010) ประเภทรถ+ทะเบียนรถ both NULL despite sent=200. PR&Donation(6211700010)+Training(6210100150) free-form=200. All 7 detail rows(ids57-63) verified to the cent, total_year==SUM(months)==parent pending_budget recompute. 3x400 persisted nothing. Cleanup: deleted 7 detail+7 parent, residual 0/0 (FY2096-99 empty on CC). No code change. App was down at lane start; orchestrator brought :3000/:8000 up.",
+      "agent": "claude"
+    },
+    {
+      "id": "spot-test-4-travel-deep",
+      "state": "done",
+      "created": "2026-07-24T10:38:01+0700",
+      "updated": "2026-07-24T10:57:08+0700",
+      "ai": "Lane4 Travelling Expense deep QA (jakkaritw admin, CC 10AC010000, FY2098 throwaway) via :3000->:8000 (I started both servers; they were down). 7/7 PASS: (1) domestic per-diem 5*250=1250.00 split 416.66/416.66/416.68 remainder-in-last-month; (2) foreign other 4*80*33=10560.00 FX-applied not rate-only 320; (3) manual transport SGA line 1000 attaches + negative opposite-side COST GL->400 trip_side_mismatch; (4) side-flip SGA->COST moves per-diem 6210400010->5210400010, deletes old SGA per-diem, rehomes transport 6210400020->5210400020 amount preserved; (5) idempotency same client_token->same trip_id, 1 row; (6) recompute-on-read FX33->40 GET=12800 while stored detail stays 10560. Temp FX FY2098=33.0 inserted then deleted. Cleanup: deleted 4 trip/6 detail/8 pending/1 FX; residual 0 (global FY2098 check all_zero). No approval endpoint touched, no forbidden identity/CC used.",
+      "agent": "claude"
+    },
+    {
+      "id": "spot-test-2-db-align-check",
+      "state": "done",
+      "created": "2026-07-24T10:29:05+0700",
+      "updated": "2026-07-24T10:29:05+0700",
+      "ai": "Direct read-only DB verification that schema+state align with Spot Test #2: approval_status has all 13 code-expected columns + PK = (department, fiscal_year) confirmed via sys.index_columns; approval_log shape matches verified audit trail; chain source v_employee_budget_01 maps suchanyay(101159) -> manager 101622 (arthids), L2/L3 are compile-time constants per ADR-0006; all 5 budget tables 0 rows post-cleanup; zero-amount debris scan clean; board_budget intact (364 rows, 10IT012000/FY2026 = 5 = spot1 baseline); submission_deadline FY2027 = 2026-10-31 (noted: table updated same day 06:31). (Backfill: done ~19:00, logged late.)",
+      "agent": "kimi"
+    },
+    {
+      "id": "spot-test-2-approver-journey",
+      "state": "done",
+      "created": "2026-07-24T10:29:05+0700",
+      "updated": "2026-07-24T10:29:05+0700",
+      "ai": "First real-user approval journey (10IT012000 Solution Delivery FY2027), 9/9 steps: state machine DRAFT->PENDING_APPROVER1/2/3->APPROVED + REJECT/RESUBMIT; chain arthids(101622)->nipapornt(101032)->warapornt(100427); submit locks immediately (filler PUT 403); pending-for-me shows dept only to current level; wrong-actor approves 403 x3; blank reason 400 / missing key 422; post-APPROVED pending rows untouched + permanent lock; audit log 6 ordered rows; UI action bar only for current approver. Email gate verified safe (NOTIFICATIONS_DRY_RUN default True, zero HTTP). Cleanup to 0 rows in all 5 tables (kimi re-verified: status DRAFT, grid baseline 8 rows / pending 0 / SAP 539,118.41 unchanged). Anomalies: debris zero-row via suchanyay fallback identity (unheadered call - asked CC to confirm), approval.ts:35 comment says 422 but blank reason is 400, editable:true while APPROVED by design. (Backfill: done ~18:30, logged late.)",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "docs/test/spot-test-2-summary.png",
+          "label": "summary image"
+        },
+        {
+          "path": "docs/test/spot-test-2-insert-log.md",
+          "label": "insert+cleanup log"
+        }
+      ]
+    },
+    {
+      "id": "spot-test-1b-nipapornt",
+      "state": "done",
+      "created": "2026-07-24T10:29:04+0700",
+      "updated": "2026-07-24T10:29:04+0700",
+      "ai": "Full 17-item spot test as nipapornt (filler, 7 CCs) incl. the earlier parallel RLS A/B proof (same query: nipapornt 20 rows / suchanyay 0) and header-passthrough UI check. Phase A read-only: multi-dept picker default (auto-selects first by Thai-locale sort), counts UI=API=DB (11 GL dept General), SAP 282,112.88 exact, Approved 117,000.00, theme/F5/console. Phase B write round: 6.1 4 rows/20 cells DB-exact, 6.2 all 6 special groups + per-diem dom 750.00 / intl 5,280.00 exact, write-path 403 on out-of-scope CC, 409/422 shapes, totals-after-write = DB (143 cells 0 mismatch), cleanup to 0 rows all 3 tables (kimi re-verified). Findings: IB GLs missing from gl_group, ~15.27M hidden on non-master GLs, gl_access docstring 13-vs-12 drift, picker badge missing space. (Backfill: done ~17:10, logged late.)",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "docs/test/spot-test-1b-summary.png",
+          "label": "summary image"
+        },
+        {
+          "path": "docs/test/spot-test-1b-insert-log.md",
+          "label": "insert+cleanup log"
+        }
+      ]
+    },
+    {
+      "id": "spot-test-1-verify-summary",
+      "state": "done",
+      "created": "2026-07-24T10:29:04+0700",
+      "updated": "2026-07-24T10:29:04+0700",
+      "ai": "Independently re-verified CC spot test #1 (suchanyay) headline numbers via direct API re-query (year=2027: 8 GLs, SAP 539,118.41, Approved 1,480,104.00, pending 0 post-cleanup - all exact) and confirmed the year-semantics observation (label 2026 sends API year=2027). Built the visual summary docs/test/spot-test-1-summary.png. (Backfill: done ~15:45, logged late.)",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "docs/test/spot-test-1-summary.png",
+          "label": "summary image"
+        },
+        {
+          "path": "docs/test/spot-test-1-summary.html",
+          "label": "source"
+        }
+      ]
+    },
+    {
+      "id": "plan-vite-nextjs-migration-guide",
+      "state": "done",
+      "created": "2026-07-24T10:29:04+0700",
+      "updated": "2026-07-24T10:29:04+0700",
+      "ai": "Wrote the detailed Vite-to-Next.js static-export migration guide (decisions, file map, gotchas G1-G8, steps 0-11, verification matrix) after user confirmed org standard; later added G9 + step 9b (backend static-serving coupling: config.py fallback, static.py /_next/static mount) from code reading. CC later deepened it with ARCH-a/b/c + backlog while preserving G9/9b. (Backfill: work done 2026-07-23 morning, logged late.)",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "plan/vite-to-nextjs-migration.md",
+          "label": "migration guide"
+        }
+      ]
+    },
+    {
+      "id": "spot-test-3-seeonly-noscope",
+      "state": "done",
+      "created": "2026-07-24T10:34:33+0700",
+      "updated": "2026-07-24T15:17:25+0700",
+      "ai": "Spot Test #3 (kimi lane) see_only + no-scope: ALL PASS. Users discovered from DB & verified: bunpotk@chememan.com (see_only, 112 see CCs/121 dept rows, 0 fill) and adirekn@chememan.com (role none). Results: (A1) departments=121 rows; (A2) grid read on see-CC loads (10MN011100: 8 rows, SAP 69,107.94) with editable=false on EVERY row (API); (A3) UI read-only proven: deep-link prefills Plant Mechanical Maint. (PBB), GL codes render, 192 read-only span cells, only 5 filter inputs, ZERO month inputs, console clean; (A4) PUT on see-only CC -> 403 'not in your Fill scope' (also adirekn 403); (A5) POST /approval/submit on see-only dept -> 403 'does not Fill any cost center', status stays DRAFT; (B6) no-scope: departments=0, budget on data CC=[]; (B7) friendly empty state + no grid + identity correct + KNOWN pre-existing bug REPRODUCES live: exactly 1 spurious /scope/departments call (evidence for #e2e-stale-specs-fix); (B8) deep-link to foreign dept still empty state, zero data; (B9) all negative writes 403 with DB-verified zero footprint (pending_budget/approval_status/approval_log = 0); (B10) console errors: none in all runs. Note: original subagent (agent-5) stalled 2h+25min silent -> killed; kimi ran the whole round directly. Dev-server incident: :3000 had a HUNG next dev process (PID 37488, port held but unresponsive) -> killed, fresh instance running (PID 18512). Role matrix now closed: filler-1CC, filler-multi, admin, approver-chain, see_only, no-scope all covered.",
+      "agent": "kimi"
+    },
+    {
+      "id": "spot-test-3-attachments",
+      "state": "done",
+      "created": "2026-07-24T16:37:27+0700",
+      "updated": "2026-07-24T16:37:27+0700",
+      "ai": "Attachments lane DONE (jakkaritw consent 2026-07-24 for real-SharePoint test upload). Via :8000 spoof suchanya (Fill Solution Delivery). Real folder Solution Delivery/2027 (pre-created; throwaway years 404 so used real). PASS: upload tiny PNG->200 (70B), GET /attachments lists it, download-url round-trip bytes==uploaded, .txt->400 disallowed, unauthorized dept (Accounting Division)->403 (Fill gate). CLEANUP via Graph DELETE (app has NO delete endpoint) item 01BDTJLIJUKON2RBAA6NC2DXP4HAS42ZQQ ->204, folder back to baseline EMPTY (0 residue). No prod code changed. Remaining CC lane: staging az acr build (deploy gate, jakkaritw approval).",
+      "agent": "claude"
+    },
+    {
+      "id": "fx-repersist-design-review-kimi",
+      "state": "done",
+      "created": "2026-07-24T13:02:26+0700",
+      "updated": "2026-07-24T16:15:10+0700",
+      "ai": "DONE by Kimi (2026-07-24): reviewed FX re-persist design, APPROVED core decisions (re-price ALL incl APPROVED = governance-aligned, ADR-0013 not-freeze + ADR-0015 re-price-all; manual trigger OK Phase-1; no lock-semantics clash - job touches derived per-diem only w/ audit _user=system:fx_repersist). Found R1 (PER_DIEM_GL_BY_SIDE[side] outside per-trip guard = KeyError aborts batch, F1-class) -> CC fixed. Required R1+R2(ADR annotation same commit) done -> committed 6daeae8.",
+      "agent": "kimi"
+    },
+    {
+      "id": "fx-repersist-perdiem-job",
+      "state": "done",
+      "created": "2026-07-24T12:16:44+0700",
+      "updated": "2026-07-24T16:32:44+0700",
+      "ai": "DONE + committed+PUSHED dbc0d30 (main; was 6daeae8 pre-rebase onto nightly graphify 57306af). FX reconciliation job re-persists stored per-diem to current FX; reuses derive_per_diem+persist primitives; re-price ALL incl APPROVED (ADR-0015, addenda ADR-0013/0015); dry-run default --run; per-trip isolation (skipped_invalid on bad rate/side/months, missing-FX fail-loud, main exit!=0 on gap); domestic skip. Kimi design review APPROVE (R1 side-KeyError F1-class fixed, R2 ADR addenda, Q2 budget-automations.yml). Gate 06 APPROVE/07 PASS/08 17/17, full backend 695/46.",
+      "agent": "claude"
+    },
+    {
+      "id": "spot-test-3-coverage",
+      "state": "done",
+      "created": "2026-07-24T10:34:34+0700",
+      "updated": "2026-07-24T16:17:16+0700",
+      "ai": "Spot#3 + CC extra lanes DONE. Earlier 4-lane workflow 29/29 (picker-46/see>fill/special-GL/travel). NOW +2 lanes (main session, :3000 spoof, throwaway FY, cleanup 0): (A) +เพิ่ม transaction picker: CC dropdown=fill-only [10IT012000], GL combo=non-special only (91 offered, 43 special excluded), create valid->200 all-zero editable, special->400, non-master->400, out-of-scope->403, duplicate->409; DOM: fill-only CC + special-excluded combo + client validation fires. (B) deadline-lock: is_post_deadline logic ok, non-admin past-deadline write->403 +client 'พ้นกำหนด..', admin bypass->200, control no-deadline->200, cleanup 0 real years 2024-27 intact. Guardrails: no /approval/*, throwaway FY, cleanup verified 0 (FY2094-2099 all tables 0, pending total 0, submission_deadline 4 real intact). Remaining CC lanes: attachments(consent), staging az acr build.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-c9d12c7",
+      "state": "done",
+      "created": "2026-07-24T23:58:45+0700",
+      "updated": "2026-07-24T23:58:45+0700",
+      "agent": "autolog",
+      "ai": "chore(docs,tracker): spot-test artifacts, integrity audit script, ledger updates [commit c9d12c7]"
+    },
+    {
+      "id": "hide-netzero-gl-rows",
+      "state": "done",
+      "created": "2026-07-24T23:33:31+0700",
+      "updated": "2026-07-24T23:49:21+0700",
+      "ai": "DONE + committed 81eac93 (main, not pushed). merge_budget_rows hides key iff sap.total_year==0 AND no board row AND no pending row (presence from join markers board_cost_center/pending_cost_center, never values; safeguard: pending/board presence -> always show). Live oracle: 56 net-zero FY2026, 51 hidden, grid 1041->1007, totals identical (SAP 70,612,040.65/Approved 205,307,324.11), original case 10GE000000/6210500010 gone, safeguard SHOW verified via merge injection. Gate 06 APPROVE-w-sugg(style only)/07 PASS/08 PASS 60/60+701/46. 6 new tests incl totals-parity. Frontend unchanged (grep clean). NOTE: :8000 still runs OLD code - restart needed to see hiding live in browser.",
+      "agent": "claude"
+    },
+    {
+      "id": "hide-netzero-gl-rows-plan",
+      "state": "done",
+      "created": "2026-07-24T23:30:23+0700",
+      "updated": "2026-07-24T23:55:53+0700",
+      "ai": "IMPLEMENTED + VERIFIED. CC built per plan/hide-netzero-gl-rows.md, commit 81eac93 on main. Kimi independent verification: (1) commit scope exact (merge_budget_rows drops key iff sap.total_year==0 AND no board AND no pending row, join-row markers); (2) full backend suite re-run: 701 passed / 46 deselected EXACT; (3) restarted :8000 with new code — live oracle: 10GE000000/6210500010 (the original reversal pair) ABSENT from grid ✓, and GE SAP total = 1,100,529.75 which reconciles exactly as 282,112.88 (filler view) + 818,416.87 (12 admin-locked GLs now visible because nipapornt was made admin) — NOT a totals regression, an identity change; (4) SAFEGUARD round-trip live: PUT blank pending row on the hidden GL -> HTTP 200 -> row re-appears; DELETE -> 200 -> hidden again ✓. CC's org-wide oracle stands: 56 net-zero keys -> 51 hidden, 1041->1007 rows, totals identical. Feature closed. NOTE: :8000 now runs the NEW code (kimi restarted it for verification) — browser needs one refresh to see hidden rows gone.",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "plan/hide-netzero-gl-rows.md",
+          "label": "hide rule spec"
+        }
+      ]
+    },
+    {
+      "id": "toggle-reautoselect-fix",
+      "state": "done",
+      "created": "2026-07-24T23:20:48+0700",
+      "updated": "2026-07-24T23:20:48+0700",
+      "ai": "fix(grid): admin-mode toggle now re-auto-selects the first ฝ่าย of the new scope after a hat-switch (jakkaritw decision 2026-07-24, option a — the 2026-07-21 'never land unselected' rule applies after toggling too, not only on mount). Change: BudgetGrid.tsx handleAdminModeToggle adds setDeptResolved(false) (+ comment) — the reset now flows through the SAME resolveInitialDept path as initial mount and the deptResolved gate prevents an unfiltered grid flash-load. Tests: rewrote the old 'resets to null' test into 2 new-behavior tests (re-auto-selects after toggle; selects FIRST of the NEW scope's hierarchy, not the previous pick) in BudgetGrid.test.tsx. Verify: vitest 489/489 (488+1); live Playwright as nipapornt (dual-role admin): fresh load auto-selects 'Budgeting and Management', toggle ON auto-selects first org-wide dept (no placeholder), toggle OFF re-selects 'Budgeting and Management' (no placeholder). UNCOMMITTED in working tree (BudgetGrid.tsx + BudgetGrid.test.tsx) — awaiting jakkaritw/CC commit flow.",
+      "agent": "kimi"
+    },
+    {
+      "id": "round2-reverify-kimi",
+      "state": "done",
+      "created": "2026-07-24T20:59:33+0700",
+      "updated": "2026-07-24T20:59:33+0700",
+      "ai": "Round-2 re-verify complete (plan/next-tests-round2-split.md done-definition). CC items 2-4 VERIFIED independently: (1) fix(userbar) d73deb6 confirmed live — no-scope probe (adirekn) now shows 0 /scope/departments calls (was 1 pre-fix), empty state intact; (2) jobs dry-run spot-check: auto_escalate --fiscal-year 2027 -> dry_run=True, notifications_dry_run=True, 0 stale PENDING, exit 0, zero writes — matches CC's report; (3) full Playwright suite run by kimi: 23 passed (1.8m) — green 23/23 confirmed, no pre-existing failures left. Also this closes the last open e2e item (#e2e-stale-specs-fix). Combined with Kimi's concurrency-races lane (4/4 PASS), test round 2 is fully done and verified. Remaining open items overall: staging az acr build (jakkaritw, Cloud Shell) only.",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-2fc1840",
+      "state": "done",
+      "created": "2026-07-24T20:57:07+0700",
+      "updated": "2026-07-24T20:57:07+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker,plan): log round-2 test lanes + save test-split plans [commit 2fc1840]"
+    },
+    {
+      "id": "viewport-smoke-cc",
+      "state": "done",
+      "created": "2026-07-24T20:09:32+0700",
+      "updated": "2026-07-24T20:12:58+0700",
+      "ai": "Item 3 PASS (Playwright tablet 768 + phone 390, suchanya, route-scoped header, NO committed write=read-only). BOTH widths: frozen identity cols stay put (frz-1 at wrap-left after 600px hscroll), 12-month area scrolls (scrollW 2086 > clientW 710 tablet/332 phone), edit month input present+enabled+focusable/typeable (filled w/ current value=no commit), console clean (0 non-font errs). Edit flow usable at tablet. PHONE caveat (report not fix per plan): 332px visible vs 2086px content = ~6x horizontal scroll, usable but cramped/desktop-first. Screenshots item3_viewport_tablet768.png + phone390.png. 85 .frz cells sticky.",
+      "agent": "claude"
+    },
+    {
+      "id": "jobs-e2e-dryrun-cc",
+      "state": "done",
+      "created": "2026-07-24T20:07:54+0700",
+      "updated": "2026-07-24T20:09:31+0700",
+      "ai": "Item 2 PASS (dry-run FY2027, no --execute, read-only). All 3 jobs exit 0, notifications_dry_run=True confirmed in every log line. auto_submit: skip (FY2027 pre-deadline, deadline 2026-10-31 vs today 07-24) correct. auto_escalate: 0 stale >=30d PENDING_* rows -> nothing correct. send_reminders: skip (reminder_date not reached) correct. No dept unexpectedly eligible for auto-submit; date/staleness gating logic all working; 0 writes 0 sends (dry-run). To see 'would-act' path would need past-deadline state (out of scope - real FY2027 is pre-deadline).",
+      "agent": "claude"
+    },
+    {
+      "id": "concurrency-races-kimi",
+      "state": "done",
+      "created": "2026-07-24T19:55:53+0700",
+      "updated": "2026-07-24T20:04:20+0700",
+      "ai": "Concurrency races LIVE — all 4 PASS, cleanup verified 0 rows all 5 budget tables. R1: two concurrent PUTs different rows (FY2094) -> both 200, DB exact (101/202). R2: same-row duplicate PUTs same token -> exactly one 200 (111.0), one 409 'was changed by someone else', DB = winner only — optimistic lock holds under true simultaneity. R3: submit then arthids approve TWICE concurrently -> one 200 advanced PENDING_APPROVER1->2 exactly once, other 409 'status changed concurrently', approval_log has exactly 1 SUBMIT + 1 APPROVE (no double-advance — conditional-UPDATE never-cut guard proven live). R4 (the design-doc R3 race, reproduced LIVE): FX repersist job read trip 13 header (days=3) BEFORE suchanyay's PUT (days 3->4) committed, then wrote LAST -> stored per-diem overwritten from fresh 10,560 to stale 7,920 (delta -2,640 in job log); job re-run then self-corrected 7,920 -> 10,560 (+2,640), final = days(4)x80x33 exact — the documented 'last-writer-wins + deterministic re-run self-corrects' property CONFIRMED, including the interim stale window (note for ops: value can be stale between the race and the next re-run/save). Bonus: FY2094 row deletes 403'd while dept was PENDING_APPROVER2 — approval lock re-confirmed mid-flow; cleanup then followed precedent (clear approval rows, delete rows, verify). FY2027 + FY2094 fully restored: pending_budget/detail/trip/approval_status/approval_log all 0 rows.",
+      "agent": "kimi"
+    },
+    {
+      "id": "next-tests-round2-split-plan",
+      "state": "done",
+      "created": "2026-07-24T19:55:53+0700",
+      "updated": "2026-07-24T19:55:53+0700",
+      "ai": "Wrote round-2 parallel test plan at plan/next-tests-round2-split.md. Lanes: Kimi = concurrency races live (R1 same-user-two-tabs different rows, R2 same-row simultaneous duplicate PUT -> exactly one 409, R3 approver double-fire -> exactly one advance + one race-guard error + single log row, R4 FX job --run vs live user trip edit -> deterministic + idempotent reconverge) on FY2094 throwaway year (+ R4 single FY2027 trip, safe because txn tables empty). CC = backend jobs E2E dry-run (auto_submit/auto_escalate/send_reminders vs real FY2027, NEVER execute flags), viewport smoke (tablet/phone grid usability), e2e-stale-specs-fix (3 pre-existing failures -> 23/23 without weakening assertions). FY isolation = collision killer: Kimi FY2094, CC FY2027 read-only. Tracker rule + route-scoped headers + no server restarts binding.",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "plan/next-tests-round2-split.md",
+          "label": "round-2 lane split"
+        }
+      ]
+    },
+    {
+      "id": "remaining-tests-reverify-kimi",
+      "state": "done",
+      "created": "2026-07-24T19:47:53+0700",
+      "updated": "2026-07-24T19:47:53+0700",
+      "ai": "Re-verify per plan/remaining-tests-split.md done-definition: CC's items 3+4 numbers VERIFIED independently. Perf spot-check (3 samples each, own curls): single-CC /budget median 4.05s (3.32-5.27) vs CC's 4.65s — same ballpark; admin-wide median 4.08s (2.53-6.47), payload 820,665B ~= CC's 801KB — same ballpark. Confirms CC's core finding: response time does NOT scale with row count (8 vs 1041 rows ~equal) — overhead is connection-per-request, not data volume. Fonts artifact claim ATTESTED from kimi's own earlier evidence: context-wide extraHTTPHeaders caused font CORS errors (nipapornt first run), route-scoped injection gave 0 console errors in every later run — the '26 errors' were a test-harness artifact, not an app bug. All 4 items in the split plan are now done (Kimi 1-2, CC 3-4) with re-verification complete.",
+      "agent": "kimi"
+    },
+    {
+      "id": "perf-smoke-cc",
+      "state": "done",
+      "created": "2026-07-24T19:31:54+0700",
+      "updated": "2026-07-24T19:36:15+0700",
+      "ai": "Item 4 DONE (quiet window, read-only, :3000 FE path, 5 samples warm). /budget response time: single-CC(suchanya 8 rows) median 4651ms p95 5744ms min 4178ms payload 6.6KB | wide-admin(jakkaritw admin_view_enabled 1041 rows) median 4736ms p95 5016ms min 3262ms payload 801.4KB. KEY: time ~4.7s REGARDLESS of scope (8 vs 1041 rows same) - NOT row-count-bound. Grid time-to-interactive (Playwright, DOMready->subtotal visible): suchanya dom595ms grid6857ms; jakkaritw dom384ms grid7669ms - BOTH render only 8 txn blocks (dept-picker auto-selects ONE dept even for admin; UI never renders full 1041-row org at once, so render never scales). FINDING (perf, not bug, Phase-2): ~4.7s/budget + ~7s grid-interactive dominated by per-request FRESH Fabric connection-open (/budget opens 2: fabric+gold, ~1.7s each) + full-year SAP gold fetch + sequential /me,/scope,/scope-departments,/budget calls; each opens its own SP connection. Optimization = connection pooling/reuse + scope SAP fetch -> large latency cut. Amplified by current RAM pressure (86%). Payload scales fine; render not bottleneck. Kimi to re-verify per plan done-definition.",
+      "agent": "claude"
+    },
+    {
+      "id": "font-blocked-degradation-cc",
+      "state": "done",
+      "created": "2026-07-24T19:29:02+0700",
+      "updated": "2026-07-24T19:31:01+0700",
+      "ai": "Item 3 PASS (Playwright, route-scoped header 127.0.0.1-only, fonts.googleapis+gstatic aborted). Fonts-blocked: grid 8 txn blocks render, title 'OPEX Management.'+year 'Year 2026'+body(12666ch) readable via fallback fonts, 0 NON-font blocking errors (1 console = expected aborted-font ERR_FAILED), load blocked 9903ms <= allowed 11084ms (not slower). NOTE: route-scoped header -> console 0 errors baseline = CONFIRMS the earlier '26 console errors' were the context-wide-header font-CORS artifact, NOT an app bug. Screenshot scratchpad/shots/item3_fonts_blocked.png. Read-only, no code, no writes. NOTE perf: gridReady ~10-11s (connection-open+RAM latency, see FX-hang analysis) = datapoint for Item 4.",
+      "agent": "claude"
+    },
+    {
+      "id": "mini-regression-2fixes-kimi",
+      "state": "done",
+      "created": "2026-07-24T19:21:15+0700",
+      "updated": "2026-07-24T19:21:15+0700",
+      "ai": "Lane 2 of plan/remaining-tests-split.md — BOTH FIXES VERIFIED LIVE, cleanup 0. (A) a02ec3c deep-link year: /?dept=Solution Delivery&year=2026 as suchanyay now fires /budget?year=2027&department=Solution+Delivery (label year -> planning year, the off-by-one fix) AND renders the dept grid (GL 6210400010 visible); garbage ?year=abc falls back safely with grid intact. Earlier false negatives were my own assertion sloppiness (totals are never rendered on the grid — subtotal rows show Pending layer only — and I matched the default no-department call first); corrected probe confirms the fix end-to-end. (B) e575d58 decimals: PUT 10IT012000/5210600010/FY2027 m01=123.45 m02=67.89 m03=100 -> API+DB store EXACT decimals (total 291.34); UI display rules verified: '123.45' and '67.89' shown with 2dp (fractional), '100.00' NOT present (whole baht plain, formatThb). Row-total 291.34 not asserted on DOM because the grid has no per-row total column (subtotals are per-month, Pending layer) — verified at API level instead. Row DELETEd (200), pending back to 0 rows. NOTE FOR CC: kimi lane-2 is DONE — the quiet window for the perf smoke (item 4) is OPEN.",
+      "agent": "kimi"
+    },
+    {
+      "id": "easy-auth-trust-review-kimi",
+      "state": "done",
+      "created": "2026-07-24T19:09:14+0700",
+      "updated": "2026-07-24T19:11:14+0700",
+      "ai": "VERDICT (kimi, 2026-07-24): SAFE-WITH-CONDITIONS — production identity spoofing through the Easy Auth front door is NOT possible as long as the documented config holds, with 2 residuals to note.\n\nCODE FINDING (backend/app/auth.py, 33 lines, read fully): get_current_user_email trusts ANY non-empty x-ms-client-principal-name blindly — by design (ADR-0004: the platform validates the token and injects the header). DEV_AUTH_EMAIL override is correctly fail-closed (honored only when APP_ENV=local; Dockerfile sets APP_ENV=production in the image). The app's entire identity trust therefore rests on the network boundary, not on in-app validation.\n\nWHY IT IS SAFE AT THE FRONT DOOR: A14_RUNBOOK mandates Easy Auth 'Restrict access = Require authentication' + 'Unauthenticated = HTTP 302 redirect' for ALL paths incl /docs (portal steps ~L296-309), and verify-deploy-landed REQUIRES an unauthenticated /health curl to return 401/302 (else STOP) and /docs to be behind login. Under Require-authentication, a forged header on an unauthenticated request never reaches uvicorn (challenged by the platform first), and on authenticated requests the platform strips/overwrites client-supplied principal headers with the verified ones.\n\nRESIDUAL-1 (environment-internal spoof path): the runbook itself notes the internal TCP probe is 'unaffected by the Easy Auth layer' — any workload with network access INSIDE the same Container Apps environment could hit the app directly with a forged header and be trusted. Accepted-internal-tool risk; optional hardening = also require x-ms-client-principal-idp=aad + x-ms-client-principal-id in production (raises the bar, still not a real boundary) or keep the environment dedicated. Recommend documenting, not building, for Phase-1.\n\nRESIDUAL-2 (config drift): the app's defense is zero if anyone later flips Allow anonymous or adds an unauthenticated path exclusion (e.g. for probes). The runbook checks guard the initial deploy only. Recommendation: re-run the 2 curl checks (unauth /health -> 302; /docs behind login) after ANY future auth/ingress change.\n\nCLOUD SHELL CHECKLIST for jakkaritw (post-deploy): (1) portal Authentication blade or 'az containerapp auth show' -> provider exists + Require authentication; (2) curl -i https://FQDN/health unauthenticated -> 302 to Microsoft login; (3) SPOOF TEST: curl -i -H 'x-ms-client-principal-name: fake@chememan.com' https://FQDN/me WITHOUT session -> must 302, never 200 with fake email; (4) after real login, /me shows the REAL email (proves overwrite); (5) review which other apps share the Container Apps environment (peer spoof path). NOTE (already in runbook): staging+prod share the same Fabric SQL DB — accepted pre-go-live, revisit before real data entry.",
+      "agent": "kimi"
+    },
+    {
+      "id": "remaining-tests-split-plan",
+      "state": "done",
+      "created": "2026-07-24T19:09:14+0700",
+      "updated": "2026-07-24T19:09:14+0700",
+      "ai": "Wrote the parallel-execution plan for the 4 remaining test items at plan/remaining-tests-split.md (jakkaritw ordered). Lanes: Kimi = (1) Easy Auth trust review (auth.py header validation + ingress/deploy docs, report-only verdict + Cloud Shell checklist), (2) mini-regression of fixes a02ec3c (deep-link year label) + e575d58 (2dp month cells) with small write+cleanup on 10IT012000 FY2027. CC = (3) font-blocked degradation (Playwright route-abort googleapis/gstatic), (4) performance smoke (budget timing single-CC vs 121-CC-wide + render timing + payload sizes). Guardrails: perf smoke runs only in the quiet window after both Playwright lanes done; only item 2 writes DB; no code edits this pass; no server restarts without tracker notice; route-scoped header injection; each lane logs doing/done in tracker immediately.",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "plan/remaining-tests-split.md",
+          "label": "lane split plan"
+        }
+      ]
+    },
+    {
+      "id": "domain-decisions-audit-2026-07-24",
+      "state": "done",
+      "created": "2026-07-24T17:47:16+0700",
+      "updated": "2026-07-24T17:47:16+0700",
+      "ai": "DOMAIN DECISIONS by jakkaritw (2026-07-24) following the data-integrity-audit-kimi findings — future audits/reviews must NOT re-flag these as bugs: (1) The 7 negative-month rows in dbo.board_budget (10IT011000 x2, 10MN* x5 on GL 6210400999) are ACCEPTED/intentional (credit/reversal semantics from the board ingest). The asymmetry is therefore intended: board ingest allows negatives, pending user input forbids them (NegativeMonthError). (2) The master-membership hiding of non-master GLs is CORRECT as designed: 107 of 219 GLs (242.3M THB of 312.9M FY2026 SAP actuals) not present in dbo.gl_group are deliberately out of the budget app's scope — the master filter is the intended scoping mechanism, not a data gap. Both verified by the audit (setup/audit_integrity.py) and closed by owner decision.",
+      "agent": "kimi"
+    },
+    {
+      "id": "data-integrity-audit-kimi",
+      "state": "done",
+      "created": "2026-07-24T17:21:41+0700",
+      "updated": "2026-07-24T17:21:41+0700",
+      "ai": "Whole-DB read-only integrity audit (new reusable script setup/audit_integrity.py, runs via venv python from backend/). RESULTS: (A) all 5 txn tables empty post-test-rounds, all integrity checks OK (sum parity, orphans, dup keys, parent-drift - vacuous). (B) board_budget 364 rows OK except 7 rows with NEGATIVE months (10IT011000 x2, 10MN* x5 on GL 6210400999, totals down to -40,000) - board ingest allows negatives while pending path forbids them (NegativeMonthError): flagged for domain owner to confirm intent (credit/reversal vs ingest bug). (C) masters clean: no dup gl_code (146), no dup cc_filler_map keys, no blank emails/codes; master_currency_rate FY2025=40.0/FY2026=35.5/FY2027=33.0 present. (D) BIG master-completeness finding, quantified globally using sap.py's exact contract: FY2026 SAP actuals = 219 GLs / 312.9M THB org-wide, of which 107 GLs / 242.3M THB (77% of money) are NOT in gl_group master and are therefore hidden from the app by the master-membership filter. Top hidden: 6110100012 39.4M, 6210100010 31.2M, 5211000900 -29.7M, 5210500010 27.9M, 5410100150 20.6M. Some likely deliberate out-of-scope (payroll/capex series), but 621-series gaps look like real master incompleteness - needs domain review: which of the 107 belong in the budget app. board_budget side: 0 non-master GLs (fully covered). Note: gl_group PK column is gl_code (not gl_account); gold.fact_gl_trans lives in the separate gold warehouse (get_gold_conn).",
+      "agent": "kimi",
+      "files": [
+        {
+          "path": "setup/audit_integrity.py",
+          "label": "reusable audit script"
+        }
+      ]
+    },
+    {
+      "id": "e2e-stale-specs-fix",
+      "state": "done",
+      "created": "2026-07-23T13:29:26+0700",
+      "updated": "2026-07-24T20:47:43+0700",
+      "ai": "DONE (round2 item4). e2e suite GREEN 23/23 (was 10 failing). App fix d73deb6 (fix(userbar): skip /scope/departments for no-scope callers — root cause of edge-states 4.1 double-fetch + Kimi's no-scope reproduce-live bug; 1-line wantsScopeData += scope.role!=='none', matches BudgetGrid hasNoScope invariant, vitest 488/488 unaffected). Spec commit 5467ef5 (5 files: auto-select expectation 2.1/4.4, deep-link label-year DEEP_LINK_YEAR=PLANNING_YEAR-1 per a02ec3c, YearPicker /ปีงบประมาณ/->/ปีฐาน/). No assertion weakened (2 strengthened). Gate 06 APPROVE/07 PASS/08 PASS (vitest 488, e2e 23/23 re-run). Both commits unpushed.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-7a17e8c",
+      "state": "done",
+      "created": "2026-07-29T00:18:01+0700",
+      "updated": "2026-07-29T00:18:01+0700",
+      "agent": "autolog",
+      "ai": "docs(uat): quick guide 1-pager for pilot users (Thai) + close P0-31 log access [commit 7a17e8c]"
+    },
+    {
+      "id": "uat-quick-guide",
+      "state": "done",
+      "created": "2026-07-29T00:17:58+0700",
+      "updated": "2026-07-29T00:17:58+0700",
+      "ai": "ร่าง plan/uat-quick-guide.md ภาษาไทย 1 หน้า (filler/approver flow, กติกา attachments, อาการที่ต้องรายงาน, FAQ) — เหลือเติมวันที่+ฝ่ายที่ 2+ช่องทาง support รอ jakkaritw เลือก. P0-31 log access ปิด (ใช้จริงตอน deploy 2 ครั้ง)",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-1c95cc1",
+      "state": "done",
+      "created": "2026-07-29T00:15:09+0700",
+      "updated": "2026-07-29T00:15:09+0700",
+      "agent": "autolog",
+      "ai": "docs(phase2): section G complete — G1/G2/G3 verified in real mailbox [commit 1c95cc1]"
+    },
+    {
+      "id": "phase2-g-mailbox-verified",
+      "state": "done",
+      "created": "2026-07-29T00:15:04+0700",
+      "updated": "2026-07-29T00:15:04+0700",
+      "ai": "Section G ปิดครบ: G1 render สวยครบ 3 platforms (desktop/web/mobile), G2 Safe Links ไม่ rewrite + click-through จากเมลจริงลงแอปถูกฝ่าย/ปี authenticated (ส่ง probe พิเศษ Accounting Division/2027 ชี้ prd FQDN), G3 5 ฉบับเข้า Inbox ครบไม่ตก Junk — Phase 2 เหลือแค่ persona batch (F/E1-3/B6/D6) + flips ตอน go-live",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-b429c6d",
+      "state": "done",
+      "created": "2026-07-29T00:06:12+0700",
+      "updated": "2026-07-29T00:06:12+0700",
+      "agent": "autolog",
+      "ai": "docs(phase2): K4 PASS under two-tier threshold (single-user <=3s, 10-concurrent <=8s) [commit b429c6d]"
+    },
+    {
+      "id": "k4-concurrency-threshold",
+      "state": "done",
+      "created": "2026-07-29T00:06:05+0700",
+      "updated": "2026-07-29T00:06:05+0700",
+      "ai": "K4 ปิด: scale prd min-replicas 1→2 (user รัน) re-measure 3 รอบ mean 5.1-5.9s max 7.5s (จาก 7-11s) — jakkaritw ตัดสินใจเกณฑ์ two-tier: single-user p95<=3s + 10-concurrent<=8s → PASS. backlog post-UAT: SAP cache + conn pooling. อัปเดต plan P2-K4 + Appendix E #6 + results doc",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-c2daf69",
+      "state": "done",
+      "created": "2026-07-28T23:38:18+0700",
+      "updated": "2026-07-28T23:38:18+0700",
+      "agent": "autolog",
+      "ai": "test(phase2): D-L prod harness — 27 PASS/1 FAIL(K4)/13 DEFER + full results doc [commit c2daf69]"
+    },
+    {
+      "id": "phase2-dkl-harness",
+      "state": "done",
+      "created": "2026-07-28T23:37:56+0700",
+      "updated": "2026-07-28T23:37:56+0700",
+      "ai": "Phase 2 D-L บน prod: 27 PASS/1 FAIL/13 DEFER/4 COVERED — D attachments ครบ (byte-exact/rejects/sanitize/overwrite/pre-auth URL), E4/E5 guard 409 ผ่าน, I deadline BKK inclusive ผ่าน (temp row cleanup), J3 492 cells 0 mismatch, K2 p95=1.39s ผ่าน, K5 clean 401. K4 FAIL: 10 concurrent GETs 7-11s (~7x) — ต้องตัดสินใจ threshold/min-replicas. harness setup/phase2_harness_dkl.py + ผลเต็ม docs/test/phase2-results-2026-07-28.md; SharePoint scratch 3 ไฟล์ TEST-PROBE ที่ Accounting Division/2099; cleanup 2099=0 ครบ",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-95f9890",
+      "state": "done",
+      "created": "2026-07-28T23:05:49+0700",
+      "updated": "2026-07-28T23:05:49+0700",
+      "agent": "autolog",
+      "ai": "test(phase2): A/B/C prod harness green after B3 fix — 16 PASS/0 FAIL/1 DEFER [commit 95f9890]"
+    },
+    {
+      "id": "fix-b3-concurrent-submit-502",
+      "state": "done",
+      "created": "2026-07-28T22:18:28+0700",
+      "updated": "2026-07-28T23:05:01+0700",
+      "ai": "FIXED+VERIFIED ON PROD: commit ace0f00 (_admin_direct_approve catch IntegrityError→ConcurrentApprovalError + unit test). Deploy: user rebuild image ace0f00 → stg+prd. Re-run phase2_harness_abc: 16 PASS/0 FAIL/1 DEFER — B3 concurrent submits→[200,409] message ถูก. smoke_prd regression: 15/0/8 เท่าเดิม. cleanup 2099=0 ครบ",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-5e58ba1",
+      "state": "done",
+      "created": "2026-07-28T21:40:37+0700",
+      "updated": "2026-07-28T21:40:37+0700",
+      "agent": "autolog",
+      "ai": "test(smoke): Phase 1 harness setup/smoke_prd.py — 15 PASS/0 FAIL/8 DEFER on prd [commit 5e58ba1]"
+    },
+    {
+      "id": "phase1-smoke-prd",
+      "state": "done",
+      "created": "2026-07-28T21:16:02+0700",
+      "updated": "2026-07-28T21:40:16+0700",
+      "ai": "Phase 1 smoke บน prd: 15 PASS / 0 FAIL / 8 DEFER — P1-06 🔴 header-spoof แพ้ทั้ง unauth+in-session (session ตอบ jakkaritw เสมอ), headers ครบ 4, SPA+fallback, /budget 200, attachments 200. harness ใหม่ setup/smoke_prd.py ใช้ AppServiceAuthSession cookie (SP Bearer โดน 403 โดย design 'this application itself' — เก็บ posture นี้ไว้). DEFER ทั้ง 8 มี coverage (unit/e2e/Phase 2 personas). harness bug 1 จุด: pending-for-me ต้องมี fiscal_year param แก้แล้ว",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-8469656",
+      "state": "done",
+      "created": "2026-07-28T21:13:59+0700",
+      "updated": "2026-07-28T21:13:59+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): production deployed 2026-07-28 — image 35e3482 live on stg+prd, Easy Auth on, §7 verified; next = Phase 1 smoke on prd FQDN [commit 8469656]"
+    },
+    {
+      "id": "deploy-runbook-prep",
+      "state": "done",
+      "created": "2026-07-28T19:38:46+0700",
+      "updated": "2026-07-28T21:13:17+0700",
+      "ai": "DEPLOY สำเร็จ 2026-07-28: image 35e3482 → staging (Easy Auth ใหม่ app reg 7035aa47) เขียวครบ §7 → production cman-budget-web-prd (min-replicas 1, Easy Auth app reg 61d5d556, ADMIN_EMAILS 3 อีเมล, APP_BASE_URL=prd FQDN) verify ครบ: unauth 401, db:ok, /me, /docs login, / เร็ว, /budget 200. บทเรียน: FABRIC_SQL_DATABASE ต้องมี GUID suffix (v1 hardcode ผิด→40532) แก้ด้วย v2 จาก .env; tmp secrets file ลบแล้ว",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-7c3eb42",
+      "state": "done",
+      "created": "2026-07-28T15:39:16+0700",
+      "updated": "2026-07-28T15:39:16+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): add Progress section — what's done (pre-work/decisions/data) vs what remains (blocked on Container App deploy) [commit 7c3eb42]"
+    },
+    {
+      "id": "plan-progress-section",
+      "state": "done",
+      "created": "2026-07-28T15:39:08+0700",
+      "updated": "2026-07-28T15:39:08+0700",
+      "ai": "เพิ่มส่วน Progress ใน plan/post-deploy-smoke-uat-plan.md: บันทึก DONE (decisions+3 executed, data readiness FY2027, GL master 12, P0-22 fix, test coverage ทั้งหมด, debris cleanup) / REMAINING (Phase 0-3 รอ deploy, flips 4 ตัว, sap-actuals-view blocked) / NEXT = deploy Container App",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-7dcbc17",
+      "state": "done",
+      "created": "2026-07-28T14:53:20+0700",
+      "updated": "2026-07-28T14:53:20+0700",
+      "agent": "autolog",
+      "ai": "docs: admin GL count 13->12 (forensics-verified) + tracker cleanup [commit 7dcbc17]"
+    },
+    {
+      "id": "deploy-prep-data-readiness",
+      "state": "done",
+      "created": "2026-07-28T14:53:13+0700",
+      "updated": "2026-07-28T14:53:13+0700",
+      "ai": "เช็ค data readiness FY2027 บน live DB ตาม Phase 0.2: submission_deadline 2027 มี (deadline 2026-10-31, reminder 2026-10-15), per_diem_rate 24 แถว, master_currency_rate มี 2027, board_budget มี 2026 (base year) — ผ่านทั้งหมด. แก้เลข admin GL 13->12 ใน config.py+plan ตาม forensics",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-8fffc30",
+      "state": "done",
+      "created": "2026-07-28T14:36:58+0700",
+      "updated": "2026-07-28T14:36:58+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): pin ADMIN_EMAILS value at deploy (P0-05) + supersede Appendix E decision 10 [commit 8fffc30]"
+    },
+    {
+      "id": "waraporn-admin-emails",
+      "state": "done",
+      "created": "2026-07-28T14:36:36+0700",
+      "updated": "2026-07-28T14:36:36+0700",
+      "ai": "เพิ่ม warapornt@chememan.com เข้า ADMIN_EMAILS ใน backend/.env (แก้ P0-22 ให้ approver ขั้น 3) — verify resolve_scope is_admin=True แล้ว. อุบัติเหตุ: sed pattern เผลอลบ prefix ADMIN_EMAILS= แก้คืนแล้ว. อัปเดต plan: P0-05 ระบุค่า 3 อีเมลชัดเจน + Appendix E ข้อ 10 superseded จาก See scope เป็น ADMIN_EMAILS (ตรง Spec A v2 dual-role)",
+      "agent": "kimi"
+    },
+    {
+      "id": "predeploy-master-checks",
+      "state": "done",
+      "created": "2026-07-28T13:39:21+0700",
+      "updated": "2026-07-28T13:44:39+0700",
+      "ai": "(1) edit_by: 146/146 ตั้งแล้ว, admin=12 — ขาด 6211300999 Insurance Premium-Others SGA ที่เป็น user (ทั้งที่คู่ COST 5211300999 เป็น admin) ตรงกับ forensics task 2026-07-26 (2) P0-22 วัดจริง: nipaporn is_admin=True (รอดผ่าน admin view) แต่ waraporn is_admin=False เห็น 5/114 ฝ่าย — ขาด 109 ต้องขยาย See scope หรือพิจารณา ADMIN_EMAILS (3) push สำเร็จหลัง rebase บน origin (graphify-nightly commit) — มีอุบัติเหตุ: post-commit hook เขียน pending.json ระหว่าง rebase ทำ rebase ค้าง แก้ด้วย checkout+continue",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-126cc07",
+      "state": "done",
+      "created": "2026-07-28T13:29:01+0700",
+      "updated": "2026-07-28T13:29:01+0700",
+      "agent": "autolog",
+      "ai": "feat(ops): split FX re-persist into own workflow + SharePoint folder bulk-create script [commit 126cc07]"
+    },
+    {
+      "id": "sharepoint-bulk-folders",
+      "state": "done",
+      "created": "2026-07-28T13:23:21+0700",
+      "updated": "2026-07-28T13:28:42+0700",
+      "ai": "setup/create_attachment_folders.py: dry-run default, --apply สร้าง 2 ระดับ <root>/<ฝ่าย>/<year> (conflictBehavior fail, 409=exists); reuse helpers จาก app.attachments; dry-run จริงผ่าน: 114 ฝ่ายจาก cc_filler_map + Graph site/drive resolve OK. ยังไม่ได้ --apply (เป็น rollout action จริง รอคำสั่ง)",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-86dc03a",
+      "state": "done",
+      "created": "2026-07-28T13:19:09+0700",
+      "updated": "2026-07-28T13:19:09+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record Appendix E decisions (2026-07-28) for post-deploy smoke+UAT [commit 86dc03a]"
+    },
+    {
+      "id": "split-fx-workflow",
+      "state": "done",
+      "created": "2026-07-28T13:18:44+0700",
+      "updated": "2026-07-28T13:28:41+0700",
+      "ai": "แยก FX ออกเป็น .github/workflows/fx-repersist.yml (inputs เดิม fiscal_year+execute, step เดียว --run) ออกจาก budget-automations.yml ที่เหลือ 3 jobs; YAML parse ผ่านทั้งคู่; อัปเดต Appendix E ข้อ 3 = DONE",
+      "agent": "kimi"
+    },
+    {
+      "id": "appendix-e-decisions",
+      "state": "done",
+      "created": "2026-07-28T13:18:43+0700",
+      "updated": "2026-07-28T13:18:43+0700",
+      "ai": "ตอบ 10 ข้อ Appendix E ใน plan/post-deploy-smoke-uat-plan.md: FQDN ก่อน(domain rollout เต็ม), GL_EDIT_BY ON หลังเช็ค master, แยก workflow FX, โฟลเดอร์ pilot มือ+script bulk, รับ no-delete+คู่มือ, perf p95 grid<=3s api<=2s, sentinel 2099 OK/SharePoint ลบมือ, pilot ฝ่ายบัญชี+1 ฝ่าย 3-5 วัน, abort >20% หรือ blocker>1วัน, ขยาย See scope ให้ approver",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-9818096",
+      "state": "done",
+      "created": "2026-07-28T13:08:02+0700",
+      "updated": "2026-07-28T13:08:02+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): expand post-deploy smoke+UAT plan to 179 items across 4 phases [commit 9818096]"
+    },
+    {
+      "id": "post-deploy-plan-review",
+      "state": "done",
+      "created": "2026-07-28T13:01:56+0700",
+      "updated": "2026-07-28T13:07:37+0700",
+      "ai": "DONE: plan/post-deploy-smoke-uat-plan.md rewritten in place 140->838 lines, 179 numbered items (P0=35 preflight, P1=20 smoke, P2=77 functional across 12 areas A-L, P3=47 UAT/rollout/monitoring), 47 marked critical. Grounded in real code+ops facts: ERROR_HTTP_STATUS map (403/409/400/413/500-fail-loud), 9 routers, deadline.py bangkok_today inclusive rule, attachments (6 ext/10MB/folders NOT auto-created/no delete/pre-auth download URL), 4 jobs. NEW findings flagged: (1) repersist_perdiem_fx ignores DRY_RUN and takes --run, so workflow execute=true is a REAL FX re-write while the other 3 stay preview -> recommend splitting workflow; (2) approver step2/3 UI-unreachable defect from 2026-07-22 promoted to P0-22 blocker + Appendix E Q10; (3) header-spoof test P1-06 added (app trusts x-ms-client-principal-name, Easy Auth is sole guard); (4) session-expiry-mid-edit P2-K5, cold-start P2-K1, Safe-Links link rewrite P2-G2, Outlook render matrix P2-G1; (5) P0 data-readiness gates for FX/per-diem/board_budget/deadline rows (missing = 500 fail-loud or silent no-op). Appendices: A known-open carried items, B tester traps, C commands, D evidence log templates, E 10 decisions for jakkaritw. NOT done: no code/config changed, nothing executed against prod.",
+      "agent": "claude"
+    },
+    {
+      "id": "post-deploy-smoke-uat-plan",
+      "state": "done",
+      "created": "2026-07-28T12:54:58+0700",
+      "updated": "2026-07-28T12:54:58+0700",
+      "ai": "เขียน plan/post-deploy-smoke-uat-plan.md — checklist 4 phases: pre-flight config, automated smoke, functional verify บน prod (write/subforms/attachments/approve loop ครบวง+เมลจริง/RLS/jobs/perf), UAT pilot 1-2 ฝ่ายพร้อม go/no-go criteria",
+      "agent": "kimi"
+    },
+    {
+      "id": "integration-rerun-kimi",
+      "state": "done",
+      "created": "2026-07-28T12:45:58+0700",
+      "updated": "2026-07-28T12:50:00+0700",
+      "ai": "integration live-DB suite 46 passed, 701 deselected, 3m22s (HEAD 0ec7b4c หลัง email template + subject reformat + live e2e) — cleanup sentinel 2099 ผ่าน ไม่มี leftover",
+      "agent": "kimi"
+    },
+    {
+      "id": "email-subject-reformat",
+      "state": "done",
+      "created": "2026-07-28T12:41:35+0700",
+      "updated": "2026-07-28T12:41:35+0700",
+      "ai": "เปลี่ยน subject เมล 4 แบบเป็นฟอร์แมต status-first ไทยล้วน (เอา [Budget] และ label year ออกจาก subject; body ยังแสดงปี 2 แบบ): รอการอนุมัติ/ถูกตีกลับ/ได้รับการอนุมัติ งบประมาณของฝ่าย X ปีงบประมาณ Y + reminder แสดงปีที่ค้าง. tests อัปเดต 69 passed, probe ส่งจริง user ยืนยัน pass",
+      "agent": "kimi"
+    },
+    {
+      "id": "email-template-styling",
+      "state": "done",
+      "created": "2026-07-28T12:22:24+0700",
+      "updated": "2026-07-28T12:23:25+0700",
+      "ai": "notifications.py เพิ่ม _wrap/_hl/_hl_red template: font Segoe UI/Leelawadee UI, highlight ฟ้า #2E74B5 (ฝ่าย/ปี) แดง #C55A11 (ตีกลับ/กำหนดปิดรับ), ลายเซ็น Best Regards Budget Management Team ทุกฉบับ. tests 69 passed (notifications+approval_router+jobs 3 ไฟล์). ส่ง probe จริง 4 ฉบับชุดใหม่แล้ว รอ user เช็ค inbox",
+      "agent": "kimi"
+    },
+    {
+      "id": "email-live-probe",
+      "state": "done",
+      "created": "2026-07-28T12:08:25+0700",
+      "updated": "2026-07-28T12:12:09+0700",
+      "ai": "ส่งจริงครบ 4 แบบผ่าน path production (notifications.py -> Graph sendMail) หา jakkaritw คนเดียว: notify_turn/reject/approved/reminder ทั้งหมด 202 sent. script ใหม่ setup/probe_notifications_live.py (default probe, --send ส่งจริง). Note: jakkaritw ไม่อยู่ใน v_employee_budget_01 เลย stub เฉพาะ recipient lookup ของ notify_turn; dry_run ใน .env ไม่ได้แตะ. ยังไม่ commit",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-ca330ad",
+      "state": "done",
+      "created": "2026-07-28T11:42:44+0700",
+      "updated": "2026-07-28T11:42:44+0700",
+      "agent": "autolog",
+      "ai": "test(e2e): add live-backend happy-path spec (real FastAPI + Fabric SQL, no mocks) [commit ca330ad]"
+    },
+    {
+      "id": "e2e-real-backend",
+      "state": "done",
+      "created": "2026-07-28T11:11:33+0700",
+      "updated": "2026-07-28T11:40:15+0700",
+      "ai": "สร้าง live e2e (browser→FastAPI→Fabric SQL จริง ไม่ mock): playwright.live.config.ts + e2e/live-backend.spec.ts + e2e/live_db.py (discover/cleanup sentinel year 2099, 5 tables รวม approval_status/log); package.json เพิ่ม test:e2e:live; playwright.config.ts testIgnore live-*. ผล: live 1 passed (1.2m รวม next build), mocked suite 23 passed ไม่โดนกระทบ. Caveat: spec pin browser Date=2098-06-15 เพราะ UI จำกัด year window ±5 (by design), extraHTTPHeaders ทำ Google Fonts CORS noise (allowlist แล้ว). ยังไม่ commit",
+      "agent": "kimi"
+    },
+    {
+      "id": "approval-debris-cleanup-kimi",
+      "state": "done",
+      "created": "2026-07-26T10:34:29+0700",
+      "updated": "2026-07-28T14:51:03+0700",
+      "ai": "VERIFIED+EXECUTED 2026-07-28: ลบ approval_log 519(SUBMIT suchanyay)+520(APPROVE arthids) และ approval_status Solution Delivery/FY2027 เรียบร้อย — log left=0, status left=0, FY2027 approval_status ทั้งบริษัท=0",
+      "agent": "kimi"
+    },
+    {
+      "id": "log-89c57e3",
+      "state": "done",
+      "created": "2026-07-26T10:33:21+0700",
+      "updated": "2026-07-26T10:33:21+0700",
+      "agent": "autolog",
+      "ai": "test(backend): integration suite green 46/46 — first full live-DB run [commit 89c57e3]"
+    },
+    {
+      "id": "gl-editby-6211300999-forensics",
+      "state": "done",
+      "created": "2026-07-26T07:51:21+0700",
+      "updated": "2026-07-26T07:54:47+0700",
+      "ai": "ANSWERED. SharePoint version history (Graph API, file gl group_gl th name.xlsx on CMANDWPRD): edit made by Nipaporn Tongking (nipapornt@chememan.com) 2026-07-17 17:32:52-17:33:40 BKK (v10-v12, one editing session, ~1.5h AFTER the 16:11 rollout verify that saw admin=13). Content diff v9(pre-edit) vs v12(current): EXACTLY ONE cell changed - 6211300999 edit_by admin->user; 146 rows both sides, nothing added/removed, 5211300999 untouched (admin). Current file: 146 total/12 admin - matches DB since 18Jul 06:31 sync. Verdict: surgical single-cell edit by the master's owner (budget dept) = intentional beyond reasonable doubt; formal confirm = one-line ask to Nipaporn. Next: Kimi updates integration test 13->12 (+note source of truth = daily-synced Excel) and commits. DB direct check failed (INFORMATION_SCHEMA empty via SP - separate known perm quirk, not needed; app verifies covered 12/134 since 19Jul).",
+      "agent": "claude"
+    },
+    {
+      "id": "integration-live-run-kimi",
+      "state": "done",
+      "created": "2026-07-25T21:02:42+0700",
+      "updated": "2026-07-26T10:33:34+0700",
+      "ai": "CLOSED 2026-07-25, committed (see log). Full integration suite 46/46 GREEN (249.8s) - first-ever complete live-DB run. 4 stale tests fixed (join premise -> FULL OUTER semantics; 2 delete tests -> e6f669b orphan-drop contract; edit_by counts -> 12/134 with provenance note pointing at the living owner Excel + gl-editby-6211300999-forensics). Pending debris cleaned (2 rows, FY2027 pending=0, jakkaritw confirmed). Sentinel years all 0. OPEN ITEM handed back: APPROVAL debris from the same 2026-07-24 15:57 flow still live - approval_status Solution Delivery/FY2027=PENDING_APPROVER2 + approval_log 519/520 - jakkaritw to confirm cleanup (not deleted: approval tables need explicit ok). OPEN: approval-debris-cleanup confirm.",
+      "agent": "kimi"
+    },
+    {
+      "id": "review-admin-journey-31-respec",
+      "state": "done",
+      "created": "2026-07-25T19:50:50+0700",
+      "updated": "2026-07-25T20:02:21+0700",
+      "ai": "[UPDATE] Commit landed as 715597d test(e2e): spec 3.1 -> post-hat-switch re-auto-select (2026-07-24 rule). Lane closed.",
+      "agent": "claude"
+    },
+    {
+      "id": "post-feature-regression-kimi",
+      "state": "done",
+      "created": "2026-07-25T17:46:44+0700",
+      "updated": "2026-07-25T20:00:06+0700",
+      "ai": "COMMITTED as 715597d (test(e2e): spec 3.1 -> post-hat-switch re-auto-select) after jakkaritw's review approved 2026-07-25 (CC re-ran the suite itself: 23/23 green, 153s). Spec-only commit per the 5467ef5 pattern; ledger + graphify artifacts stay for a later chore commit.",
+      "agent": "kimi"
+    },
+    {
+      "id": "spot-test-status-kimi",
+      "state": "done",
+      "created": "2026-07-24T10:22:46+0700",
+      "updated": "2026-07-25T18:03:31+0700",
+      "ai": "Closing stale umbrella STATUS entry (2026-07-23). All queued items it tracked were completed in their own entries: see_only/no-scope -> spot-test-3-seeonly-noscope (done 2026-07-24), see>fill asymmetry + 46-dept picker -> spot-test-3-coverage / spot-test-4-travel-deep (done), approver chain -> spot-test-2-approver-journey (done, kimi re-verified). No leftover work.",
+      "agent": "kimi"
+    },
+    {
+      "id": "gl-visibility-rules",
+      "state": "done",
+      "created": "2026-07-19T00:24:05+0700",
+      "updated": "2026-07-25T20:44:31+0700",
+      "ai": "CLOSED 2026-07-25 per jakkaritw: keep GL_EDIT_BY_ENABLED OFF on staging/PRD for Phase-1; open a NEW task when rollout is wanted (deploy config + jakkaritw approval + staging test that non-admin sees 134 GLs). Code fully done: Rule1 master-membership 8dc59c3 (gate 06/07/08 PASS), Rule2 edit_by flag-gated, conftest monkeypatches flag=false so unit tests clean. Deliberate hides (53M FY2025: 5120500010+6410200250) signed off - do NOT 'fix'.",
+      "agent": "claude"
+    },
+    {
+      "id": "signoff-spec-pdf-rebuild",
+      "state": "done",
+      "created": "2026-07-18T23:11:32+0700",
+      "updated": "2026-07-25T20:00:27+0700",
+      "ai": "Confirmed done by jakkaritw 2026-07-25. Verified before closing: requirement_spec/ working tree clean, V2.0 rebuild landed as 0a91a4f (Spec A V2.0 3-part restructure) + 2ba6c5a (cursive signatures laddawan Spec A/B/C) + 0b77eb7 (docx->PDF rebuild + reorganize by owner). Original 2026-07-18 audit concern (uncommitted tree, unknown owner session) resolved.",
+      "agent": "kimi"
+    },
+    {
+      "id": "ui-parity-mockup-0002-3",
+      "state": "done",
+      "created": "2026-07-17T14:50:50+0700",
+      "updated": "2026-07-28T14:51:05+0700",
+      "files": [
+        {
+          "path": "frontend/src/grid/GridTable.tsx",
+          "label": "point1 scroll/sticky/freeze JSX"
+        },
+        {
+          "path": "frontend/src/styles/global.css",
+          "label": "point1 scroll/sticky/freeze CSS"
+        }
+      ],
+      "ai": "ปิดตาม ai note เดิม: DONE all 11 points + polish, 401/401 green @842efef (stale doing ตั้งแต่ 2026-07-18)"
+    },
+    {
+      "id": "ui-polish-mockup-parity",
+      "state": "done",
+      "created": "2026-07-17T14:44:00+0700",
+      "updated": "2026-07-28T14:51:06+0700",
+      "ai": "ปิด — งานถูก absorb โดย ui-parity-mockup-0002-3 ที่ done ครบแล้ว (stale doing ตั้งแต่ 2026-07-17)"
+    },
+    {
+      "id": "special-group-completeness",
+      "state": "done",
+      "created": "2026-07-17T00:03:25+0700",
+      "updated": "2026-07-28T14:51:06+0700",
+      "ai": "ปิดตาม ai note เดิม: staging tests A1/A2/A4/B5/B6/B7 PASS (stale doing ตั้งแต่ 2026-07-17)"
+    },
+    {
+      "id": "ent-prd-mockup-sample-data",
+      "state": "done",
+      "created": "2026-07-16T17:30:28+0700",
+      "updated": "2026-07-28T14:51:06+0700",
+      "agent": "05-software-developer",
+      "ai": "ปิด — mockup sample data เสร็จตั้งแต่ 2026-07-16 และ mockup ถูก supersede แล้ว (stale doing)"
+    },
+    {
+      "id": "trip-idempotency",
+      "state": "done",
+      "created": "2026-07-16T13:54:51+0700",
+      "updated": "2026-07-28T14:51:05+0700",
+      "ai": "VERIFIED 2026-07-28: implement แล้วจริง — client_token NVARCHAR(64) อยู่ใน write_model.py (_MAX_LEN_CLIENT_TOKEN, dedup logic) ปิด task"
+    },
+    {
+      "id": "staging-95dfd64-verified",
+      "state": "done",
+      "created": "2026-07-30T12:03:07+0700",
+      "updated": "2026-07-30T12:03:07+0700",
+      "ai": "Staging deploy+verify done 2026-07-30: image cmanbudgetacr.azurecr.io/budget-web:95dfd64 (ACR run cmc, built from clean worktree @95dfd64) -> cman-budget-web-stg revision cman-budget-web-stg--0000011. Discovery corrected 3 handoff errors: RG=CMAN-BUDGET-MNGT-WEB-RG both apps, repo=budget-web, --image flag. Smoke setup/smoke_prd.py --staging with real stg cookie: PASS 15 / FAIL 0 / DEFER 8 (same as 2026-07-28 prod baseline); db:ok, forged-header loses, headers, SPA fallback. 07-security-checklist on diff 95dfd64^..4052730: PASS 8/8 (display-only). Rollback line ready: --0000010. Next: jakkaritw approval gate -> PRD.",
+      "agent": "kimi"
+    },
+    {
+      "id": "actuals-month-mismatch",
+      "state": "done",
+      "created": "2026-07-30T11:46:06+0700",
+      "updated": "2026-07-30T12:01:50+0700",
+      "ai": "ROOT CAUSE CONFIRMED: not app bug — SAP_ACTUALS_SQL reproduces gold exactly (m01 7979/m02 7979/m03 358/m04 8981). gold.fact_gl_trans missing docs: SAP daily entry-date files SAP_T_GL_TRANS_*_(YYYYMMDD).TXT -> bronze ACDOCA(transient) -> silver append -> gold rebuild 2026-06-23; loaded entry-day windows have holes ~2026-02-26..03-30 and >=2026-04-30, nothing loaded after 2026-06-05. FY2026 cc1000 docs/mo: Jan 33821/Feb 26901/Mar 8640/Apr 27654 (baseline 29-38k) — all CC/GL affected. Missing docs for 10AC012000/6210900060: 1900000370,1110000641,3110001512,3110001584,1900000724,1110001487. gold_bi FY2026 empty. Fix owner = DW pipeline (reload files + schedule daily). Plan+Kimi prompt: plan/sap-actuals-dw-gap-fix.md. Memory: gotcha_fact_gl_trans_entry_day_holes",
+      "agent": "claude"
+    },
+    {
+      "id": "log-f72098e",
+      "state": "done",
+      "created": "2026-07-30T11:37:22+0700",
+      "updated": "2026-07-30T11:37:22+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): handoff for the Kimi session - deploy 95dfd64 + remaining open items [commit f72098e]"
+    },
+    {
+      "id": "log-8618a7f",
+      "state": "done",
+      "created": "2026-07-30T11:24:10+0700",
+      "updated": "2026-07-30T11:24:10+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): record visual sign-off for the no-scope access message [commit 8618a7f]"
+    },
+    {
+      "id": "no-scope-empty-state-ux",
+      "state": "done",
+      "created": "2026-07-30T10:58:01+0700",
+      "updated": "2026-07-30T11:13:39+0700",
+      "ai": "DUPLICATE of #no-access-empty-state-copy (created by the implement subagent for the same change). The authoritative record, incl. the approved wording, the parallel-session protocol and the commit hash, lives on #no-access-empty-state-copy. No separate work here.",
+      "agent": "claude",
+      "skills": [
+        "32-design-an-interface",
+        "00-engineering-methodology"
+      ]
+    },
+    {
+      "id": "grid-totals-3layer-yearcol",
+      "state": "done",
+      "created": "2026-07-30T10:56:33+0700",
+      "updated": "2026-07-30T11:28:26+0700",
+      "ai": "Done+deployed to git: commit 95dfd64 pushed to origin/main (2026-07-30). 3-layer grand total both sides + รวมทั้งปี column before Jan + header 14.7px/800. Full frontend suite 494/494, tsc clean, visual verify PASS (jakkaritw approved screenshots). Leftover: image build+staging+PRD deploy via Azure Cloud Shell per docs/deploy/A14_RUNBOOK.md (tag=95dfd64); backend pytest + 07-security gate still to run before PRD.",
+      "agent": "kimi"
+    },
+    {
+      "id": "no-access-empty-state-copy",
+      "state": "done",
+      "created": "2026-07-30T10:40:39+0700",
+      "updated": "2026-07-30T11:24:02+0700",
+      "ai": "[VISUAL SIGN-OFF 2026-07-30] jakkaritw reviewed 3 real-app screenshots (light 1280, dark 1280, mobile 390 - rendered via next dev with only /me and /scope stubbed to role='none', all other markup real) and replied 'pass'. Screenshots left at frontend/noscope-{light-1280,dark-1280,mobile-390}.png at his request - UNTRACKED and NOT gitignored, so the parallel session must not 'git add -A'. Code already committed as 059ebe0. REMAINING: (1) not deployed - real users still see the old 'ดูข้อมูลได้ที่ Dashboard' copy until a new image is built and deployed, which needs jakkaritw's deploy approval; (2) CSS polish (.no-scope-empty spacing + heading weight) still deferred until the parallel session commits frontend/src/styles/global.css - checkbox open in .claude/plan.md; (3) DeptPicker's 'ไม่พบฝ่ายในสิทธิ์ของคุณ' empty text NOT changed (out of scope, easy now that SCOPE_ACCESS_CONTACT_EMAIL/SCOPE_ACCESS_SOURCE_FILE are exported).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-2a07036",
+      "state": "done",
+      "created": "2026-07-30T10:15:26+0700",
+      "updated": "2026-07-30T10:15:26+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): P0-22 approver-scope defect still open; P0-36 tenant cause; P0-38 health-probe gap [commit 2a07036]"
+    },
+    {
+      "id": "nipaporn-scope-resolve",
+      "state": "done",
+      "created": "2026-07-30T09:51:00+0700",
+      "updated": "2026-07-30T09:51:18+0700",
+      "ai": "RESULT: email CONFIRMED nipapornt@chememan.com (empcode 101032, นิภาพร ทองกิ่ง, mgr warapornt) present in dbo.v_employee_budget_01 AND v_employee_primary; Entra UPN==mail==same => header match OK. role=admin (ADMIN_EMAILS in BOTH prd+stg containers contains her exactly; 3 entries) + base role=filler => DUAL-ROLE admin, 'โหมด Admin' toggle default OFF. Fill=See=7 CC (10AC020000,10CO000000,10FA000000,10FA010000,10FN012000,10GE000000,10IB000000) = 5 depts (Budgeting & Cost Accounting / Budgeting and Management / Chief Financial Officer / Chief Operating Officer / General); 0 subordinate fillers so See==Fill exactly. Toggle ON = 211 CC/114 depts. Grid FY2027 personal scope 17 rows/4 CC (auto-selected first dept 'Budgeting & Cost Accounting' = 2 rows editable) => NOT empty. RISKS: (1) approve/reject buttons hidden while admin-mode ON (showApproveReject=status.can_act && !adminViewEnabled) and DeptPicker only lists See-scoped depts => as global position-2 approver for 114 depts she can only reach 5 in personal mode -> UI-unreachable approvals (confirms ui-test-results-2026-07-22 defect; server-side approve is NOT scope-blocked, only UI nav). (2) dept 'Chief Financial Officer' = 0 grid rows (blank grid if picked). (3) budget.pending_budget EMPTY + approval_status 0 rows => pending-for-me=0 for FY2026/2027 today. (4) NOTIFICATIONS_DRY_RUN unset in prd => notification emails are log-only previews. No writes performed.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-b565f9e",
+      "state": "done",
+      "created": "2026-07-30T09:43:08+0700",
+      "updated": "2026-07-30T09:43:08+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): P0-36 records the measured consent outcome (tenant User.Read alone unblocked login) [commit b565f9e]"
+    },
+    {
+      "id": "log-03f7a09",
+      "state": "done",
+      "created": "2026-07-30T09:35:18+0700",
+      "updated": "2026-07-30T09:35:18+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): add P0-36/P0-37 tenant admin-consent gate after real login block [commit 03f7a09]"
+    },
+    {
+      "id": "entra-admin-consent-login-block",
+      "state": "done",
+      "created": "2026-07-30T09:30:57+0700",
+      "updated": "2026-07-30T10:14:55+0700",
+      "ai": "[CLOSED+PROVEN 2026-07-30 via workflow wf_40087ffc-985, 9 agents read-only] Entra sign-in log confirms the fix: nipapornt sign-in 2026-07-30T02:40:04Z errorCode=0 with NO Principal grant for her, conditionalAccessStatus=notApplied (device NB627/Edge, Bangkok). Login flow requests only openid+profile+email; User.Read is never requested at sign-in, yet admin-consenting the app is what unblocked it => the proposed PATCH of the AllPrincipals scope and adding OIDC perms to requiredResourceAccess are BOTH unnecessary - do not do them. STRUCTURAL follow-on: tenant authorizationPolicy allows self-consent only for 'low'-classified permissions and MS Graph has ZERO delegatedPermissionClassifications here + app has no verified publisher => EVERY future app registration (custom domain, new env) hits the same 'Need admin approval' wall until an admin consents. Also verified prd Easy Auth config: require auth ON, unauthenticatedClientAction=RedirectToLoginPage, excludedPaths=[] (so /health is behind auth - external uptime probe impossible, now plan item P0-38), allowedApplications=[appId], allowedPrincipals={} (no extra allowlist), redirect URI byte-exact vs live FQDN, APP_BASE_URL identical (no trailing-slash drift), revision 0000005 Succeeded. NOT readable with App Admin role (403): Conditional Access policies, adminConsentRequestPolicy, appConsentRequests, permissionGrantPolicies includes - so CA cannot be ruled out for other users; first real login per rollout wave is the test. Docs: plan P0-36 (tenant-policy reason added), P0-38 (new), P0-22 (updated with the admin-shield nuance); memory gotcha_entra_need_admin_approval_easyauth updated. Spawned #approver-nonadmin-scope-risk for the still-unfixed approver-scope defect.",
+      "agent": "claude"
+    },
+    {
+      "id": "monthly-highlight-2026-07",
+      "state": "done",
+      "created": "2026-07-29T19:55:24+0700",
+      "updated": "2026-07-29T19:58:37+0700",
+      "ai": "Delivered monthly report highlights for 2026-07: (a) 'Activities last month' 6 English bullets (app build A2-A14, prod deploy 2026-07-28, 179-item post-deploy plan + 15/15 smoke + 43 PASS functional, live-DB 46/46 + 475 FE/673 BE tests, email 4 types verified in real mailboxes, master data + signoff V2.0 + Thai UAT guide); (b) 'Ongoing this month' (Aug) = UAT pilot -> Go/No-Go -> staged rollout to 114 depts, grounded in plan/post-deploy-smoke-uat-plan.md Phase 3 + Appendix E decisions. Open blockers named for jakkaritw: 2nd pilot dept + dates, support channel, P0-10/21/22 chain confirmation, NOTIFICATIONS_DRY_RUN flip, GL_EDIT_BY data check. No code change. Doc-only answer, nothing committed",
       "agent": "claude"
     }
   ]

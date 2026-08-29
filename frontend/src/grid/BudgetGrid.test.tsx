@@ -536,6 +536,83 @@ describe('BudgetGrid', () => {
     })
   })
 
+  // Department-restricted GL groups (jakkaritw 2026-08-29) — the rule itself is
+  // unit-tested in model.test.ts and AddTransactionForm.test.tsx; what only
+  // exists here is the wiring, i.e. that BudgetGrid actually hands the picker
+  // its `departments` (from GET /scope/departments) and the caller's isAdmin.
+  describe('department-restricted GL wiring (departments + isAdmin -> AddTransactionForm)', () => {
+    const SEMINAR_GL_REF = [
+      ...GL_REF,
+      { gl_code: '5210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' as const },
+    ]
+    const TWO_DEPARTMENTS = [
+      { cost_center: '10AC012000', department: 'Accounting', division: 'Finance Division', c_level: 'CFO' },
+      { cost_center: '10HR012000', department: 'Talent & Culture', division: 'Corporate Affairs', c_level: 'CEO' },
+    ]
+
+    function mockGrid() {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SEMINAR_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(TWO_DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
+    }
+
+    it('a filler gets the seminar GL only on the Talent & Culture cost center', async () => {
+      const scope: ScopeState = {
+        ...SCOPE, fillCostCenters: ['10AC012000', '10HR012000'], seeCostCenters: ['10AC012000', '10HR012000'],
+      }
+      mockGrid()
+
+      render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: '10AC012000' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
+
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
+    })
+
+    // Gate finding MED-1: BudgetGrid swallows a /scope/departments failure
+    // (departments = [], no banner). The picker must not then hide the seminar
+    // GLs in silence — this is the wiring of that signal.
+    it('a failed /scope/departments makes the picker say WHY the restricted GLs are missing', async () => {
+      const scope: ScopeState = { ...SCOPE, fillCostCenters: ['10HR012000'], seeCostCenters: ['10HR012000'] }
+      mockGrid()
+      vi.mocked(budgetApi.fetchDepartments).mockRejectedValue(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง'))
+
+      render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+
+      expect(screen.getByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
+    })
+
+    it('an admin gets the seminar GL on a cost center outside Talent & Culture', async () => {
+      const adminScope: ScopeState = {
+        ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['10AC012000'], seeCostCenters: ['10AC012000'],
+      }
+      mockGrid()
+
+      render(<BudgetGrid scope={adminScope} initialFilter={{ dept: null, year: null }} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: '10AC012000' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
+    })
+  })
+
   // ADR-0013 read-only lock (UI parity port, 2026-08-05) — the single line
   // `const readOnly = !row.editable` in handleOpenSpecial is the whole
   // feature's wiring point and had zero coverage at this level; inverting it

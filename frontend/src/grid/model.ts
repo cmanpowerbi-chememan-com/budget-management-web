@@ -719,6 +719,58 @@ export function lockedCostCenterDepartments(
   return result
 }
 
+/** GL groups only ONE department may budget for: gl_group -> owning department
+ * (jakkaritw, 2026-08-29). Keyed by GROUP, never by gl_code, because
+ * `dbo.gl_group` is an admin-edited master — a third Training & Seminar GL
+ * added there inherits the restriction without a code change (same reason
+ * `groupChipClass` above gates on the group name).
+ *
+ * Scope is deliberately the PICKER only: existing rows, the grid and every
+ * total stay exactly as they are. Cost centers outside Talent & Culture already
+ * carry approved seminar money (FY2026 board_budget), so stripping rows or
+ * refusing writes would move real numbers — hence a rule that decides what can
+ * be ADDED from here on, and nothing else. */
+export const DEPT_RESTRICTED_GL_GROUPS: Record<string, string> = {
+  'Training & Seminar': 'Talent & Culture',
+}
+
+/** Thai reason for a restricted GL picked on a cost center outside its owning
+ * department. Only reachable from a stale selection — the picker never offers
+ * the GL in the first place (see `AddTransactionForm`). Spelled out rather than
+ * built from the map: one group, one message, and the wording names the GL the
+ * way users say it ("ค่าอบรมและสัมมนา"), not the way the master spells it. */
+export const DEPT_RESTRICTED_GL_REASON_TH =
+  'GL ค่าอบรมและสัมมนา ใช้ได้เฉพาะ Cost Center ของฝ่าย Talent & Culture'
+
+/** Shown in the GL picker when a restricted GL is withheld because the
+ * DEPARTMENT LIST could not be loaded, not because the Cost Center genuinely
+ * belongs elsewhere (`BudgetGrid` swallows a `GET /scope/departments` failure
+ * with `departments = []` and no banner). Deliberately NOT
+ * `DEPT_RESTRICTED_GL_REASON_TH`: telling a Talent & Culture filler their own
+ * GL belongs to Talent & Culture would send them hunting for a permission
+ * problem that does not exist. The fail-closed behavior is unchanged — only
+ * the silence is. */
+export const DEPT_DATA_UNAVAILABLE_REASON_TH =
+  'โหลดข้อมูลฝ่ายไม่สำเร็จ จึงยังไม่แสดง GL บางรายการ — กรุณารีเฟรชหน้าจอแล้วลองใหม่'
+
+/** True when `gl` may be picked for `costCenter`. Admins bypass the rule
+ * entirely (jakkaritw, 2026-08-29); every GL outside `DEPT_RESTRICTED_GL_GROUPS`
+ * is unaffected. Fails CLOSED for a restricted GL — no cost center picked yet,
+ * or a cost center with no row in `departments`, hides it rather than offering
+ * one that would vanish (or be rejected) on the next pick. */
+export function isGlPickableForCostCenter(
+  gl: GlAccount,
+  costCenter: string,
+  departments: DepartmentRow[],
+  isAdmin = false,
+): boolean {
+  if (isAdmin) return true
+  const requiredDepartment = DEPT_RESTRICTED_GL_GROUPS[gl.gl_group ?? '']
+  if (!requiredDepartment) return true
+  if (!costCenter) return false
+  return departments.find((d) => d.cost_center === costCenter)?.department === requiredDepartment
+}
+
 export interface NewTransactionInput {
   costCenter: string
   glAccount: string
@@ -734,6 +786,14 @@ export interface NewTransactionInput {
    * year-wide lock makes any pick irrelevant. Optional/defaults to `false` —
    * "the year is open", the pre-existing behavior. */
   yearNotOpen?: boolean
+  /** cost_center -> department rows (`GET /scope/departments`, already fetched
+   * by `BudgetGrid` for the ฝ่าย picker) — resolves the picked Cost Center's
+   * department for the `DEPT_RESTRICTED_GL_GROUPS` check. Optional; omitting it
+   * only ever matters for a restricted GL, which then fails closed. */
+  departments?: DepartmentRow[]
+  /** Admins bypass the department restriction on GL groups entirely
+   * (jakkaritw, 2026-08-29). Optional/defaults to `false`. */
+  isAdmin?: boolean
 }
 
 export interface ValidationResult {
@@ -758,6 +818,21 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   const lockedDepartment = (input.lockedCostCenters ?? {})[input.costCenter]
   if (lockedDepartment) {
     return { ok: false, errorTh: lockedAddReasonTh(lockedDepartment) }
+  }
+  // A picked GL that is no longer in the master (an admin removed it from
+  // `dbo.gl_group` and `glRef` refetched under the open form) must not skip the
+  // checks below just because it cannot be looked up — it used to fall through
+  // the restriction AND the duplicate test straight to the API.
+  const pickedGl = input.glRef.find((g) => g.gl_code === input.glAccount)
+  if (!pickedGl) {
+    return { ok: false, errorTh: 'GL นี้ไม่มีอยู่ในรายการ GL แล้ว กรุณาเลือกใหม่' }
+  }
+  // Stale-selection defence: the picker hides a restricted GL the moment the
+  // Cost Center makes it ineligible, so this only fires if that state was
+  // somehow bypassed. Checked ahead of the duplicate-row test — "this GL is not
+  // yours" is the more useful message of the two.
+  if (!isGlPickableForCostCenter(pickedGl, input.costCenter, input.departments ?? [], input.isAdmin)) {
+    return { ok: false, errorTh: DEPT_RESTRICTED_GL_REASON_TH }
   }
   const exists = input.existingRows.some(
     (r) => r.cost_center === input.costCenter && r.gl_account === input.glAccount,
