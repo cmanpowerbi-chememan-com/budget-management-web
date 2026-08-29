@@ -6,12 +6,24 @@
 fastapi==0.139.0
 uvicorn[standard]==0.46.0
 pyodbc==5.3.0
-msal==1.36.0
+msal==1.38.0
 pydantic-settings==2.14.2
-pytest==9.0.2
+pytest==9.0.3
 httpx==0.28.1
 python-multipart==0.0.32
 # openpyxl: TEST-only dep — tests/tests_data_sync/test_sap_actuals_parity.py
 # reads the SAP .xlsx export. Missing here made CI exit 2 on collection
 # ("No module named 'openpyxl'") from 2026-07-31, so no test ran at all.
 openpyxl==3.1.5
+# cryptography: TRANSITIVE only (msal -> PyJWT[crypto]), pinned here purely as
+# a security FLOOR. pip-audit during the 2026-08-22 security gate flagged the
+# 48.0.1 that resolved in: 3 CVEs, incl. CVE-2026-69247, a Bleichenbacher-style
+# decrypt oracle in PKCS7 — first fixed in 50.0.0. Nothing in this app calls
+# cryptography directly; the pin exists so the resolver can never walk back to
+# a vulnerable build. It does NOT resolve on its own: msal 1.36.0 caps
+# cryptography<49, so the first build failed ResolutionImpossible (ACR run
+# cm1s) — msal is bumped to 1.38.0 above, whose ceiling is <51, purely to
+# make room. Same audit flagged pytest 9.0.2 (local /tmp DoS, dev-only)
+# -> 9.0.3 above, the exact fix release; 9.1.1 exists but a minor bump is a
+# test-behavior risk this change does not need to take.
+cryptography==50.0.1

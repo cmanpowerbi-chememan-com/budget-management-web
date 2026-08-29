@@ -60,3 +60,18 @@ docs/13Template Special/
 # az acr build contexts — full copies of the repo tree, regenerated on every build.
 # Left behind they bloat the workspace and make git status / the VS Code file watcher crawl.
 .build-ctx-*/
+
+# Pre-edit snapshots the SIT workbook editor writes before every pass
+# (setup/fill_sit_test_case_gaps.py). 38 of them already, ~3 MB of binary
+# churn; the live file lives on SharePoint and the edited copy is committed,
+# so these are local safety copies only.
+requirement_spec/4_sit/*_before_*.xlsx
+
+# Stray npm/Next artifacts at the REPO ROOT. The real app lives in frontend/
+# (which has its own .gitignore), so anything here is the residue of an npx or
+# next command accidentally run one directory up. Ignored rather than tolerated
+# because a single `git add -A` on an unignored node_modules is exactly how
+# .git reached 1 GB once before.
+/node_modules/
+/.next/
+/out/
