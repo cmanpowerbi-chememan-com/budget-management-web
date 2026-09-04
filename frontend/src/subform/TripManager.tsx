@@ -1116,11 +1116,12 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                       </table>
                       </div>
 
-                      {/* รายละเอียด — no note/detail field exists anywhere in the
-                        * trip data model (TripDraft/TripInput/TripListItem, or
-                        * ManualLineDraft) yet. Rendered disabled per the task's
-                        * explicit instruction rather than inventing a backend
-                        * field or silently persisting nothing. */}
+                      {/* รายละเอียด — free-text note on `budget.budget_trip.remark`
+                        * (setup/migrate_budget_trip_remark.py), wired the same way
+                        * as PROJECT above. Disabling on `readOnly` comes for free
+                        * from the surrounding `<fieldset disabled={saving ||
+                        * readOnly}>` (ADR-0013) — no per-input readOnly check
+                        * needed here, matching every other field in this card. */}
                       <div className="trip-detail-row">
                         <label className="trip-detail-label" htmlFor={`trip-detail-${card.localId}`}>
                           รายละเอียด
@@ -1130,8 +1131,9 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                           className="detail-input"
                           type="text"
                           placeholder="ระบุรายละเอียด เช่น ค่าวีซ่า / ประกัน"
-                          disabled
-                          title="(ยังไม่รองรับ — mockup placeholder)"
+                          maxLength={500}
+                          value={card.draft.remark ?? ''}
+                          onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, remark: e.target.value }))}
                           aria-label={`trip-detail-note ${card.localId}`}
                         />
                       </div>

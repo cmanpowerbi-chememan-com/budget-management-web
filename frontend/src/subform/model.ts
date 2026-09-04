@@ -334,6 +334,9 @@ export interface TripDraft {
   days: number
   travel_months: string[]
   project: string | null
+  /** Free-text "รายละเอียด" note at the bottom of the trip card — distinct
+   * from `purpose`/`project` above. */
+  remark: string | null
   purpose: string | null
   /** Kept nullable defensively (`validateTripDraft` still blocks save on
    * null) but in practice always set: Trip Manager locks every card — new
@@ -360,6 +363,7 @@ export function blankTripDraft(costCenter: string, fiscalYear: number, side: Tri
     days: 0,
     travel_months: [],
     project: null,
+    remark: null,
     purpose: null,
     side,
     expected_updated_at: null,
@@ -378,6 +382,7 @@ export function draftFromTripListItem(item: TripListItem): TripDraft {
     days: item.days,
     travel_months: item.travel_months,
     project: item.project ?? null,
+    remark: item.remark ?? null,
     purpose: item.purpose,
     side: item.side,
     expected_updated_at: item.updated_at,

@@ -1195,8 +1195,22 @@ def test_post_trip_endpoint_succeeds_end_to_end_after_the_job_level_column_fix(
     `_lookup_per_diem_rate`'s `WHERE position = ?` raised pyodbc 42S22 ("no
     such column") on EVERY real trip save -> `POST /budget/trip` always 502.
     Proves the fix through the full stack (real router, real auth override,
-    real Fabric SQL DB): 200 + a persisted `budget.budget_trip` row."""
+    real Fabric SQL DB): 200 + a persisted `budget.budget_trip` row.
+
+    Also covers `remark` (setup/migrate_budget_trip_remark.py, "รายละเอียด"
+    free-text note on the trip card): the value written via `POST /budget/trip`
+    must come back both from a direct `SELECT remark FROM budget.budget_trip`
+    AND from `GET /budget/trip`. The migration WAS applied on the live DB
+    2026-09-04, and the whole remark round trip is proven green there — but
+    this test still cannot run: since the 2026-08-10 year gate
+    (`app.deadline.fiscal_year_state`) a fiscal_year with no
+    `dbo.submission_deadline` row is NOT_OPEN, so every write on the 2099
+    sentinel 403s `ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ`. That hits the whole
+    2099 write-test family, not just this test. Fix = seed a future-dated
+    sentinel deadline row for 2099 (the DEADLINE_SENTINEL_YEAR=2097
+    precedent below) and delete it in cleanup."""
     cost_center, filler_email, _ = discovered
+    remark_value = "ค่าวีซ่า / ประกัน — integration proof"
 
     with get_fabric_conn() as conn:
         traveler_empcode = _discover_traveler_with_a_configured_rate(conn)
@@ -1214,20 +1228,31 @@ def test_post_trip_endpoint_succeeds_end_to_end_after_the_job_level_column_fix(
                     "days": 3,
                     "travel_months": ["05"],
                     "side": "COST",
+                    "remark": remark_value,
                 },
             )
         assert response.status_code == 200, response.text
         trip_id = response.json()["trip_id"]
         assert trip_id is not None
+        assert response.json()["remark"] == remark_value
 
         with get_fabric_conn() as verify_conn:
             cursor = verify_conn.cursor()
             try:
-                cursor.execute("SELECT trip_id FROM budget.budget_trip WHERE trip_id = ?", trip_id)
+                cursor.execute("SELECT trip_id, remark FROM budget.budget_trip WHERE trip_id = ?", trip_id)
                 row = cursor.fetchone()
             finally:
                 cursor.close()
         assert row is not None, "trip row was not persisted despite a 200 response"
+        assert row[1] == remark_value, "remark was not persisted despite a 200 response"
+
+        with TestClient(fastapi_app) as client:
+            get_response = client.get(
+                "/budget/trip", params={"cost_center": cost_center, "fiscal_year": FISCAL_YEAR}
+            )
+        assert get_response.status_code == 200, get_response.text
+        listed_trip = next(t for t in get_response.json() if t["trip_id"] == trip_id)
+        assert listed_trip["remark"] == remark_value
     finally:
         fastapi_app.dependency_overrides.pop(get_current_user_email, None)
         with get_fabric_conn() as cleanup_conn:

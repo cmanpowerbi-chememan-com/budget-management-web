@@ -1300,7 +1300,7 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
         _OPEN_DEADLINE,  # deadline check -> row exists, not yet passed (OPEN)
         (99,),  # an existing per-diem detail line already exists (detail_id=99) — its OLD amount is never read
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (None,),  # echo fix: project not sent -> read back the actually-stored value (none here)
+        (None, None),  # echo fix: project/remark not sent -> read back the actually-stored values (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -2028,7 +2028,7 @@ def _stored_trip_row(**overrides):
         trip_id=42, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
         traveler_name="Somchai", position="Manager", destination="Bangkok",
         country_group=1, days=10, travel_months="03", purpose="site visit",
-        project=None, side="COST", _updated_at=STALE,
+        project=None, remark=None, side="COST", _updated_at=STALE,
     )
     base.update(overrides)
     return tuple(base[c] for c in _TRIP_REPLAY_COLUMNS)
@@ -2231,7 +2231,7 @@ def test_trip_update_ignores_client_token_never_dedups_an_edit():
         _OPEN_DEADLINE,               # deadline check -> open
         None,                        # existing trip-detail lookup -> INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (None,),                     # echo fix: project not sent -> read back the actually-stored value (none here)
+        (None, None),                # echo fix: project/remark not sent -> read back the actually-stored values (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -2323,7 +2323,10 @@ def _trip_update_fetchone_sequence():
 def test_trip_update_with_project_sets_project_column():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence()
+    # remark is NOT sent (defaults None) -> the combined project/remark echo
+    # lookup still fires for remark's sake even though project itself needs
+    # no lookup here (_lookup_trip_project_and_remark, ONE round trip).
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
     cursor.rowcount = 1
     scope = _scope()
     results = save_trip(
@@ -2345,7 +2348,7 @@ def test_trip_update_with_empty_project_clears_the_column():
     request shape."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence()
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
     cursor.rowcount = 1
     scope = _scope()
     results = save_trip(
@@ -2367,7 +2370,7 @@ def test_trip_update_without_project_keeps_the_legacy_update_shape():
     claimed null)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project",)]
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project", "Legacy Remark")]
     cursor.rowcount = 1
     scope = _scope()
     results = save_trip(
@@ -2378,6 +2381,7 @@ def test_trip_update_without_project_keeps_the_legacy_update_shape():
     assert len(update_calls) == 1
     assert "project" not in update_calls[0].args[0]
     assert results[0].trip.project == "Legacy Project"
+    assert results[0].trip.remark == "Legacy Remark"
 
 
 def test_trip_create_replay_returns_stored_project():
@@ -2390,6 +2394,146 @@ def test_trip_create_replay_returns_stored_project():
     results = save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
     assert results[0].ok is True
     assert results[0].trip.project == "ERP rollout"
+
+
+# ---------------------------------------------------------------------------
+# TripInput.remark — free-text "รายละเอียด" note at the bottom of the trip
+# card (Trip Manager). Persisted with the SAME conditional-column trick as
+# project/client_token: the column is referenced ONLY when a non-null value
+# is supplied, so a remark-less request stays byte-identical to the
+# pre-migration SQL (deploy-safe before setup/migrate_budget_trip_remark.py
+# runs). Mirrors the TripInput.project test section above exactly.
+# ---------------------------------------------------------------------------
+
+def test_trip_input_accepts_remark_defaulting_to_none():
+    assert _trip().remark is None
+    assert _trip(remark="ค่าวีซ่า").remark == "ค่าวีซ่า"
+
+
+def test_trip_input_rejects_remark_over_500_chars():
+    with pytest.raises(ValidationError):
+        _trip(remark="a" * 501)
+
+
+def test_trip_create_with_remark_includes_remark_column():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_create_fetchone_sequence()
+    cursor.fetchval.return_value = 45
+    scope = _scope()
+    results = save_trip(conn, [_trip(remark="ค่าวีซ่า / ประกัน")], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    insert_calls = [c for c in cursor.execute.call_args_list if "INSERT INTO budget.budget_trip" in c.args[0]]
+    assert len(insert_calls) == 1
+    assert "remark" in insert_calls[0].args[0]
+    assert "ค่าวีซ่า / ประกัน" in insert_calls[0].args[1:]
+    assert results[0].trip.remark == "ค่าวีซ่า / ประกัน"
+
+
+def test_trip_create_without_remark_keeps_the_legacy_insert_shape():
+    """No remark -> NO 'remark' referenced in ANY SQL (works against the
+    un-migrated live table)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_create_fetchone_sequence()
+    cursor.fetchval.return_value = 46
+    scope = _scope()
+    results = save_trip(conn, [_trip()], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].trip.remark is None
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("remark" in s for s in executed_sql)
+
+
+def test_trip_update_with_remark_sets_remark_column():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    # project is NOT sent (defaults None) -> the combined project/remark echo
+    # lookup still fires for project's sake even though remark itself needs
+    # no lookup here (_lookup_trip_project_and_remark, ONE round trip).
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, remark="ค่าวีซ่า", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "remark = ?" in update_calls[0].args[0]
+    assert "ค่าวีซ่า" in update_calls[0].args[1:]
+    assert results[0].trip.remark == "ค่าวีซ่า"
+
+
+def test_trip_update_with_empty_remark_clears_the_column():
+    """Explicit "" (NOT None) means "clear the field" — distinct from
+    omitting the field (None = leave untouched), same contract as project."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, remark="", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "remark = ?" in update_calls[0].args[0]
+    assert "" in update_calls[0].args[1:]
+    assert results[0].trip.remark == ""
+
+
+def test_trip_update_without_remark_keeps_the_legacy_update_shape():
+    """No remark sent (None) -> the WRITE itself stays legacy-shaped (never
+    references `remark`), but the echoed TripState must still reflect the
+    ACTUAL stored value, not just parrot back the request's None."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, "Legacy Remark")]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "remark" not in update_calls[0].args[0]
+    assert results[0].trip.remark == "Legacy Remark"
+
+
+def test_trip_update_with_project_and_remark_both_sent_uses_no_extra_lookup():
+    """When BOTH project and remark are sent, the echo-fix lookup must not
+    run at all (neither needs a stale-value read) — one fewer DB round trip
+    than the project-only/remark-only cases above."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence()
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn,
+        [_trip(trip_id=42, project="ERP rollout", remark="ค่าวีซ่า", expected_updated_at=STALE)],
+        "filler@chememan.com", scope,
+    )
+    assert results[0].ok is True
+    assert results[0].trip.project == "ERP rollout"
+    assert results[0].trip.remark == "ค่าวีซ่า"
+    # No leftover mocked fetchone values were consumed beyond the fixed
+    # sequence — StopIteration would have raised if an extra lookup fired.
+
+
+def test_trip_create_replay_returns_stored_remark():
+    """A token replay must return the STORED remark (like every other
+    stored field), and _TRIP_REPLAY_COLUMNS must therefore carry it."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [_stored_trip_row(remark="ค่าวีซ่า"), (500, None, None)]
+    scope = _scope()
+    results = save_trip(conn, [_trip(client_token="tok-1")], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].trip.remark == "ค่าวีซ่า"
 
 
 # ---------------------------------------------------------------------------

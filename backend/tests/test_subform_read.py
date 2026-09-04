@@ -75,7 +75,7 @@ def _trip_row(**overrides):
         trip_id=10, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
         traveler_name="สมชาย ใจดี", position="Supervisor", destination="Japan",
         country_group=2, days=5, travel_months="02,03", purpose="visit",
-        project=None, side="COST", _updated_at="2026-01-01T00:00:00",
+        project=None, remark=None, side="COST", _updated_at="2026-01-01T00:00:00",
     )
     base.update(overrides)
     return tuple(base[c] for c in _TRIP_COLUMNS)
@@ -176,6 +176,23 @@ def test_fetch_trips_returns_project(monkeypatch):
     rows = fetch_trips(conn, "CC1", 2027)
 
     assert rows[0]["project"] == "ERP rollout"
+
+
+def test_fetch_trips_returns_remark(monkeypatch):
+    """`remark` (the trip card's "รายละเอียด" free-text note) must come back
+    on every read — the subform edit form re-populates from this."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        _trip_row(country_group=1, travel_months="03", remark="ค่าวีซ่า / ประกัน"),
+    ]
+    monkeypatch.setattr(
+        "app.subform_read._lookup_per_diem_rate",
+        lambda c, position: {"rate_domestic": 300, "rate_asian": None, "rate_other": None},
+    )
+
+    rows = fetch_trips(conn, "CC1", 2027)
+
+    assert rows[0]["remark"] == "ค่าวีซ่า / ประกัน"
 
 
 def test_fetch_trips_scopes_by_cc_fiscal_year():

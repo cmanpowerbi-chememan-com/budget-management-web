@@ -69,6 +69,23 @@ def test_trip_row_carries_project():
     assert row.model_dump(mode="json")["project"] == "ERP rollout"
 
 
+def test_trip_row_carries_remark():
+    """`remark` (trip card "รายละเอียด" free text, migrate_budget_trip_remark.py)
+    must survive the response model — same guard as `project` above."""
+    from app.routers.subform import TripRow
+
+    row = TripRow(
+        trip_id=10, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
+        traveler_name="สมชาย", position="Supervisor", destination="Japan",
+        country_group=2, days=5, travel_months=["02", "03"], purpose=None,
+        remark="ค่าวีซ่า / ประกัน", side="COST",
+        updated_at=datetime(2026, 7, 15, 10, 30, 0),
+        per_diem_months=None, per_diem_error=None,
+    )
+
+    assert row.model_dump(mode="json")["remark"] == "ค่าวีซ่า / ประกัน"
+
+
 # ---------------------------------------------------------------------------
 # GET /budget/detail
 # ---------------------------------------------------------------------------

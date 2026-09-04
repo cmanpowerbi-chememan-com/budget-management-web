@@ -249,6 +249,9 @@ export interface TripInput {
   days: number
   travel_months: string[]
   project: string | null
+  /** Free-text "รายละเอียด" note at the bottom of the trip card — distinct
+   * from `purpose`/`project` above. */
+  remark: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   expected_updated_at: string | null
@@ -272,6 +275,7 @@ export interface TripState {
   days: number
   travel_months: string[]
   project: string | null
+  remark: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   updated_at: string
@@ -294,6 +298,7 @@ export interface TripListItem {
   days: number
   travel_months: string[]
   project: string | null
+  remark: string | null
   purpose: string | null
   side: 'COST' | 'SGA'
   updated_at: string

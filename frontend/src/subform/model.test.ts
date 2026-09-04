@@ -309,7 +309,7 @@ describe('trip draft <-> payload round trip', () => {
     const item: TripListItem = {
       trip_id: 10, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E1',
       traveler_name: 'สมชาย', position: 'Supervisor', destination: 'Japan',
-      country_group: 2, days: 5, travel_months: ['02', '03'], project: 'PRJ-A', purpose: 'visit',
+      country_group: 2, days: 5, travel_months: ['02', '03'], project: 'PRJ-A', remark: 'ค่าวีซ่า', purpose: 'visit',
       side: 'COST', updated_at: '2026-01-01T00:00:00',
       per_diem_months: { m02: 1000, m03: 1000 } as Record<string, number>, per_diem_error: null,
     }
@@ -319,6 +319,7 @@ describe('trip draft <-> payload round trip', () => {
     expect(draft.side).toBe('COST')
     expect(draft.travel_months).toEqual(['02', '03'])
     expect(draft.project).toBe('PRJ-A')
+    expect(draft.remark).toBe('ค่าวีซ่า')
     expect(draft.purpose).toBe('visit')
   })
 
@@ -345,6 +346,15 @@ describe('trip draft <-> payload round trip', () => {
     expect(payload.purpose).toBe('เยี่ยมลูกค้า')
   })
 
+  it('blankTripDraft starts with remark null and buildTripPayload carries remark', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    expect(draft.remark).toBeNull()
+    draft.traveler_empcode = 'E1'
+    draft.remark = 'ค่าวีซ่า / ประกัน'
+    const payload = buildTripPayload(draft)
+    expect(payload.remark).toBe('ค่าวีซ่า / ประกัน')
+  })
+
   it('buildTripPayload refuses an unset side (validateTripDraft guards the UI path)', () => {
     expect(() => buildTripPayload(blankTripDraft('CC1', 2027, null))).toThrow()
   })
@@ -361,7 +371,7 @@ describe('trip draft <-> payload round trip', () => {
     const item: TripListItem = {
       trip_id: 10, cost_center: 'CC1', fiscal_year: 2027, traveler_empcode: 'E1',
       traveler_name: 'สมชาย', position: 'Supervisor', destination: 'Japan',
-      country_group: 2, days: 5, travel_months: ['02', '03'], project: null, purpose: 'visit',
+      country_group: 2, days: 5, travel_months: ['02', '03'], project: null, remark: null, purpose: 'visit',
       side: 'COST', updated_at: '2026-01-01T00:00:00',
       per_diem_months: { m02: 1000, m03: 1000 } as Record<string, number>, per_diem_error: null,
     }

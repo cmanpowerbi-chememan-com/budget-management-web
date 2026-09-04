@@ -55,6 +55,7 @@ function tripItem(overrides: Partial<TripListItem> = {}): TripListItem {
     days: 5,
     travel_months: ['02', '03'],
     project: null,
+    remark: null,
     purpose: null,
     side: 'COST',
     updated_at: '2026-01-01T00:00:00',
@@ -137,6 +138,7 @@ function tripState(overrides: Partial<Awaited<ReturnType<typeof subformApi.creat
     days: 3,
     travel_months: ['05'],
     project: null,
+    remark: null,
     purpose: null,
     side: 'SGA' as const,
     updated_at: '2026-01-02T00:00:00',
@@ -680,12 +682,14 @@ describe('TripManager', () => {
       fillNewTripBasics()
       fireEvent.change(screen.getByLabelText('project new-0'), { target: { value: 'PRJ-X' } })
       fireEvent.change(screen.getByLabelText('purpose new-0'), { target: { value: 'ประชุมลูกค้า' } })
+      fireEvent.change(screen.getByLabelText('trip-detail-note new-0'), { target: { value: 'ค่าวีซ่า' } })
       fireEvent.click(saveAllButton())
 
       await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
       const payload = vi.mocked(subformApi.createTrip).mock.calls[0][0]
       expect(payload.project).toBe('PRJ-X')
       expect(payload.purpose).toBe('ประชุมลูกค้า')
+      expect(payload.remark).toBe('ค่าวีซ่า')
     })
 
     it('save is blocked with a Thai message until a destination is picked (group derives from it)', async () => {
@@ -1438,16 +1442,34 @@ describe('TripManager', () => {
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.other.COST)).toBeInTheDocument()
     })
 
-    it('the รายละเอียด field is disabled (no backing model field yet) with an explanatory title', async () => {
-      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+    it('the รายละเอียด field is editable, prefills from the stored remark, and typing updates the draft', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ remark: 'ค่าวีซ่า / ประกัน' })])
       mockNoManualLines()
       render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       const detailInput = screen.getByLabelText('trip-detail-note existing-10')
-      expect(detailInput).toBeDisabled()
-      expect(detailInput).toHaveAttribute('title', expect.stringContaining('ยังไม่รองรับ'))
+      expect(detailInput).not.toBeDisabled()
       expect(detailInput).toHaveAttribute('placeholder', expect.stringContaining('ค่าวีซ่า'))
+      expect(detailInput).toHaveValue('ค่าวีซ่า / ประกัน')
+
+      fireEvent.change(detailInput, { target: { value: 'อัปเดตรายละเอียด' } })
+      expect(detailInput).toHaveValue('อัปเดตรายละเอียด')
+    })
+
+    it('the รายละเอียด (remark) input is included in the save payload', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      vi.mocked(subformApi.updateTrip).mockResolvedValue(tripState() as never)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      fireEvent.change(screen.getByLabelText('trip-detail-note existing-10'), { target: { value: 'ค่าวีซ่า / ประกัน' } })
+      fireEvent.click(saveAllButton())
+
+      await waitFor(() => expect(subformApi.updateTrip).toHaveBeenCalled())
+      const payload = vi.mocked(subformApi.updateTrip).mock.calls[0][0]
+      expect(payload.remark).toBe('ค่าวีซ่า / ประกัน')
     })
 
     // Option B (2026-07-19 save-all consolidation): a brand-new trip renders
@@ -1493,6 +1515,7 @@ describe('TripManager', () => {
       expect(fieldset).toBeDisabled()
       expect(screen.getByLabelText('days existing-10')).toBeDisabled()
       expect(screen.getByLabelText('destination existing-10')).toBeDisabled()
+      expect(screen.getByLabelText('trip-detail-note existing-10')).toBeDisabled()
       expect(screen.getByRole('button', { name: 'ลบทริป' })).toBeDisabled()
     })
 
