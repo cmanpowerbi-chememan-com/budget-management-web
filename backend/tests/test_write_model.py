@@ -45,6 +45,8 @@ from app.write_model import (
     TripNotFoundError,
     TripSideMismatchError,
     UnknownGlAccountError,
+    PER_DIEM_GL_BY_SIDE,
+    TRAVEL_GL_BY_TYPE_SIDE,
     delete_detail_line,
     delete_pending_row,
     delete_trip,
@@ -771,6 +773,40 @@ def test_trip_side_mismatch_rejects_a_sga_gl_on_a_cost_trip():
     assert results[0].error == "trip_side_mismatch"
 
 
+def test_reclassified_gl_rejected_even_if_dbo_gl_group_still_says_travelling_expense():
+    """D8 hardening (2026-09-04 coordinator finding): 5210400999/6210400999
+    were removed from `TRAVEL_GL_BY_TYPE_SIDE` (reclassified out of
+    Travelling Expense), but during the window before the Fabric sync lands,
+    `dbo.gl_group` (and therefore `dims['gl_group']`) can still say
+    "Travelling Expense" for these two GLs. Before this fix,
+    `_TRAVEL_GL_SIDE.get(line.gl_account)` returned None for an unrecognised
+    GL, so `if gl_side is not None and gl_side != trip_side` was SKIPPED
+    rather than failing — an SGA GL attached to a COST trip (or vice versa)
+    sailed through, violating D8 (never-cut: COST/SGA never cross). Must
+    fail CLOSED: reject any GL not in `_TRAVEL_GL_SIDE`, before the trip's
+    side is even looked up (no query spent)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Travelling Expense", "Travelling Expense - Test"), ("deptA", "divA", "clA"),  # dims — sync-lag window
+        ("CC1", "COST", 2027),   # trip row — must NOT be consumed if the fix rejects first
+        None,                     # department-lock check -> not locked
+        _OPEN_DEADLINE,           # deadline check -> open
+    ]
+    scope = _scope()
+    line = _detail(gl_account="6210400999", trip_id=1, meta_json=None, m01=500)  # SGA GL, mismatched vs COST trip
+    results = save_detail_lines(conn, [line], "filler@chememan.com", scope)
+    assert results[0].ok is False
+    assert results[0].error == "invalid_request"
+    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
+    assert not any("INSERT INTO budget.pending_budget_detail" in s for s in executed_sql), (
+        "the reclassified GL must never be written as a travel detail line"
+    )
+    assert not any("budget_trip" in s for s in executed_sql), (
+        "the fix must reject before spending a query on the trip lookup"
+    )
+
+
 def test_trip_side_match_succeeds_and_recomputes_parent_cell():
     conn = MagicMock()
     cursor = conn.cursor.return_value
@@ -982,8 +1018,8 @@ def test_parent_cell_insert_pk_collision_retry_succeeds():
 
 
 def test_travel_gl_detail_line_without_trip_id_is_rejected():
-    """A5 gate MUST-FIX 3 (NEVER-CUT COST/SGA): the 3 non-per-diem
-    Travelling GLs (transport/lodging/other) must attach to an existing
+    """A5 gate MUST-FIX 3 (NEVER-CUT COST/SGA): the 2 non-per-diem
+    Travelling GLs (transport/lodging) must attach to an existing
     trip. Before this fix trip_id=None silently bypassed the side-check
     entirely and saved an orphan line."""
     conn = MagicMock()
@@ -1002,7 +1038,7 @@ def test_travel_gl_detail_line_without_trip_id_is_rejected():
 
 
 def test_non_travelling_detail_line_with_trip_id_is_rejected():
-    """Defense-in-depth (A5 re-gate item 2): only the 3 non-per-diem
+    """Defense-in-depth (A5 re-gate item 2): only the 2 non-per-diem
     Travelling GLs may reference a trip_id (checked above). A non-Travelling
     detail line (e.g. Entertainment) carrying an arbitrary trip_id had zero
     cross-validation — reject it before any trip lookup, instead of silently
@@ -1034,6 +1070,24 @@ def test_detail_line_rejected_when_deadline_has_passed_no_db_write():
     conn.commit.assert_not_called()
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("pending_budget_detail" in s for s in executed_sql)
+
+
+def test_moved_other_travel_gls_are_no_longer_in_any_travel_gl_map():
+    """2026-09-04: GL 5210400999 (COST) / 6210400999 (SGA), Thai name
+    "ค่าใช้จ่ายเดินทางอื่น", were reclassified by jakkaritw from Travelling
+    Expense to "Other manpower exp" (a recurring monthly cost, not per-trip)
+    — see docs/reference/gl-master.md. `TRAVEL_GL_BY_TYPE_SIDE` (and every
+    map derived from it) must never mention these two GLs again, or a stale
+    "other" travel type would silently reappear in Trip Manager."""
+    assert "other" not in TRAVEL_GL_BY_TYPE_SIDE
+    all_travel_gls = {gl for sides in TRAVEL_GL_BY_TYPE_SIDE.values() for gl in sides.values()}
+    assert "5210400999" not in all_travel_gls
+    assert "6210400999" not in all_travel_gls
+    assert all_travel_gls == {
+        "5210400010", "6210400010", "5210400020", "6210400020", "5210400030", "6210400030",
+    }
+    # per-diem is untouched by the reclassification (its own separate map)
+    assert set(PER_DIEM_GL_BY_SIDE.values()) == {"5210400010", "6210400010"}
 
 
 # ---------------------------------------------------------------------------
@@ -1351,8 +1405,8 @@ def test_per_diem_line_label_is_bound_as_a_parameter_never_a_varchar_sql_literal
 
 def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
     """A5 gate MUST-FIX 4 + D8 (NEVER-CUT COST/SGA + parent==SUM): updating a
-    trip's side (COST->SGA) changes its per-diem GL AND must re-home the 3
-    manual travel lines (transport/accommodation/other) too — before the D8
+    trip's side (COST->SGA) changes its per-diem GL AND must re-home the 2
+    manual travel lines (transport/accommodation) too — before the D8
     fix, only per-diem moved and a manual line could be left stranded under
     the OLD side's GL (one trip spanning both COST and SGA)."""
     conn = MagicMock()
@@ -1404,7 +1458,6 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
     rehomed_pairs = {(args[0], args[2]) for args in rehome_calls}  # (new_gl, old_gl) per _rehome_trip_detail_lines call
     assert ("6210400020", "5210400020") in rehomed_pairs, "transport line must move COST->SGA"
     assert ("6210400030", "5210400030") in rehomed_pairs, "accommodation line must move COST->SGA"
-    assert ("6210400999", "5210400999") in rehomed_pairs, "other-travel line must move COST->SGA"
 
     def _is_parent_table_write(sql: str) -> bool:
         s = sql.strip()
@@ -1412,12 +1465,23 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
         return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not is_detail
 
     parent_writes = [args for sql, args in executed if _is_parent_table_write(sql)]
-    old_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
-    new_side_gls = {"6210400010", "6210400020", "6210400030", "6210400999"}
+    old_side_gls = {"5210400010", "5210400020", "5210400030"}
+    new_side_gls = {"6210400010", "6210400020", "6210400030"}
     recomputed_old = {gl for args in parent_writes for gl in old_side_gls if gl in args}
     recomputed_new = {gl for args in parent_writes for gl in new_side_gls if gl in args}
-    assert recomputed_old == old_side_gls, f"expected all 4 OLD-side parent cells recomputed, got {recomputed_old}"
-    assert recomputed_new == new_side_gls, f"expected all 4 NEW-side parent cells recomputed, got {recomputed_new}"
+    assert recomputed_old == old_side_gls, f"expected all 3 OLD-side parent cells recomputed, got {recomputed_old}"
+    assert recomputed_new == new_side_gls, f"expected all 3 NEW-side parent cells recomputed, got {recomputed_new}"
+
+    # Regression (2026-09-04): the moved GL (5210400999/6210400999, now a
+    # plain "Other manpower exp" cell, never travel-driven) must never be
+    # re-homed or recomputed by a trip's side flip — it is not in
+    # TRAVEL_GL_BY_TYPE_SIDE anymore, so this loop must never touch it.
+    assert not any("5210400999" in args or "6210400999" in args for args in rehome_calls), (
+        "the moved GL must never be re-homed on a side flip"
+    )
+    assert not any(gl in {"5210400999", "6210400999"} for args in parent_writes for gl in args), (
+        "the moved GL must never be recomputed on a side flip"
+    )
 
     new_gl_inserts = [args for sql, args in executed if sql.strip().startswith("INSERT INTO budget.pending_budget_detail")]
     assert any("6210400010" in args for args in new_gl_inserts)  # SGA per-diem GL — the NEW side
@@ -1636,7 +1700,7 @@ def test_delete_detail_line_deleting_last_line_removes_the_empty_parent():
     assert "NOT EXISTS" in sql
 
 
-def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
+def test_delete_trip_removes_all_lines_and_recomputes_all_three_side_gls():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     one_off = iter([
@@ -1677,13 +1741,13 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_four_side_gls():
         return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not is_detail
 
     parent_writes = [args for sql, args in executed if _is_parent_write(sql)]
-    cost_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
+    cost_side_gls = {"5210400010", "5210400020", "5210400030"}
     recomputed = {gl for args in parent_writes for gl in cost_side_gls if gl in args}
-    assert recomputed == cost_side_gls, f"expected all 4 COST-side parent cells recomputed, got {recomputed}"
+    assert recomputed == cost_side_gls, f"expected all 3 COST-side parent cells recomputed, got {recomputed}"
 
 
-def test_delete_trip_removes_orphaned_parents_for_all_four_side_gls():
-    """After the trip's lines are gone, each of the 4 travel-GL parent rows
+def test_delete_trip_removes_orphaned_parents_for_all_three_side_gls():
+    """After the trip's lines are gone, each of the 3 travel-GL parent rows
     gets the same guarded orphan DELETE as the detail-line path (2026-07-21
     residue fix) — a parent another trip still uses is kept by the NOT EXISTS
     guard, not by skipping the attempt."""
@@ -1710,7 +1774,7 @@ def test_delete_trip_removes_orphaned_parents_for_all_four_side_gls():
     assert result.ok is True
 
     executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
-    cost_side_gls = {"5210400010", "5210400020", "5210400030", "5210400999"}
+    cost_side_gls = {"5210400010", "5210400020", "5210400030"}
     parent_deletes = [
         (sql, args)
         for sql, args in executed
@@ -1718,10 +1782,51 @@ def test_delete_trip_removes_orphaned_parents_for_all_four_side_gls():
         and not sql.strip().startswith("DELETE FROM budget.pending_budget_detail")
     ]
     deleted_gls = {gl for sql, args in parent_deletes for gl in cost_side_gls if gl in args}
-    assert deleted_gls == cost_side_gls, f"expected guarded parent DELETE for all 4 GLs, got {deleted_gls}"
+    assert deleted_gls == cost_side_gls, f"expected guarded parent DELETE for all 3 GLs, got {deleted_gls}"
     for sql, _args in parent_deletes:
         assert "remark IS NULL" in sql
         assert "NOT EXISTS" in sql
+
+
+def test_delete_trip_never_touches_the_moved_other_gl_row():
+    """Regression (2026-09-04): before "other" was removed from
+    `TRAVEL_GL_BY_TYPE_SIDE`, `_delete_one_trip`'s per-GL recompute +
+    orphan-delete loop iterated ALL travel GLs including
+    5210400999/6210400999 — even though those two are now a PLAIN monthly
+    GL ("Other manpower exp"), never travel-driven. Without this fix: a
+    Filler types 500,000 THB into a plain 6210400999 cell, an unrelated
+    colleague deletes ANY trip in the same cost_center+fiscal_year, and the
+    recompute (SUM of the trip's now-zero/nonexistent detail lines = 0)
+    plus the orphan-delete guard would silently zero and then DROP that
+    unrelated plain row. Proves neither GL is referenced by ANY statement
+    `delete_trip` executes, so a plain row on either GL — anywhere in the
+    same cost_center/fiscal_year — is never recomputed or deleted."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    one_off = iter([
+        ("CC1", "COST", 2027),      # trip lookup
+        ("deptA", "divA", "clA"),    # cc_dims lookup for department-lock check
+        None,                         # department-lock check -> not locked
+        _OPEN_DEADLINE,               # deadline check -> open
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    scope = _scope()
+    result = delete_trip(conn, 7, STALE, "filler@chememan.com", scope)
+    assert result.ok is True
+
+    executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
+    for sql, args in executed:
+        assert "5210400999" not in args, f"delete_trip must never touch the moved GL, got: {sql} {args}"
+        assert "6210400999" not in args, f"delete_trip must never touch the moved GL, got: {sql} {args}"
 
 
 def test_delete_trip_forbidden_when_actual_cc_outside_caller_scope():

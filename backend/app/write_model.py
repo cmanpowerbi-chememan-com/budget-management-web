@@ -89,12 +89,16 @@ EXCLUDED_COST_CENTERS: frozenset[str] = frozenset(
     {"CMRY01", "CMKK01", "CMPB01", "MNLB00", "MNLB01", "MNLB02", "MNLB03", "MNLB04"}
 )
 
-# 8 GL = 4 travel expense types x 2 accounting sides (spec §4a Travelling Expense).
+# 6 GL = 3 travel expense types x 2 accounting sides (spec §4a Travelling
+# Expense). "other" (5210400999/6210400999) was REMOVED 2026-09-04:
+# reclassified by jakkaritw from Travelling Expense to "Other manpower exp"
+# (a recurring monthly cost — parking/fuel/tolls, not per-trip) — see
+# `docs/reference/gl-master.md`. The GL master edit landed on SharePoint
+# 2026-09-04; the Fabric sync into `dbo.gl_group` lands the next ~06:31 run.
 TRAVEL_GL_BY_TYPE_SIDE: dict[str, dict[str, str]] = {
     "per_diem": {"COST": "5210400010", "SGA": "6210400010"},
     "transport": {"COST": "5210400020", "SGA": "6210400020"},
     "accommodation": {"COST": "5210400030", "SGA": "6210400030"},
-    "other": {"COST": "5210400999", "SGA": "6210400999"},
 }
 PER_DIEM_GL_BY_SIDE: dict[str, str] = TRAVEL_GL_BY_TYPE_SIDE["per_diem"]
 _TRAVEL_GL_SIDE: dict[str, str] = {
@@ -995,8 +999,22 @@ def _save_one_detail_line(
         raise PerDiemDirectEditError("per-diem lines are managed via /budget/trip, not /budget/detail")
 
     if gl_group == "Travelling Expense":
+        if line.gl_account not in _TRAVEL_GL_SIDE:
+            # D8 (never-cut, COST/SGA never cross), fail CLOSED: a GL can
+            # still be classified "Travelling Expense" by `dbo.gl_group`
+            # (e.g. during the lag window between a GL master reclassification
+            # landing on SharePoint and the next Fabric sync) while no longer
+            # being one of `TRAVEL_GL_BY_TYPE_SIDE`'s recognised travel GLs —
+            # 5210400999/6210400999 moved out 2026-09-04. Rejecting here,
+            # BEFORE the trip lookup below, closes that gap: without this
+            # check, `_TRAVEL_GL_SIDE.get(line.gl_account)` would return None
+            # for the unrecognised GL and the side-match guard a few lines
+            # down would silently be SKIPPED rather than enforced.
+            raise InvalidRequestError(
+                f"{line.gl_account} is not a recognised Travelling Expense detail account"
+            )
         if line.trip_id is None:
-            # The 3 non-per-diem Travelling GLs (transport/accommodation/other)
+            # The 2 non-per-diem Travelling GLs (transport/accommodation)
             # must attach to an existing trip (ADR-0005/spec §4a) — without
             # this, trip_id=None silently bypassed the side-check below entirely.
             raise InvalidRequestError(
@@ -1017,8 +1035,15 @@ def _save_one_detail_line(
         trip_cc, trip_side, trip_year = trip
         if trip_cc != line.cost_center or trip_year != line.fiscal_year:
             raise TripSideMismatchError(f"trip {line.trip_id} belongs to a different cost_center/fiscal_year")
+        # `gl_side` is guaranteed non-None here: this block only runs when
+        # `line.trip_id is not None`, which (per the branches above) only
+        # happens when `gl_group == "Travelling Expense"` AND
+        # `line.gl_account in _TRAVEL_GL_SIDE` was already enforced. Tightened
+        # from `gl_side is not None and gl_side != trip_side` — dropping the
+        # `is not None` guard fails CLOSED (raises) instead of silently
+        # skipping the check, should that invariant ever be violated.
         gl_side = _TRAVEL_GL_SIDE.get(line.gl_account)
-        if gl_side is not None and gl_side != trip_side:
+        if gl_side != trip_side:
             raise TripSideMismatchError(
                 f"GL {line.gl_account} ({gl_side}) does not match trip {line.trip_id}'s side ({trip_side})"
             )
@@ -1308,8 +1333,8 @@ def _upsert_trip_detail_line(
 def _rehome_trip_detail_lines(conn: pyodbc.Connection, trip_id: int, old_gl: str, new_gl: str) -> None:
     """D8 (never-cut, COST/SGA never cross): move any manually-entered
     (non-per-diem) detail lines of `trip_id` still under the OLD side's GL
-    to the NEW side's GL for the same travel type (transport/accommodation/
-    other) — keeps the Filler's entered amount, just re-homes which GL it
+    to the NEW side's GL for the same travel type (transport/accommodation)
+    — keeps the Filler's entered amount, just re-homes which GL it
     counts against. A trip side flip must never leave a line stranded on
     the old side. Per-diem is handled separately (deleted + freshly
     re-derived, never just moved — ADR-0015)."""
@@ -1553,8 +1578,8 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         # never cross on one trip). Per-diem is DERIVED (ADR-0015): the old
         # GL's line would otherwise survive as a ghost amount forever, so it
         # is deleted here (the new GL's line was already freshly created
-        # above, never just moved). The 3 manual lines (transport/
-        # accommodation/other) keep whatever amount the Filler entered and
+        # above, never just moved). The 2 manual lines (transport/
+        # accommodation) keep whatever amount the Filler entered and
         # are re-homed to the matching NEW-side GL.
         old_per_diem_gl = PER_DIEM_GL_BY_SIDE[old_side]
         _delete_trip_detail_line(conn, trip_id=trip_id, gl_account=old_per_diem_gl)
@@ -1751,12 +1776,12 @@ def _delete_one_trip(
     conn: pyodbc.Connection, trip_id: int, expected_updated_at: datetime, user_email: str, scope: Scope
 ) -> TripDeleteResult:
     """Delete one trip's header row AND every one of its detail lines
-    (per-diem + the 3 manual travel-expense types — a single
+    (per-diem + the 2 manual travel-expense types — a single
     `WHERE trip_id = ?` DELETE removes all of them regardless of which GL
-    they are under), then recompute all 4 of that side's travel-GL parent
+    they are under), then recompute all 3 of that side's travel-GL parent
     cells (never-cut: parent==SUM(detail)).
 
-    Recomputing all 4 unconditionally — rather than first figuring out which
+    Recomputing all 3 unconditionally — rather than first figuring out which
     ones actually had a line for THIS trip — is deliberately the simplest
     correct option: `_recompute_parent_cell` re-derives SUM(detail) fresh
     from whatever remains, so recomputing a cell this trip never touched
@@ -1829,7 +1854,7 @@ def delete_trip(
 # offers this button for a row with no SAP and no Approved value in ANY
 # month (a truly web-added row — deleting it makes the whole txn-block
 # vanish from every layer) and never for Travelling Expense (trip-driven,
-# shared across 8 GLs — delete stays owned by Trip Manager). This endpoint
+# shared across 6 GLs — delete stays owned by Trip Manager). This endpoint
 # itself does NOT re-check either condition: it is a generic
 # (cost_center, gl_account, fiscal_year) delete with the SAME authorization
 # shape as every other write in this module (Fill-scope-or-admin,

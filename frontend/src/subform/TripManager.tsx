@@ -104,12 +104,11 @@ function blankManualByType(): Record<Exclude<TravelExpenseType, 'per_diem'>, Man
   return {
     transport: blankManualLineDraft(),
     accommodation: blankManualLineDraft(),
-    other: blankManualLineDraft(),
   }
 }
 
 function blankManualStatus(): Record<Exclude<TravelExpenseType, 'per_diem'>, Status> {
-  return { transport: 'idle', accommodation: 'idle', other: 'idle' }
+  return { transport: 'idle', accommodation: 'idle' }
 }
 
 function cardFromServerTrip(
@@ -443,8 +442,8 @@ function DestinationField({ ariaLabel, options, value, onChange, fallback }: Des
 
 /** Trip Manager (A9) — "1 ทริป = กรอกครั้งเดียว": one trip header (traveler,
  * destination, days, travel months, accounting side) auto-derives per-diem
- * server-side (ADR-0005/0015); the 3 manual expense types (transport/
- * accommodation/other) are entered per month, locked to the trip's selected
+ * server-side (ADR-0005/0015); the 2 manual expense types (transport/
+ * accommodation) are entered per month, locked to the trip's selected
  * travel_months. Per-diem is NEVER computed here — only the server's own
  * response/read is ever shown (never-cut). */
 export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = false, onClose, onSaved }: TripManagerProps) {
@@ -754,7 +753,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
               Travelling Expense — <em>จัดการทริป</em>
             </h2>
             <p className="modal-subtitle">
-              {costCenter} · FY{fiscalYear} · ทริปทั้งหมดรวมกัน 4 ประเภทค่าใช้จ่าย
+              {costCenter} · FY{fiscalYear} · ทริปทั้งหมดรวมกัน 3 ประเภทค่าใช้จ่าย
               {readOnly ? ' · 🔒 อ่านอย่างเดียว (แก้ไม่ได้)' : ''}
             </p>
           </div>
@@ -768,7 +767,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
             * legend explaining the auto-GL behavior below. Pure copy, no state. */}
           <div className="trip-legend" data-testid="trip-legend">
             <p className="trip-legend-head">
-              1 ทริป = กรอกครั้งเดียว — ระบบลง GL ให้อัตโนมัติใน 4 ประเภทค่าใช้จ่าย
+              1 ทริป = กรอกครั้งเดียว — ระบบลง GL ให้อัตโนมัติใน 3 ประเภทค่าใช้จ่าย
             </p>
             <div className="trip-legend-steps">
               <div className="trip-legend-step">
@@ -777,7 +776,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
               </div>
               <div className="trip-legend-step">
                 <span className="trip-legend-badge">B</span>
-                <span>ค่าใช้จ่าย: เบี้ยเลี้ยงคำนวณให้ · พาหนะ/ที่พัก/อื่น กรอกยอดรวม แล้วเฉลี่ยเท่ากัน</span>
+                <span>ค่าใช้จ่าย: เบี้ยเลี้ยงคำนวณให้ · พาหนะ/ที่พัก กรอกยอดรวม แล้วเฉลี่ยเท่ากัน</span>
               </div>
               <div className="trip-legend-step">
                 <span className="trip-legend-badge">C</span>
@@ -1006,7 +1005,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                     * (TripDraft/TripInput/TripListItem all lack it), so the FX
                     * suffix from the mockup is intentionally omitted rather than
                     * showing a fabricated number (never-cut). */}
-                  <div className="trip-section-label">B — ค่าใช้จ่าย 4 ประเภท</div>
+                  <div className="trip-section-label">B — ค่าใช้จ่าย 3 ประเภท</div>
 
                   {/* Expense table renders for UNSAVED trips too (Option B) —
                     * "บันทึก & ลงบัญชี" creates the trip AND its manual lines in

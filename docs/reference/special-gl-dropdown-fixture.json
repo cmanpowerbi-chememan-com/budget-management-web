@@ -24,8 +24,7 @@
     "gl_by_type_side": {
       "per_diem": { "COST": "5210400010", "SGA": "6210400010" },
       "transport": { "COST": "5210400020", "SGA": "6210400020" },
-      "accommodation": { "COST": "5210400030", "SGA": "6210400030" },
-      "other": { "COST": "5210400999", "SGA": "6210400999" }
+      "accommodation": { "COST": "5210400030", "SGA": "6210400030" }
     }
   }
 }

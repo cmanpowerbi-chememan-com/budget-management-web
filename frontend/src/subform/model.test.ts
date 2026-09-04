@@ -437,15 +437,20 @@ describe('validateTripDraft', () => {
 })
 
 describe('deriveTravelSideFromGl (2026-08-04 — replaces the old ฝ่าย-history heuristic)', () => {
-  it('resolves every one of the 8 travel GLs to its own side, per-diem included', () => {
+  it('resolves every one of the 6 travel GLs to its own side, per-diem included', () => {
     expect(deriveTravelSideFromGl('5210400010')).toBe('COST') // per_diem COST
     expect(deriveTravelSideFromGl('6210400010')).toBe('SGA') // per_diem SGA
     expect(deriveTravelSideFromGl('5210400020')).toBe('COST') // transport COST
-    expect(deriveTravelSideFromGl('6210400999')).toBe('SGA') // other SGA
+    expect(deriveTravelSideFromGl('6210400030')).toBe('SGA') // accommodation SGA
   })
 
-  it('returns null for a GL outside the 8 travel accounts (defensive — never a real caller)', () => {
+  it('returns null for a GL outside the 6 travel accounts (defensive — never a real caller)', () => {
     expect(deriveTravelSideFromGl('5211800030')).toBeNull()
+  })
+
+  it('returns null for the moved "other" GLs (5210400999/6210400999) — reclassified 2026-09-04, no longer travel GLs', () => {
+    expect(deriveTravelSideFromGl('5210400999')).toBeNull()
+    expect(deriveTravelSideFromGl('6210400999')).toBeNull()
   })
 })
 
@@ -453,7 +458,6 @@ describe('manualTravelTypeForGl', () => {
   it('resolves the manual type for a COST or SGA GL', () => {
     expect(manualTravelTypeForGl('5210400020')).toBe('transport')
     expect(manualTravelTypeForGl('6210400030')).toBe('accommodation')
-    expect(manualTravelTypeForGl('5210400999')).toBe('other')
   })
 
   it('never resolves the per-diem GL (system-managed via /budget/trip only)', () => {
@@ -463,6 +467,11 @@ describe('manualTravelTypeForGl', () => {
 
   it('returns undefined for an unrelated GL', () => {
     expect(manualTravelTypeForGl('6211800030')).toBeUndefined()
+  })
+
+  it('returns undefined for the moved "other" GLs (5210400999/6210400999) — reclassified 2026-09-04, no longer a travel type', () => {
+    expect(manualTravelTypeForGl('5210400999')).toBeUndefined()
+    expect(manualTravelTypeForGl('6210400999')).toBeUndefined()
   })
 })
 
@@ -480,12 +489,17 @@ describe('indexDetailLinesByTrip', () => {
     const lines = [
       line({ detail_id: 1, trip_id: 10, gl_account: '5210400020' }), // transport, COST
       line({ detail_id: 2, trip_id: 10, gl_account: '5210400030' }), // accommodation, COST
-      line({ detail_id: 3, trip_id: 20, gl_account: '6210400999' }), // other, SGA
+      line({ detail_id: 3, trip_id: 20, gl_account: '6210400020' }), // transport, SGA
     ]
     const index = indexDetailLinesByTrip(lines)
     expect(index[10]?.transport?.detail_id).toBe(1)
     expect(index[10]?.accommodation?.detail_id).toBe(2)
-    expect(index[20]?.other?.detail_id).toBe(3)
+    expect(index[20]?.transport?.detail_id).toBe(3)
+  })
+
+  it('skips a moved "other" GL (5210400999/6210400999) — reclassified 2026-09-04, no longer a travel type', () => {
+    const lines = [line({ detail_id: 1, trip_id: 10, gl_account: '6210400999' })]
+    expect(indexDetailLinesByTrip(lines)).toEqual({})
   })
 
   it('skips a line with no trip_id (defensive — should never happen for these GLs)', () => {

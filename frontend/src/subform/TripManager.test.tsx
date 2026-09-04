@@ -1021,7 +1021,7 @@ describe('TripManager', () => {
       expect(screen.getByRole('option', { name: /6xxx/ })).toBeInTheDocument()
     })
 
-    it('a new trip is created with the locked side, and its 4 travel GLs (visible immediately + the manual-line write) all match that side', async () => {
+    it('a new trip is created with the locked side, and its 3 travel GLs (visible immediately + the manual-line write) all match that side', async () => {
       vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
       mockNoManualLines()
       vi.mocked(subformApi.createTrip).mockResolvedValue(tripState({ trip_id: 88, side: 'SGA' }))
@@ -1035,12 +1035,11 @@ describe('TripManager', () => {
       const select = screen.getByLabelText('side new-0')
       expect(select).toHaveValue('SGA')
       expect(select).toBeDisabled()
-      // All 4 GLs render immediately, BEFORE save — the side (and its GLs)
+      // All 3 GLs render immediately, BEFORE save — the side (and its GLs)
       // is known up front now, never a post-save "—" placeholder.
       expect(within(screen.getByTestId('per-diem-row-new-0')).getByText(TRAVEL_GL_BY_TYPE_SIDE.per_diem.SGA)).toBeInTheDocument()
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.transport.SGA)).toBeInTheDocument()
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.accommodation.SGA)).toBeInTheDocument()
-      expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.other.SGA)).toBeInTheDocument()
 
       fillNewTripBasics()
       const manualInput = screen.getByLabelText('transport m05 new-0')
@@ -1412,7 +1411,7 @@ describe('TripManager', () => {
       await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
 
       expect(screen.getByText(/A — ข้อมูลหลัก/)).toBeInTheDocument()
-      expect(screen.getByText(/B — ค่าใช้จ่าย 4 ประเภท/)).toBeInTheDocument()
+      expect(screen.getByText(/B — ค่าใช้จ่าย 3 ประเภท/)).toBeInTheDocument()
     })
 
     it('the per-diem row has NO editable inputs — every active-month cell is a read-only span', async () => {
@@ -1439,7 +1438,7 @@ describe('TripManager', () => {
       expect(within(screen.getByTestId('per-diem-row-existing-10')).getByText(TRAVEL_GL_BY_TYPE_SIDE.per_diem.COST)).toBeInTheDocument()
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.transport.COST)).toBeInTheDocument()
       expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.accommodation.COST)).toBeInTheDocument()
-      expect(screen.getByText(TRAVEL_GL_BY_TYPE_SIDE.other.COST)).toBeInTheDocument()
+      expect(screen.queryByText(/5210400999|6210400999/)).not.toBeInTheDocument()
     })
 
     it('the รายละเอียด field is editable, prefills from the stored remark, and typing updates the draft', async () => {

@@ -2162,9 +2162,9 @@ def test_delete_detail_line_stale_token_is_409_and_row_still_there_live(discover
 
 @pytest.mark.integration
 def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovered: tuple[str, str, str]) -> None:
-    """Create a trip (auto-derived per-diem) + its 3 manual expense lines
-    (transport/accommodation/other) -> delete the trip -> the trip row is
-    gone, every one of its detail lines (all 4 types) is gone, and all 4
+    """Create a trip (auto-derived per-diem) + its 2 manual expense lines
+    (transport/accommodation) -> delete the trip -> the trip row is
+    gone, every one of its detail lines (all 3 types) is gone, and all 3
     of that side's travel-GL parent rows — the trip was their only
     content — are DROPPED as orphaned (2026-07-21 contract, e6f669b:
     read_model display-fills a zero Pending layer for cells with no
@@ -2201,10 +2201,6 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovere
                     DetailLineInput(
                         cost_center=cost_center, gl_account=TRAVEL_GL_BY_TYPE_SIDE["accommodation"]["COST"],
                         fiscal_year=DELETE_FISCAL_YEAR, trip_id=trip_id, m01=200,
-                    ),
-                    DetailLineInput(
-                        cost_center=cost_center, gl_account=TRAVEL_GL_BY_TYPE_SIDE["other"]["COST"],
-                        fiscal_year=DELETE_FISCAL_YEAR, trip_id=trip_id, m01=50,
                     ),
                 ],
                 user_email=filler_email, scope=scope,

@@ -302,13 +302,13 @@ export function detailLineTotal(draft: DetailLineDraft): number {
 export type TripSide = 'COST' | 'SGA'
 
 /** Reverse-lookup: which accounting side does this GL belong to, across all
- * 4 travel types (per-diem included). Trip Manager is now opened FROM a
+ * 3 travel types (per-diem included). Trip Manager is now opened FROM a
  * specific grid row (jakkaritw, 2026-08-04 — final decision, applies to
  * every user incl. admins) and locks its side select to that row's own
  * side, so the trip's GLs always match the row the user clicked — offering
  * the other side could only create a mismatch. `null` is defensive-only:
  * every GL that can open Trip Manager (`gl_group === 'Travelling Expense'`)
- * is one of these 8, so a real caller never sees it. Replaces the old
+ * is one of these 6, so a real caller never sees it. Replaces the old
  * ฝ่าย-booking-history heuristic (`deriveTravelSideHistory`, removed —
  * nothing needs an inferred default once the side is always known
  * up front). */
@@ -416,7 +416,7 @@ export function validateTripDraft(draft: TripDraft): TripValidationResult {
 }
 
 // ---------------------------------------------------------------------------
-// Manual travel-type detail lines (transport/accommodation/other) — each
+// Manual travel-type detail lines (transport/accommodation) — each
 // attaches to a trip via `trip_id` and is saved through the SAME
 // `/budget/detail` endpoint the 5 non-travel groups use (ADR-0005: only the
 // per-diem line is system-managed via `/budget/trip`).
@@ -431,7 +431,7 @@ export function manualTravelTypeForGl(glAccount: string): Exclude<TravelExpenseT
   )
 }
 
-/** Groups a flat list of detail lines (fetched across both sides x 3 manual
+/** Groups a flat list of detail lines (fetched across both sides x 2 manual
  * types) by `trip_id` then by travel type — `undefined` trip_id lines
  * (impossible for these GLs per the write-path contract, but defensive)
  * are skipped. */

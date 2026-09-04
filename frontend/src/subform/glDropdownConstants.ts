@@ -40,27 +40,30 @@ export const LEASE_PLATE_OTHER = 'อื่นๆ'
 /** UI-only — not backend-validated (see file docstring). */
 export const TRAINING_METHOD_VALUES = ['Inhouse', 'Public'] as const
 
-/** Travelling Expense — 8 GL = 4 types x 2 sides (mirrors
+/** Travelling Expense — 6 GL = 3 types x 2 sides (mirrors
  * `write_model.TRAVEL_GL_BY_TYPE_SIDE` exactly; parity-tested below). Trip
  * Manager needs this to know which GL's detail lines to fetch/save for the
- * 3 manual expense types (per-diem is never addressed via `/budget/detail`
- * — it is system-managed via `/budget/trip` only, ADR-0005). */
+ * 2 manual expense types (per-diem is never addressed via `/budget/detail`
+ * — it is system-managed via `/budget/trip` only, ADR-0005).
+ *
+ * "other" (5210400999/6210400999, ค่าใช้จ่ายเดินทางอื่น) was REMOVED
+ * 2026-09-04: reclassified by jakkaritw from Travelling Expense to "Other
+ * manpower exp" (a recurring monthly cost — parking/fuel/tolls, not
+ * per-trip). See `docs/reference/gl-master.md`. */
 export const TRAVEL_GL_BY_TYPE_SIDE = {
   per_diem: { COST: '5210400010', SGA: '6210400010' },
   transport: { COST: '5210400020', SGA: '6210400020' },
   accommodation: { COST: '5210400030', SGA: '6210400030' },
-  other: { COST: '5210400999', SGA: '6210400999' },
 } as const
 
 export type TravelExpenseType = keyof typeof TRAVEL_GL_BY_TYPE_SIDE
-/** The 3 manually-entered types (per-diem is auto, handled by TripManager
+/** The 2 manually-entered types (per-diem is auto, handled by TripManager
  * directly via its per_diem_months, never through /budget/detail). */
 export const MANUAL_TRAVEL_TYPES: readonly Exclude<TravelExpenseType, 'per_diem'>[] = [
-  'transport', 'accommodation', 'other',
+  'transport', 'accommodation',
 ]
 export const TRAVEL_TYPE_LABEL_TH: Record<TravelExpenseType, string> = {
   per_diem: 'เบี้ยเลี้ยง',
   transport: 'ค่าพาหนะเดินทาง',
   accommodation: 'ค่าที่พัก',
-  other: 'ค่าใช้จ่ายเดินทางอื่น',
 }
