@@ -49,7 +49,7 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
         {selected ?? '— เลือกฝ่าย —'}
         {selectedIsPending && (
           <span className="pp wait" data-testid="dept-picker-pending-badge">
-            รออนุมัติ
+            Pending
           </span>
         )}
       </button>
@@ -84,7 +84,7 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
                       onClick={() => pick(dept.department)}
                     >
                       <span className="dept-picker-name">{dept.department}</span>
-                      {pending.has(dept.department) && <span className="pp wait">รออนุมัติ</span>}
+                      {pending.has(dept.department) && <span className="pp wait">Pending</span>}
                       <span className="dept-picker-cc-count">{dept.costCenters.length} CC</span>
                     </button>
                   ))}

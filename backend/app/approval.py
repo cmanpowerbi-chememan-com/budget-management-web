@@ -772,14 +772,17 @@ def submit_department(
 
     if not eligibility.can_submit:
         if eligibility.reason == "department_empty":
-            raise DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้")
+            raise DepartmentEmptyError("This department has no budget data yet, so it cannot be submitted.")
         if eligibility.reason == "invalid_approval_state":
             raise InvalidApprovalStateError(
                 f"{department}/{fiscal_year} is {existing['status']} — cannot submit "
                 "(PENDING_* has no recall; APPROVED needs no re-submission, ADR-0013)"
             )
         if eligibility.reason == "year_not_open":
-            raise YearNotOpenError("ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ")
+            raise YearNotOpenError(
+                "This fiscal year is not open for entry on the web — its data is "
+                "imported from a file by an administrator."
+            )
         if eligibility.reason == "past_deadline":
             raise PastDeadlineError(f"the submission deadline for fiscal_year={fiscal_year} has passed")
         if eligibility.reason == "not_filler_of_department":
@@ -1145,9 +1148,10 @@ def admin_override_step(
     if row["status"] != PENDING_APPROVER1:
         if row["status"] in PENDING_STATUSES:
             raise StepNotOverridableError(
-                "อนุมัติแทนไม่ได้ — ตอนนี้งบประมาณอยู่ในขั้นการพิจารณาของฝ่ายงบประมาณแล้ว "
-                "ต้องให้ฝ่ายงบประมาณกดอนุมัติเอง "
-                "(ปุ่มอนุมัติแทนใช้ได้เฉพาะตอนที่งบยังค้างอยู่ที่หัวหน้าของผู้กรอก คือขั้นที่ 1)"
+                "Cannot approve on their behalf — the budget is already being reviewed by "
+                "the Budget Department. The Budget Department must approve it themselves "
+                "(the override button works only while the budget is still waiting at the "
+                "filler's manager, which is step 1)."
             )
         raise InvalidApprovalStateError(f"cannot override {department}/{fiscal_year} from status {row['status']}")
     if row["approver1_empcode"] in (NIPAPORN_EMPCODE, WARAPORN_EMPCODE):
@@ -1158,19 +1162,21 @@ def admin_override_step(
         # Names the actual person (2026-08-02, jakkaritw: the old wording read
         # as a riddle on staging) — falls back to the role when the empcode has
         # no employee row.
-        who = lookup_employee_name(conn, row["approver1_empcode"]) or "ฝ่ายงบประมาณ"
+        who = lookup_employee_name(conn, row["approver1_empcode"]) or "the Budget Department"
         raise StepNotOverridableError(
-            f"อนุมัติแทนไม่ได้ — ฝ่ายนี้ไม่มีขั้นหัวหน้า ผู้อนุมัติขั้นที่ 1 คือ {who} ซึ่งเป็นฝ่ายงบประมาณ "
-            "ปุ่มอนุมัติแทนใช้ข้ามได้เฉพาะขั้นของหัวหน้าผู้กรอกเท่านั้น "
-            "ต้องให้ฝ่ายงบประมาณกดอนุมัติเอง"
+            "Cannot approve on their behalf — this department has no manager step. "
+            f"Approver step 1 is {who}, who is the Budget Department. "
+            "The override button can only skip a filler's manager step. "
+            "The Budget Department must approve it themselves."
         )
 
     active = _active_positions(row["submitter_empcode"], row["approver1_empcode"])
     idx = active.index(1)
     if idx == len(active) - 1:
         raise StepNotOverridableError(
-            "อนุมัติแทนไม่ได้ — ฝ่ายนี้เหลือผู้อนุมัติเพียงขั้นเดียว ถ้ากดแทน งบประมาณจะผ่านทันที "
-            "โดยไม่มีใครพิจารณาจริงสักคน ต้องให้ผู้อนุมัติกดเอง"
+            "Cannot approve on their behalf — this department has only one approval step "
+            "left. Overriding it would approve the budget immediately with no one actually "
+            "reviewing it. The approver must approve it themselves."
         )
     new_status = _POSITION_TO_STATUS[active[idx + 1]]
     now = _now()

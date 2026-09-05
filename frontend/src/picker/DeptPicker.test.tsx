@@ -80,7 +80,7 @@ describe('DeptPicker', () => {
     expect(screen.getByText(/ไม่พบฝ่าย/)).toBeInTheDocument()
   })
 
-  it('shows a รออนุมัติ badge on the trigger when the selected department is pending the caller\'s approval', () => {
+  it('shows a Pending badge on the trigger when the selected department is pending the caller\'s approval', () => {
     render(
       <DeptPicker
         rows={ROWS}
@@ -104,7 +104,7 @@ describe('DeptPicker', () => {
     expect(screen.queryByTestId('dept-picker-pending-badge')).not.toBeInTheDocument()
   })
 
-  it('shows a รออนุมัติ badge next to each pending department in the list', () => {
+  it('shows a Pending badge next to each pending department in the list', () => {
     render(
       <DeptPicker
         rows={ROWS}
@@ -116,6 +116,6 @@ describe('DeptPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
     const row = screen.getByText('Solution Delivery').closest('button')
     expect(row).not.toBeNull()
-    expect(row!.textContent).toContain('รออนุมัติ')
+    expect(row!.textContent).toContain('Pending')
   })
 })

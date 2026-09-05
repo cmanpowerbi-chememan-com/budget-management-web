@@ -1,11 +1,11 @@
-/** Approver (ผู้อนุมัติ) end-to-end journey — รออนุมัติ badge, step-gated
+/** Approver (ผู้อนุมัติ) end-to-end journey — Pending badge, step-gated
  * approve/reject, required reject reason, resubmit chain-reset, and a
  * concurrent-approve 409. The approver here is `see_only` (not necessarily a
  * Filler of the department they approve) per the project's own decision. */
 import { approvalState, approverWorld, DEEP_LINK_YEAR, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('approver journey', () => {
-  test('2.1 the รออนุมัติ badge marks only the department pending on this approver', async ({ page }) => {
+  test('2.1 the Pending badge marks only the department pending on this approver', async ({ page }) => {
     const world = approverWorld({ pendingForMe: { departments: [DEPT] }, budgetGridQueue: [[]] })
     await installMocks(page, world)
 
@@ -21,7 +21,7 @@ test.describe('approver journey', () => {
     // `String.localeCompare(..., 'th')`. Assert the auto-select actually
     // landed AND drove the grid fetch, then open the picker on that trigger
     // to check the badge — the test's real intent (only DEPT, the one
-    // pending on THIS approver, ever shows รออนุมัติ) is unchanged.
+    // pending on THIS approver, ever shows Pending) is unchanged.
     const trigger = page.getByRole('button', { name: DEPT2 })
     await expect(trigger).toBeVisible()
     await expect.poll(() => world.captured.budgetQueries.at(-1)?.department).toBe(DEPT2)
@@ -29,8 +29,8 @@ test.describe('approver journey', () => {
     await trigger.click()
     const deptRow = page.locator('.dept-picker-row', { hasText: DEPT })
     const dept2Row = page.locator('.dept-picker-row', { hasText: DEPT2 })
-    await expect(deptRow.getByText('รออนุมัติ')).toBeVisible()
-    await expect(dept2Row.getByText('รออนุมัติ')).toHaveCount(0)
+    await expect(deptRow.getByText('Pending')).toBeVisible()
+    await expect(dept2Row.getByText('Pending')).toHaveCount(0)
   })
 
   test('2.2 Approve/Reject show ONLY on the department where it is this approver\'s turn', async ({ page }) => {

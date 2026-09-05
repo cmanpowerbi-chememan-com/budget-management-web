@@ -172,10 +172,10 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
   })
 
-  it('on a 400 department_empty error, shows the server\'s own Thai detail (bug 3, 2026-08-08 -- defense in depth for a stale can_submit=true, same describeApiError fallback every non-409 submit failure already uses)', async () => {
+  it('on a 400 department_empty error, shows the server\'s own detail (bug 3, 2026-08-08 -- defense in depth for a stale can_submit=true, same describeApiError fallback every non-409 submit failure already uses)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
     vi.mocked(approvalApi.submitDepartment).mockRejectedValue(
-      new ApiError(400, 'คำขอไม่ถูกต้อง', 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้'),
+      new ApiError(400, 'คำขอไม่ถูกต้อง', 'This department has no budget data yet, so it cannot be submitted.'),
     )
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
@@ -183,7 +183,7 @@ describe('ApprovalActionBar', () => {
     fireEvent.click(await screen.findByTestId('approval-submit-btn'))
 
     await waitFor(() =>
-      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้'),
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('This department has no budget data yet, so it cannot be submitted.'),
     )
   })
 

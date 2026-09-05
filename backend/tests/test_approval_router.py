@@ -92,19 +92,19 @@ def test_submit_forbidden_maps_to_403(client):
 
 def test_submit_department_empty_maps_to_400(client):
     """Bug 3 (2026-08-07 wave): `DepartmentEmptyError` -> 400 with the
-    server's own Thai detail, the same `_run` dict-based mapping idiom every
+    server's own detail, the same `_run` dict-based mapping idiom every
     other approval error already uses."""
     _override_auth("filler@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.resolve_scope", return_value=MagicMock()
     ), patch(
         "app.routers.approval.submit_department",
-        side_effect=DepartmentEmptyError("ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้"),
+        side_effect=DepartmentEmptyError("This department has no budget data yet, so it cannot be submitted."),
     ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 400
-    assert response.json()["detail"] == "ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้"
+    assert response.json()["detail"] == "This department has no budget data yet, so it cannot be submitted."
 
 
 def test_submit_invalid_state_maps_to_409(client):
@@ -1083,17 +1083,17 @@ def test_locked_departments_db_failure_maps_to_502(client):
     assert response.status_code == 502
 
 
-def test_override_step_not_overridable_maps_to_409_with_thai_detail(client):
+def test_override_step_not_overridable_maps_to_409(client):
     """StepNotOverridableError (positions 2/3, or the only-active-position
-    case) -> 409 whose Thai detail the UI shows as-is."""
+    case) -> 409 whose detail the UI shows as-is."""
     _override_auth("jakkaritw@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
         "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
     ), patch(
         "app.routers.approval.admin_override_step",
-        side_effect=StepNotOverridableError("ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ"),
+        side_effect=StepNotOverridableError("Cannot approve on their behalf — this step is under review by the Budget Department."),
     ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 409
-    assert "ไม่สามารถอนุมัติแทนได้" in response.json()["detail"]
+    assert "Cannot approve on their behalf" in response.json()["detail"]

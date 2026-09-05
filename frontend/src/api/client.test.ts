@@ -188,7 +188,7 @@ describe('apiFetch', () => {
     await expect(apiFetch('/budget/rows')).rejects.toMatchObject({ status: 400, detail: undefined })
   })
 
-  it('maps a department_locked 403 (A10 gap close) to a specific Thai message', async () => {
+  it('maps a department_locked 403 (A10 gap close) to a specific message', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -198,7 +198,7 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
       status: 403,
-      message: 'ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้',
+      message: 'This department is in approval or already approved — editing is locked.',
     })
   })
 

@@ -137,7 +137,7 @@ def _notify_after_transition(
                     )
                     override_send_failed = True
             if override_send_failed:
-                state.notification_warning = "การแจ้งเตือนอีเมลล้มเหลว แต่การทำรายการสำเร็จแล้ว"
+                state.notification_warning = "The email notification failed, but your action was saved."
         elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
             notifications.notify_turn(
                 conn, department=state.department, fiscal_year=state.fiscal_year,
@@ -146,7 +146,7 @@ def _notify_after_transition(
             )
     except Exception as exc:  # noqa: BLE001 -- deliberate: a notify failure must never fail the action
         logger.error("notification failed after %s for %s/%s: %s", action, state.department, state.fiscal_year, exc)
-        state.notification_warning = "การแจ้งเตือนอีเมลล้มเหลว แต่การทำรายการสำเร็จแล้ว"
+        state.notification_warning = "The email notification failed, but your action was saved."
 
 
 class DepartmentYearBody(BaseModel):
@@ -352,7 +352,7 @@ def override_step(body: DepartmentYearBody, email: str = Depends(get_current_use
             scope = resolve_scope(email, conn)
             if not scope.is_admin:
                 raise HTTPException(
-                    status_code=403, detail="เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถอนุมัติแทนผู้อนุมัติได้"
+                    status_code=403, detail="Only an administrator can approve on behalf of an approver."
                 )
             state = admin_override_step(conn, body.department, body.fiscal_year, email)
             _notify_after_transition(conn, "override_step", state, admin_email=email)

@@ -74,7 +74,7 @@ test.describe('edge states', () => {
     await expect(page.getByText('พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ')).toBeVisible()
   })
 
-  test('4.5b a department-locked save shows its OWN specific Thai message (distinct from past_deadline)', async ({ page }) => {
+  test('4.5b a department-locked save shows its OWN specific message (distinct from past_deadline)', async ({ page }) => {
     const world = fillerWorld({
       budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 100 }, pendingUpdatedAt: 'PEND-1' })]],
       saveRowQueue: [err(403, `${DEPT}/${PLANNING_YEAR} is PENDING_APPROVER1 — mid-approval or approved, editing is locked`)],
@@ -86,7 +86,7 @@ test.describe('edge states', () => {
     await m01.fill('200')
     await m01.blur()
 
-    await expect(page.getByText('ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้')).toBeVisible()
+    await expect(page.getByText('This department is in approval or already approved — editing is locked.')).toBeVisible()
   })
 
   test('4.6 the userbar always offers a real Logout control pointing at the Easy Auth logout endpoint', async ({ page }) => {

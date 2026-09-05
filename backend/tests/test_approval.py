@@ -642,7 +642,7 @@ def test_submit_department_empty_as_filler_refused():
     ]
     cursor.fetchall.side_effect = [[("CC1",)]]  # _department_cost_centers -- department IS live-mapped
 
-    with pytest.raises(DepartmentEmptyError, match="ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ"):
+    with pytest.raises(DepartmentEmptyError, match="This department has no budget data yet"):
         submit_department(conn, DEPT, FY, "filler@chememan.com", _scope(fill_cost_centers=["CC1"]))
     conn.commit.assert_not_called()
 

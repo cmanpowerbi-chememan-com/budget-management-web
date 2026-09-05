@@ -56,7 +56,7 @@ function defaultOnUnauthorized(): void {
  * message (`"<dept>/<year> is <status> — mid-approval or approved, editing
  * is locked"`, A10 gap close) — the ONE `detail` pattern this client
  * special-cases, since a plain Fill-scope 403 shares the same HTTP status
- * but needs a different Thai message. */
+ * but needs a different message. */
 const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
 
 /** Stable marker substrings inside `deadline.PastDeadlineError`'s message
@@ -73,7 +73,7 @@ const PAST_DEADLINE_DETAIL_SUFFIX = 'has passed'
 function messageForStatus(status: number, detail?: string): string {
   if (status === 403) {
     if (detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER)) {
-      return 'ฝ่ายนี้อยู่ระหว่างรออนุมัติ/อนุมัติแล้ว — แก้ไขไม่ได้'
+      return 'This department is in approval or already approved — editing is locked.'
     }
     if (detail?.includes(PAST_DEADLINE_DETAIL_PREFIX) && detail.includes(PAST_DEADLINE_DETAIL_SUFFIX)) {
       return 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'
