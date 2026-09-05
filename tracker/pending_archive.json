@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-04T11:45:42+0700",
+  "updated": "2026-09-05T19:39:48+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2296,6 +2296,78 @@
       "created": "2026-08-05T10:01:32+0700",
       "updated": "2026-08-05T11:45:03+0700",
       "ai": "DONE commit d0672fc. ADR-0013 read-only lock ported to React. Backend: approval.LOCKED_APPROVAL_STATUSES hoisted (write_model imports it); read_model.fetch_locked_departments(planning_year, skipped when admin_wide) + locked_departments arg -> row.editable = admin_wide OR (fill_cc AND row_dept not locked); row_dept = pending.department or board.department or cc_dims or department_filter; cc_dims now fetched when department_filter set OR locked_departments non-empty (gate D1 fix: SAP-led rows used to fail-OPEN on unfiltered grid). Frontend: GridTable renders subform button for ALL visible special rows (locked variant lock-icon + du-rai-la-iad, .special-open-btn-locked opacity .55) -> approvers can finally review; BudgetGrid threads readOnly=!row.editable into DetailSubform+TripManager; both get readOnly prop (lock in title, disabled inputs, hide add/save, cancel->close, TripManager via trip-cards-fieldset disabled) + early-return guards on every mutator. 2 GridTable tests REWRITTEN on purpose (asserted button hidden for non-editable = contradicts spec). Verified independently in main session: backend 863 pass, frontend 585 pass, next build clean. gate:APPROVE-WITH-SUGGESTIONS (06+07+08, all legs ran, security PASS 8/8, all 6 hidden controls have server backstops via _ensure_department_not_locked). OPEN follow-ups: D2 read=snapshot dept vs write=live cc_filler_map diverge after a CC->dept remap (needs jakkaritw product call, NOT fixed, documented in docstrings); See-only users can now open Trip Manager from UI = traveller PII (name/position/destination/purpose) reaches wider audience, authz boundary UNCHANGED (GET /budget/trip always allowed See scope) - needs jakkaritw ack; pre-existing flaky BudgetGrid.test.tsx:261/279 double-fetch went red 1 of 2 gate runs. NOT deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "perdiem-trip-data-verify-2027",
+      "state": "done",
+      "created": "2026-08-05T16:28:12+0700",
+      "updated": "2026-08-05T16:28:12+0700",
+      "ai": "VERIFIED by jakkaritw ('pass') 2026-08-05 on PRD-equivalent data, CC 10IT012000 FY2027. Trip 30: สุชัญญา ยุปา (101159), Assistant Department Head (MGR), South Africa, country_group=2 asian, 2 days, months 01,02 -> 2 x 80 USD x 33.00 = 5,280.00 THB split Jan 2,640.00 + Feb 2,640.00. Trip 31: เจณภพ สุริยะวงศ์ (100925), Senior Supervisor 2, China, group 2, 2 days, month 04 -> 2 x 70 x 33.00 = 4,620.00 THB. CONTROL NUMBER: pending_budget_detail (is_auto_calc=1, detail_id 166+167) sums to 9,900.00 = pending_budget row for GL 6210400010 total_year 9,900.00, diff 0.00. Masters confirmed against the authoritative SharePoint file (Budgeting and Management/country.xlsx, modified 2026-07-13): 13 countries, Thailand=ในประเทศ, the other 12 incl South Africa=ต่างประเทศ-อาเซียน; dbo.country_group matches the file 13/13. per_diem_rate: Assistant Department Head (MGR) 300/80/90, Senior Supervisor 2 250/70/80. master_currency_rate FY2027=33.00 (FY2026=35.50, FY2025=40.00) - the derivation uses the TRIP's fiscal_year, not year-1. NOTE for later: country.xlsx has only 2 groups (ในประเทศ / ต่างประเทศ-อาเซียน) - no country maps to group 3, so the rate_other column (90 USD here) is only reachable via the frontend-added 'อื่นๆ' destination; add rows to the file if a real third group is wanted. Hand-run SQL for this reconcile was given to jakkaritw (3 queries: formula-vs-stored diff, stored group vs master group, detail-vs-grid control total).",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-prd-1e441de",
+      "state": "done",
+      "created": "2026-08-05T15:57:46+0700",
+      "updated": "2026-08-05T15:57:46+0700",
+      "ai": "PRODUCTION DEPLOYED 2026-08-05 by jakkaritw's explicit go. cman-budget-web-prd rev 0000013, image budget-web:1e441de (same image staging rev 0000027 was running - no rebuild, ACR run cmv reused). Previous prd = 0000012 / 68a18a2 (NOT c2bd552 - earlier ledger/session notes said c2bd552, that was wrong; corrected here). Revision RunningAtMaxScale/Healthy/100pct traffic, anon curl 401 = Easy Auth ON (expected). FQDN cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io. SHIPPED (9 commits 68a18a2..1e441de): year filter capped at current calendar year (04d1c46); legend +40pct (2d6c92c); Reset-columns on each side-heading row (577524b); DRAFT chip inline left of Submit (55eef13); session-expiry dialog vs network error, ANOTHER SESSION's work (ff67b25); last table fills to the approval bar + admin strip 1 line + page title -30pct (60db5fa); admin strip reduced to gear+'Admin' (fdfa441); searchable dept-scoped traveller picker (05e7b65); accounting side locked to the opening GL row (1e441de). NOT shipped: d0672fc (ADR-0013 subform read-only lock, another session, never ran on staging) - staging is now BEHIND HEAD by that commit. Rollback = az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --image cmanbudgetacr.azurecr.io/budget-web:68a18a2. Post-deploy smoke by a human still pending.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-d0672fc-stg-prd",
+      "state": "done",
+      "created": "2026-08-05T16:42:47+0700",
+      "updated": "2026-08-05T16:42:47+0700",
+      "ai": "STAGING + PRODUCTION DEPLOYED 2026-08-05 on jakkaritw's 'stg and prd deploy'. Image budget-web:d0672fc (ACR run cmw), one build promoted to both. Staging rev 0000028 Running/Healthy/100pct (prev 0000027/1e441de); Production rev 0000014 RunningAtMaxScale/Healthy/100pct (prev 0000013/1e441de). Anonymous curl 401 on both = Easy Auth ON, expected. CONTENT: d0672fc = ADR-0013 subform read-only lock (written by the PARALLEL session, not this one) - special-GL rows now open the subform for every row the caller can SEE regardless of row.editable, in read-only mode when the department is mid-approval/APPROVED or the caller is See-only; TripManager/DetailSubform gained a readOnly prop (whole card list wrapped in a disabled fieldset, เพิ่มทริป/บันทึก hidden, ยกเลิก becomes ปิด). Pre-deploy verification run by me at that commit: frontend vitest 585/585 33 files, backend pytest 863 passed/48 deselected, next build clean. NOT gate-reviewed by this session (06/07/08 were run by the parallel session that wrote it) - flagged, not blocking, since jakkaritw approved the deploy explicitly. Rollback for BOTH apps = --image cmanbudgetacr.azurecr.io/budget-web:1e441de. prd and stg are now on the SAME image and main is fully shipped (nothing unshipped on main).",
+      "agent": "claude"
+    },
+    {
+      "id": "decision-other-country-destination",
+      "state": "done",
+      "created": "2026-08-05T16:32:28+0700",
+      "updated": "2026-08-05T16:32:28+0700",
+      "ai": "DECISION by jakkaritw 2026-08-05 (do NOT re-litigate): the destination dropdown stays as-is. Rule confirmed by him: dbo.country_group / SharePoint country.xlsx lists 13 countries (Thailand=ในประเทศ -> group 1; the other 12 incl South Africa=ต่างประเทศ-อาเซียน -> group 2); ANY country not in that file is 'ประเทศอื่น' -> group 3 -> per_diem_rate.rate_other. The app already prices that correctly via the single frontend-added option OTHER_COUNTRY_OPTION='อื่นๆ (Other)' (model.ts:135, countryOptionsWithOther adds it with country_group 3; the API only ever serves groups 1-2). KNOWN AND ACCEPTED LOSS: picking 'อื่นๆ' stores destination='อื่นๆ (Other)', so the real country name (Germany, Japan, ...) is NOT recorded anywhere - jakkaritw was offered a free-text/typeahead capture twice and explicitly chose 'ปล่อยไว้ตามเดิม - คิดเงินถูกอยู่แล้ว ยอมเสียรายละเอียดชื่อประเทศ'. Do not 'fix' this as a bug. If a future audit needs the country name, that is a NEW request, not a regression. Legacy free-typed destinations on old trips keep their stored group (countryGroupFor returns null for an unknown name and the stored group is preserved until the user re-picks).",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-1bbddcb-stg-prd",
+      "state": "done",
+      "created": "2026-08-05T22:34:43+0700",
+      "updated": "2026-08-05T22:34:43+0700",
+      "ai": "STAGING + PRODUCTION DEPLOYED 2026-08-05 on jakkaritw's explicit 'deploy stg prd' approval (AskUserQuestion, both envs). Image budget-web:1bbddcb (ACR run cmx, built from clean detached worktree per reference_staging_deploy_recipe.md). Staging rev cman-budget-web-stg--0000029 Running/Healthy/100pct (prev 0000028/d0672fc); Production rev cman-budget-web-prd--0000015 RunningAtMaxScale/Healthy/100pct (prev 0000014/d0672fc). Anonymous curl 401 on both = Easy Auth ON, expected, verify-deploy-landed satisfied. CONTENT: 1bbddcb = special-GL codes now pickable in \"+ เพิ่ม Transaction\" (removed AddTransactionForm.tsx nonSpecialGls filter + model.ts validateNewTransaction reject; BudgetGrid.tsx routes a special-GL pick straight into its subform, skipping /budget/rows which the backend 400s for special GLs) + searchable Cost Center combobox (mirrors the existing GL Code combobox pattern). GATED before deploy: 07-security-auditor PASS (auth/authz confirmed structural server-side via _ensure_write_scope/_save_one_pending_row SpecialGlDirectEditError/_ensure_department_not_locked, unaffected by the frontend guard removal; no injection/secrets issues in the new CC combobox, pure client-side filter over already-authorized fillCostCenters). Pre-deploy tests: frontend vitest 590/590 (33 files), next build clean, oxlint clean. main was fully shipped before this (only d0672fc+1bbddcb ahead of the last deployed image, both now live). Rollback for BOTH apps = --image cmanbudgetacr.azurecr.io/budget-web:d0672fc.",
+      "agent": "claude"
+    },
+    {
+      "id": "security-audit-1bbddcb",
+      "state": "done",
+      "created": "2026-08-05T22:11:03+0700",
+      "updated": "2026-08-05T22:11:20+0700",
+      "ai": "PASS - no deploy block. Backend independently re-validates Fill scope (_ensure_write_scope, write_model.py:296-308) + special-GL block (SpecialGlDirectEditError, write_model.py:584-587) + dept-lock (_ensure_department_not_locked, write_model.py:443-481) on EVERY write path (rows:578/595, detail:896-899/955, trip:1310/1354) regardless of frontend input - frontend guard removal in 1bbddcb is UI-routing only, no auth weakening. CC combobox = pure client array filter over fillCostCenters prop (authorized list), React text interpolation only, no dangerouslySetInnerHTML, no new data source. No secrets/logging introduced. No dependency changes in diff.",
+      "agent": "claude"
+    },
+    {
+      "id": "addtxn-special-gl-cc-search",
+      "state": "done",
+      "created": "2026-08-05T21:17:17+0700",
+      "updated": "2026-08-05T21:31:06+0700",
+      "ai": "Special-GL codes now pickable in AddTransactionForm GL combo (removed nonSpecialGls filter + validateNewTransaction reject); CC field replaced plain select with same searchable-combobox pattern as GL. Found BudgetGrid.tsx also needed a fix (3rd file, genuine): backend SpecialGlDirectEditError rejects /budget/rows for special GL, so handleAddTransaction now routes special picks straight to openSpecialForm (shared w/ handleOpenSpecial) instead of create-row; detailTarget state simplified to {costCenter,glAccount} vs full BudgetRow. GridTable canOpenSpecial/onOpenSpecial confirmed keyed off meta.is_special from GL master only, no change needed. Frontend suite 590/590 pass, next build+tsc clean, oxlint clean. Not committed (per instructions). plan.md updated.",
+      "agent": "claude"
+    },
+    {
+      "id": "addtxn-cc-search-special-gl",
+      "state": "done",
+      "created": "2026-08-05T20:36:11+0700",
+      "updated": "2026-08-05T21:35:36+0700",
+      "ai": "Duplicate of addtxn-special-gl-cc-search (agent logged its own entry) - see that entry for full detail. Dispatched 05-software-developer inline, jakkaritw approved unblocking special-GL in AddTransactionForm via AskUserQuestion. Done: guards removed (AddTransactionForm.tsx + model.ts validateNewTransaction), CC search combobox added, BudgetGrid.tsx 3rd-file fix (special-GL create routes to subform not /budget/rows, since backend SpecialGlDirectEditError blocks direct creates). 590/590 frontend tests pass, next build clean, not committed yet.",
+      "agent": "claude"
+    },
+    {
+      "id": "specb-subform-verify",
+      "state": "done",
+      "created": "2026-08-04T23:59:31+0700",
+      "updated": "2026-08-05T21:35:16+0700",
+      "ai": "[CORRECTION 2026-08-05] The 'HIGH finding: read-only lock UNIMPLEMENTED' reported earlier in this entry is WRONG - ADR-0013 read-only lock was already shipped in commit d0672fc (2026-08-05 11:44, gated 06+07+08 APPROVE-WITH-SUGGESTIONS, already had a memory file project_adr0013_readonly_lock_port.md from a prior session documenting this). My code read of DetailSubform.tsx/TripManager.tsx/GridTable.tsx earlier in this session somehow returned pre-d0672fc content despite d0672fc being HEAD at session start - root cause of the stale read unclear, but git diff HEAD confirms current working tree matches HEAD exactly, which HAS full readOnly support (props, disabled inputs, hidden buttons, lock icon, '\\xf0\\x9f\\x94\\x92 \\xe0\\xb8\\x94\\xe0\\xb8\\xb9\\xe0\\xb8\\xa3\\xe0\\xb8\\xb2\\xe0\\xb8\\xa2\\xe0\\xb8\\xa5\\xe0\\xb8\\xb0\\xe0\\xb9\\x80\\xe0\\xb8\\xad\\xe0\\xb8\\xb5\\xe0\\xb8\\xa2\\xe0\\xb8\\x94 button in GridTable.tsx). Told jakkaritw to skip live-testing this in the human test guide based on the wrong finding - corrected in chat. Remaining real findings from this task stand: 2 cosmetic PDF-vs-code label mismatches (non-issues). Separately found+fixed (new task addtxn-special-gl-cc-search / addtxn-cc-search-special-gl): AddTransactionForm blocked special-GL codes entirely, contradicting spec path (kho) - fixed, CC search box added too.",
       "agent": "claude"
     }
   ]

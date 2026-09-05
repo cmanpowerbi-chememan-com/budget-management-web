@@ -89,3 +89,6 @@ Pre-existing values for the pair are deleted, not migrated.
 - Migrating the old values into the new normal row — rejected in D3 in favour of wiping.
 - Editing the DW sync notebook or the SharePoint master (master edit already done by
   jakkaritw; the notebook lives in workspace `cman-dw-ws`, another repo).
+- **Revising the signed Spec B / subform spec documents** — jakkaritw, 2026-09-06: chosen not to
+  do it. The documents still describe a 4-row trip expense table; the app has 3. Documentation
+  drift is accepted, no system impact. See [T06](tickets/T06-signoff-docs.md).
