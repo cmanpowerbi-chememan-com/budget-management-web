@@ -237,7 +237,7 @@ export function ApprovalActionBar({
           disabled={actionBusy}
           onClick={() => setRejecting(true)}
         >
-          ตีกลับทั้งฝ่าย
+          Reject
         </button>
       )}
       {showApprove && (
@@ -248,7 +248,7 @@ export function ApprovalActionBar({
           disabled={actionBusy}
           onClick={handleApprove}
         >
-          อนุมัติทั้งฝ่าย
+          Approve
         </button>
       )}
       {showSubmit && (
