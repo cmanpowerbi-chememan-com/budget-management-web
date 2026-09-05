@@ -85,7 +85,7 @@ test.describe('approver journey', () => {
     await expect.poll(() => world.captured.rejectBodies.length).toBeGreaterThan(0)
     expect(world.captured.rejectBodies.at(-1)).toEqual({ department: DEPT, fiscal_year: PLANNING_YEAR, reason: 'ข้อมูลไม่ครบ' })
 
-    await expect(page.getByTestId('approval-status-chip')).toContainText('ถูกตีกลับ')
+    await expect(page.getByTestId('approval-status-chip')).toContainText('Rejected')
     await expect(page.getByTestId('approval-reject-reason')).toContainText('ข้อมูลไม่ครบ')
   })
 
@@ -99,7 +99,7 @@ test.describe('approver journey', () => {
     await installMocks(page, world)
 
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
-    await expect(page.getByTestId('approval-status-chip')).toContainText('ถูกตีกลับ')
+    await expect(page.getByTestId('approval-status-chip')).toContainText('Rejected')
 
     // Simulate "meanwhile, the filler resubmitted elsewhere" by mutating the
     // mock backend's CURRENT state directly (not a canned queue — GET
@@ -118,8 +118,8 @@ test.describe('approver journey', () => {
     await page.locator('.dept-picker-row', { hasText: DEPT, exact: false }).first().click()
 
     const chip = page.getByTestId('approval-status-chip')
-    await expect(chip).toContainText('รออนุมัติ')
-    await expect(chip).toContainText('ขั้น 1')
+    await expect(chip).toContainText('Pending')
+    await expect(chip).toContainText('Step 1')
   })
 
   test('2.5 a concurrent approve returns 409, shows the Thai message, and refetches the status', async ({ page }) => {
@@ -145,8 +145,8 @@ test.describe('approver journey', () => {
     page.once('dialog', (dialog) => void dialog.accept())
     await page.getByTestId('approval-approve-btn').click()
 
-    await expect(page.getByTestId('approval-action-message')).toContainText('มีการเปลี่ยนแปลงสถานะโดยผู้อื่นระหว่างนี้')
+    await expect(page.getByTestId('approval-action-message')).toContainText('Someone else changed this status')
     // load() ran again after the 409 — the chip reflects the FRESH (position 2) truth.
-    await expect(page.getByTestId('approval-status-chip')).toContainText('ขั้น 2')
+    await expect(page.getByTestId('approval-status-chip')).toContainText('Step 2')
   })
 })

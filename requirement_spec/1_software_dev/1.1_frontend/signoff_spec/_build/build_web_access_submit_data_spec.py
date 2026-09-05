@@ -145,8 +145,8 @@ def capture():
         #     PENDING_APPROVER1 = exactly his step → the picker shows the รออนุมัติ badge
         #     and the action bar shows Approve + Reject (NOT a separate inbox screen).
         #       ① #faipPP   (รออนุมัติ badge on the ฝ่าย-picker)
-        #       ② #approveBtn (อนุมัติทั้งฝ่าย) → GREEN
-        #       ③ #rejectBtn  (ตีกลับทั้งฝ่าย)  → RED
+        #       ② #approveBtn (Approve) → GREEN
+        #       ③ #rejectBtn  (Reject)  → RED
         pg.evaluate("switchUser('arthit')"); pg.wait_for_timeout(150)
         # arthit's status was reset by switchUser → re-seed PENDING_APPROVER1 + lock his ฝ่าย
         pg.evaluate("DEPT_STATUS['Solution Delivery']='PENDING_APPROVER1';")
@@ -722,7 +722,7 @@ def build_body(meta, rids):
                         "การปรับโครงสร้าง HR ภายหลังไม่กระทบงานที่อยู่ระหว่างอนุมัติ"))
     parts.append(bullet("approver1 ไม่ถูกต้อง (ไม่มี managerempcode / ชี้ไปคนที่ inactive/ถูกตัด) → "
                         "ตกไปที่ นิภาพร (approver2) โดยตรง · ไม่บล็อกการส่ง"))
-    parts.append(bullet("ตีกลับ (Reject) = ตีกลับทั้งฝ่าย (ทุก CC) ด้วยเหตุผลเดียว → REJECTED → แจ้งคนกดส่งล่าสุด · "
+    parts.append(bullet("ตีกลับ (Reject) = Reject (ทุก CC) ด้วยเหตุผลเดียว → REJECTED → แจ้งคนกดส่งล่าสุด · "
                         "ตีกลับ “หลังปิดรับ”: ฝ่ายกลับเป็น DRAFT แต่ผู้กรอกถูกล็อก → เฉพาะ Admin override แก้+ส่งใหม่"))
 
     # ---- Section 5: Approve on the main page (replaces inbox) ------------
@@ -731,7 +731,7 @@ def build_body(meta, rids):
         "ระบบ “ไม่มีกล่องงานผู้อนุมัติ (inbox) แยกหน้าอีกต่อไป” — ผู้อนุมัติทำงานบน “หน้าหลักหน้าเดียวกัน” "
         "กับผู้กรอก โดยใช้ 2 ส่วน: (ก) ตัวเลือกฝ่าย (ฝ่าย-picker) ที่มีป้าย “รออนุมัติ” + สวิตช์ "
         "“เฉพาะที่รออนุมัติ” เพื่อโฟกัสเฉพาะฝ่ายที่ค้างที่ขั้นของตน และ (ข) แถบปุ่มด้านล่าง "
-        "(อนุมัติทั้งฝ่าย / ตีกลับทั้งฝ่าย) ที่โผล่เมื่อฝ่ายที่เลือกอยู่ที่ขั้นของผู้อนุมัติพอดี.",
+        "(Approve / Reject) ที่โผล่เมื่อฝ่ายที่เลือกอยู่ที่ขั้นของผู้อนุมัติพอดี.",
         size_half_pt=21,
     ))
     parts.append(para(
@@ -767,8 +767,8 @@ def build_body(meta, rids):
     parts.append(table([
         ["#", "จุด", "ความหมาย"],
         ["①", "ป้าย “รออนุมัติ” บนฝ่าย-picker", "ฝ่ายนี้ค้างที่ขั้นของผู้อนุมัติพอดี (status = ขั้นของฉัน)"],
-        ["②", "ปุ่ม “อนุมัติทั้งฝ่าย” (สีเขียว)", "อนุมัติทุก CC ในฝ่าย → เลื่อนไปขั้นถัดไป (หรือ APPROVED ถ้าเป็นด่านสุดท้าย)"],
-        ["③", "ปุ่ม “ตีกลับทั้งฝ่าย” (สีแดง)", "ตีกลับทุก CC ด้วยเหตุผลเดียว → REJECTED · แจ้งคนกดส่งล่าสุด"],
+        ["②", "ปุ่ม “Approve” (สีเขียว)", "อนุมัติทุก CC ในฝ่าย → เลื่อนไปขั้นถัดไป (หรือ APPROVED ถ้าเป็นด่านสุดท้าย)"],
+        ["③", "ปุ่ม “Reject” (สีแดง)", "ตีกลับทุก CC ด้วยเหตุผลเดียว → REJECTED · แจ้งคนกดส่งล่าสุด"],
     ], MK_WIDTHS))
     parts.append(para(
         run("ภาพประกอบ 5.4 — ฝ่าย-picker (เปิด): ป้ายรออนุมัติต่อฝ่าย + สวิตช์ “เฉพาะที่รออนุมัติ”",

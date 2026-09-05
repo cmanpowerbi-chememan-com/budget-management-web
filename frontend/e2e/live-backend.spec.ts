@@ -196,7 +196,7 @@ test.describe('live stack (real backend + real Fabric SQL DB)', () => {
 
       // -- (f) Submit via the real button; the real chain starts -----------
       const chip = page.getByTestId('approval-status-chip')
-      await expect(chip).toContainText('แบบร่าง') // never-submitted DRAFT
+      await expect(chip).toContainText('Draft') // never-submitted DRAFT
       await expect(page.getByTestId('approval-submit-btn')).toBeVisible()
 
       let dialogMessage = ''
@@ -217,8 +217,8 @@ test.describe('live stack (real backend + real Fabric SQL DB)', () => {
 
       const submitBody = (await submitResp.json()) as { status: string }
       expect(submitBody.status).toBe('PENDING_APPROVER1')
-      await expect(chip).toContainText('รออนุมัติ')
-      await expect(chip).toContainText('ขั้น 1')
+      await expect(chip).toContainText('Pending')
+      await expect(chip).toContainText('Step 1')
 
       expect(unexpectedConsole, 'no unexpected browser console errors on the live stack').toEqual([])
     } finally {

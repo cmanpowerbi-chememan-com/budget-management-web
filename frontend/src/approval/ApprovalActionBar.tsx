@@ -18,7 +18,7 @@ export interface ApprovalActionBarProps {
   isFillerOfDept: boolean
   adminViewEnabled: boolean
   /** Raw `scope.isAdmin` (NOT the admin-view toggle) — gates the ADR-0027
-   * step-override visibility: an admin sees the อนุมัติ button on
+   * step-override visibility: an admin sees the Approve button on
    * PENDING_APPROVER1 even when they are not the frozen approver. */
   isAdmin: boolean
   rowCount: number
@@ -61,7 +61,7 @@ export function ApprovalActionBar({
       const state = await fetchApprovalStatus(department, fiscalYear)
       setStatus(state)
     } catch (err) {
-      setLoadError(err instanceof ApiError ? err.message : 'โหลดสถานะอนุมัติไม่สำเร็จ')
+      setLoadError(err instanceof ApiError ? err.message : 'Could not load the approval status')
     } finally {
       setLoading(false)
     }
@@ -78,7 +78,7 @@ export function ApprovalActionBar({
 
   function describeApiError(err: unknown, fallback: string): string {
     if (err instanceof ApiError) {
-      if (err.status === 409) return 'มีการเปลี่ยนแปลงสถานะโดยผู้อื่นระหว่างนี้ กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง'
+      if (err.status === 409) return 'Someone else changed this status. Reload the page and try again.'
       return `${err.message}${err.detail ? ` (${err.detail})` : ''}`
     }
     return fallback
@@ -119,29 +119,29 @@ export function ApprovalActionBar({
     if (!department) return
     const confirmed = window.confirm(buildSubmitConfirmText(department, fiscalYear, rowCount, costCenterCount))
     if (!confirmed) return
-    runAction(() => submitDepartment(department, fiscalYear), 'ส่งอนุมัติไม่สำเร็จ')
+    runAction(() => submitDepartment(department, fiscalYear), 'Submit failed')
   }
 
   function handleApprove() {
     if (!department || !status) return
     if (status.can_act) {
       // Normal approve — the caller IS the frozen current approver.
-      if (!window.confirm(`ยืนยันอนุมัติทั้งฝ่าย "${department}" ปี ${fiscalYear}?`)) return
-      runAction(() => approveDepartment(department, fiscalYear), 'อนุมัติไม่สำเร็จ')
+      if (!window.confirm(`Approve the whole department "${department}" for FY ${fiscalYear}?`)) return
+      runAction(() => approveDepartment(department, fiscalYear), 'Approve failed')
       return
     }
-    // Admin step-override (ADR-0027): SAME อนุมัติ button, but the confirm
+    // Admin step-override (ADR-0027): SAME Approve button, but the confirm
     // dialog must NAME the approver being skipped — it is the only guard
     // against an accidental override (no stale-gate, no reason field).
     const skippedName =
       status.current_approver_name ?? approverLabel(status.current_position, status.current_approver_empcode)
     if (!window.confirm(buildOverrideConfirmText(department, fiscalYear, skippedName))) return
-    runAction(() => overrideStep(department, fiscalYear), 'อนุมัติแทนไม่สำเร็จ', describeOverrideError)
+    runAction(() => overrideStep(department, fiscalYear), 'Override approve failed', describeOverrideError)
   }
 
   async function handleConfirmReject() {
     if (!department || !reason.trim()) return
-    await runAction(() => rejectDepartment(department, fiscalYear, reason.trim()), 'ตีกลับไม่สำเร็จ')
+    await runAction(() => rejectDepartment(department, fiscalYear, reason.trim()), 'Reject failed')
     setRejecting(false)
     setReason('')
   }
@@ -151,7 +151,7 @@ export function ApprovalActionBar({
   if (loading && !status) {
     return (
       <div className="approval-bar" data-testid="approval-bar">
-        <span className="act-status">กำลังโหลดสถานะอนุมัติ…</span>
+        <span className="act-status">Loading approval status…</span>
       </div>
     )
   }
@@ -161,7 +161,7 @@ export function ApprovalActionBar({
       <div className="approval-bar" data-testid="approval-bar">
         <span className="act-status act-status-error" role="alert">{loadError}</span>
         <button type="button" className="btn" onClick={load}>
-          ลองใหม่
+          Retry
         </button>
       </div>
     )
@@ -173,7 +173,7 @@ export function ApprovalActionBar({
     isFillerOfDept, adminViewEnabled, canSubmitServer: status.can_submit,
   })
   const showApproveReject = status.can_act && !adminViewEnabled
-  // ADR-0027: ONE อนุมัติ button — visible to the frozen approver (normal
+  // ADR-0027: ONE Approve button — visible to the frozen approver (normal
   // approve) OR to an admin while the department sits on PENDING_APPROVER1
   // (step-override; positions 2/3 stay unapproachable here, the server 409s
   // them anyway). Reject stays approver-only — an override never rejects.
@@ -188,7 +188,7 @@ export function ApprovalActionBar({
   // the asymmetry this closes. Now shows for WHOEVER is actually blocked.
   // `!locked` avoids a duplicate line with the pending-lock hint just below:
   // both would otherwise fire together for a Filler on a PENDING_*
-  // department (`locked` says "ส่งแล้ว..."; the server's
+  // department (`locked` says "Submitted..."; the server's
   // `invalid_approval_state` reason says almost the same thing) — `locked`
   // is the more specific of the two, so it wins and the generic hint stays
   // silent there. The one case `locked` does NOT cover is a Filler on an
@@ -205,7 +205,7 @@ export function ApprovalActionBar({
         <span className={`status-chip status-chip-${statusToneClass(status.status)}`} data-testid="approval-status-chip">
           {statusChipLabel(status)}
         </span>
-        {locked && <span className="act-status">ส่งแล้ว — แก้ไขไม่ได้จนกว่าจะถูกตีกลับ</span>}
+        {locked && <span className="act-status">Submitted — locked for editing until it is rejected</span>}
         {submitBlockedHint && (
           <span className="act-status" data-testid="approval-submit-blocked-hint">
             {submitBlockedHint}
@@ -219,7 +219,7 @@ export function ApprovalActionBar({
          * the same visual .act-status-error treatment (GATE finding 1). */}
         {status.status === 'REJECTED' && status.reject_reason && (
           <span className="act-status act-status-error" data-testid="approval-reject-reason">
-            เหตุผลที่ตีกลับ: {status.reject_reason}
+            Reject reason: {status.reject_reason}
           </span>
         )}
         {actionMessage && (
@@ -264,13 +264,13 @@ export function ApprovalActionBar({
             <path d="M22 2L11 13" />
             <path d="M22 2L15 22l-4-9-9-4 20-7z" />
           </svg>
-          <span>ส่งอนุมัติ</span>
+          <span>Submit</span>
         </button>
       )}
 
       {rejecting && (
         <div className="reject-panel" data-testid="approval-reject-panel">
-          <label htmlFor="reject-reason-input">เหตุผลที่ตีกลับ (จำเป็น)</label>
+          <label htmlFor="reject-reason-input">Reject reason (required)</label>
           <textarea
             id="reject-reason-input"
             data-testid="approval-reject-reason-input"
@@ -280,7 +280,7 @@ export function ApprovalActionBar({
           />
           <div className="reject-panel-actions">
             <button type="button" className="btn" onClick={() => { setRejecting(false); setReason('') }}>
-              ยกเลิก
+              Cancel
             </button>
             <button
               type="button"
@@ -289,7 +289,7 @@ export function ApprovalActionBar({
               disabled={actionBusy || !reason.trim()}
               onClick={handleConfirmReject}
             >
-              ยืนยันตีกลับ
+              Confirm Reject
             </button>
           </div>
         </div>

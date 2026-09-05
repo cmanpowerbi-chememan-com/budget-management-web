@@ -372,8 +372,8 @@ test.describe('filler journey', () => {
     expect(world.captured.submitBodies.at(-1)).toEqual({ department: DEPT, fiscal_year: PLANNING_YEAR })
 
     const chip = page.getByTestId('approval-status-chip')
-    await expect(chip).toContainText('รออนุมัติ')
-    await expect(chip).toContainText('ขั้น 1')
+    await expect(chip).toContainText('Pending')
+    await expect(chip).toContainText('Step 1')
   })
 
   // Filler-blocked-hint fix (2026-08-16, jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"):
@@ -392,7 +392,7 @@ test.describe('filler journey', () => {
 
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
-    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('ยังไม่เปิด')
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('not open for submission yet')
     await expect(page.getByTestId('approval-submit-btn')).not.toBeVisible()
   })
 })

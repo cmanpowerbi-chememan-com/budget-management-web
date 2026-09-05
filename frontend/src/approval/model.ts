@@ -10,13 +10,13 @@ const WARAPORN_EMPCODE = '100427'
 
 const PENDING_STATUSES = new Set(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3'])
 
-const BASE_STATUS_LABEL_TH: Record<string, string> = {
-  DRAFT: 'แบบร่าง (ยังไม่ส่งอนุมัติ)',
-  APPROVED: 'อนุมัติแล้ว',
-  REJECTED: 'ถูกตีกลับ',
+const BASE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Draft — not submitted',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
 }
 
-/** Friendly Thai name for the CURRENT approver step. Positions 2/3 always
+/** Friendly name for the CURRENT approver step. Positions 2/3 always
  * resolve to the two fixed budget-dept approvers (their empcode never
  * varies); position 1 varies per submission and the state only ever
  * carries an empcode for it, so it falls back to a role label rather than
@@ -35,19 +35,19 @@ const BASE_STATUS_LABEL_TH: Record<string, string> = {
 export function approverLabel(position: 1 | 2 | 3 | null, approverEmpcode: string | null): string {
   if (position === 2 || approverEmpcode === NIPAPORN_EMPCODE) return 'นิภาพร ทองกิ่ง (Senior Associate)'
   if (position === 3 || approverEmpcode === WARAPORN_EMPCODE) return 'วราพร ติรสิทธิ์ (Assistant Department Head)'
-  if (position === 1) return 'ผู้บังคับบัญชาสายตรง'
+  if (position === 1) return 'Direct manager'
   return ''
 }
 
-/** The status chip's full label, e.g. "รออนุมัติ · ขั้น 2 (นิภาพร ทองกิ่ง (Senior Associate))". */
+/** The status chip's full label, e.g. "Pending · Step 2 (นิภาพร ทองกิ่ง (Senior Associate))". */
 export function statusChipLabel(state: Pick<ApprovalStatusState, 'status' | 'current_position' | 'current_approver_empcode'>): string {
-  if (state.status in BASE_STATUS_LABEL_TH && state.current_position === null) {
-    return BASE_STATUS_LABEL_TH[state.status]
+  if (state.status in BASE_STATUS_LABEL && state.current_position === null) {
+    return BASE_STATUS_LABEL[state.status]
   }
   if (state.current_position) {
-    return `รออนุมัติ · ขั้น ${state.current_position} (${approverLabel(state.current_position, state.current_approver_empcode)})`
+    return `Pending · Step ${state.current_position} (${approverLabel(state.current_position, state.current_approver_empcode)})`
   }
-  return BASE_STATUS_LABEL_TH[state.status] ?? state.status
+  return BASE_STATUS_LABEL[state.status] ?? state.status
 }
 
 /** True while the department is locked to a PENDING_* step — informational
@@ -116,7 +116,7 @@ export function canSubmit(params: {
   return canSubmitServer === true
 }
 
-/** Short Thai explanation for why the Submit button is absent (design call,
+/** Short explanation for why the Submit button is absent (design call,
  * 2026-08-16, extended the same day per jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"
  * — show the same hint to a blocked FILLER, not just a blocked admin):
  * whoever is blocked sees a small hint line next to the status chip rather
@@ -140,38 +140,38 @@ export function canSubmit(params: {
  * confirming `scope.is_admin`) — the reason code itself already determines
  * who can receive each string, so a second per-audience copy would just be
  * duplication with nothing to disambiguate. */
-const SUBMIT_BLOCKED_REASON_TH: Record<string, string> = {
+const SUBMIT_BLOCKED_REASON: Record<string, string> = {
   admin_cannot_submit_in_cycle:
-    'ฝ่ายนี้ยังอยู่ในรอบอนุมัติปกติ ผู้ดูแลระบบส่งแทนไม่ได้ (ต้องรอเลยกำหนดส่ง หรือเป็นฝ่ายที่ไม่มีผู้กรอกอยู่จริง)',
-  mid_chain_admin_overwrite: 'ฝ่ายนี้อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว ส่งซ้ำไม่ได้',
-  department_empty: 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้',
-  not_filler_of_department: 'คุณไม่ใช่ผู้กรอกของฝ่ายนี้ จึงส่งอนุมัติแทนไม่ได้',
-  year_not_open: 'ปีงบประมาณนี้ยังไม่เปิดให้ส่งอนุมัติ กรุณารอประกาศเปิดรอบ',
-  past_deadline: 'เลยกำหนดส่งอนุมัติของปีงบประมาณนี้แล้ว จึงส่งอนุมัติไม่ได้',
-  invalid_approval_state: 'ฝ่ายนี้อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว จึงส่งซ้ำไม่ได้',
+    'This department is still inside the normal approval cycle, so an admin cannot submit for it (wait until the submission deadline has passed, or the department genuinely has no filler).',
+  mid_chain_admin_overwrite: 'This department is already in approval or approved, so it cannot be submitted again.',
+  department_empty: 'This department has no budget data yet, so it cannot be submitted.',
+  not_filler_of_department: 'You are not a filler of this department, so you cannot submit on its behalf.',
+  year_not_open: 'This fiscal year is not open for submission yet. Please wait for the round to be announced.',
+  past_deadline: 'The submission deadline for this fiscal year has passed, so it can no longer be submitted.',
+  invalid_approval_state: 'This department is already in approval or approved, so it cannot be submitted again.',
 }
 
 export function submitBlockedReasonLabel(reason: string | null): string | null {
   if (!reason) return null
-  return SUBMIT_BLOCKED_REASON_TH[reason] ?? null
+  return SUBMIT_BLOCKED_REASON[reason] ?? null
 }
 
-/** Thai confirm-dialog text for Submit — summarizes what is being sent so
+/** Confirm-dialog text for Submit — summarizes what is being sent so
  * the click is a deliberate act, not an accidental one. */
 export function buildSubmitConfirmText(department: string, fiscalYear: number, rowCount: number, costCenterCount: number): string {
   return (
-    `ยืนยันส่งอนุมัติงบประมาณฝ่าย "${department}" ปี ${fiscalYear}?\n` +
-    `จำนวน ${rowCount} รายการ ใน ${costCenterCount} cost center — ส่งครั้งนี้จะส่งทั้งฝ่าย ไม่สามารถแก้ไขได้จนกว่าจะถูกตีกลับ`
+    `Submit the budget of department "${department}" for FY ${fiscalYear}?\n` +
+    `${rowCount} rows in ${costCenterCount} cost center(s) — this submits the WHOLE department. You cannot edit it until it is rejected.`
   )
 }
 
-/** Thai confirm-dialog text for the admin step-override (ADR-0027). MUST
+/** Confirm-dialog text for the admin step-override (ADR-0027). MUST
  * name the approver being skipped — this dialog is the ONLY guard against
  * an accidental override (D3 removed the stale-gate and the reason field),
- * so a generic "ยืนยันการอนุมัติ" is never acceptable here. */
+ * so a generic "confirm approval" is never acceptable here. */
 export function buildOverrideConfirmText(department: string, fiscalYear: number, skippedApproverName: string): string {
   return (
-    `⚠️ คุณกำลังอนุมัติแทน ${skippedApproverName} (ผู้อนุมัติขั้นที่ 1) ของฝ่าย "${department}" ปี ${fiscalYear}\n` +
-    `ระบบจะบันทึกว่าคุณกดแทน และส่งอีเมลแจ้งผู้กรอกงบ พร้อมสำเนาถึง ${skippedApproverName} · ยืนยันหรือไม่?`
+    `⚠️ You are approving on behalf of ${skippedApproverName} (approver step 1) for department "${department}", FY ${fiscalYear}\n` +
+    `The system will record that you approved on their behalf and will email the budget filler, with a copy to ${skippedApproverName}. Continue?`
   )
 }

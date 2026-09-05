@@ -63,13 +63,13 @@ describe('ApprovalActionBar', () => {
   it('loads and shows the status chip', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT' }))
     render(<ApprovalActionBar {...BASE_PROPS} />)
-    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('แบบร่าง'))
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Draft'))
   })
 
-  it('shows a loud Thai error when the status fetch fails', async () => {
-    vi.mocked(approvalApi.fetchApprovalStatus).mockRejectedValue(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง'))
+  it('shows a loud error when the status fetch fails', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockRejectedValue(new ApiError(502, 'Server error'))
     render(<ApprovalActionBar {...BASE_PROPS} />)
-    await waitFor(() => expect(screen.getByText('เซิร์ฟเวอร์ขัดข้อง')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument())
   })
 
   it('shows Submit for a Filler when status is DRAFT, and submits after confirm', async () => {
@@ -82,7 +82,7 @@ describe('ApprovalActionBar', () => {
     fireEvent.click(submitBtn)
 
     await waitFor(() => expect(approvalApi.submitDepartment).toHaveBeenCalledWith('Accounting', 2027))
-    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('ขั้น 1'))
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step 1'))
     expect(BASE_PROPS.onChanged).toHaveBeenCalled()
   })
 
@@ -125,7 +125,7 @@ describe('ApprovalActionBar', () => {
     fireEvent.click(approveBtn)
 
     await waitFor(() => expect(approvalApi.approveDepartment).toHaveBeenCalledWith('Accounting', 2027))
-    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('อนุมัติแล้ว'))
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Approved'))
   })
 
   it('rejects with a required reason via the inline panel', async () => {
@@ -158,17 +158,17 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(screen.getByTestId('approval-reject-reason')).toHaveTextContent('ยอดไม่ตรง'))
   })
 
-  it('on a 409 conflict, shows a Thai message and refetches the status', async () => {
+  it('on a 409 conflict, shows an error message and refetches the status', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus)
       .mockResolvedValueOnce(state({ status: 'DRAFT' }))
       .mockResolvedValueOnce(state({ status: 'PENDING_APPROVER1', current_position: 1 }))
-    vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น', 'concurrent'))
+    vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(409, 'Conflict', 'concurrent'))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<ApprovalActionBar {...BASE_PROPS} />)
     fireEvent.click(await screen.findByTestId('approval-submit-btn'))
 
-    await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('ผู้อื่น'))
+    await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('Someone else'))
     await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
   })
 
@@ -208,7 +208,7 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
 
-  it('shows a short Thai explanation next to the chip when the blocked admin hint applies (2026-08-16 fix #2)', async () => {
+  it('shows a short explanation next to the chip when the blocked admin hint applies (2026-08-16 fix #2)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({
         status: 'DRAFT', current_position: null,
@@ -217,7 +217,7 @@ describe('ApprovalActionBar', () => {
     )
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() =>
-      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('รอบอนุมัติปกติ'),
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('normal approval cycle'),
     )
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
@@ -244,7 +244,7 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
 
-  it('hides อนุมัติ for a non-admin who is not the current approver', async () => {
+  it('hides Approve for a non-admin who is not the current approver', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: false }),
     )
@@ -253,7 +253,7 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
   })
 
-  it('admin on PENDING_APPROVER1 with can_act=false sees the same อนุมัติ button, and the override confirm names the skipped approver (ADR-0027)', async () => {
+  it('admin on PENDING_APPROVER1 with can_act=false sees the same Approve button, and the override confirm names the skipped approver (ADR-0027)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({
         status: 'PENDING_APPROVER1', current_position: 1, can_act: false,
@@ -272,10 +272,10 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(approvalApi.overrideStep).toHaveBeenCalledWith('Accounting', 2027))
     expect(approvalApi.approveDepartment).not.toHaveBeenCalled()
     expect(BASE_PROPS.onChanged).toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('ขั้น 2'))
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step 2'))
   })
 
-  it('hides อนุมัติ for an admin on PENDING_APPROVER2 (positions 2/3 are never overridable, D4)', async () => {
+  it('hides Approve for an admin on PENDING_APPROVER2 (positions 2/3 are never overridable, D4)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({ status: 'PENDING_APPROVER2', current_position: 2, can_act: false }),
     )
@@ -287,19 +287,19 @@ describe('ApprovalActionBar', () => {
   // Filler-blocked-hint fix (2026-08-16, jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"):
   // the hint used to be gated to admins only (`adminViewEnabled && !isFillerOfDept`)
   // -- a Filler who lost the button silently got no explanation at all.
-  it('shows a Thai explanation to a blocked Filler, not just to a blocked admin (jakkaritw 2026-08-16)', async () => {
+  it('shows an explanation to a blocked Filler, not just to a blocked admin (jakkaritw 2026-08-16)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: 'department_empty' }),
     )
     render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
     await waitFor(() =>
-      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ'),
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('This department has no budget data yet'),
     )
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
 
   it.each(['year_not_open', 'past_deadline'] as const)(
-    'shows the filler-reachable %s reason as a Thai hint next to the chip',
+    'shows the filler-reachable %s reason as a hint next to the chip',
     async (reason) => {
       vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
         state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: reason }),
@@ -317,7 +317,7 @@ describe('ApprovalActionBar', () => {
       }),
     )
     render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
-    await screen.findByText('ส่งแล้ว — แก้ไขไม่ได้จนกว่าจะถูกตีกลับ')
+    await screen.findByText('Submitted — locked for editing until it is rejected')
     expect(screen.queryByTestId('approval-submit-blocked-hint')).not.toBeInTheDocument()
   })
 

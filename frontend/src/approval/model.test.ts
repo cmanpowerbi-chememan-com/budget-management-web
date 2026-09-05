@@ -30,7 +30,7 @@ describe('approverLabel', () => {
   it('falls back to a generic role label at position 1 (no name available)', () => {
     const label = approverLabel(1, '200')
     expect(label).not.toContain('200')
-    expect(label).toContain('ผู้บังคับบัญชา')
+    expect(label).toContain('Direct manager')
   })
 
   it('names Nipaporn even at position 1 when approver1 collapsed onto her empcode (invalid-approver1 fallback)', () => {
@@ -40,21 +40,21 @@ describe('approverLabel', () => {
 
 describe('statusChipLabel', () => {
   it('labels DRAFT plainly', () => {
-    expect(statusChipLabel({ status: 'DRAFT', current_position: null, current_approver_empcode: null })).toContain('แบบร่าง')
+    expect(statusChipLabel({ status: 'DRAFT', current_position: null, current_approver_empcode: null })).toContain('Draft')
   })
 
   it('labels a PENDING step with the position number and approver name', () => {
     const label = statusChipLabel({ status: 'PENDING_APPROVER2', current_position: 2, current_approver_empcode: '101032' })
-    expect(label).toContain('ขั้น 2')
+    expect(label).toContain('Step 2')
     expect(label).toContain('นิภาพร')
   })
 
   it('labels APPROVED plainly', () => {
-    expect(statusChipLabel({ status: 'APPROVED', current_position: null, current_approver_empcode: null })).toContain('อนุมัติแล้ว')
+    expect(statusChipLabel({ status: 'APPROVED', current_position: null, current_approver_empcode: null })).toContain('Approved')
   })
 
   it('labels REJECTED plainly', () => {
-    expect(statusChipLabel({ status: 'REJECTED', current_position: null, current_approver_empcode: null })).toContain('ตีกลับ')
+    expect(statusChipLabel({ status: 'REJECTED', current_position: null, current_approver_empcode: null })).toContain('Rejected')
   })
 })
 
@@ -159,12 +159,12 @@ describe('submitBlockedReasonLabel', () => {
     expect(submitBlockedReasonLabel(null)).toBeNull()
   })
 
-  it("explains shape (a)'s admin_cannot_submit_in_cycle reason in Thai", () => {
-    expect(submitBlockedReasonLabel('admin_cannot_submit_in_cycle')).toContain('รอบอนุมัติปกติ')
+  it("explains shape (a)'s admin_cannot_submit_in_cycle reason", () => {
+    expect(submitBlockedReasonLabel('admin_cannot_submit_in_cycle')).toContain('normal approval cycle')
   })
 
-  it("explains department_empty in Thai, matching the server's own DepartmentEmptyError text", () => {
-    expect(submitBlockedReasonLabel('department_empty')).toBe('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงส่งอนุมัติไม่ได้')
+  it('explains department_empty, for a department with no budget data yet', () => {
+    expect(submitBlockedReasonLabel('department_empty')).toBe('This department has no budget data yet, so it cannot be submitted.')
   })
 
   it('returns null for an unmapped/unknown reason code (never shows a raw machine code)', () => {
@@ -175,22 +175,22 @@ describe('submitBlockedReasonLabel', () => {
   // these 3 reasons are the filler-reachable ones confirmed against
   // `evaluate_submit_eligibility` in backend/app/approval.py (department_empty
   // was already covered above, since it fires for every caller).
-  it('explains year_not_open in Thai, saying the year has not opened yet', () => {
-    expect(submitBlockedReasonLabel('year_not_open')).toContain('ยังไม่เปิด')
+  it('explains year_not_open, saying the year has not opened yet', () => {
+    expect(submitBlockedReasonLabel('year_not_open')).toContain('not open')
   })
 
-  it('explains past_deadline in Thai, saying the deadline has already passed', () => {
-    expect(submitBlockedReasonLabel('past_deadline')).toContain('เลยกำหนด')
+  it('explains past_deadline, saying the deadline has already passed', () => {
+    expect(submitBlockedReasonLabel('past_deadline')).toContain('has passed')
   })
 
-  it('explains invalid_approval_state in Thai (already mid-chain or approved)', () => {
-    expect(submitBlockedReasonLabel('invalid_approval_state')).toContain('ส่งซ้ำไม่ได้')
+  it('explains invalid_approval_state (already mid-chain or approved)', () => {
+    expect(submitBlockedReasonLabel('invalid_approval_state')).toContain('cannot be submitted again')
   })
 
   it('explains not_filler_of_department without assuming the reader is an admin (evaluate_submit_eligibility only returns this reason when scope.is_admin is False -- an actual admin never sees it)', () => {
     const text = submitBlockedReasonLabel('not_filler_of_department')
     expect(text).not.toBeNull()
-    expect(text).not.toContain('ผู้ดูแลระบบ')
+    expect(text).not.toContain('admin')
   })
 })
 
