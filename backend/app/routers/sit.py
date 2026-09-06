@@ -56,13 +56,37 @@ router = APIRouter(prefix="/sit")
 # path — shared by both the set and the clear response.
 _COOKIE_FLAGS = {"httponly": True, "samesite": "lax", "secure": True, "path": "/"}
 
-_DISCLAIMER_TH = "เครื่องมือนี้ใช้เฉพาะสำหรับทดสอบบน staging (SIT) เท่านั้น ห้ามใช้งานจริง"
+# The banner is derived from `app_env`, never hardcoded, because the same picker now
+# serves two very different situations and a wrong banner is worse than none:
+#
+#   app_env="local"  -> staging. Historically the only place this ran.
+#   app_env="uat"    -> PRODUCTION, during a UAT round (2026-09-06). Saying "staging only,
+#                       do not use for real" there is actively false, and it is the exact
+#                       moment the operator most needs to be told the opposite.
+#
+# Deriving it also means the revert (APP_ENV back to "production") needs no second code
+# change — the page 404s again and the banner question disappears with it.
+_DISCLAIMER_STAGING_TH = "เครื่องมือนี้ใช้เฉพาะสำหรับทดสอบบน staging (SIT) เท่านั้น ห้ามใช้งานจริง"
+_DISCLAIMER_UAT_TH = (
+    "โหมด UAT บนระบบจริง (production) — ทุกการกดบันทึก อนุมัติ หรือตีกลับ "
+    "มีผลกับข้อมูลจริงและส่งอีเมลจริงถึงคนจริง "
+    "ระบบจะบันทึกชื่อผู้ที่ถูกสวมสิทธิ์ ไม่ใช่ชื่อผู้ที่กดจริง"
+)
+_UAT_ENV = "uat"
 
 
-def _render_page(targets: list[str], active_target: str) -> str:
+def _mode_copy(settings: Settings) -> tuple[str, str]:
+    """Return `(banner, heading_suffix)` for the current environment."""
+    if settings.app_env.strip().lower() == _UAT_ENV:
+        return _DISCLAIMER_UAT_TH, "UAT"
+    return _DISCLAIMER_STAGING_TH, "SIT"
+
+
+def _render_page(targets: list[str], active_target: str, settings: Settings) -> str:
     """Build the self-contained (inline CSS, no external assets) picker
     page. Every target is its own same-origin `<form method="post">` so
     selecting one is a real POST, never a GET link."""
+    disclaimer, mode = _mode_copy(settings)
     rows = []
     for target in targets:
         safe_target = escape(target)
@@ -78,7 +102,7 @@ def _render_page(targets: list[str], active_target: str) -> str:
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<title>SIT Impersonation</title>
+<title>{mode} Impersonation</title>
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }}
   .banner {{ background: #fff3cd; border: 1px solid #d1a300; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; font-size: 14px; }}
@@ -89,8 +113,8 @@ def _render_page(targets: list[str], active_target: str) -> str:
 </style>
 </head>
 <body>
-  <div class="banner">{_DISCLAIMER_TH}</div>
-  <h1>เลือกสวมสิทธิ์ผู้อนุมัติ (SIT impersonation)</h1>
+  <div class="banner">{disclaimer}</div>
+  <h1>เลือกสวมสิทธิ์ผู้อนุมัติ ({mode} impersonation)</h1>
   <p>สวมสิทธิ์ปัจจุบัน: <strong>{escape(active_target)}</strong></p>
   {''.join(rows)}
   <form method="post">
@@ -147,7 +171,7 @@ def impersonate_page(
         raise HTTPException(status_code=404)
 
     active_target = _select_sit_target(targets, sit_as)
-    return HTMLResponse(_render_page(targets, active_target))
+    return HTMLResponse(_render_page(targets, active_target, settings))
 
 
 @router.post("/impersonate")

@@ -87,6 +87,55 @@ def test_get_page_marks_the_cookie_selected_target_as_active(client):
     assert TARGET_2 in response.text
 
 
+UAT_SETTINGS = Settings(
+    _env_file=None,
+    app_env="uat",
+    admin_emails=ADMIN_EMAIL,
+    sit_impersonate=f"{ADMIN_EMAIL}:{TARGET_1},{TARGET_2}",
+)
+
+
+def test_get_page_in_uat_warns_about_production_instead_of_claiming_staging(client):
+    """`app_env="uat"` means the picker is running on PRODUCTION (2026-09-06).
+
+    The staging banner would then be actively false — it tells the operator the
+    opposite of the truth at exactly the moment the warning matters most.
+    """
+    _override_settings(UAT_SETTINGS)
+    body = client.get("/sit/impersonate", headers=_admin_headers()).text
+
+    assert "staging" not in body.lower()
+    assert "ห้ามใช้งานจริง" not in body
+    assert "UAT" in body
+    assert "production" in body.lower()
+    # the three things an operator must know before clicking a target here
+    assert "ข้อมูลจริง" in body
+    assert "อีเมลจริง" in body
+    assert "ไม่ใช่ชื่อผู้ที่กดจริง" in body  # the audit trail records the TARGET
+
+
+def test_get_page_in_staging_keeps_the_staging_banner(client):
+    """Pin the other branch, so a future edit cannot silently swap the copy."""
+    _override_settings(SIT_SETTINGS)
+    body = client.get("/sit/impersonate", headers=_admin_headers()).text
+
+    assert "staging (SIT)" in body
+    assert "ห้ามใช้งานจริง" in body
+    assert "UAT" not in body
+
+
+def test_get_page_titles_and_heading_track_the_environment(client):
+    _override_settings(UAT_SETTINGS)
+    uat_body = client.get("/sit/impersonate", headers=_admin_headers()).text
+    _override_settings(SIT_SETTINGS)
+    sit_body = client.get("/sit/impersonate", headers=_admin_headers()).text
+
+    assert "<title>UAT Impersonation</title>" in uat_body
+    assert "(UAT impersonation)" in uat_body
+    assert "<title>SIT Impersonation</title>" in sit_body
+    assert "(SIT impersonation)" in sit_body
+
+
 def test_get_404_in_production(client):
     prod_settings = Settings(
         _env_file=None,
