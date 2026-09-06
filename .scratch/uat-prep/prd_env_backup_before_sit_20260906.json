@@ -1,0 +1,53 @@
+[
+  {
+    "name": "APP_ENV",
+    "value": "production"
+  },
+  {
+    "name": "FABRIC_SQL_SERVER",
+    "value": "v5o4qez3u4cupase7cogkwvyke-bby6xlm3ncqexly4ozejod2vqe.database.fabric.microsoft.com"
+  },
+  {
+    "name": "FABRIC_SQL_DATABASE",
+    "value": "fabric_sql_database-a42ef9f3-f190-464a-8d5e-c0d41ef9ce42"
+  },
+  {
+    "name": "GOLD_SQL_SERVER",
+    "value": "v5o4qez3u4cupase7cogkwvyke-2nucmmcmvaiejgjtmxgk5gewea.datawarehouse.fabric.microsoft.com"
+  },
+  {
+    "name": "GOLD_SQL_DATABASE",
+    "value": "cman_dw_wh_gold"
+  },
+  {
+    "name": "ADMIN_EMAILS",
+    "value": "jakkaritw@chememan.com,nipapornt@chememan.com,warapornt@chememan.com"
+  },
+  {
+    "name": "APP_BASE_URL",
+    "value": "https://cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io"
+  },
+  {
+    "name": "ENTRA_CLIENT_ID",
+    "secretRef": "entra-client-id",
+    "value": ""
+  },
+  {
+    "name": "ENTRA_CLIENT_SECRET",
+    "secretRef": "entra-client-secret",
+    "value": ""
+  },
+  {
+    "name": "ENTRA_TENANT_ID",
+    "secretRef": "entra-tenant-id",
+    "value": ""
+  },
+  {
+    "name": "GL_EDIT_BY_ENABLED",
+    "value": "true"
+  },
+  {
+    "name": "NOTIFICATIONS_DRY_RUN",
+    "value": "false"
+  }
+]

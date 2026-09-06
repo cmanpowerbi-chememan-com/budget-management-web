@@ -1,0 +1,10 @@
+[
+  {
+    "active": true,
+    "created": "2026-09-06T15:10:39+00:00",
+    "health": "Healthy",
+    "image": "cmanbudgetacr.azurecr.io/budget-web:72affd9",
+    "rev": "cman-budget-web-prd--0000034",
+    "traffic": 100
+  }
+]

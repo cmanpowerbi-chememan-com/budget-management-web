@@ -1,8 +1,24 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-06T21:52:48+0700",
+  "updated": "2026-09-06T22:16:45+0700",
   "tasks": [
+    {
+      "id": "prd-appenv-uat-revert-after-uat",
+      "state": "doing",
+      "created": "2026-09-06T22:16:45+0700",
+      "updated": "2026-09-06T22:16:45+0700",
+      "ai": "MUST REVERT AFTER UAT. Production cman-budget-web-prd had APP_ENV changed 'production' -> 'uat' and SIT_IMPERSONATE added on 2026-09-06, by jakkaritw's explicit decision, so the impersonation picker at GET /sit/impersonate works on the SAME link the 5 UAT testers use (he tried the prd URL, got the designed 404, and chose the one-link option over the two-link split). jakkaritw ran the az command himself - Claude Code's safety classifier blocked it twice for Claude, correctly, since it removes a deliberate production guard. WHY IT IS NARROW: grep over all of backend/ proves app_env is read in only 4 places - auth.py:45 (DEV override, gated on is_local which is strictly app_env=='local', so 'uat' does NOT arm it, and DEV_AUTH_EMAIL is absent from prd anyway = closed twice), auth.py:106 (the impersonation hard gate, the one intentionally unlocked), config.py:241 (a startup warning that only fires when app_env=='production'; it now stops firing - cosmetic, APP_BASE_URL is set correctly), routers/me.py:15 (echoes app_env, so GET /me now returns 'uat'). No is_production helper exists. VERIFIED AFTER: env 12 -> 13 vars, ZERO lost, all original values byte-identical, DEV_AUTH_EMAIL still ABSENT; revision cman-budget-web-prd--0000034 Healthy / RunningAtMaxScale / 100% traffic / 2 replicas; anonymous curl /health = 401 and anonymous /sit/impersonate = 401, so Easy Auth still enforces and the picker is NOT publicly exposed. Targets (6): pornthipp, laddawank, nipapornt, warapornt, arthids, suchanyay - all @chememan.com, from_email pinned to jakkaritw so ONLY he can impersonate (nipapornt/warapornt are admins but are targets, not the from). Backup of the pre-change env: .scratch/uat-prep/prd_env_backup_before_sit_20260906.json (12 vars). REVERT (jakkaritw must run it; the classifier blocks Claude): az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --set-env-vars APP_ENV=production --remove-env-vars SIT_IMPERSONATE . AUDIT WARNING: an impersonated action records the TARGET in budget.approval_log.action_by_email / pending_budget._user, never jakkaritw; only the container log line 'auth: SIT impersonation X -> Y' shows the real actor. Nothing in the schema distinguishes a UAT click from a genuine one - say so in writing whenever a UAT round touches a live department. This is the THIRD outstanding prd revert alongside prd-session-1h-revert-after-uat and ccdept-revert-pornthipp-solution-delivery.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-d3004f7",
+      "state": "done",
+      "created": "2026-09-06T21:53:07+0700",
+      "updated": "2026-09-06T21:53:07+0700",
+      "agent": "autolog",
+      "ai": "docs(uat): record the two-URL lane split [commit d3004f7]"
+    },
     {
       "id": "uat-two-url-lane-split",
       "state": "done",

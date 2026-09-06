@@ -108,6 +108,21 @@ cannot start. D2 is the next decision, because T3, T4, D7 and T6 all hang off it
 > Baseline backup: `prd_auth_backup_before_3h_20260906.json`. **This map is not closed until that
 > revert has run and been verified.**
 >
+> ### ⚠️ OUTSTANDING PRODUCTION GUARD REMOVAL — must also be reverted when UAT ends
+>
+> `APP_ENV` on `cman-budget-web-prd` went **`production` → `uat`** and `SIT_IMPERSONATE` was
+> added (6 targets) on 2026-09-06, so the impersonation picker works on the same link the
+> testers use. This deliberately removes the guard `auth.py:106` describes as "identity-rewrite
+> can never run on PRD no matter what the other settings hold". Tracked as
+> `prd-appenv-uat-revert-after-uat`. Verified narrow: `app_env` is read in only four places and
+> `DEV_AUTH_EMAIL` stays absent, so nothing else was unlocked. Revert (jakkaritw must run it —
+> Claude's safety classifier blocks it):
+>
+> ```bash
+> az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG \
+>   --set-env-vars APP_ENV=production --remove-env-vars SIT_IMPERSONATE
+> ```
+>
 > ### ⚠️ OUTSTANDING MASTER-DATA CHANGE — must also be reverted when UAT ends
 >
 > SharePoint `cc dept.xlsx` row 15 (`10IT012000`, Solution Delivery) went from
@@ -136,17 +151,18 @@ cannot start. D2 is the next decision, because T3, T4, D7 and T6 all hang off it
   the cookie is 1 hour — **jakkaritw accepted that as-is on 2026-09-06, so it is not to be fixed**;
   it self-heals the moment the cookie is reverted. The trade is that the run plan and the pack MUST
   carry it as a known issue (T6), or five testers will each report it.
-- **Two URLs, one system** (2026-09-06, extends D1, ledger `uat-two-url-lane-split`): the five
-  testers use the **production** URL and sign in as themselves; jakkaritw uses the **staging**
-  URL only when he needs the impersonation picker. Chosen over enabling impersonation on
-  production, which `auth.py:106` blocks by a hard gate written as "identity-rewrite can never
-  run on PRD no matter what the other settings hold". Setting `APP_ENV=uat` on prd would in fact
-  have worked and unlocked only that one behaviour (`app_env` is read in just three places), but
-  it breaks the invariant and adds a third revert; staging already gives the same capability for
-  free. **These are NOT isolated environments** — same image, same database, same real unlabelled
-  mail, so an approve clicked on staging is visible on production immediately. **Testers must
-  never be given the staging link**: the picker is there and `DEV_AUTH_EMAIL=pornthipp` is armed
-  behind Easy Auth. Gap: `suchanyay@` is not among staging's five impersonation targets.
+- **ONE URL, impersonation enabled on production** (2026-09-06, FINAL — supersedes the two-URL
+  split first recorded in ledger `uat-two-url-lane-split`): all five testers use the
+  **production** URL and sign in as themselves, and jakkaritw gets the impersonation picker at
+  `/sit/impersonate` on that same URL. The deciding factor was that switching URLs mid-round is
+  where a tester goes wrong, and this round has five real people in it. Applied by setting
+  `APP_ENV=uat` and `SIT_IMPERSONATE` (6 targets: pornthipp, laddawank, nipapornt, warapornt,
+  arthids, suchanyay) on the production container. jakkaritw ran the command himself because
+  Claude's safety classifier refused it twice — correctly, since it removes a deliberate
+  production guard. Cost: a third outstanding revert, `prd-appenv-uat-revert-after-uat`.
+  Staging keeps its own picker and stays the rehearsal environment, but the round no longer
+  needs it. **Note the route is `/sit/impersonate` on both machines** — the `sit` in the path is
+  the page's name, not the environment's, and there is no `/prd/impersonate`.
 - [D4 — What goes into the UAT pack?](tickets/D4-pack-scope.md): **a business-acceptance subset
   (~30) plus the ~25 new-behaviour cases**. Security, Data Integrity, SQL-judged cases and TC-027
   are dropped; TC-061, TC-057, TC-013, TC-035 and TC-005 are rewritten because they now assert
