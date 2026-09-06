@@ -1,14 +1,30 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-06T22:16:45+0700",
+  "updated": "2026-09-06T23:44:09+0700",
   "tasks": [
+    {
+      "id": "sit-banner-env-aware-deploy",
+      "state": "done",
+      "created": "2026-09-06T23:43:58+0700",
+      "updated": "2026-09-06T23:43:58+0700",
+      "ai": "DEPLOYED 11acba9 to stg + prd 2026-09-06. The /sit/impersonate picker's yellow banner used to hardcode 'เครื่องมือนี้ใช้เฉพาะสำหรับทดสอบบน staging (SIT) เท่านั้น ห้ามใช้งานจริง'. Once the picker was enabled on production for UAT that sentence became the OPPOSITE of the truth, at the moment the warning matters most. Banner, <title> and <h1> now derive from settings.app_env via _mode_copy() in backend/app/routers/sit.py: app_env=='uat' -> names production and states the 3 things that matter (ข้อมูลจริง / อีเมลจริง / ระบบบันทึกชื่อผู้ถูกสวมสิทธิ์ ไม่ใช่ชื่อผู้ที่กดจริง) + heading '(UAT impersonation)'; anything else -> unchanged staging copy + '(SIT impersonation)'. Deriving instead of editing the literal means the post-UAT revert (APP_ENV back to production) needs NO second code change - the route 404s and the banner question disappears with it. Tests +3 in backend/tests/test_sit.py pinning both branches' copy and the title/heading; test_sit 25->28, auth+sit+config suite 78 passed. Commit 11acba9. DEPLOY: jakkaritw ran az acr build + both containerapp updates himself because Claude Code's safety classifier blocked build and deploy in this session. VERIFIED: ACR run cm1x Succeeded tag 11acba9; BOTH containers on cmanbudgetacr.azurecr.io/budget-web:11acba9; stg rev 0000069 Healthy/ScaledToZero/100 (minReplicas=0, normal), prd rev 0000035 Healthy/RunningAtMaxScale/100; anonymous /health AND /sit/impersonate = 401 on both so Easy Auth still enforces and the picker is not public; env survived the image swap - stg APP_ENV=local, prd APP_ENV=uat. NOT verified by AI: the rendered banner text on screen - jakkaritw is the visual reviewer per project rule (never Read screenshots).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-2a665d5",
+      "state": "done",
+      "created": "2026-09-06T22:19:59+0700",
+      "updated": "2026-09-06T22:19:59+0700",
+      "agent": "autolog",
+      "ai": "feat(uat): one link for the round — impersonation enabled on production [commit 2a665d5]"
+    },
     {
       "id": "prd-appenv-uat-revert-after-uat",
       "state": "doing",
       "created": "2026-09-06T22:16:45+0700",
-      "updated": "2026-09-06T22:16:45+0700",
-      "ai": "MUST REVERT AFTER UAT. Production cman-budget-web-prd had APP_ENV changed 'production' -> 'uat' and SIT_IMPERSONATE added on 2026-09-06, by jakkaritw's explicit decision, so the impersonation picker at GET /sit/impersonate works on the SAME link the 5 UAT testers use (he tried the prd URL, got the designed 404, and chose the one-link option over the two-link split). jakkaritw ran the az command himself - Claude Code's safety classifier blocked it twice for Claude, correctly, since it removes a deliberate production guard. WHY IT IS NARROW: grep over all of backend/ proves app_env is read in only 4 places - auth.py:45 (DEV override, gated on is_local which is strictly app_env=='local', so 'uat' does NOT arm it, and DEV_AUTH_EMAIL is absent from prd anyway = closed twice), auth.py:106 (the impersonation hard gate, the one intentionally unlocked), config.py:241 (a startup warning that only fires when app_env=='production'; it now stops firing - cosmetic, APP_BASE_URL is set correctly), routers/me.py:15 (echoes app_env, so GET /me now returns 'uat'). No is_production helper exists. VERIFIED AFTER: env 12 -> 13 vars, ZERO lost, all original values byte-identical, DEV_AUTH_EMAIL still ABSENT; revision cman-budget-web-prd--0000034 Healthy / RunningAtMaxScale / 100% traffic / 2 replicas; anonymous curl /health = 401 and anonymous /sit/impersonate = 401, so Easy Auth still enforces and the picker is NOT publicly exposed. Targets (6): pornthipp, laddawank, nipapornt, warapornt, arthids, suchanyay - all @chememan.com, from_email pinned to jakkaritw so ONLY he can impersonate (nipapornt/warapornt are admins but are targets, not the from). Backup of the pre-change env: .scratch/uat-prep/prd_env_backup_before_sit_20260906.json (12 vars). REVERT (jakkaritw must run it; the classifier blocks Claude): az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --set-env-vars APP_ENV=production --remove-env-vars SIT_IMPERSONATE . AUDIT WARNING: an impersonated action records the TARGET in budget.approval_log.action_by_email / pending_budget._user, never jakkaritw; only the container log line 'auth: SIT impersonation X -> Y' shows the real actor. Nothing in the schema distinguishes a UAT click from a genuine one - say so in writing whenever a UAT round touches a live department. This is the THIRD outstanding prd revert alongside prd-session-1h-revert-after-uat and ccdept-revert-pornthipp-solution-delivery.",
+      "updated": "2026-09-06T23:44:09+0700",
+      "ai": "[UPDATE 2026-09-06] Unchanged obligation, but the revert is now code-free. Image 11acba9 (deployed to BOTH containers) made the /sit/impersonate banner derive from app_env, so setting APP_ENV back to 'production' both closes the picker (404) and retires the UAT banner in one move - no second deploy, no string edit. Both containers now run cmanbudgetacr.azurecr.io/budget-web:11acba9; prd rev 0000035 Healthy/100, stg rev 0000069 Healthy/100. REVERT COMMAND UNCHANGED (jakkaritw must run it, the classifier blocks Claude): az containerapp update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --set-env-vars APP_ENV=production --remove-env-vars SIT_IMPERSONATE",
       "agent": "claude"
     },
     {
@@ -1416,14 +1432,6 @@
       "agent": "claude"
     },
     {
-      "id": "gate-d2-live-department-resolution",
-      "state": "done",
-      "created": "2026-08-07T23:22:28+0700",
-      "updated": "2026-08-07T23:22:44+0700",
-      "ai": "Fixed. New shared helper _resolve_live_department(cc,row,cc_dims) in backend/app/read_model.py: live cc_dims first, then pending.department, then board.department (lock decision also appends department_filter as harmless last resort). Both merge_budget_rows consumers (department_filter grouping + editable-lock) now call it -- can never disagree. cc_dims fetch condition in get_budget_grid left unchanged (verified sufficient, reasoning in plan.md). Docstrings corrected in read_model.py (merge_budget_rows, fetch_locked_departments) + approval.py (LOCKED_APPROVAL_STATUSES comment) -- no longer describe snapshot-first order, name the one remaining theoretical edge (CC deleted entirely from cc_filler_map, matches write path's own accepted fail-open policy). 6 new tests in test_read_model.py (2 actually went RED pre-fix reproducing both divergence directions proven live on prod 2026-08-07 w/ CC 10IT012000; 4 are regression guards that already passed). Backend 869 passed/48 deselected (was 863). Frontend vitest 590/590, next build clean. Write path untouched. Not committed, not deployed per instructions.",
-      "agent": "claude"
-    },
-    {
       "id": "sit-wave-a",
       "state": "doing",
       "created": "2026-08-07T13:18:55+0700",
@@ -1436,14 +1444,6 @@
       "created": "2026-08-06T01:31:12+0700",
       "updated": "2026-08-06T02:57:41+0700",
       "ai": "PAUSED 2026-08-05 - jakkaritw confirmed values to use (spec-based: Dept Head 300/80/90, Operator 1/2/3 200/70/80, Driver 200/60/70; Maid stays 0/intentional) but said 'skip this topic' before executing - deferred, not fixed. Attempted fix via Graph API PATCH to SharePoint source ค่าเบี่ยเลี้ยง.xlsx (drive b!yMQKs8rOc0CSyxosit6gVJ-jsz3SMHhEsjhrhVwMu3U6WiCnc-8ET6z8xMhvYx2y, item 01BDTJLIM34PDYAMMGHBG3NT6DI3RJUZFF, Sheet1, rows B20:D23=Operator1/2/3+Driver, B25:D25=Dept Head) - BLOCKED by Claude Code auto-mode classifier (external write action), twice, even after explicit user reconfirmation in chat. Needs either a Bash permission-rule change in settings, or jakkaritw edits the xlsx himself then asks for the dbo.per_diem_rate DB-side update + verify. Exact cell values already given to jakkaritw in chat as a copy-paste table. 291 real employees still affected (0 THB per-diem) until this lands.",
-      "agent": "claude"
-    },
-    {
-      "id": "adr0013-readonly-lock-port",
-      "state": "done",
-      "created": "2026-08-05T11:00:51+0700",
-      "updated": "2026-08-07T23:25:02+0700",
-      "ai": "[CROSS-SESSION UPDATE gate-d2-live-department-resolution 2026-08-07] D2 is now CLOSED - see task gate-d2-live-department-resolution. jakkaritw decided option A (fix both read-path consumers). read_model.merge_budget_rows now resolves department live-first via new _resolve_live_department(cc,row,cc_dims) helper (cc_dims -> pending.department -> board.department, matching write_model._lookup_cc_dims exactly), used by both the department_filter grouping and the editable-lock decision. Docstrings in read_model.py/approval.py corrected accordingly. Backend 869 passed (was 863, +6). Original entry preserved below.\n\nGATE fix pass (06+07+08 combined, APPROVE-WITH-SUGGESTIONS, security PASS 8/8) applied same day: (1) dropped dead PENDING_STATUSES import write_model.py; (2) corrected overclaimed can-never-drift-apart docstrings in approval.py/read_model.py/plan.md -> only the status SET is shared, dept resolution still snapshot(read) vs live(write), flagged D2 for jakkaritw; (3) BudgetGrid.test.tsx +4 tests closing zero-coverage on readOnly wiring line, RED-first confirmed by inverting; (4) closed gate D1 - get_budget_grid now fetches cc_dims when locked_departments non-empty even without department_filter (was fail-open bug for SAP-led rows on plain grid load), RED-first confirmed, +2 tests; (5) added fetch_locked_departments query-shape test (was fully monkeypatched/unverified), +3 tests; optional admin_wide skip applied +1 test. Backend 863 passed/48 deselected (was 857). Frontend 585 passed/33 files (was 581). next build clean, oxlint clean, checks.sh clean. Explicitly NOT touched (AT THE TIME): D2 resolution order itself (needs jakkaritw), flaky BudgetGrid.test.tsx:261/279 toHaveBeenCalledTimes(1) (pre-existing, separate ticket), traveller-PII question. Still not committed.",
       "agent": "claude"
     },
     {
