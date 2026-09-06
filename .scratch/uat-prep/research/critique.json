@@ -1,0 +1,109 @@
+{
+ "gaps": [
+  {
+   "gap": "The UAT test-case pack does not exist in any form. Verified: `C:\\04.budget_management_web\\requirement_spec\\5_uat\\` is an empty, untracked directory (created 2026-09-06 03:23, zero files). The pooled research proposes 25 new cases (U-01..U-25) and a folder layout, but nobody has decided which of the 61 SIT cases carry over, who writes the workbook, or how many cases it holds. `tracker/task.py list` shows `wayfinder-uat-prep` still `doing`, and its claimed map `.scratch/uat-prep/MAP.md` does not exist (`.scratch/` contains only `other-travel-gl-move`).",
+   "why_it_matters": "The destination requires the pack to exist in `requirement_spec\\5_uat`. Zero percent of it exists, and its input (which SIT cases survive) is an unmade decision, not a writing task.",
+   "how_to_close": "jakkaritw picks the carry-over rule (open decision 5), then one agent generates `Budget_UAT_Test_Cases_<DD.MM.YYYY>.xlsx` by importing the proven SharePoint + sensitivity-label helpers from `setup/update_sit_test_cases.py` and `setup/fill_sit_test_case_gaps.py` rather than re-implementing them a third time.",
+   "severity": "blocking"
+  },
+  {
+   "gap": "No rollback contract exists for what UAT will write, and APPROVED is terminal inside the application. Verified: `backend/app/routers/approval.py` exposes only `/submit`, `/approve`, `/reject`, `/override-step`, `/pending-for-me`, `/locked-departments`, `/status` — there is NO reopen or reset route. `approval.py:692-695` refuses a filler resubmit unless `status == REJECTED`. `write_model.py:551` (`if scope.is_admin:`) returns BEFORE the `LOCKED_APPROVAL_STATUSES` check at `:558`, so an admin can still edit the money rows of an APPROVED department but nothing in the app can un-APPROVE the status row. The only restore scripts in the repo (`plan/sit/restore_fy2027_testdata.sql`, `plan/sit/restore_stale_testdata_2026-08-07.sql`) are 2026-08-05 snapshots of data that no longer exists.",
+   "why_it_matters": "Staging and production share one Fabric SQL database and `dbo.submission_deadline` holds exactly one row (FY2027, deadline_date 2026-10-07, verified live), so UAT must write the live planning cycle. If UAT drives `Solution Delivery/2027` to APPROVED, Suchanya's real budget is frozen at UAT's test numbers and only a direct DB UPDATE frees it — and no such script has been written or reviewed.",
+   "how_to_close": "Before the round: SELECT-export all six `budget.*` tables to a dated file, and pre-write plus review the un-approve / delete statements for the two or three UAT cost centers. Then settle open decision 3.",
+   "severity": "blocking"
+  },
+  {
+   "gap": "The destination assumes staging, but staging-vs-production was never actually decided, and every staging-hardening item is conditional on that unmade choice. The SIT workbook Info sheet used the staging URL; the pooled UAT proposal uses the production URL; the August status report already promised a production pilot. Measurably, staging is LESS realistic than production, not more: same image `72affd9`, same database, same real unlabelled mail, but plus `SIT_IMPERSONATE`, `DEV_AUTH_EMAIL=pornthipp@chememan.com`, `APP_ENV=local`, `minReplicas=0` cold starts, a different Entra app registration, and no cookie-lifetime setting.",
+   "why_it_matters": "If UAT runs on production, the 1-hour session change, the SIT_IMPERSONATE removal, the DEV_AUTH_EMAIL removal and the Entra-consent check are all wasted work, and the pack's Info sheet points at the wrong URL.",
+   "how_to_close": "jakkaritw decides open decision 1 first; sequence everything else behind it.",
+   "severity": "blocking"
+  },
+  {
+   "gap": "The Solution Delivery role problem has a verified diagnosis but no priced options and no owner. Verified live: `dbo.cc_filler_map` returns exactly 5 rows for the two departments, and `Solution Delivery` has one filler only (`10IT012000` / `suchanyay@chememan.com`); `dbo.v_employee_budget_01` confirms suchanyay (101159) and laddawank (101431) BOTH report to 101622 (arthids). The pooled research stops at 'impossible via configuration' and never evaluates the two workarounds that do exist: (a) `POST /approval/override-step` — verified admin-only, position-1-only at `backend/app/routers/approval.py:340-357` — lets Nipaporn skip Arthid entirely; (b) adding Pornthip as a Solution Delivery filler makes Laddawan approver1 naturally, at the cost of a production master edit to `cc dept.xlsx` with ~24h sync latency (`_load_dttm 2026-09-05 06:31:58`) and no written revert.",
+   "why_it_matters": "'Every role assignment is settled' is a destination condition. Today the second department has neither a UAT filler nor a UAT approver, and the leading fix is a production master-data edit nobody has scheduled or agreed to reverse.",
+   "how_to_close": "jakkaritw picks from open decision 2; whoever executes records the pre-change SharePoint version of `cc dept.xlsx` and files a dated revert task in the tracker the same day.",
+   "severity": "blocking"
+  },
+  {
+   "gap": "jakkaritw cannot act as himself on staging, so two proposed admin UAT cases are unrunnable there. Verified in `backend/app/auth.py`: `_apply_sit_impersonation` (:191-215) rewrites the caller on EVERY request when the guard passes, and `_select_sit_target` (:137-154) returns `targets[0]` when no `sit_as` cookie is present — that is `pornthipp@chememan.com`. The 'clear' button only deletes the cookie, so the next request falls straight back to Pornthip. No pooled finding turns this into an action item.",
+   "why_it_matters": "Proposed cases U-06 (admin still sees the seminar GLs) and U-15 (admin step-override confirm dialog) both require jakkaritw to be an admin. On staging he is silently a non-admin filler, and every write he makes is signed with Pornthip's name.",
+   "how_to_close": "Remove `SIT_IMPERSONATE` from the staging container for the UAT window, or run those two cases as Nipaporn/Waraporn, or moot it by running UAT on production where the variable is absent.",
+   "severity": "important"
+  },
+  {
+   "gap": "The 1-hour session-expiry change has no stated purpose and a side effect nobody priced. Verified: the dialog copy is hardcoded at `frontend/src/api/sessionExpiry.ts:16` — 'หมดเวลาการเข้าใช้งาน (ระบบให้ล็อกอินได้ครั้งละ 14 ชั่วโมง) กรุณา login ใหม่อีกครั้ง'. On a 1-hour staging that sentence is false to every tester. The pooled research also overstates the fix cost: it names three tests asserting the literal string; grep over `frontend/src` finds it in exactly two files total — the source line and `frontend/src/grid/BudgetGrid.test.tsx:162`.",
+   "why_it_matters": "A tester reading a wrong number in an error dialog will file it as a defect. And because there is no `tokenStore` on either app the lifetime is fixed, not sliding — a 3-hour UAT session forces two to three re-logins per attendee, which must be in the script rather than a surprise.",
+   "how_to_close": "Ask jakkaritw why 1 hour is wanted. If it is only to exercise the dialog once, do it as a scripted short window at the end of day 1. If it stays on for the round, make the copy env-driven first — one source line and one test, not three.",
+   "severity": "important"
+  },
+  {
+   "gap": "No dates, no entry/exit criteria, no Go/No-Go gate, and an expired go-live target. Verified: nothing under `requirement_spec/` defines UAT criteria; `.claude/plan.md` mentions UAT exactly once (line 287, inside an ADR-0029 note); the only recorded go-live target (end of August 2026) has passed with nothing superseding it. The Go/No-Go bullets were promised to management in `monthly_update/project_status_report_2026-08.html` but were never turned into a checkable gate. Separately `dbo.submission_deadline.reminder_date = 2026-09-22` (verified live) — the real deadline-reminder mail to real fillers fires inside any plausible UAT window.",
+   "why_it_matters": "Without a written exit gate 'UAT passed' is an opinion, and the round can collide with the genuine 2026-09-22 reminder mail and the 2026-10-07 deadline.",
+   "how_to_close": "Write `requirement_spec/5_uat/UAT_Entry_Exit_Criteria.md` in Thai, porting `plan/sit/sit-test-plan.md:913-946` plus the six management Go/No-Go bullets, and set the window dates against 2026-09-22 and 2026-10-07.",
+   "severity": "important"
+  },
+  {
+   "gap": "Unverified: whether the five attendees can even sign in to the staging app. Staging uses a different Entra app registration (`7035aa47-0398-4b71-8411-7fc372e82123`, `isAutoProvisioned: false`) from production (`61d5d556-ee48-44f7-91b3-b8e05d6419aa`). This project already has a recorded incident where non-admin logins hit 'Need admin approval' until one tenant-wide User.Read consent was granted per Easy Auth app. Nobody probed the consent state for the staging registration, and it is not checkable read-only from here.",
+   "why_it_matters": "If it bites, it bites all five testers in the first five minutes and the day is lost.",
+   "how_to_close": "Have one non-admin attendee (Pornthip) open the staging URL and sign in once before the round — or moot it by running on production.",
+   "severity": "minor"
+  }
+ ],
+ "contradictions": [
+  "SIT recorded a role the code makes impossible. uat-artifacts: the workbook Info sheet reads \"Role–Approver 2=Jakkarit\". people-scope: \"Jakkarit `jakkaritw@` — none — NOT in view; 0 rows in `dbo.employee_master` … can never be approver1/2/3; admin-only\", with positions 2 and 3 as compile-time constants `NIPAPORN_EMPCODE = \"101032\"` / `WARAPORN_EMPCODE = \"100427\"` (`approval.py:59-60`). I re-queried `dbo.v_employee_budget_01` for all seven emails and got 6 rows back — jakkaritw is absent. So SIT's step-2/3 approvals (TC-043..046) were performed by impersonating Nipaporn/Waraporn, and any UAT plan that lists Jakkarit as an approver is wrong on its face.",
+  "A locked jakkaritw decision was overturned by shipped code and the ledger still records the old rule. post-sit-changes quotes tracker `pending-round-to-hundreds` (2026-08-20): \"'100 ล้าน ตอนนี้ตัดเงียบ OK' … no warning dialog, no toast, no inline message… DO NOT 'improve' this later into a warning without asking him again.\" The same findings then record `053fabc` (2026-08-29): \"Brand-new toast surface (`platform/notice.ts` + `NoticeToasts.tsx`, App root, TTL 6 s, max 3, `role=status`) narrating every Pending-amount correction, 3 distinct Thai messages\" — LIVE on both stg and prd. Either the ledger entry or the shipped behaviour has to give before UAT tests it.",
+  "The UAT environment is asserted two ways. The task destination and the SIT-era artifacts assume staging (\"staging is configured and safe for a 5-person, 2-department UAT round\"; SIT Info sheet Environment = stg URL). uat-artifacts records the opposite commitment: proposed Info sheet \"`Environment` = prd URL\", and, already promised to management in `project_status_report_2026-08.html`, \"pilot on production, 1–2 departments, 3–5 working days\". Nobody has reconciled these, and the entire staging-hardening list only makes sense under the first reading.",
+  "A proposed UAT case cannot run on the environment it is proposed for. sit-coverage-gaps proposes U-06: \"ล็อกอินเป็น admin (jakkaritw / nipapornt / warapornt) เปิด picker เดียวกัน ตรวจว่า ยังเห็น GL อบรมและสัมมนาอยู่ (admin bypass)\". stg-realism states: \"On staging today, jakkaritw can never act as jakkaritw; he is Pornthip by default and one of {pornthipp, laddawank, nipapornt, warapornt, arthids} at best.\" I confirmed the mechanism at `auth.py:137-154` and `:191-215`. On staging, U-06 tests Pornthip, not an admin.",
+  "The cost of fixing the session-expiry copy is overstated. session-expiry: \"it would … change production's copy unless made env-driven … `frontend/src/api/sessionExpiry.ts:16` plus 3 tests that assert the literal string — `frontend/src/api/client.test.ts`, `frontend/src/auth/SessionExpiredDialog.test.tsx`, `frontend/src/grid/BudgetGrid.test.tsx:162`.\" Verified by grep over `frontend/src`: the literal appears in exactly two files — `sessionExpiry.ts:16` and `BudgetGrid.test.tsx:162`. One source line and one test, not three."
+ ],
+ "open_decisions": [
+  {
+   "question": "Does UAT run on staging or on production? Decide this FIRST — everything else in the prep branches off it.",
+   "options": [
+    "Staging (`cman-budget-web-stg`) — requires removing SIT_IMPERSONATE and DEV_AUTH_EMAIL, deciding the cookie lifetime, warming the container (minReplicas 0), and confirming Entra consent on app registration 7035aa47…; still writes the same production database and still sends real unlabelled mail.",
+    "Production (`cman-budget-web-prd`) — zero config changes: no impersonation, no DEV override, two always-on replicas, a 14h cookie, everyone is themselves; matches the pilot already promised to management.",
+    "Staging first as a rehearsal for the testers, then re-run the acceptance cases on production."
+   ],
+   "recommendation": "Production. Both environments run the identical image `72affd9` against the identical Fabric SQL database and both send real unlabelled mail, so staging buys no safety at all — it only adds three distortions (impersonated identities, a latent whole-app identity override, cold starts) that make UAT verdicts less trustworthy. Running on production deletes four prep items and matches the August commitment. Keep staging as the place to rehearse the script."
+  },
+  {
+   "question": "How does Solution Delivery get a UAT filler and a UAT approver, given its only filler is Suchanya and both she and Laddawan report to Arthid (101622)?",
+   "options": [
+    "(a) Add `(10IT012000, pornthipp@chememan.com)` to `cc dept.xlsx` — Pornthip fills and submits, approver1 resolves to Laddawan automatically. Needs a production master edit, a ~24h sync wait, and a dated revert.",
+    "(b) Add Laddawan as the Solution Delivery filler — she becomes a second filler, but if she submits, approver1 is Arthid, who is not attending and would receive a real unlabelled approval email.",
+    "(c) Invite the real people: Suchanya as filler and Arthid as approver1. Zero master edits, fully realistic, seven attendees instead of five.",
+    "(d) Let Pornthip or Laddawan submit and have Nipaporn use the admin step-override (`POST /approval/override-step`, admin-only, position-1-only) to skip Arthid — no master edit, but Laddawan then approves nothing for that department.",
+    "(e) Drop the second department and run a single-department round like SIT did."
+   ],
+   "recommendation": "(a), with (c) as the better answer if two more people can be in the room. Option (a) is the only one that actually delivers 'Laddawan carries 2 departments', and it is additive — the primary key is `(cost_center, filler_email)` and 153 cost centers already carry more than one filler, so Suchanya loses nothing. Two conditions: record the pre-change SharePoint version of `cc dept.xlsx` and file the revert as a dated tracker task the same day, and tell Suchanya beforehand that her department will be written to and locked during the round. Reject (b) outright — it emails a non-participant a genuine approval request."
+  },
+  {
+   "question": "Does UAT write the live FY2027 planning cycle, or do we open a sandbox fiscal year first?",
+   "options": [
+    "FY2027 (the only open year) with a full pre-UAT snapshot of all six `budget.*` tables and a pre-written restore script, accepting that UAT numbers sit in the real budget until cleaned.",
+    "Add a sentinel year row (e.g. 2099) to the deadline master so testers type into a throwaway year — but it arrives via the daily 06:31 sync, appears in the year picker for all 114 departments, and the previous 2099 attempt returned 403 until a real row was seeded.",
+    "FY2027 but stop the chain short of the final approval so nothing reaches the terminal APPROVED state."
+   ],
+   "recommendation": "FY2027 with a snapshot and a pre-written, pre-reviewed un-approve script. A sentinel year does not test what UAT exists to test (the real cycle, the real deadline, the real numbers) and leaks a junk year to every department. Do not choose option 3 — reaching APPROVED end-to-end is the single most important thing UAT proves, and since the app has no reopen route, the recovery script must be written and reviewed BEFORE the round, not improvised after it."
+  },
+  {
+   "question": "What do UAT emails look like — real and unmarked, labelled, or redirected to one mailbox?",
+   "options": [
+    "Leave as-is: `NOTIFICATIONS_DRY_RUN=false`, no label, no redirect — recipients get mail indistinguishable from production, sent as `cmanpowerbi@chememan.com`.",
+    "Set `NOTIFICATIONS_ENVIRONMENT_LABEL` (red banner plus subject prefix) for the UAT window.",
+    "Set `NOTIFICATIONS_REDIRECT_ALL_TO=<one catcher mailbox>` so no non-attendee is ever mailed.",
+    "`NOTIFICATIONS_DRY_RUN=true` — kills sending entirely and makes all 16 email cases unverifiable."
+   ],
+   "recommendation": "Leave the mail real and unlabelled IF the round is confined to attendees only — unlabelled mail is what UAT is meant to accept — but warn Arthid and Suchanya in advance, and note that the genuine FY2027 deadline reminder fires to all real fillers on 2026-09-22, so either finish before that date or brief people that both mails are real. If any case can route to a non-attendee, switch to the redirect for the window. Never option 4: 16 of the 61 SIT cases are email cases."
+  },
+  {
+   "question": "What goes into the UAT pack — re-run all 61 SIT cases, or a business-acceptance subset plus the new post-SIT behaviour?",
+   "options": [
+    "All 61 SIT cases re-run and re-worded for the English approval UI (11 carry now-wrong Thai expectations) — thorough but heavy for five people in three to five days.",
+    "A business-acceptance subset (~30: drop Security, Data Integrity, backend-SQL-verification cases and TC-027) plus ~25 new cases covering everything shipped after 2026-08-21 — CI theme repaint, per-diem tier 3, searchable destination, seminar GL restriction, amount toasts, trip remark, other-travel GL move, English approval copy, and two-department switching.",
+    "New and changed behaviour only (~25), assuming SIT still holds for everything else."
+   ],
+   "recommendation": "Option 2. Twelve commits shipped AFTER the last SIT case was executed and none was ever exercised; at the same time 11 SIT cases assert Thai strings the app no longer renders, and TC-057 tests a seminar GL that the 2026-08-29 restriction now hides from a Data & Analytic filler. A subset plus the new-behaviour block is the only version that both fits the window and covers the delta. Add a `Department` column — the SIT sheet has none and a two-department round needs one — and fix the three known workbook defects: the missing `Special GL Subform` row in the Summary breakdown, the promised-but-absent Defect ID column, and the hard-coded `$4:$64` ranges with `freeze_panes = I36`."
+  }
+ ]
+}

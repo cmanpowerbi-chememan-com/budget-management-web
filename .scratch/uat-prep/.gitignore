@@ -1,0 +1,15 @@
+# The cc dept.xlsx before/after snapshots stay LOCAL on purpose.
+#
+# They are a full copy of the Cost-Center -> Filler master: 213 rows carrying ~55 employee
+# email addresses. Committing that into git puts a permanent employee-contact dump in history
+# for no benefit, and the SIT safety rules already say evidence files report "counts plus one
+# example row", never a roster.
+#
+# They are also not the revert path. Reverting is
+#   python -X utf8 setup/ccdept_add_filler.py --remove --apply
+# which recomputes from the LIVE file, and SharePoint's own version history (v58.0 is the
+# pre-change version) is the authoritative record. The snapshots are belt-and-braces only.
+#
+# Everything else in this folder — MAP.md, tickets/, research/, and the Easy Auth config
+# JSONs (GUIDs and a secret *name*, no secret values) — is committed.
+*.xlsx

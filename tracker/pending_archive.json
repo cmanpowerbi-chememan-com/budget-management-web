@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-05T19:39:48+0700",
+  "updated": "2026-09-06T21:26:30+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2369,6 +2369,13 @@
       "updated": "2026-08-05T21:35:16+0700",
       "ai": "[CORRECTION 2026-08-05] The 'HIGH finding: read-only lock UNIMPLEMENTED' reported earlier in this entry is WRONG - ADR-0013 read-only lock was already shipped in commit d0672fc (2026-08-05 11:44, gated 06+07+08 APPROVE-WITH-SUGGESTIONS, already had a memory file project_adr0013_readonly_lock_port.md from a prior session documenting this). My code read of DetailSubform.tsx/TripManager.tsx/GridTable.tsx earlier in this session somehow returned pre-d0672fc content despite d0672fc being HEAD at session start - root cause of the stale read unclear, but git diff HEAD confirms current working tree matches HEAD exactly, which HAS full readOnly support (props, disabled inputs, hidden buttons, lock icon, '\\xf0\\x9f\\x94\\x92 \\xe0\\xb8\\x94\\xe0\\xb8\\xb9\\xe0\\xb8\\xa3\\xe0\\xb8\\xb2\\xe0\\xb8\\xa2\\xe0\\xb8\\xa5\\xe0\\xb8\\xb0\\xe0\\xb9\\x80\\xe0\\xb8\\xad\\xe0\\xb8\\xb5\\xe0\\xb8\\xa2\\xe0\\xb8\\x94 button in GridTable.tsx). Told jakkaritw to skip live-testing this in the human test guide based on the wrong finding - corrected in chat. Remaining real findings from this task stand: 2 cosmetic PDF-vs-code label mismatches (non-issues). Separately found+fixed (new task addtxn-special-gl-cc-search / addtxn-cc-search-special-gl): AddTransactionForm blocked special-GL codes entirely, contradicting spec path (kho) - fixed, CC search box added too.",
       "agent": "claude"
+    },
+    {
+      "id": "sit-plan-authoring",
+      "state": "done",
+      "created": "2026-08-07T09:42:27+0700",
+      "updated": "2026-08-07T12:57:08+0700",
+      "ai": "DONE (files written, originals NOT yet deleted - awaiting jakkaritw). plan/sit/sit-test-plan.md 997 lines / 20 Parts + plan/sit/sit-run-log.md 378 lines. Consolidated ui-test-plan.md (12 Parts/96 items) + STAGING_TEST_PLAN.md (5 suites) + 6 git-only plan/*.md. Carried 150 old cases (103 UI + 47 staging) + 153 NEW never-run cases (95 P1); 139 NEW-Ax-nn ids + 8 SIT-00x gate cases. Workflow whye6meaz (wf_7e77918b-92f) 14 agents 0 errors: 4 recon + 7 drafters (169 drafted) + 2 critics (READY-WITH-FIXES / NOT-READY, 16 must-add) + assembler; 28 duplicates merged. CORRECTION TO MY OWN EARLIER CLAIM THIS SESSION: d0672fc is NOT unshipped - verified via az, prod cman-budget-web-prd rev 0000015 image budget-web:1bbddcb created 2026-08-05T15:32Z, and d0672fc (2026-08-05 11:44 tanasedw, same 14 files/740 insertions) is its ancestor => the ADR-0013 read-only lock has been LIVE IN PRODUCTION since 2026-08-05. SIT therefore verifies live behavior, not a pre-deploy gate. Deliberate drops: plan/testscript.md byte-identical to ui-test-plan.md (0 diff); items 5.3/5.4 inverted by 1bbddcb; 6F.5 reversed by 1e441de; DC6 GL counts obsolete (live 146=134+12); spoof-header rule dead (Easy Auth ON both envs since 2026-07-28); port-5180 proxy dead (Next.js); Phase-3 UAT 47 items condensed to a 1-page appendix = the ONE scope reduction. 16 open questions in the plan; 4 BLOCK the run (which dept/year may be used as test field, may prod be written, is the single real-email case approved, may the Excel master be edited). L3 only half-closable: none of the 48 integration tests touches the READ side of the lock. NEXT: jakkaritw approves deleting docs/test/ui-test-plan.md + docs/test/STAGING_TEST_PLAN.md and the 6 already-deleted plan/*.md; results/evidence in docs/test/ stay."
     }
   ]
 }

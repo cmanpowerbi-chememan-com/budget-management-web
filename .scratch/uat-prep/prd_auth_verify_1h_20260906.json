@@ -1,0 +1,41 @@
+WARNING: The behavior of this command has been altered by the following extension: containerapp
+{
+  "encryptionSettings": {},
+  "globalValidation": {
+    "excludedPaths": [],
+    "redirectToProvider": "azureactivedirectory",
+    "unauthenticatedClientAction": "RedirectToLoginPage"
+  },
+  "identityProviders": {
+    "azureActiveDirectory": {
+      "isAutoProvisioned": true,
+      "registration": {
+        "clientId": "61d5d556-ee48-44f7-91b3-b8e05d6419aa",
+        "clientSecretSettingName": "microsoft-provider-authentication-secret",
+        "openIdIssuer": "https://sts.windows.net/13c85daf-a73b-4705-8244-f89c655ab851/v2.0"
+      },
+      "validation": {
+        "allowedAudiences": [
+          "api://61d5d556-ee48-44f7-91b3-b8e05d6419aa"
+        ],
+        "defaultAuthorizationPolicy": {
+          "allowedApplications": [
+            "61d5d556-ee48-44f7-91b3-b8e05d6419aa"
+          ],
+          "allowedPrincipals": {}
+        }
+      }
+    }
+  },
+  "login": {
+    "cookieExpiration": {
+      "timeToExpiration": "01:00:00"
+    },
+    "nonce": {},
+    "preserveUrlFragmentsForLogins": false,
+    "routes": {}
+  },
+  "platform": {
+    "enabled": true
+  }
+}

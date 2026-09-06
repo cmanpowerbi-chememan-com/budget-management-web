@@ -96,9 +96,13 @@ GET    /api/master/<module>/reference/<name>   (e.g. orgcodes, cost-centers)
   CLAUDE.md "Fabric SQL DB — Local Connection Pattern".
 
 ### master-tables rules (non-negotiable)
-- **4 admins, same set across both apps** (master-tables + main budget app), via the
-  `ADMIN_EMAILS` env-var allowlist checked against the SWA principal email:
-  `jakkaritw@chememan.com, nipapornt@chememan.com, warapornt@chememan.com, piyadad@chememan.com`.
+- **3 admins on the budget app**, via the `ADMIN_EMAILS` env-var allowlist checked against the
+  principal email: `jakkaritw@chememan.com, nipapornt@chememan.com, warapornt@chememan.com`
+  (plus `cmanpowerbi@chememan.com`, injected in code by `config.SHARED_ADMIN_MAILBOX`, never via env).
+  Verified live on BOTH containers 2026-09-06. **`piyadad@chememan.com` is NOT an admin of the
+  budget app** — this line used to claim 4 admins including him, and that was wrong; he appears
+  only in the retired master-tables module's own list. `sit-test-plan.md` open decision 6 asks
+  whether to add him; until that is answered, 3 is the live truth.
 - **No audit columns** (`created_by/at`, `deleted_by/at`) — traceability not required at this scale.
 - **Hard delete** is fine — no soft-delete pattern.
 - **orgcode_costcenter module reads `dbo.employee_master`** (the consolidated Fabric SQL

@@ -1,8 +1,48 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-06T01:47:37+0700",
+  "updated": "2026-09-06T21:26:45+0700",
   "tasks": [
+    {
+      "id": "ccdept-revert-pornthipp-solution-delivery",
+      "state": "doing",
+      "created": "2026-09-06T04:58:04+0700",
+      "updated": "2026-09-06T21:26:30+0700",
+      "ai": "[SYNC VERIFIED 2026-09-06] The mapping is now LIVE in dbo.cc_filler_map, so the revert obligation is real and active. The scheduled 06:31 run had already picked up the edit (_load_dttm 2026-09-06 06:31:07, rows 466->467); an on-demand run then confirmed it idempotently - NB_budget_masters_sync in DW ws cman-dw-ws notebook c2908a41-5508-420c-b1cb-d5fc2891b64b, param only_spec='Budget_Masters_cc_filler_map' so only this one master was processed, job f8f792e8-d9c6-4417-b357-79fa37c08612 Completed in 202s, _load_dttm -> 2026-09-06 21:21:18, rows 467->467. Per gotcha C1 the Completed status was NOT trusted alone: the table was re-read and the row confirmed. Reusable trigger: setup/run_ccfiller_sync.py (fails loudly if Completed but row absent). resolve_scope run live against prd: pornthipp role=filler FILL 3 CC (10IT011300,10IT012000,10IT013000) = departments ['Data & Analytic','Solution Delivery'], empcode 101917 manager 101431 -> approver1 will be laddawank for BOTH depts; laddawank FILL 2 CC unchanged but SEE grew 2->3 (she now SEES 10IT012000 via manager-see-add because she manages pornthipp who fills it - See only, never Fill, and it persists until the revert); suchanyay unchanged FILL 1 CC Solution Delivery, NOT displaced. REVERT unchanged: python -X utf8 setup/ccdept_add_filler.py --remove --apply, then re-run setup/run_ccfiller_sync.py to make it live (or wait for 06:31). STILL OPEN: Suchanya and Arthid have NOT been briefed.",
+      "agent": "claude"
+    },
+    {
+      "id": "prd-session-1h-revert-after-uat",
+      "state": "doing",
+      "created": "2026-09-06T04:45:14+0700",
+      "updated": "2026-09-06T04:45:14+0700",
+      "ai": "MUST REVERT AFTER UAT. Production cman-budget-web-prd Easy Auth session cookie was lowered 14:00:00 -> 01:00:00 on 2026-09-06 by jakkaritw's explicit order ('เปลี่ยนเปน ทุกๆ 1 hr ไปเลย แต่โนตไว้ว่าต้องแก้กลับหลัง uat done'). This affects EVERY production user, not just the 5 UAT testers. REVERT COMMAND (one line, easy - prd already HAS a cookieExpiration block, so unlike the 2026-08-18 staging case this does NOT need the strip-and-PUT dance): az containerapp auth update -n cman-budget-web-prd -g CMAN-BUDGET-MNGT-WEB-RG --set login.cookieExpiration.convention=FixedTime --set login.cookieExpiration.timeToExpiration=14:00:00 . Full pre-change ARM backup: .scratch/uat-prep/prd_auth_backup_before_3h_20260906.json (filename says 3h because 3h was asked first then changed to 1h before anything was applied; the file content is the true 14:00:00 baseline). VERIFIED AT APPLY TIME: only timeToExpiration changed, 10 other auth fields byte-identical (platform.enabled, unauthenticatedClientAction=RedirectToLoginPage, redirectToProvider, AAD clientId 61d5d556-ee48-44f7-91b3-b8e05d6419aa, clientSecretSettingName, openIdIssuer, allowedAudiences, allowedApplications, isAutoProvisioned, excludedPaths); login keys unchanged; anonymous curl /health still 401 so Easy Auth still enforcing; staging untouched (still no cookieExpiration block = platform default ~8h). BEHAVIOUR NOTES: expiry is FixedTime from login and does NOT slide with activity (no tokenStore on either app), and it applies only to logins made AFTER the change - anyone already logged in keeps their old 14h cookie until they log out. KNOWN COSMETIC DEFECT NOW LIVE FOR REAL USERS: the session-expired dialog hardcodes 'ระบบให้ล็อกอินได้ครั้งละ 14 ชั่วโมง' at frontend/src/api/sessionExpiry.ts:16 - that sentence is now false on production. One source line + one test (frontend/src/grid/BudgetGrid.test.tsx:162) to fix; NOT fixed, jakkaritw not yet asked. Related: ticket D5 in .scratch/uat-prep/, ADR-0028.",
+      "agent": "claude"
+    },
+    {
+      "id": "wayfinder-uat-prep",
+      "state": "doing",
+      "created": "2026-09-06T03:41:58+0700",
+      "updated": "2026-09-06T21:26:45+0700",
+      "ai": "[2026-09-06 T2 SYNC DONE] dbo.cc_filler_map is LIVE with pornthipp on 10IT012000. Scheduled 06:31 run already had it (rows 466->467); on-demand re-run via NB_budget_masters_sync (only_spec='Budget_Masters_cc_filler_map', job f8f792e8, Completed 202s) confirmed idempotently, _load_dttm -> 2026-09-06 21:21:18. resolve_scope live: pornthipp FILL 3 CC = 2 departments (Data & Analytic + Solution Delivery), manager 101431 so approver1 = laddawank for BOTH; suchanyay untouched; SIDE EFFECT laddawank SEE 2->3 CC (sees Solution Delivery via manager-see-add, See-only, persists until revert). New script setup/run_ccfiller_sync.py (on-demand sync + C1 verify-back). T2 now DONE except the 2 human briefings (Suchanya, Arthid). MAP STATE: 5 of 7 decisions closed (D1 prd, D3 add pornthipp, D4 subset+new, D5 1h applied, + D4 copy-drift accepted); remaining decisions D2 (gates T3/T4/D7/T6) and D6 (mail). Remaining tasks: T3, T4, T5, T6, T7, plus 2 reverts owed (prd-session-1h-revert-after-uat, ccdept-revert-pornthipp-solution-delivery). Uncommitted: setup/ccdept_add_filler.py, setup/run_ccfiller_sync.py, .scratch/uat-prep/, .claude/plan.md, .claude/project-context.md, tracker/pending.json.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-folder-cleanup",
+      "state": "done",
+      "created": "2026-09-06T03:15:19+0700",
+      "updated": "2026-09-06T03:20:56+0700",
+      "ai": "[FOLLOW-UP] Also removed the last backup: git rm Budget_SIT_Test_Cases_10.08.2026_before_email_alert.xlsx, commit 62d42a7 (local, not pushed). That file was the pre-TC-038..043 snapshot (37 cases vs 61 today); it had only survived because it was committed in 4b5ba29 BEFORE .gitignore started excluding requirement_spec/4_sit/*_before_*.xlsx (a67cedd) - ignore rules do not apply retroactively to tracked files. Verified still recoverable via git cat-file at 4b5ba29. requirement_spec/4_sit now holds exactly ONE file: Budget_SIT_Test_Cases_10.08.2026.xlsx, which still carries an UNCOMMITTED modification dating from 2026-08-20 (pre-existing, jakkaritw not yet decided whether to commit it).",
+      "agent": "claude"
+    },
+    {
+      "id": "log-6cd0a8c",
+      "state": "done",
+      "created": "2026-09-06T01:47:38+0700",
+      "updated": "2026-09-06T01:47:38+0700",
+      "agent": "autolog",
+      "ai": "docs(wayfinder): accept the spec-doc drift instead of revising it [commit 6cd0a8c]"
+    },
     {
       "id": "signoff-spec-b-stale-accepted",
       "state": "done",
@@ -578,16 +618,16 @@
       "id": "sit-round-closed-2026-08-19",
       "state": "done",
       "created": "2026-08-19T15:46:39+0700",
-      "updated": "2026-08-19T15:46:39+0700",
-      "ai": "[SIT ROUND CLOSED 2026-08-19] Live workbook audit: 61 cases = 59 Pass + 2 N/A (TC-027 export feature does not exist, TC-042 duplicate of TC-041). Severity column empty on all 61 = no defect raised in the whole round. Per module: Login 5/5, Budget Entry 9/9, Submission 4/4, Approver1 6/6, Approver2/3 4/4, Business Rules 2/2, Security 3/3, Data Integrity 2/2, UI/UX 3/3, Email Alert 15/16 (the 16th is the N/A duplicate), Special GL Subform 6/6. Actual Result now reads 'Pass by AI' on 18 rows and human-written text on 41 — humans re-ran or consolidated most rows after the AI round. TC-029/TC-034 concurrency: jakkaritw reported the two-tab 409 was unreproducible; root cause was ORDER, not the product — tab 2 must be opened BEFORE tab 1 saves, and I verified in code that the grid has NO focus/visibilitychange refetch (only keydown/resize/mouse/touch listeners), so a tab left open genuinely keeps its stale optimistic-lock timestamp. He accepted both as Pass, agreeing the real-world probability is low (needs two people on the identical cost_center+gl+year row, both loaded before either saves) while the guard still matters because the alternative is a silent overwrite of someone's budget figures. REMAINING HOUSEKEEPING, none blocking: 22 rows have no Tester and 23 no Test Date; 7 rows (002/009/010/028/029/030/052) still carry a stale 'ยังต้องให้คน…' remark although they are marked Pass; staging still has the 20-minute cookieExpiration and the 4-persona SIT_IMPERSONATE set (both should be reverted after the human round), setup/_auth_cookie.tmp.txt still on disk, and the Entertainment blank-ประเภทการรับรอง 400 bug is still open (task bug-entertainment-blank-type-400).",
+      "updated": "2026-09-06T04:11:27+0700",
+      "ai": "[CROSS-SESSION UPDATE 2026-09-06 wayfinder-uat-prep] SIT is closed but its workbook is now PARTLY WRONG against live code. 12 user-visible commits shipped AFTER the last case ran (stg rev 0000058 / image 1b537f9 landed 2026-08-21 13:22, after all execution) and have ZERO workbook coverage: 8013391 CI-green repaint, f32dcc7 per-diem tier 3 (13->29 countries), 91a9e21 searchable destination combobox, c615999 real EN approver titles, 965042f hundreds legend note, a096e26 seminar GL restricted to Talent & Culture, 053fabc toast surface, 55e0753 editable trip remark, bab089b other-travel GL out of the trip form, ad12d4a+230ffa7+72affd9 approval module fully English incl. the dept-picker badge. Stale expectations: 15 cases quote 'รออนุมัติ', 11 quote 'ตีกลับ'; TC-061 expects a 4-row trip table and a greyed-out remark; TC-057 uses seminar GL 6210100150 with a Data & Analytic filler, which a096e26 now HIDES from that picker - that case would fail today and is an untested live regression risk. Do not reuse the SIT pack as-is for UAT; see ticket D4 in .scratch/uat-prep/.",
       "agent": "claude"
     },
     {
       "id": "pending-round-to-hundreds",
       "state": "done",
       "created": "2026-08-19T15:27:21+0700",
-      "updated": "2026-08-20T22:26:33+0700",
-      "ai": "[DECISION CONFIRMED BY jakkaritw 2026-08-20: '100 ล้าน ตอนนี้ตัดเงียบ OK'] The silent client-side clamp at PENDING_AMOUNT_MAX = 100,000,000 is ACCEPTED as final behaviour -- no warning dialog, no toast, no inline message. I had flagged that typing 999,999,999 silently becomes 100,000,000 and the user could miss losing 899,999,999; he reviewed it on staging revision cman-budget-web-stg--0000057 and signed it off. Rationale kept from the implementation: it matches the rounding rule's own UX (redisplay the corrected number as the feedback) rather than introducing a second, louder pattern. DO NOT 'improve' this later into a warning without asking him again. Defense in depth is unchanged and still asymmetric on purpose: the FRONTEND clamps (frontend/src/grid/model.ts roundPendingAmount -> Math.min(roundedToHundred, PENDING_AMOUNT_MAX), called only from MonthCell.tsx:82 and MonthAmountInput.tsx:75, i.e. the two commit paths) while the BACKEND REJECTS with MonthAmountOverCapError -> error code amount_over_cap (400), following the NegativeMonthError precedent -- so a direct API call cannot store more than 100,000,000 even though the UI would have clamped it. Also re-verified while answering his question: the cap is applied ONLY on input commit, never to computed or displayed totals -- a legitimate year total such as 121,394,056,573.90 is not clamped, which is correct since 12 months x 100M per cell can exceed the per-cell cap. He separately confirmed live that 146 -> blur -> 100 and that an over-cap entry lands on 100,000,000.00."
+      "updated": "2026-09-06T04:11:13+0700",
+      "ai": "[CROSS-SESSION UPDATE 2026-09-06 wayfinder-uat-prep] The 'no toast' half of this entry is SUPERSEDED by shipped code. Original decision preserved: jakkaritw 2026-08-20 '100 ล้าน ตอนนี้ตัดเงียบ OK' - silent clamp, no warning dialog, no inline message, do NOT re-propose a blocking warning without asking him again. BUT commit 053fabc (2026-08-29) shipped a brand-new toast surface (platform/notice.ts + NoticeToasts.tsx at App root, TTL 6s, max 3, role=status) that DOES narrate every Pending-amount correction with 3 Thai messages: below-100 becomes 0, over-cap becomes 100,000,000, and rounds-to-hundreds. LIVE on stg rev 0000068 and prd rev 0000033, both image 72affd9. So the current behaviour is silent-clamp-plus-toast, not silent. Anyone reading this entry to decide UAT expectations must test the toast, not its absence - see ticket D4 in .scratch/uat-prep/."
     },
     {
       "id": "userbar-chip-truncate",
@@ -1365,13 +1405,6 @@
       "created": "2026-08-07T13:18:55+0700",
       "updated": "2026-08-08T22:43:02+0700",
       "ai": "[DEPLOYED TO BOTH ENVS 2026-08-08, jakkaritw-directed] Image budget-web:1b37afd (digest sha256:3d52ce77...) built via az acr build from a clean detached worktree at HEAD 1b37afd (run cmy Succeeded; the CLI's own UnicodeEncodeError exit is the known cp1252 glyph trap, judged by list-runs per the recipe). STAGING rev 0000030 Running/Healthy/100 + Easy Auth FULLY DISABLED (platform.enabled=false - AllowAnonymous alone was NOT enough, the sidecar still stripped forged headers exactly as security test P1-06 proved; full disable is the documented spoof-window technique). Spoof verified live: /me as phanuwate 200, /scope as pornthipp 200 with fill=['10IT011300','10IT0130000']. PRD rev 0000016 RunningAtMaxScale/Healthy/100 with THE SAME image; Easy Auth prd UNTOUCHED (RedirectToLoginPage, anonymous /health -> 401 PASS). VERIFY-DEPLOY-LANDED behavioral proof on stg: locked-departments year_not_open true@2026/false@2027 PASS-PASS; grid as filler year 2026 -> 3 rows editable=0 PASS (year lock live); year 2027 as pornthipp -> 0 rows = DATA-EMPTY not a bug (her CCs have no FY2026 SAP activity and pending is empty after the purge - same suchanyay probe returns 7 rows editable=7 PASS, so the 2027 path works); prd behavioral check blocked because jakkaritw's Easy Auth cookie EXPIRED (14h, captured 2026-08-07 afternoon -> /me 401) - prd proof rests on same-digest + Healthy revision + stg behavior; a fresh cookie would close it fully. OPEN RISKS now live: (1) STAGING URL IS WIDE OPEN writing prod data until Easy Auth is re-enabled - jakkaritw accepted, MUST re-enable after his eyeball review: az containerapp auth update -n cman-budget-web-stg -g CMAN-BUDGET-MNGT-WEB-RG --enabled true; (2) pornthipp's UAT dept still has no typeable data at 2027 - the known UAT-prep gap. Eyeball guide for jakkaritw: stg URL + header extension x-ms-client-principal-name to impersonate; on screen pick 'Year 2026' (=system 2027) to type, 'Year 2025' (=2026) shows the year lock."
-    },
-    {
-      "id": "sit-plan-authoring",
-      "state": "done",
-      "created": "2026-08-07T09:42:27+0700",
-      "updated": "2026-08-07T12:57:08+0700",
-      "ai": "DONE (files written, originals NOT yet deleted - awaiting jakkaritw). plan/sit/sit-test-plan.md 997 lines / 20 Parts + plan/sit/sit-run-log.md 378 lines. Consolidated ui-test-plan.md (12 Parts/96 items) + STAGING_TEST_PLAN.md (5 suites) + 6 git-only plan/*.md. Carried 150 old cases (103 UI + 47 staging) + 153 NEW never-run cases (95 P1); 139 NEW-Ax-nn ids + 8 SIT-00x gate cases. Workflow whye6meaz (wf_7e77918b-92f) 14 agents 0 errors: 4 recon + 7 drafters (169 drafted) + 2 critics (READY-WITH-FIXES / NOT-READY, 16 must-add) + assembler; 28 duplicates merged. CORRECTION TO MY OWN EARLIER CLAIM THIS SESSION: d0672fc is NOT unshipped - verified via az, prod cman-budget-web-prd rev 0000015 image budget-web:1bbddcb created 2026-08-05T15:32Z, and d0672fc (2026-08-05 11:44 tanasedw, same 14 files/740 insertions) is its ancestor => the ADR-0013 read-only lock has been LIVE IN PRODUCTION since 2026-08-05. SIT therefore verifies live behavior, not a pre-deploy gate. Deliberate drops: plan/testscript.md byte-identical to ui-test-plan.md (0 diff); items 5.3/5.4 inverted by 1bbddcb; 6F.5 reversed by 1e441de; DC6 GL counts obsolete (live 146=134+12); spoof-header rule dead (Easy Auth ON both envs since 2026-07-28); port-5180 proxy dead (Next.js); Phase-3 UAT 47 items condensed to a 1-page appendix = the ONE scope reduction. 16 open questions in the plan; 4 BLOCK the run (which dept/year may be used as test field, may prod be written, is the single real-email case approved, may the Excel master be edited). L3 only half-closable: none of the 48 integration tests touches the READ side of the lock. NEXT: jakkaritw approves deleting docs/test/ui-test-plan.md + docs/test/STAGING_TEST_PLAN.md and the 6 already-deleted plan/*.md; results/evidence in docs/test/ stay."
     },
     {
       "id": "perdiem-rate-zero-gap-job-levels",
