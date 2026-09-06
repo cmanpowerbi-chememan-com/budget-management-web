@@ -136,6 +136,17 @@ cannot start. D2 is the next decision, because T3, T4, D7 and T6 all hang off it
   the cookie is 1 hour — **jakkaritw accepted that as-is on 2026-09-06, so it is not to be fixed**;
   it self-heals the moment the cookie is reverted. The trade is that the run plan and the pack MUST
   carry it as a known issue (T6), or five testers will each report it.
+- **Two URLs, one system** (2026-09-06, extends D1, ledger `uat-two-url-lane-split`): the five
+  testers use the **production** URL and sign in as themselves; jakkaritw uses the **staging**
+  URL only when he needs the impersonation picker. Chosen over enabling impersonation on
+  production, which `auth.py:106` blocks by a hard gate written as "identity-rewrite can never
+  run on PRD no matter what the other settings hold". Setting `APP_ENV=uat` on prd would in fact
+  have worked and unlocked only that one behaviour (`app_env` is read in just three places), but
+  it breaks the invariant and adds a third revert; staging already gives the same capability for
+  free. **These are NOT isolated environments** — same image, same database, same real unlabelled
+  mail, so an approve clicked on staging is visible on production immediately. **Testers must
+  never be given the staging link**: the picker is there and `DEV_AUTH_EMAIL=pornthipp` is armed
+  behind Easy Auth. Gap: `suchanyay@` is not among staging's five impersonation targets.
 - [D4 — What goes into the UAT pack?](tickets/D4-pack-scope.md): **a business-acceptance subset
   (~30) plus the ~25 new-behaviour cases**. Security, Data Integrity, SQL-judged cases and TC-027
   are dropped; TC-061, TC-057, TC-013, TC-035 and TC-005 are rewritten because they now assert

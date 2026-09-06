@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-06T21:26:45+0700",
+  "updated": "2026-09-06T21:52:48+0700",
   "tasks": [
+    {
+      "id": "uat-two-url-lane-split",
+      "state": "done",
+      "created": "2026-09-06T21:52:48+0700",
+      "updated": "2026-09-06T21:52:48+0700",
+      "ai": "DECISION 2026-09-06 (jakkaritw): UAT runs with TWO URLs, not two environments. (1) UAT lane = https://cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io - the 5 testers (pornthipp, laddawank, jakkaritw, nipapornt, warapornt) sign in as THEMSELVES; session cookie now 01:00:00. (2) Impersonation lane = https://cman-budget-web-stg.kindstone-f34836dd.southeastasia.azurecontainerapps.io - jakkaritw ONLY, for the SIT picker at GET /sit/impersonate; session ~8h (no cookieExpiration block). RATIONALE: chose this over enabling impersonation on prd. auth.py:106 is a HARD gate (app_env=='production' -> return False, 'identity-rewrite can never run on PRD no matter what the other settings hold'); grep proves app_env is consumed in only 3 places (that gate, is_local+dev_auth_email where is_local is strictly app_env=='local', and /me echoing it), so APP_ENV=uat on prd WOULD have worked and unlocked only impersonation - but it breaks the documented never-on-prd invariant and adds a 3rd revert obligation, while stg already gives the identical capability for free. CRITICAL: these are NOT isolated environments - same image 72affd9, byte-identical FABRIC_SQL_SERVER/DATABASE, same real unlabelled mail. An approve clicked on stg is visible on prd instantly; same rows, same money. DO NOT GIVE THE STG LINK TO TESTERS: the impersonation picker lives there AND DEV_AUTH_EMAIL=pornthipp@chememan.com is armed (any anonymous caller becomes Pornthip if Easy Auth is ever switched off). OPEN GAP: stg SIT_IMPERSONATE has 5 targets (pornthipp, laddawank, nipapornt, warapornt, arthids) and does NOT include suchanyay@chememan.com, the real Solution Delivery filler - add her if her persona must be exercised. AUDIT WARNING unchanged: impersonated actions record the TARGET in approval_log.action_by_email, never jakkaritw. Must appear in the UAT pack (T5) and run plan (T6).",
+      "agent": "claude"
+    },
     {
       "id": "ccdept-revert-pornthipp-solution-delivery",
       "state": "doing",
@@ -23,8 +31,8 @@
       "id": "wayfinder-uat-prep",
       "state": "doing",
       "created": "2026-09-06T03:41:58+0700",
-      "updated": "2026-09-06T21:26:45+0700",
-      "ai": "[2026-09-06 T2 SYNC DONE] dbo.cc_filler_map is LIVE with pornthipp on 10IT012000. Scheduled 06:31 run already had it (rows 466->467); on-demand re-run via NB_budget_masters_sync (only_spec='Budget_Masters_cc_filler_map', job f8f792e8, Completed 202s) confirmed idempotently, _load_dttm -> 2026-09-06 21:21:18. resolve_scope live: pornthipp FILL 3 CC = 2 departments (Data & Analytic + Solution Delivery), manager 101431 so approver1 = laddawank for BOTH; suchanyay untouched; SIDE EFFECT laddawank SEE 2->3 CC (sees Solution Delivery via manager-see-add, See-only, persists until revert). New script setup/run_ccfiller_sync.py (on-demand sync + C1 verify-back). T2 now DONE except the 2 human briefings (Suchanya, Arthid). MAP STATE: 5 of 7 decisions closed (D1 prd, D3 add pornthipp, D4 subset+new, D5 1h applied, + D4 copy-drift accepted); remaining decisions D2 (gates T3/T4/D7/T6) and D6 (mail). Remaining tasks: T3, T4, T5, T6, T7, plus 2 reverts owed (prd-session-1h-revert-after-uat, ccdept-revert-pornthipp-solution-delivery). Uncommitted: setup/ccdept_add_filler.py, setup/run_ccfiller_sync.py, .scratch/uat-prep/, .claude/plan.md, .claude/project-context.md, tracker/pending.json.",
+      "updated": "2026-09-06T21:30:26+0700",
+      "ai": "[COMMITTED b5b6a2e 2026-09-06] 32 files: .scratch/uat-prep/ (MAP + 14 tickets + 6 research reports + critique + 3 Easy Auth config JSONs), setup/ccdept_add_filler.py, setup/run_ccfiller_sync.py, .claude/plan.md, .claude/project-context.md, tracker/*.json. LOCAL ONLY - not pushed (feedback_keep_local_dont_push). Committed on main, matching this project's flow. Deliberately NOT staged: the 53 other dirty entries are pre-existing and belong to other sessions (36 deleted design mockups/spec artifacts, requirement_spec/4_sit/Budget_SIT_Test_Cases_10.08.2026.xlsx's uncommitted 08-20 modification that jakkaritw has not decided about, setup/phase2_harness_dkl.py, and 14 untracked paths incl monthly_update/, playdata/, docs/manual/, db/queries/, setup/{fill_sit_test_case_gaps,run_sit_ai,write_sit_actual_results}.py, setup/tests/). The two cc dept.xlsx snapshots are gitignored on purpose via .scratch/uat-prep/.gitignore - 213 rows of employee emails, and the revert path is the --remove script plus SharePoint version history (v58.0), not the file. Auth JSONs were secret-scanned before commit: GUIDs (tenant/client/subscription) and the secret NAME 'microsoft-provider-authentication-secret' only, zero secret values; both scripts read every credential via os.getenv.",
       "agent": "claude"
     },
     {
