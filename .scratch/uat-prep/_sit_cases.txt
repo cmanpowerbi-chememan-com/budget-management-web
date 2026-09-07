@@ -1,0 +1,92 @@
+TC-001 | Login / Authentication | High | Pass | เข้าสู่ระบบด้วยบัญชีที่ถูกต้อง (Filler)
+TC-002 | Login / Authentication | High | Pass | เข้าสู่ระบบด้วยบัญชีที่ถูกต้อง (Approver)
+TC-003 | Login / Authentication | High | Pass | เข้าสู่ระบบด้วยรหัสผ่านผิด
+TC-004 | Login / Authentication | Medium | Pass | ออกจากระบบ (Logout)
+TC-005 | Login / Authentication | Medium | Pass | Session หมดอายุ แล้วระบบบังคับล็อกอินใหม่ (ตอนทดสอบปรับอายุ session เหลือ 20 นาที)
+TC-006 | Budget Entry (Filler) | High | Pass | แสดงฟอร์มกรอกงบของฝ่าย Data & Analytic
+TC-007 | Budget Entry (Filler) | High | Pass | กรอกจำนวนเงินงบปกติและบันทึกร่าง
+TC-008 | Budget Entry (Filler) | High | Pass | ผลรวม (Total) คำนวณอัตโนมัติถูกต้อง
+TC-009 | Budget Entry (Filler) | Medium | Pass | รูปแบบตัวเลข / คั่นหลักพัน / ทศนิยม
+TC-010 | Budget Entry (Filler) | High | Pass | Validation — ช่องบังคับกรอกว่าง (ฟอร์มเพิ่ม Transaction)
+TC-011 | Budget Entry (Filler) | Medium | Pass | Validation — กรอกตัวอักษรในช่องตัวเลข
+TC-012 | Budget Entry (Filler) | Medium | Pass | Validation — ค่าติดลบ
+TC-013 | Budget Entry (Filler) | Low | Pass | จำนวนเงินขนาดใหญ่มาก / ขอบเขตค่า
+TC-014 | Budget Entry (Filler) | Medium | Pass | แก้ไขร่างที่บันทึกไว้ก่อนส่ง
+TC-015 | Submission / Workflow | High | Pass | ส่งงบเพื่อขออนุมัติ (Submit)
+TC-016 | Submission / Workflow | High | Pass | Filler แก้ไขไม่ได้หลังส่งแล้ว
+TC-017 | Submission / Workflow | Medium | Pass | แจ้งเตือนถึง Approver หลังส่ง
+TC-018 | Submission / Workflow | Medium | Pass | สถานะแสดงตรงกันทั้งฝั่ง Filler และ Approver
+TC-019 | Approval (Approver1) | High | Pass | Approver ดูรายละเอียดงบที่ส่งมา
+TC-020 | Approval (Approver1) | High | Pass | อนุมัติงบ (Approve)
+TC-021 | Approval (Approver1) | High | Pass | ตีกลับ/ไม่อนุมัติ พร้อมเหตุผล (Reject)
+TC-022 | Approval (Approver1) | Medium | Pass | บังคับกรอกเหตุผลเมื่อ Reject
+TC-023 | Approval (Approver1) | High | Pass | Filler แก้ไขและส่งใหม่หลังถูกตีกลับ
+TC-024 | Approval (Approver1) | High | Pass | Approver ไม่เห็นงบของแผนกอื่น
+TC-025 | Business Rules | High | Pass | ผลรวมส่งเข้าอนุมัติ = ผลรวมที่ Filler กรอก
+TC-026 | Business Rules | Medium | Pass | ป้องกันส่งซ้ำของรอบ/แผนกเดิม
+TC-027 | Reports / Export | Medium | N/A | ส่งออกข้อมูลงบ (Excel/PDF) — ไม่อยู่ในขอบเขตเวอร์ชันนี้
+TC-028 | UI / UX | Low | Pass | ข้อความภาษาไทยแสดงครบถ้วน ไม่ถูกตัดหาย
+TC-029 | UI / UX | Low | Pass | ข้อความ error ชัดเจน บอกสาเหตุ/วิธีแก้ ไม่แสดง technical/stack trace ให้ผู้ใช้
+TC-030 | UI / UX | Low | Pass | แสดงผลบนหน้าจอ/เบราว์เซอร์ต่างกัน
+TC-031 | Security | High | Pass | เข้าถึงหน้า/URL โดยไม่ล็อกอิน
+TC-032 | Security | High | Pass | Filler เข้าถึงฟังก์ชันอนุมัติไม่ได้
+TC-033 | Security | Medium | Pass | ทดสอบ input พิเศษ (injection/XSS) ในช่องข้อความ
+TC-034 | Data Integrity | Low | Pass | แก้ไขพร้อมกัน 2 คน (concurrent)
+TC-035 | Data Integrity | Medium | Pass | ความแม่นยำทศนิยม/การปัดเศษ
+TC-036 | Email Alert / Notification | High | Pass | อีเมลแจ้งผู้อนุมัติเมื่อมีงบประมาณส่งมาถึงคิวของตน (Submit → Approver 1)
+TC-037 | Email Alert / Notification | High | Pass | อีเมลแจ้งผู้ส่งเมื่องบถูกตีกลับ (Reject) พร้อมเหตุผล
+TC-038 | Email Alert / Notification | High | Pass | อีเมลแจ้งผู้ส่งเมื่องบได้รับอนุมัติครบทุกขั้น (Approved)
+TC-039 | Email Alert / Notification | Medium | Pass | อีเมลแจ้งเมื่อผู้ดูแลระบบดำเนินการแทนผู้อนุมัติที่ค้าง (Step Override)
+TC-040 | Email Alert / Notification | Medium | Pass | อีเมลเตือนผู้อนุมัติที่ค้างการอนุมัติเกิน 7 วัน (รวมทุกฝ่ายใน 1 ฉบับ)
+TC-041 | Email Alert / Notification | Medium | Pass | อีเมลเตือนผู้กรอกงบที่ยังไม่ได้ส่งงบก่อนวันปิดรับ (รวมทุกฝ่ายใน 1 ฉบับ)
+TC-042 | Email Alert / Notification | Medium | N/A | อีเมลเตือนผู้กรอกงบที่ยังไม่ได้ส่งงบก่อนวันปิดรับ (รวมทุกฝ่ายใน 1 ฉบับ)
+TC-043 | Approval (Approver 2/3) | High | Pass | ผู้อนุมัติขั้นที่ 2 (ฝ่ายงบประมาณ) เปิดดูและอนุมัติงบที่ผ่านการอนุมัติขั้นที่ 1 มาแล้ว
+TC-044 | Approval (Approver 2/3) | High | Pass | ผู้อนุมัติขั้นสุดท้าย (ขั้นที่ 3) อนุมัติแล้วสถานะเปลี่ยนเป็นอนุมัติครบทุกขั้น (Approved)
+TC-045 | Approval (Approver 2/3) | Medium | Pass | ผู้อนุมัติขั้นที่ 2 หรือ 3 ตีกลับงบ → กลับไปหาผู้กรอกโดยตรง (ไม่ย้อนทีละขั้น)
+TC-046 | Approval (Approver 2/3) | High | Pass | ผู้อนุมัติที่ยังไม่ถึงคิวกดอนุมัติก่อนไม่ได้ (ระบบบังคับลำดับขั้น 1→2→3)
+TC-047 | Email Alert / Notification | Medium | Pass | [ตรวจเนื้อหาอีเมล] ผู้ส่ง (From) ของอีเมลถูกต้อง
+TC-048 | Email Alert / Notification | High | Pass | [ตรวจเนื้อหาอีเมล] ผู้รับ To / CC ถูกต้อง
+TC-049 | Email Alert / Notification | High | Pass | [ตรวจเนื้อหาอีเมล] หัวข้ออีเมล (Subject) ถูกต้องตามรูปแบบ
+TC-050 | Email Alert / Notification | High | Pass | [ตรวจเนื้อหาอีเมล] เนื้อหาแสดง ฝ่าย / ปีงบ / สถานะ ครบ
+TC-051 | Email Alert / Notification | High | Pass | [ตรวจเนื้อหาอีเมล] ลิงก์ 'คลิกที่นี่เพื่อดูรายละเอียด' เปิดหน้าถูกต้อง
+TC-052 | Email Alert / Notification | Medium | Pass | [ตรวจเนื้อหาอีเมล] ภาษาไทยแสดงผลถูกต้อง ไม่มีตัวอักษรเพี้ยน
+TC-053 | Email Alert / Notification | Medium | Pass | [ตรวจเนื้อหาอีเมล] อีเมลเข้า Inbox ไม่ตกลง Junk/Spam
+TC-054 | Email Alert / Notification | Medium | Pass | [ตรวจเนื้อหาอีเมล] ปีงบประมาณในอีเมลตรงกับที่ระบบออกแบบ (2027 = จอ Year 2026)
+TC-055 | Email Alert / Notification | High | Pass | อีเมล "รอการอนุมัติ" ถูกส่งถึงผู้อนุมัติขั้นที่ 2 และขั้นที่ 3 ตามลำดับ
+TC-056 | Special GL Subform | High | Pass | Filler กรอกฟอร์มย่อย Entertainment 2 รายการ บันทึกแล้วตัวเลขขึ้นที่ตารางหลักแบบแก้ไม่ได้ และเปิดกลับมาเห็นค่าทุกช่องเหมือนเดิม
+TC-057 | Special GL Subform | High | Pass | Filler กรอกฟอร์มย่อย Training & Seminar โดยแยกชื่อหลักสูตรกับรูปแบบการอบรม (Method) เป็นคนละช่อง และตรวจว่าช่องเดือนรับเฉพาะตัวเลขจำนวนเต็ม
+TC-058 | Special GL Subform | High | Pass | Filler กรอกฟอร์มย่อย Professional & Legal Fee โดยแยก Project กับรายละเอียดเป็นคนละช่อง และแก้ยอดเดือนของรายการเดิมแล้วยอดที่ตารางหลักขยับตาม
+TC-059 | Special GL Subform | Medium | Pass | Filler กรอกฟอร์มย่อย Public Relation & Donation หลายรายการภายใต้ GL เดียว และตรวจว่าแต่ละรายการเก็บแยกแถว ไม่รวมกันเป็นก้อนเดียว
+TC-060 | Special GL Subform | High | Pass | Filler กรอกฟอร์มย่อย Lease & Rental ครบ 4 ช่อง รวมกรณีเลือกทะเบียนรถ "อื่นๆ" แล้วพิมพ์ทะเบียนเอง และตรวจว่า GL คนละประเภทเปิดช่องไม่เหมือนกัน
+TC-061 | Special GL Subform | High | Pass | Filler สร้างทริปเดินทาง 1 ทริป กรอกค่าใช้จ่าย 3 ประเภทเอง ระบบคำนวณเบี้ยเลี้ยงให้ และยอดกระจายไปที่ GL คนละแถวในตารางหลัก
+
+--- SUMMARY SHEET ---
+R2 |  | SIT Test Execution — Summary |  |  | 
+R3 |  | สรุปผลอัตโนมัติจากแท็บ “2. Test Cases” (ไม่ต้องกรอกเอง) |  |  | 
+R5 |  | Result | Count |  | 
+R6 |  | Total test cases |  |  | 
+R7 |  | Pass |  |  | 
+R8 |  | Fail |  |  | 
+R9 |  | Blocked |  |  | 
+R10 |  | Not Run |  |  | 
+R11 |  | N/A |  |  | 
+R12 |  | Pass Rate (Pass / Executed) |  |  | 
+R14 |  | Breakdown by Module |  |  | 
+R15 |  | Module | Total | Pass | Fail
+R16 |  | Login / Authentication |  |  | 
+R17 |  | Budget Entry (Filler) |  |  | 
+R18 |  | Submission / Workflow |  |  | 
+R19 |  | Approval (Approver1) |  |  | 
+R20 |  | Business Rules |  |  | 
+R21 |  | Reports / Export |  |  | 
+R22 |  | UI / UX |  |  | 
+R23 |  | Security |  |  | 
+R24 |  | Data Integrity |  |  | 
+R25 |  | Email Alert / Notification |  |  | 
+R26 |  | Approval (Approver 2/3) |  |  | 
+R27 |  | หมายเหตุ: ตัวเลขอัปเดตอัตโนมัติเมื่อกรอกคอลัมน์ Status ในแท็บ Test Cases (แถวตัวอย่าง EX ไม่ถูกนับ) |  |  | 
+
+--- NOTE SHEET ---
+R5 | 2 | บางรายการที่เพิ่ม transaction เอง แต่ไม่ได้ใส่ข้อมูลครบเช่นด้านล่างใส่แค่สถานที่ใช้งาน สามารถกดบันทึกได้
+R19 | 3 | ข้อ TC060 : สามารถเว้นการกรอกรายละเอยดกิจกรรมได้??
+R33 | 4 | ยอดยาวๆจะทับกันไหม??

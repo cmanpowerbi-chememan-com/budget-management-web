@@ -84,12 +84,17 @@ takeable when every ticket named in its `Blocked by` line is closed. Claim one b
 | [T3 — Export the baseline and pre-write the restore](tickets/T3-baseline-and-restore.md) | D2 | no |
 | [T1 — Apply and verify the environment configuration](tickets/T1-apply-env-config.md) | ~~D5~~ closed · **D6** | no |
 | [T4 — Prepare the field: clean the leftovers, seed enough to click](tickets/T4-prep-uat-field-data.md) | D2, T3 | no |
-| [T5 — Build the UAT pack in `requirement_spec/5_uat/`](tickets/T5-build-uat-pack.md) | D7 | no |
+| [T5 — Build the UAT pack in `requirement_spec/5_uat/`](tickets/T5-build-uat-pack.md) | **SPLIT 09-07** — part A none, part B D7 | **part A in progress · part B no** |
 | [T6 — Write the engineering companion in `plan/uat/`](tickets/T6-uat-run-plan.md) | D2, D6, D7, T3 | no |
 | ~~[D1 — staging or production?](tickets/D1-environment.md)~~ | — | **CLOSED 2026-09-06** |
 | ~~[D3 — Solution Delivery filler and approver](tickets/D3-solution-delivery-roles.md)~~ | — | **CLOSED 2026-09-06** |
 | ~~[D4 — What goes into the UAT pack?](tickets/D4-pack-scope.md)~~ | — | **CLOSED 2026-09-06** |
 | ~~[D5 — the session lifetime](tickets/D5-session-lifetime.md)~~ | — | **CLOSED 2026-09-06 · APPLIED to prd · REVERT OWED** |
+
+**T5 split on 2026-09-07.** The test script itself depends only on closed decisions, so part A
+(the workbook + the Thai companion + the generator + the validator) is being built now; part B
+(entry/exit criteria, the two 1-page guides, the sign-off sheet, any SharePoint upload) stays
+blocked on D7. Details in the ticket.
 
 **Start T2 first.** The `cc dept.xlsx` edit is the only item with a hard ~24-hour latency (the
 SharePoint → `dbo.cc_filler_map` sync runs ~06:30), so every day it waits is a day the round

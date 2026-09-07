@@ -1,6 +1,47 @@
 # T5 — Build the UAT pack in `requirement_spec/5_uat/`
 
-Type: `wayfinder:task` (AFK) · Status: OPEN · Blocked by: **D1, D3, D4, D7**
+Type: `wayfinder:task` (AFK) · Status: **SPLIT — part A in progress, part B still blocked**
+Claimed by: session 2026-09-07 (`uat-test-script-doc` in the ledger)
+Blocked by: ~~D1~~ closed · ~~D3~~ closed · ~~D4~~ closed · **D7 (part B only)**
+
+## Split, 2026-09-07
+
+jakkaritw asked for "the UAT script doc, referencing the SIT workbook, adjusted for UAT scope,
+easy to test and comprehend, placed at `requirement_spec/5_uat`". That is part A of this ticket,
+and every decision it depends on (D1 environment, D3 roles, D4 pack scope) is already closed —
+only the entry/exit criteria file waits on D7. So T5 splits:
+
+**Part A — the test script (IN PROGRESS, this session).** **54 cases** across 8 waves and 8
+modules: the business-acceptance subset of the SIT 61 that D4 chose, the ~25 new-behaviour cases
+from `research/post-sit-changes.md` §7, and 13 more that `research/sit-coverage-gaps.md` §3 marks
+"UAT: IN SCOPE" but D4's resolution text did not enumerate — the whole Attachments feature (5),
+per-diem arithmetic the business can hand-check (2), the Approved and SAP layers (2), the admin
+mode toggle, the year lock, the grid ergonomics block, and deleting a hand-added row. Delivers:
+the workbook, a Thai companion `UAT_Test_Script.md`, a generator and a validator under `_build/`.
+Brief: `.scratch/uat-prep/_T5_brief.md` (REVISION 2).
+
+**De-duplication pass, approved by jakkaritw 2026-09-07: 68 → 54.** The first draft gave every
+assertion its own row. jakkaritw asked which were duplicated or unimportant, and approved the
+cut. Thirteen cases were **merged** into a neighbour they already shared a screen and a
+click-path with — the `+N` chip overflow into the login case; the six money-input values
+(146 / 30 / 999999999 / 33333.33 / letters / negatives) into one `Test Data` table; Public
+Relation & Donation into Entertainment; destination search and the trip remark into the
+create-trip case; open-detail and the step-2/3 title chips into the Reject/Approve case; the
+step-2 and approved mails into one chain case; the step-override mail into the step-override
+screen case; and the Thai-truncation checks into the CI-palette sweep. One case was **cut
+outright**: SIT `TC-034` concurrent edit in two windows, which jakkaritw already judged Pass on
+2026-08-20 while waiving 3 of its 4 sub-cases because the numbers refresh immediately.
+
+**Coverage was not reduced** — a merged case is one row carrying several checks, and the
+validator's check 9 asserts that every absorbed SIT id and all of U-01…U-25 still appear in the
+traceability table. Nothing on the never-cut list moved: the money rules, the submitted-total
+reconcile, the per-diem arithmetic, the silent-money-loss case, the seminar-GL regression, the
+irreversible attachment delete and `Approved`, and the whole two-department premise all keep
+their own rows.
+
+**Part B — the gate artifacts (STILL BLOCKED by D7).** `UAT_Entry_Exit_Criteria.md`, the two
+1-page Thai guides, the acceptance sign-off sheet, `assets/` screenshots, and any SharePoint
+upload. None of these can be written before the window and the pass/fail rule exist.
 
 ## Question
 

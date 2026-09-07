@@ -1,8 +1,80 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-06T23:44:09+0700",
+  "updated": "2026-09-07T18:19:47+0700",
   "tasks": [
+    {
+      "id": "uat-47-runorder-fix",
+      "state": "done",
+      "created": "2026-09-07T12:12:23+0700",
+      "updated": "2026-09-07T12:19:22+0700",
+      "ai": "UAT pack run-order inversion FIXED (no commit, per instruction). 4 edits: (1) .scratch/uat-prep/cases/W7.json UAT-47.runs_after += 'UAT-52' (UAT-40's existing 'UAT-47' edge KEPT - removing it moves UAT-40 to 51 and breaks every 'position 52' reference); (2) W6.json UAT-40.note += verbatim UAT-47 pairing signpost as clause 2; (3) W7.json UAT-47 step 7 prefixed with the UAT-44 4b pointer; (4) UAT_Test_Script.md 4.1 lead-in 3->4 return points + 4th sub-bullet (UAT-47/UAT-40 = one set of Approve presses, rows 51-52 filled together). Run order tail now 49 UAT-50 / 50 UAT-52 / 51 UAT-47 / 52 UAT-40 / 53 UAT-49 / 54 UAT-51 - matches auditor; UAT-40 stays at 52 so no renumbering. 54 cases unchanged. Build run 3x byte-identical sha256 743b086d08b9f9be63df7a531d3b56395b9d87b00e547175b9b1760778a1887e; validate_uat_pack.py 10 PASS 0 FAIL. NOTE: validator cannot see a wrongly-directed runs_after edge - green != runnable.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-pack-revalidate-fixlist2",
+      "state": "done",
+      "created": "2026-09-07T11:55:24+0700",
+      "updated": "2026-09-07T11:55:43+0700",
+      "ai": "UAT pack rebuilt+revalidated. xlsx sha256 cc0b2f8230aed93d2fcacfc9b46e292872409bea47d7fac606290109058f2ec1 byte-identical x3 runs; md 074a8f58004d2687172ba198551164847450c9ca22ab54df907b1e57107d0738. validate_uat_pack.py 10 PASS 0 FAIL. 54 cases, ids UAT-01..54 contiguous, Run Order permutation 1..54, 0 runs_after violations. fix_list_2 items 1,2,3,4,6,7,8,9,10,11 all verified landed. ITEM 5 WAS NOT ACTUALLY CLOSED: re-audit premise 'trips lock at Approved' is wrong -- app.approval.LOCKED_APPROVAL_STATUSES = PENDING_STATUSES|{APPROVED}, so dept locks at Submit (pos 34) not Approve; write_model._ensure_department_not_locked gates trip save/delete on it and TripManager.tsx wraps cards in disabled fieldset + hides 'บันทึก & ลงบัญชี' when !row.editable. So UAT-52 step 2 (negative days) was unobservable at its new pos 51. FIXED with the pack's own two-state pointer convention (same as UAT-42/UAT-44): UAT-52 preconditions/steps2/expected2/note now point to 'ทำทันทีหลัง UAT-26 ก่อนเริ่ม UAT-32' (Draft window pos 25->34), UAT-26 note carries the mirror 'หยุด — กลับไปทำ UAT-52 ข้อ 2', companion 4.1 now lists 3 back-track points not 2. UAT-52 keeps runs_after UAT-32 + before UAT-40 (step 1 still needs a submitted-not-approved dept). Files: .scratch/uat-prep/cases/W8.json, W3.json, requirement_spec/5_uat/UAT_Test_Script.md. NOT committed, nothing uploaded, no az.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-validator-check10",
+      "state": "done",
+      "created": "2026-09-07T11:08:52+0700",
+      "updated": "2026-09-07T11:09:06+0700",
+      "ai": "validate_uat_pack.py now 10 checks, 10 PASS 0 FAIL. (1) CHECK 10 added: Run Order must be a permutation of 1..54 AND strictly > every runs_after dep; 109 edges over 54 cases; UAT-40 at position 50 with all 14 prerequisites ahead of it. Logic lifted OUT of check 3 (was folded in by the interrupted run) so each check is independently falsifiable. (2) Robustness fix found by fault injection: a crashing check used to kill the whole run with a traceback and print NO verdict (renaming '4. Defects' made check_6_dv raise KeyError) - added run_check() wrapper turning any exception into that check's FAIL, plus a post-pass asserting each of the 10 produced exactly 1 verdict. (3) Fault-injected all 10 checks against throwaway copies: 11/11 faults detected (check 10 probed twice: edge-order swap UAT-40<->UAT-44, and a duplicate Run Order value); baseline control + openpyxl round-trip both 10 PASS so the injection mechanism is clean. Throwaway copies deleted. Pack itself byte-unchanged (xlsx md5 babc5f39, md fe34cf74) and the generator is deterministic - a fresh build reproduced both byte-identically. W2/W6 repairs verified in passing: UAT-12 carries 999999999999 + 33333.33 + 3,333,300 + append-do-not-clear, UAT-15 has the admin-toggle step, UAT-37 is down to 7 steps / 4 expected with no step-2/3 chip assertion, U-20 sits on UAT-40. NOT committed, nothing uploaded. Only file changed: requirement_spec/5_uat/_build/validate_uat_pack.py",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-cases-w3-w4-fix",
+      "state": "done",
+      "created": "2026-09-07T10:29:16+0700",
+      "updated": "2026-09-07T10:29:36+0700",
+      "ai": "29 edits applied to .scratch/uat-prep/cases/W3.json (22) + W4.json (7); 54 cases unchanged; nothing committed/uploaded. G-1: UAT-25 + UAT-26 no longer hard-code 'Thailand' - tester picks whichever domestic entry dbo.country_group offers (domestic tier sorts first, reference_data.fetch_countries) and writes it down; reason recorded in UAT-25 note. C2: UAT-31 note now states impersonation is jakkaritw's setup mechanism, not under test, and that writes are signed as the impersonated person (quotes the page's own UAT banner, routers/sit.py _DISCLAIMER_UAT_TH). Shipped-string corrections beyond the brief: UAT-22/23 'krunaa-phim thabian-rot' -> real message 'krunaa-lueak thabian-rot'/'krunaa-lueak praphet-rot' shown UNDER the table as 'raikan thi N: ...' and one field at a time (subform/model.firstIncompleteField + DetailSubform saveAll); UAT-21 zero month renders em-dash not 0.00 (grid/model.formatThb); UAT-26 delete-trip confirm full text incl. the second clause (TripManager DELETE_TRIP_CONFIRM_TEXT); UAT-25 per-diem error real prefix 'mai samat khamnuan bia-liang dai - '; UAT-26 last travel month absorbs the rounding remainder (per_diem.derive_per_diem); UAT-24 side select shows 'SG&A (6xxx)' label + per-diem row label is 'bia-liang Per Diem' + destination picker shows NO country-group label (DestinationField renders o.country only); UAT-23 step7 unsaved rows delete with no confirm; UAT-20 dropdown counts exclude the '- lueak -' placeholder; UAT-27 file list = 3 named cols + 1 unnamed button col, uploader may legitimately render em-dash, folder-missing banner is Thai 500 prefix + English Graph reason. NOTE: UAT-31's note arrived from the 10:21 runs_after pass ending mid-phrase ('...phuea sang nguean-khai hai khet ni') - completed to '...run dai' while appending. Workbook NOT regenerated (Rebuild phase owns that).",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-cases-runs-after-key",
+      "state": "done",
+      "created": "2026-09-07T10:25:23+0700",
+      "updated": "2026-09-07T10:25:36+0700",
+      "ai": "DONE (uncommitted, .scratch only). runs_after array added to all 54 cases in .scratch/uat-prep/cases/W1-W8.json, inserted immediately after the wave key; purely additive line insertion, file formatting/newlines preserved. Graph verified acyclic, all ids in UAT-01..54, Kahn topo sort emits exactly 54. Key edges: UAT-32.runs_after = UAT-05 + all W2-W4 (06..31) + UAT-53 + UAT-54; UAT-03/33/34/35/36/37/42/43/46/52 after UAT-32; UAT-38 after all pending-step1 observers (03,33,34,35,36,37,42,43); 38->39->44->41->47->40; UAT-40 last for the dept; 49/51 after 40. DEVIATION from the audit brief: UAT-42 is placed BEFORE UAT-44 (its steps 1-4 + expected 1-4 assert chip = Pending Step 1, which UAT-44 destroys); only its step 5 is the deferred tail after UAT-44, same split-case shape as UAT-03. UAT-54 strengthened to before UAT-32 (needs an editable grid, not just before UAT-40). Next: build the Run Order column from these keys (fix-list D) and update sheet1/companion/validate_uat_pack.py column refs.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-cases-w1-w5-w7-w8-fix",
+      "state": "doing",
+      "created": "2026-09-07T03:36:51+0700",
+      "updated": "2026-09-07T03:36:51+0700",
+      "ai": "UAT pack repair: W1/W5/W7/W8 case JSON — add runs_after ordering keys (fix-list item D groundwork) + correctness sweep vs shipped frontend/src, backend/app. Case count stays 54.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-validate-pack-script",
+      "state": "done",
+      "created": "2026-09-07T02:56:09+0700",
+      "updated": "2026-09-07T03:04:03+0700",
+      "ai": "IMPLEMENTED requirement_spec/5_uat/_build/validate_uat_pack.py (replaced the 9-check STUB). Runs 9/9 PASS on the shipped pack, exit 0; full report -> _build/validate_uat_pack.out.txt (194 lines), compact PASS/FAIL per check to stdout. Check 9 (the 68->54 dedup coverage proof) verifies 46 required SIT ids + U-01..U-25 against TWO independent sources: (A) per-case rows of the generated traceability table in UAT_Test_Script.md, (B) sit_refs/new_refs in .scratch/uat-prep/cases/W1-W8.json; deliberately EXCLUDES the prose coverage-summary sentence under the table, which enumerates every id and would make the check vacuous. Result: 0 missing on both sources; 47 SIT ids cited (TC-030 carried beyond the required 46) + all 25 U-xx. ONE check-2 FAIL during the build was a fault in MY check, not the artifact: I scanned the whole workbook for 'TC-EX' and hit 3. Summary!B26, which is prose SAYING the file has no example row. Fixed by scoping the scan to '2. Test Cases' (where a data row could actually live) per the brief's wording, and reporting other-sheet prose mentions as INFO — assertion preserved, not weakened. Generator and case JSON NOT modified; no fault found in them. Verified non-vacuous via a 15-fault negative-control injection (missing sheet, real TC-EX data row, header off row 2, deleted row, dup id, literal 64 reintroduced, range stopping short, module dropped from Summary, Status DV removed, staging hostname planted, prod URL removed, traceability row removed, SIT id dropped, U-xx id dropped, table unreadable) -> 15/15 detected; temp harness deleted. OBSERVATION for a later pass (NOT a check-9 failure, not in the brief's required list): the case JSON omits the section-letter refs A/B/I/P — all 5 W4 Attachments cases (UAT-27..31) and UAT-45 carry EMPTY sit_refs+new_refs, and UAT-34/UAT-01 lack their section refs; brief check 9 does not require section ids so this does not fail, but the traceability table shows those rows as 'new (never in SIT)' with no gap id. NOT committed (per dispatch); requirement_spec/5_uat/ is still untracked.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-test-script-doc",
+      "state": "done",
+      "created": "2026-09-07T00:31:55+0700",
+      "updated": "2026-09-07T18:19:47+0700",
+      "ai": "SCOPE CHANGE APPLIED (2026-09-07, uncommitted, .scratch+requirement_spec only). Solution Delivery now filled+submitted+approved-step1-only+rejected-back, not left in Draft, not taken to full Approved. Files: .scratch/uat-prep/cases/W5.json UAT-36 (scenario/preconditions/steps/test_data/expected/note rewritten: Pornthip fills 2 GL rows 10,000+20,000=30,000 into empty 10IT012000, submits SD separately from DA, proves independence, email to Laddawan only not Arthid); W6.json UAT-43 (widened, merged:true, now DOES approve SD step1 via Laddawan then rejects via Nipaporn back to REJECTED status to unlock Suchanya, DA untouched throughout, verifies Nipaporn gets SD turn-mail + no mail to arthids@chememan.com on either approve or reject) + UAT-37.note (fixed stale \"SD never submitted\" claim at UAT-51 crossref); W8.json UAT-51 step11 (same stale-claim fix, mirrored). Generator build_uat_test_cases.py: PROJECT_INFO Suchanya row + WARNINGS list +1 item (6 total) re Suchanya lock-out UAT-36->UAT-43, timing moved from \"after UAT-31\" to \"after UAT-43\". UAT_Test_Script.md (hand-written prose, NOT generator-owned per prior session's note): heading \"5 ข้อ\"->\"6 ข้อ\", new item 6 mirrored, §3 Suchanya paragraph rewritten (timing UAT-31->UAT-43, added lock warning), §4.1 UAT-51/UAT-37 crossref sentence fixed, §6.2 fully replaced (old \"2-dept chain out of scope\" -> new \"SD taken to step1 then rejected back; full 3-step Approved stays out of scope, reason: would leave a pristine prod dept permanently Approved\").\nVERIFIED: runs_after graph untouched (zero edge changes) -> run_order 100% unchanged, UAT-40 still position 52/54, no need to touch the 6 quoting sites (script's _sync_uat40_order still auto-syncs, ran with 6 hits = no-op value change). Build ran 3x, xlsx+md byte-identical (sha256 59cbddf9...for xlsx, f57f5884...for md across all 3 runs). validate_uat_pack.py 10/10 PASS. Full run-order state walk done by hand (54 positions) both depts tracked: SD Draft(0 rows)->[pos39 UAT-36]Pending Step1(30,000)->[pos42 UAT-43]Pending Step2->Rejected(stays Rejected rest of round, editable); DA Draft->[34]Pending1->[42 untouched]->[43]Rejected->[44]Pending1->[45]Pending2(admin override)->[46]Rejected->[47]Pending1->[51/52 same click-set]Approved(final, position52). No false preconditions found at any printed position.\nEMAIL AUDIT (backend/app/notifications.py + routers/approval.py read): notify_turn (submit + each approve) has NO cc param ever; notify_reject cc's only the frozen approver1. SD submit->notify_turn(To=Laddawan,no cc); SD approve step1->notify_turn(To=Nipaporn,no cc); SD reject->notify_reject(To=Pornthip,cc=Laddawan). Arthid (arthids@chememan.com) never appears in any of the 3 sends -- CONFIRMED zero mail to him, only reachable if someone other than Pornthip submitted SD (explicitly guarded against in UAT-36's precondition/note).\nCAVEAT flagged to user: task said \"reject...back to Draft\" -- literal DB semantics (approval.py DRAFT=560 \"no approval_status row exists\") mean SD ends the round at status=REJECTED (editable, functionally equivalent -- Suchanya regains full edit rights) not literally re-synthesized DRAFT; there is no app action that reverts an existing row to DRAFT. Documented this precisely in UAT-43 expected item 7 rather than overclaiming literal \"Draft\".\nNot committed (repo rule). No SharePoint upload, no az command run.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-5b0eea9",
+      "state": "done",
+      "created": "2026-09-06T23:44:26+0700",
+      "updated": "2026-09-06T23:44:26+0700",
+      "agent": "autolog",
+      "ai": "chore(tracker): log the 11acba9 banner deploy to stg and prd [commit 5b0eea9]"
+    },
     {
       "id": "sit-banner-env-aware-deploy",
       "state": "done",
@@ -1421,14 +1493,6 @@
       "created": "2026-08-08T18:28:55+0700",
       "updated": "2026-08-08T18:29:09+0700",
       "ai": "backend/app/approval.py: new DepartmentEmptyError (400/department_empty) + _department_has_pending_rows (live-CC scoped, snapshot fallback when orphan) + guard at top of submit_department, before filler/admin branch split. Backend +6 tests (874->880 passing, 48 deselected). Frontend: verified describeApiError's existing non-409 fallback already surfaces the Thai detail -- 0 production frontend code changed, +1 regression test (605->606 passing). next build clean. Not committed per instructions.",
-      "agent": "claude"
-    },
-    {
-      "id": "addtxn-lock-awareness",
-      "state": "done",
-      "created": "2026-08-08T11:29:36+0700",
-      "updated": "2026-08-08T11:29:55+0700",
-      "ai": "DONE. New GET /approval/locked-departments (routers/approval.py, reuses read_model.fetch_locked_departments -- one source, scoped to caller's own scope.fill_cost_centers, no new leakage). Frontend: model.ts isCostCenterLocked/lockedCostCenterDepartments/lockedAddReasonTh/ALL_COST_CENTERS_LOCKED_REASON_TH; validateNewTransaction rejects a locked CC pick pre-API; AddTransactionForm shows the control disabled+Thai reason (visible, never hidden) when EVERY Fill CC is locked, else stays actionable so a mixed locked/open-department filler can still add to the open one; BudgetGrid wires GET /approval/locked-departments (fetched on year change + after submit/approve/reject, skipped for admin-wide) + fixes handleAddTransaction's hardcoded editable:true -> derived via isCostCenterLocked. Tests: backend +5 (test_approval_router.py), frontend model.test.ts +7, AddTransactionForm.test.tsx +4, BudgetGrid.test.tsx +3. Results: backend 874 passed (was 869, +5, 0 regressions); frontend vitest 605/605 (was 590, +15); npx next build clean. Verified headless Playwright against the REAL built static export (not jsdom) with mocked API routes: 8/8 PASS (locked->disabled+reason, open->unchanged, mixed->stays actionable+open CC addable+locked CC rejected with reason, 0 console errors). Not committed, not deployed per instructions.",
       "agent": "claude"
     },
     {
