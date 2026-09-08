@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-07T11:55:24+0700",
+  "updated": "2026-09-08T11:18:51+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2399,6 +2399,30 @@
       "created": "2026-08-08T11:29:36+0700",
       "updated": "2026-08-08T11:29:55+0700",
       "ai": "DONE. New GET /approval/locked-departments (routers/approval.py, reuses read_model.fetch_locked_departments -- one source, scoped to caller's own scope.fill_cost_centers, no new leakage). Frontend: model.ts isCostCenterLocked/lockedCostCenterDepartments/lockedAddReasonTh/ALL_COST_CENTERS_LOCKED_REASON_TH; validateNewTransaction rejects a locked CC pick pre-API; AddTransactionForm shows the control disabled+Thai reason (visible, never hidden) when EVERY Fill CC is locked, else stays actionable so a mixed locked/open-department filler can still add to the open one; BudgetGrid wires GET /approval/locked-departments (fetched on year change + after submit/approve/reject, skipped for admin-wide) + fixes handleAddTransaction's hardcoded editable:true -> derived via isCostCenterLocked. Tests: backend +5 (test_approval_router.py), frontend model.test.ts +7, AddTransactionForm.test.tsx +4, BudgetGrid.test.tsx +3. Results: backend 874 passed (was 869, +5, 0 regressions); frontend vitest 605/605 (was 590, +15); npx next build clean. Verified headless Playwright against the REAL built static export (not jsdom) with mocked API routes: 8/8 PASS (locked->disabled+reason, open->unchanged, mixed->stays actionable+open CC addable+locked CC rejected with reason, 0 console errors). Not committed, not deployed per instructions.",
+      "agent": "claude"
+    },
+    {
+      "id": "submit-empty-department-guard",
+      "state": "done",
+      "created": "2026-08-08T18:28:55+0700",
+      "updated": "2026-08-08T18:29:09+0700",
+      "ai": "backend/app/approval.py: new DepartmentEmptyError (400/department_empty) + _department_has_pending_rows (live-CC scoped, snapshot fallback when orphan) + guard at top of submit_department, before filler/admin branch split. Backend +6 tests (874->880 passing, 48 deselected). Frontend: verified describeApiError's existing non-409 fallback already surfaces the Thai detail -- 0 production frontend code changed, +1 regression test (605->606 passing). next build clean. Not committed per instructions.",
+      "agent": "claude"
+    },
+    {
+      "id": "approver-see-overlay",
+      "state": "done",
+      "created": "2026-08-08T23:29:04+0700",
+      "updated": "2026-08-08T23:30:17+0700",
+      "ai": "DONE 2026-08-08. Implementation was already present in working tree when this pass started (rls.py _pending_approval_overlay + approval.py departments_pending_for_empcode/cost_centers_for_departments + tests in test_rls.py/test_approval.py/test_read_model.py/test_scope.py) - verified all required test scenarios already covered, wrote docs/adr/0029-approver-see-overlay.md (was missing), synced .claude/plan.md Current Phase. Backend 914 passed/48 deselected (was 899, +15). Frontend vitest 612/612 unchanged (zero frontend code touched, verified not assumed). next build clean. checks.sh clean. Not committed, not deployed (per instructions) - files still uncommitted in working tree: backend/app/rls.py, backend/app/approval.py, backend/tests/test_rls.py, backend/tests/test_approval.py, backend/tests/test_read_model.py, backend/tests/test_scope.py, docs/adr/0029-approver-see-overlay.md, .claude/plan.md.",
+      "agent": "claude"
+    },
+    {
+      "id": "fiscal-year-3state",
+      "state": "done",
+      "created": "2026-08-08T22:03:09+0700",
+      "updated": "2026-08-08T22:03:24+0700",
+      "ai": "Backend: app/deadline.py fiscal_year_state()+YearNotOpenError; write_model._ensure_year_open_for_write (renamed, 6 call sites); approval._submit_normal_chain now checks year state; read_model.merge_budget_rows/get_budget_grid gained year_not_open; routers/approval.py locked-departments gained year_not_open field. Frontend: types.ts/model.ts/AddTransactionForm.tsx/BudgetGrid.tsx threaded yearNotOpen through the existing lock-awareness feature. Tests: backend 899 passed (was 887, +12), frontend vitest 612 passed (was 606, +6), next build clean. plan.md updated. NOT committed, NOT deployed per task instructions. Fillable years on prod the moment this ships (table has only FY2027 row): 2027=OPEN, everything else NOT_OPEN=admin-only.",
       "agent": "claude"
     }
   ]

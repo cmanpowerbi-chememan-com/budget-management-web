@@ -144,8 +144,10 @@ HOW_TO = [
     "4.  ทดสอบทีละเคสตาม “Test Steps” แล้วเทียบผลกับ “Expected Result”",
     "5.  **อ่าน “Expected Result” ให้จบทุกข้อก่อนตัดสินผล** — หลายเคสเป็นเคสรวม (merged) คือ 1 แถว "
     "แต่มีหลายข้อที่ต้องตรวจ ถ้าข้อใดข้อหนึ่งไม่ผ่าน ให้ทั้งแถวเป็น Fail แล้วระบุในช่อง Actual Result ว่าข้อไหนไม่ผ่าน",
-    "6.  **ผู้ทดสอบกรอกเฉพาะช่องพื้นหลังสีเหลือง 7 ช่องนี้:** Actual Result, Status, Severity, Defect ID, "
-    "Tester, Test Date, Remarks",
+    "6.  **ผู้ทดสอบดูแลช่องพื้นหลังสีเหลือง 7 ช่องนี้:** Actual Result, Status, Severity, Defect ID, "
+    "Tester, Test Date, Remarks · ช่อง `Tester` กรอกชื่อไว้ล่วงหน้าแล้วตามแผนคนจาก actor map ก่อนเริ่มรอบ "
+    "(ตัวหนังสือสีม่วงเหมือนช่องเนื้อหาเคสอื่น ๆ) ถ้าคนที่ลงมือทดสอบจริงไม่ตรงกับชื่อที่กรอกไว้ ให้แก้ชื่อในช่องนี้ให้ตรงกับคนที่ทำจริง "
+    "· อีก 6 ช่องที่เหลือยังว่างอยู่ ให้ผู้ทดสอบกรอกเองระหว่างทดสอบตามปกติ",
     "7.  เลือก Status จาก dropdown: Pass / Fail / Blocked / N/A · **ช่องที่ยังว่าง = `Not Run` "
     "(ยังไม่ได้ทดสอบ) ซึ่งเป็นค่าเริ่มต้น** ไม่ต้องพิมพ์คำว่า Not Run เอง "
     "— แท็บ “3. Summary” นับช่องว่างเป็น Not Run ให้อัตโนมัติ",
@@ -156,6 +158,7 @@ HOW_TO = [
     "9.  แท็บ “3. Summary” สรุปผลอัตโนมัติ (จำนวน / อัตราผ่าน / แยกตาม Module, Wave และฝ่าย) ไม่ต้องกรอกเอง",
     "10. **ข้อยกเว้นเดียวของกติกา “กรอกเฉพาะช่องสีเหลือง” คือคอลัมน์ `PIC`** ซึ่งเป็นช่องสีขาว "
     "และคนที่กรอกไม่ใช่ผู้ทดสอบ แต่เป็น **Test Lead** ที่กรอกชื่อผู้รับผิดชอบรายเคสไว้ **ก่อน** เริ่มรอบทดสอบ "
+    "(ใช้เมื่อ Test Lead ต้องการมอบหมายผู้รับผิดชอบเพิ่มเติม นอกเหนือจากชื่อที่กรอกไว้แล้วในช่อง `Tester`) "
     "· ระหว่างทดสอบ ผู้ทดสอบไม่ต้องแตะคอลัมน์นี้",
     "11. ตัวหนังสือ **สีม่วง** คือข้อความที่ AI ร่างไว้ให้ ยังไม่ผ่านการตรวจจากผู้ทดสอบ "
     "ถ้าพบว่าไม่ตรงกับระบบจริง แก้ได้เลยแล้วบันทึกไว้ในช่อง Remarks "
@@ -295,6 +298,9 @@ def load_cases():
     unknown_d = sorted(used_depts - set(DEPARTMENTS))
     if unknown_d:
         raise SystemExit(f"FATAL: case department(s) not in the DV list: {unknown_d}")
+    blank_tester = [c["id"] for c in cases if not str(c.get("tester") or "").strip()]
+    if blank_tester:
+        raise SystemExit(f"FATAL: case(s) with no 'tester' value: {blank_tester}")
     assign_run_order(cases)
     return cases
 
@@ -511,11 +517,17 @@ def build_info_sheet(ws, n_cases, last_row, uat40_order):
     row += 1
     legend = [
         (FILL_YELLOW,
-         "ช่องพื้นหลังสีเหลือง = ช่องที่ผู้ทดสอบกรอกระหว่างรอบทดสอบ (7 ช่อง: Actual Result, Status, "
-         "Severity, Defect ID, Tester, Test Date, Remarks)", None),
+         "ช่องพื้นหลังสีเหลือง = ช่องที่ผู้ทดสอบดูแลระหว่างรอบทดสอบ (7 ช่อง: Actual Result, Status, "
+         "Severity, Defect ID, Tester, Test Date, Remarks) · ช่อง `Tester` มีชื่อกรอกไว้ล่วงหน้าแล้วตามแผนคน "
+         "(ตัวหนังสือสีม่วง) ผู้ทดสอบแก้ไขได้ถ้าคนที่ทดสอบจริงเปลี่ยนไปจากแผน ส่วนอีก 6 ช่องยังว่าง กรอกเองระหว่างทดสอบ", None),
         (FILL_WHITE,
          "ช่อง `PIC` เป็นช่องสีขาว แต่เป็นข้อยกเว้นเดียวที่ต้องกรอก — Test Lead กรอกก่อนเริ่มรอบ "
-         "ผู้ทดสอบไม่ต้องแตะ · ช่องสีขาวอื่นทั้งหมดคือเนื้อหาเคส ไม่ต้องแก้", None),
+         "ผู้ทดสอบไม่ต้องแตะ (คนละหน้าที่กับช่อง `Tester`: `PIC` = ผู้รับผิดชอบที่ Test Lead มอบหมาย, "
+         "`Tester` = คนที่ต้องลงมือทดสอบตามแผน) · ช่องสีขาวอื่นทั้งหมดคือเนื้อหาเคส ไม่ต้องแก้", None),
+        (FILL_WHITE,
+         "รูปแบบ `ชื่อ(jakkarit)` ในช่อง `Tester` (พบที่ UAT-31 และช่วงหนึ่งของ UAT-43) แปลว่า "
+         "**jakkaritw เป็นคนกดจริงบนเครื่อง** โดยสวมสิทธิ์ผ่านหน้า `/sit/impersonate` เป็นคนที่ชื่ออยู่หน้าวงเล็บ "
+         "— ระบบบันทึกประวัติเป็นชื่อคนที่ถูกสวมสิทธิ์เท่านั้น ไม่มีคอลัมน์เก็บชื่อผู้กดจริง", None),
         (FILL_WHITE,
          "คอลัมน์ `ลำดับการรัน` (Run Order) = ลำดับที่ต้องลงมือทำจริง 1 → {N_CASES} · "
          "คอลัมน์ `Wave` = ชื่อกลุ่มของเคส ใช้กรองดูเท่านั้น **ไม่ใช่ลำดับการทำ** · "
@@ -585,14 +597,19 @@ LAST_COL = CASE_COLUMNS[-1][0]
 YELLOW_COLS = ["N", "O", "P", "Q", "R", "S", "T"]   # tester-filled
 # AI-written = every case-content column, printed in purple, which sheet 1's
 # legend defines as "AI drafted it, correct it if the real system disagrees".
-# Three columns are deliberately absent:
+# 'R' (Tester) joins this list even though it is also a yellow tester-owned
+# column: since 2026-09-08 it ships PRE-FILLED with the planned tester(s) from
+# the actor map (requirement_spec/5_uat/UAT_Actor_Map.md), not blank — that is
+# a draft, same status as every other purple cell, and the tester must correct
+# it (not just confirm it) when the person who actually ran the case differs
+# from the plan. Two columns are still deliberately absent:
 #   'G' (PIC)                  — white, filled by the Test Lead before the round
 #   'A' (Wave) + 'B' (Run Order) — NOT prose and NOT correctable: both are
 #       computed by this generator (Run Order is the topological sort of the
 #       'runs_after' graph), and companion §5.1 forbids editing them.  Painting
 #       them purple invited the tester to overwrite the one column the whole
 #       round's safety depends on, so they print in plain black instead.
-AI_COLS = ["C", "D", "E", "F", "H", "I", "J", "K", "L", "M"]
+AI_COLS = ["C", "D", "E", "F", "H", "I", "J", "K", "L", "M", "R"]
 
 
 def build_cases_sheet(ws, cases):
@@ -640,7 +657,7 @@ def build_cases_sheet(ws, cases):
             "L": case["test_data"],
             "M": _expected_with_note(case),
             "N": None, "O": None, "P": None, "Q": None,
-            "R": None, "S": None, "T": None,
+            "R": case["tester"], "S": None, "T": None,
         }
         for col, _hdr, _w, al in CASE_COLUMNS:
             fill = FILL_YELLOW if col in YELLOW_COLS else FILL_WHITE
