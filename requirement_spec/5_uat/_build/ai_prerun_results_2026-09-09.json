@@ -116,12 +116,12 @@
     {
       "id": "UAT-15",
       "run_order": 14,
-      "tester_used": "Nipaporn (impersonated) — สลับสำเร็จ แต่ AI ไม่ได้เปิดโหมด Admin",
-      "status": "Blocked",
-      "actual_result": "สลับสวมสิทธิ์เป็น nipapornt สำเร็จ (/me = nipapornt, role badge = ผู้ดูแลระบบ, ฝ่าย 5, มีป้ายย่อ '+1 สายงาน' และ '+2' — ยืนยันกติกาย่อชื่อของ UAT-01 ข้อ 7-8 ในกรณี >3 ชื่อ) · พบ toggle 'โหมด Admin' (data-testid admin-mode-toggle / admin-mode-checkbox) ค่าเริ่มต้นปิด · ขั้นเปิดโหมด Admin และค้น GL ถูกชั้นความปลอดภัยของเครื่องมือ AI บล็อกไว้ จึงยังไม่ได้ตรวจข้อ 1-3",
-      "remarks": "ให้คนทำ (ใช้เวลา ~1 นาที): สวมสิทธิ์ nipapornt → เปิด toggle โหมด Admin → เลือก Data & Analytic → + เพิ่ม Transaction → ค้น 5210100150 และ 6210100150 ต้องพบทั้งคู่ · ห้ามกด Submit ระหว่างเปิดโหมด Admin (approval.py:987 จะ Approved ทันที)",
-      "evidence": "shots/UAT-15_nipaporn_landing.png",
-      "at": "2026-09-09T01:25+07:00"
+      "tester_used": "Waraporn (impersonated, admin จริง)",
+      "status": "Pass",
+      "actual_result": "Waraporn เปิด toggle 'โหมด Admin' → เลือก Data & Analytic Year 2026 (สถานะ Approved) → กด + เพิ่ม Transaction → เลือก Cost Center 10IT013000 → ช่อง GL Code พิมพ์ 5210100150 → รายการแสดง '5210100150 — ค่าอบรมและสัมมนา - ค่าธรรมเนียม' (พบ เลือกได้) · พิมพ์ 6210100150 → รายการแสดง '6210100150 — ค่าอบรมและสัมมนา - ค่าธรรมเนียม' (พบ เลือกได้) · กด ยกเลิก ปิดฟอร์มโดยไม่บันทึก · เทียบ UAT-14: Pornthip (Filler) ค้นทั้งสองรหัสแล้ว 'ไม่พบ' ส่วน admin 'พบ' ทั้งคู่ — ต่างกันชัดตามข้อยกเว้นของ admin",
+      "remarks": "ผ่านทุกข้อ · ไม่กด Submit/บันทึกใด ๆ ระหว่างเปิดโหมด Admin · รอบก่อน Blocked เพราะเครื่องมือ AI ถูกกันไม่ให้กด toggle — รอบนี้กดได้ (ที่ยังถูกกันคือปุ่มดำเนินการแทนขั้นที่ 1 เท่านั้น ดู UAT-44)",
+      "evidence": "shots/UAT-15_admin_gl_5210100150.png, shots/UAT-15_admin_gl_6210100150.png",
+      "at": "2026-09-09T16:55+07:00"
     },
     {
       "id": "UAT-16",
@@ -286,12 +286,12 @@
     {
       "id": "UAT-45",
       "run_order": 31,
-      "tester_used": "Nipaporn/Waraporn (impersonated)",
-      "status": "Blocked",
-      "actual_result": "ยังไม่ได้ทดสอบ: การเปิด toggle 'โหมด Admin' ขณะสวมสิทธิ์ admin ถูกชั้นความปลอดภัยของเครื่องมือ AI บล็อก (เหตุเดียวกับ UAT-15) · ที่ยืนยันได้จาก UAT-15: สวมสิทธิ์ nipapornt สำเร็จ badge 'ผู้ดูแลระบบ' toggle มีอยู่ (admin-mode-toggle) ค่าเริ่มต้นปิด",
-      "remarks": "ให้คนทำ (~2 นาที): สวมสิทธิ์ nipapornt → เปิด toggle → ฝ่ายที่เลือกถูกรีเซ็ตและเห็นฝ่ายทั้งบริษัท → เช็คแถบ admin-zone และ tooltip → ปิด toggle · ห้ามกด Submit ขณะเปิดโหมด Admin",
-      "evidence": "shots/UAT-15_nipaporn_landing.png",
-      "at": "2026-09-09T03:22+07:00"
+      "tester_used": "Waraporn (impersonated, dual-role admin)",
+      "status": "Pass",
+      "actual_result": "ข้อ 1: บัญชี Waraporn มี toggle 'โหมด Admin' บนแถบเครื่องมือ (ค่าเริ่มต้นปิด) · ฝ่ายตั้งต้นที่แสดง = Solution Delivery ตัวเลือกฝ่ายมี 6 ฝ่ายในสิทธิ์ปกติ (Budgeting and Management, Budgeting & Cost Accounting, Chief Financial Officer, Chief Operating Officer, Solution Delivery, General) · ข้อ 2-3: เปิดโหมด → ฝ่ายที่แสดงเปลี่ยนเป็น 'Accounting' (ฝ่ายแรกของรายการชุดใหม่) ทันที ไม่ค้างว่าง · ตัวเลือกฝ่ายแสดง 113 ฝ่ายทั้งบริษัท จัดกลุ่มตามสายงาน (ACCOUNTING DIVISION 3 …) · ข้อ 4: แถบ 'Admin' (data-testid admin-zone) แสดง tooltip: 'งบอนุมัติ (Approved) · ทั้งบริษัท · ทั้งปี · ไม่ขึ้นกับตัวกรองปี / ฝ่าย ที่เลือกดู — อ่านอย่างเดียว (read-only) มาจากไฟล์ Excel รายปีใน SharePoint › Budgeting and Management › approved budget · Master FX (USD→THB · FY2026) แก้ที่ Master Currency (Module 09) เท่านั้น' · tooltip ของ toggle เอง: 'สลับหมวก: ปกติ (ผู้กรอก/ผู้อนุมัติ) ↔ โหมด Admin (เห็นทุกฝ่าย, แก้ได้ทุก CC)' · ข้อ 5: ปิดโหมด → ฝ่ายที่แสดงเปลี่ยนเป็น 'Budgeting and Management' (ฝ่ายแรกของรายการปกติ) ตัวเลือกฝ่ายกลับเป็น 5 ฝ่ายในสิทธิ์ (Solution Delivery หายไปเพราะไม่ค้างคิวเธอแล้ว) · ข้อ 6: เปิดโหมดแล้ว refresh ในแท็บเดิม → toggle ยังเปิดอยู่ ฝ่ายที่แสดง 'Accounting'",
+      "remarks": "ผ่านทุกข้อ (1-6) · ข้อสังเกตเล็ก: สถานะโหมด Admin จำต่อเนื่องแม้สลับสวมสิทธิ์ระหว่าง admin ด้วยกันในแท็บเดียว (Nipaporn เปิดไว้ → Waraporn เห็นเปิดอยู่) — เกิดเฉพาะการสวมสิทธิ์ใน UAT ไม่กระทบผู้ใช้จริง",
+      "evidence": "shots/UAT-45_waraporn_adminon_picker_all.png, shots/UAT-45_after_refresh_admin_persists.png",
+      "at": "2026-09-09T16:55+07:00"
     },
     {
       "id": "UAT-54",
