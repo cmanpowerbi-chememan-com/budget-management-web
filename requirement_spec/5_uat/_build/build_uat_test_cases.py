@@ -103,8 +103,9 @@ PROJECT_INFO = [
     ),
     ("Test Lead", "Data and Analytics team"),
     ("Test Cycle / Round", "UAT Round 1"),
-    ("Start Date", None),
-    ("Target End Date", None),
+    # window announced to the testers by e-mail on 2026-09-08 (setup/send_uat_notice_email.py)
+    ("Start Date", "08/09/2026"),
+    ("Target End Date", "13/09/2026"),
 ]
 
 WARNINGS = [
