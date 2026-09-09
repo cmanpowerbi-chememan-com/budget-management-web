@@ -76,6 +76,8 @@ SHEET_CASES = "2. Test Cases"
 SHEET_SUMMARY = "3. Summary"
 SHEET_DEFECTS = "4. Defects"
 EXPECTED_SHEETS = [SHEET_INFO, SHEET_CASES, SHEET_SUMMARY, SHEET_DEFECTS]
+# added by merge_ai_results.py after the AI pre-run; optional, must come last
+OPTIONAL_SHEETS = ["5. AI Pre-Run"]
 
 EXPECTED_CASE_COUNT = 54
 HEADER_ROW = 2
@@ -214,10 +216,11 @@ def check_1_sheets(rep, wb):
     for name in EXPECTED_SHEETS:
         if name not in actual:
             problems.append("missing sheet %r" % name)
-    extra = [n for n in actual if n not in EXPECTED_SHEETS]
+    extra = [n for n in actual if n not in EXPECTED_SHEETS + OPTIONAL_SHEETS]
     if extra:
         problems.append("unexpected sheet(s) %r" % extra)
-    if not problems and actual != EXPECTED_SHEETS:
+    core = [n for n in actual if n in EXPECTED_SHEETS]
+    if not problems and core != EXPECTED_SHEETS:
         problems.append("sheet order is %r, expected %r" % (actual, EXPECTED_SHEETS))
     rep.check(1, "4 sheets present with the expected names",
               not problems, "; ".join(problems))
