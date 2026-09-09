@@ -175,6 +175,94 @@ describe('BudgetGrid', () => {
     expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('900')
   })
 
+  it('a save rejected as department-locked (403) shows the Thai reason and reverts the cell', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    const freshRow = makeRow('CC1', '5211800030', {
+      pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+      editable: false,
+    })
+    vi.mocked(budgetApi.fetchBudgetGrid)
+      .mockResolvedValueOnce([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+      // Refetch after the rejected save — the department is now locked, so
+      // the server's own row.editable flips false too (same source of
+      // truth the grid always reads).
+      .mockResolvedValueOnce([freshRow])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(
+        403,
+        'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+        'ฝ่ายบัญชี/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked',
+      ),
+    )
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    fireEvent.change(input, { target: { value: '777' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(screen.getByText(/ฝ่ายนี้ส่งขออนุมัติแล้ว/)).toBeInTheDocument())
+    // Reverts the cell AND flips it read-only — same refetch-and-trust-the-
+    // server contract the 409 path already uses.
+    await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toHaveTextContent('100'))
+    expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument()
+  })
+
+  it('a successful Submit flips the grid to read-only immediately, without a page reload', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid)
+      .mockResolvedValueOnce([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+      // Refetch triggered by ApprovalActionBar's onChanged after a
+      // successful submit — the server now reports the row locked.
+      .mockResolvedValueOnce([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+          editable: false,
+        }),
+      ])
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+      submitter_empcode: null, submitter_email: null, submitted_at: null,
+      approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+      reject_reason: null, rejected_by_empcode: null, updated_at: null,
+      current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+      can_submit: true, submit_blocked_reason: null,
+    })
+    vi.mocked(approvalApi.submitDepartment).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'PENDING_APPROVER1',
+      submitter_empcode: null, submitter_email: null, submitted_at: null,
+      approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+      reject_reason: null, rejected_by_empcode: null, updated_at: null,
+      current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+      can_submit: false, submit_blocked_reason: 'invalid_approval_state',
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    const submitBtn = await screen.findByTestId('approval-submit-btn')
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => expect(approvalApi.submitDepartment).toHaveBeenCalled())
+    // Same-page flip — no reload, just the grid re-rendering read-only once
+    // the refetched rows come back with editable:false.
+    await waitFor(() => expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument())
+    expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toHaveTextContent('100')
+
+    vi.restoreAllMocks()
+  })
+
   describe('grid trailing "ลบ" column — deleting a manually-added row', () => {
     beforeEach(() => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)

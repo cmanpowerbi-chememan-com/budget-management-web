@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
 import { fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
-import { ApiError } from '../api/client'
+import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
 import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
@@ -220,12 +220,17 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, hasNoScope, adminViewEnabled])
 
-  /** Refreshes both approval-driven caches after a submit/approve/reject —
-   * a submit can both change the รออนุมัติ badge list AND lock the
-   * department the caller just submitted. */
+  /** Refreshes everything a submit/approve/reject/override can invalidate —
+   * the รออนุมัติ badge list, the "+ เพิ่ม Transaction" lock-awareness
+   * cache, AND the grid's own rows (UAT-34, 2026-09-09: `row.editable`
+   * lives on each fetched row, so without this refetch the SAME page kept
+   * showing editable month inputs right after a successful Submit until a
+   * manual reload — a reject unlocks the same way, through this same
+   * refetch). */
   function handleApprovalChanged() {
     loadPendingApprovals()
     loadLockedDepartments()
+    loadGrid()
   }
 
   async function loadGrid() {
@@ -300,6 +305,17 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           ...prev,
           [key]: { kind: 'error', text: 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง' },
         }))
+        await loadGrid()
+        return
+      }
+      // UAT-34: a department can be locked by someone ELSE's Submit between
+      // this cell's last render and this blur — same "trust the server,
+      // refetch" contract as the 409 branch above (reverts the optimistic
+      // value AND flips row.editable off), except the message IS the
+      // server's own Thai reason (messageForStatus's department-locked
+      // mapping), not a generic conflict line.
+      if (err instanceof ApiError && isDepartmentLockedError(err)) {
+        setRowMessages((prev) => ({ ...prev, [key]: { kind: 'error', text: err.message } }))
         await loadGrid()
         return
       }

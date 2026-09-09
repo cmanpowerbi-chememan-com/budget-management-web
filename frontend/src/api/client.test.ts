@@ -198,7 +198,7 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
       status: 403,
-      message: 'This department is in approval or already approved — editing is locked.',
+      message: 'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
     })
   })
 

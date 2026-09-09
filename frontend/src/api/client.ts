@@ -57,7 +57,7 @@ function defaultOnUnauthorized(): void {
  * is locked"`, A10 gap close) — the ONE `detail` pattern this client
  * special-cases, since a plain Fill-scope 403 shares the same HTTP status
  * but needs a different message. */
-const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
+export const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
 
 /** Stable marker substrings inside `deadline.PastDeadlineError`'s message
  * (`"the submission deadline for fiscal_year=<Y> has passed"`, raised by both
@@ -73,7 +73,11 @@ const PAST_DEADLINE_DETAIL_SUFFIX = 'has passed'
 function messageForStatus(status: number, detail?: string): string {
   if (status === 403) {
     if (detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER)) {
-      return 'This department is in approval or already approved — editing is locked.'
+      // UAT-34 (2026-09-09): a Filler mid-typing loses the department's lock
+      // out from under them the moment someone submits — the message must
+      // say WHY the save was refused and what to do next (a reload gets the
+      // now-read-only, correct grid), not a generic "no permission" line.
+      return 'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่'
     }
     if (detail?.includes(PAST_DEADLINE_DETAIL_PREFIX) && detail.includes(PAST_DEADLINE_DETAIL_SUFFIX)) {
       return 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'
@@ -84,6 +88,17 @@ function messageForStatus(status: number, detail?: string): string {
   if (status === 400) return 'คำขอไม่ถูกต้อง'
   if (status >= 500) return 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'
   return `คำขอไม่สำเร็จ (HTTP ${status})`
+}
+
+/** True for the ONE 403 shape callers must react to differently from a
+ * plain access-denied: `write_model.DepartmentLockedError` (a row save
+ * refused because the department is now mid-approval/approved). A row-save
+ * caller (`BudgetGrid.persistRow`) uses this to revert the optimistic edit
+ * and refetch, the same way it already does for a 409 conflict — the
+ * `err.message` from `messageForStatus` above is already the Thai reason to
+ * show alongside it. */
+export function isDepartmentLockedError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 403 && (err.detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER) ?? false)
 }
 
 /** How many Pydantic validation entries to spell out before collapsing the
