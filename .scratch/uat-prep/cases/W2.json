@@ -24,7 +24,9 @@
     "id": "UAT-07",
     "no": 7,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -45,7 +47,9 @@
     "id": "UAT-08",
     "no": 8,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -66,7 +70,9 @@
     "id": "UAT-09",
     "no": 9,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -87,7 +93,9 @@
     "id": "UAT-10",
     "no": 10,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -108,7 +116,9 @@
     "id": "UAT-11",
     "no": 11,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -129,7 +139,9 @@
     "id": "UAT-12",
     "no": 12,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -158,7 +170,9 @@
     "id": "UAT-13",
     "no": 13,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -167,7 +181,7 @@
     "preconditions": "ล็อกอินเป็น Pornthip และอยู่ในหน้ากรอกงบของฝ่าย `Data & Analytic` ปี `Year 2026` ซึ่งเป็นรอบที่ยังเปิดให้แก้ไข",
     "steps": "1. กดปุ่ม `+ เพิ่ม Transaction`\n2. ไม่เลือก Cost Center และไม่เลือก GL Code แล้วกดบันทึก\n3. คัดลอกข้อความที่ระบบแสดงตรงช่องที่ขาดทั้งสองช่องลงช่อง Actual Result\n4. เลือกเฉพาะ Cost Center โดยยังไม่เลือก GL Code แล้วกดบันทึกอีกครั้ง แล้วจดข้อความที่เห็น\n5. ปิดฟอร์ม แล้วจดคู่ Cost Center + GL Code ของแถวหนึ่งที่มีอยู่แล้วในตาราง\n6. กด `+ เพิ่ม Transaction` อีกครั้ง เลือกคู่เดิมนั้น แล้วกดบันทึก\n7. คัดลอกข้อความปฏิเสธที่เห็นลงช่อง Actual Result และตรวจว่าตารางไม่มีแถวซ้ำเกิดขึ้น",
     "test_data": "กรณีที่ 1: Cost Center = ว่าง, GL Code = ว่าง\nกรณีที่ 2: Cost Center = เลือกไว้แล้ว (เช่น 10IT011300), GL Code = ว่าง\nกรณีที่ 3: คู่ Cost Center + GL Code ที่มีอยู่แล้วในตาราง (เช่น 10IT011300 คู่กับ GL ของแถวแรกที่เห็น)",
-    "expected": "1. กรณีเว้นช่องว่าง: ระบบไม่บันทึกรายการ และแสดงข้อความ `กรุณาเลือก Cost Center` และ `กรุณาเลือก GL Code` ตรงช่องที่ขาดอย่างชัดเจน\n2. กรณีเลือกไม่ครบ: ระบบยังไม่บันทึก และชี้ช่องที่ยังขาดอยู่\n3. กรณีเพิ่มแถวซ้ำ: ระบบไม่บันทึกรายการ และแสดงข้อความปฏิเสธที่ผู้ใช้อ่านแล้วเข้าใจว่าแถวนี้มีอยู่แล้ว — ให้จดข้อความจริงที่เห็นลงช่อง Actual Result แล้วให้ความเห็นในช่อง Remarks ว่าอ่านเข้าใจหรือไม่\n4. ตารางไม่มีแถวซ้ำเกิดขึ้นหลังการทดสอบ\n5. หมายเหตุตามการออกแบบ: ช่องจำนวนเงินรายเดือนในตารางไม่ใช่ช่องบังคับกรอก การเว้นว่างมีค่าเท่ากับ 0 ข้อนี้ไม่ใช่ข้อผิดพลาด",
+    "expected": "1. กรณีเว้นช่องว่าง: ระบบไม่บันทึกรายการ และแสดงข้อความ `กรุณาเลือก Cost Center` ก่อน (ระบบแจ้งทีละช่องตามลำดับ ช่องแรกที่ขาดขึ้นก่อน เหมือนฟอร์มย่อยทุกฟอร์ม — ยอมรับได้ตามคำตัดสิน jakkaritw 2026-09-09) เมื่อเลือก Cost Center แล้วกดบันทึกอีกครั้งจึงแสดง `กรุณาเลือก GL Code`\n2. กรณีเลือกไม่ครบ: ระบบยังไม่บันทึก และชี้ช่องที่ยังขาดอยู่\n3. กรณีเพิ่มแถวซ้ำ: ระบบไม่บันทึกรายการ และแสดงข้อความปฏิเสธที่ผู้ใช้อ่านแล้วเข้าใจว่าแถวนี้มีอยู่แล้ว — ให้จดข้อความจริงที่เห็นลงช่อง Actual Result แล้วให้ความเห็นในช่อง Remarks ว่าอ่านเข้าใจหรือไม่\n4. ตารางไม่มีแถวซ้ำเกิดขึ้นหลังการทดสอบ\n5. หมายเหตุตามการออกแบบ: ช่องจำนวนเงินรายเดือนในตารางไม่ใช่ช่องบังคับกรอก การเว้นว่างมีค่าเท่ากับ 0 ข้อนี้ไม่ใช่ข้อผิดพลาด",
     "sit_refs": [
       "TC-010"
     ],
@@ -179,7 +193,9 @@
     "id": "UAT-14",
     "no": 14,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -200,7 +216,9 @@
     "id": "UAT-15",
     "no": 15,
     "wave": "W2",
-    "runs_after": ["UAT-14"],
+    "runs_after": [
+      "UAT-14"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Nipaporn หรือ Waraporn",
@@ -221,7 +239,9 @@
     "id": "UAT-16",
     "no": 16,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -242,7 +262,9 @@
     "id": "UAT-17",
     "no": 17,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -263,7 +285,9 @@
     "id": "UAT-18",
     "no": 18,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
@@ -285,7 +309,9 @@
     "id": "UAT-19",
     "no": 19,
     "wave": "W2",
-    "runs_after": ["UAT-06"],
+    "runs_after": [
+      "UAT-06"
+    ],
     "module": "Budget Entry (Filler)",
     "department": "Data & Analytic",
     "tester": "Pornthip",
