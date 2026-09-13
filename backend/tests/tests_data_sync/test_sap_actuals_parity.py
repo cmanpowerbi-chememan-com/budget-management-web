@@ -18,6 +18,16 @@ Structure:
   it queries doc-level rows from gold.fact_gl_trans and reports which
   Document Numbers are MISSING in the DW — the report names documents, not
   just amounts. Full report: parity_report.txt (utf-8) + the assert message.
+  Scoped to `COMPARE_MONTHS` (1-4) because the export file only covers those
+  months — NOT widened to 12 (an earlier draft of the ADR-0030 acceptance
+  test tried this; comparing "expected 0" against months the export never
+  covered would be a false-positive mismatch, not a wider proof).
+- `test_web_grid_matches_gold_after_hide_anti_join_no_month_is_none` — the
+  ADR-0030 acceptance test ("data on db and web sync 100%"), covering all 12
+  months for the CURRENT live year. Calls the REAL production entry point
+  (`get_budget_grid`), not a hand-called display helper — see its own
+  docstring for why that distinction is load-bearing, and exactly what
+  "100% sync" does and does not claim here.
 
 Run:
     cd backend
@@ -29,6 +39,7 @@ from __future__ import annotations
 import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -232,6 +243,41 @@ def _gold_connection_or_skip():
         ctx.__exit__(None, None, None)
 
 
+@contextlib.contextmanager
+def _fabric_connection_or_skip():
+    """Yield an open TRANSACTIONAL Fabric SQL DB connection, or pytest.skip
+    with the reason — same defensive style as `_gold_connection_or_skip`.
+    Needed by the ADR-0030 acceptance test below for `resolve_scope` and for
+    `dbo.hide_document` (read inside `fetch_sap_actuals_cached`)."""
+    try:
+        from app.config import get_settings
+        from app.db import get_fabric_conn
+    except ImportError as exc:  # pragma: no cover - environment guard
+        pytest.skip(f"backend app modules not importable: {exc}")
+
+    settings = get_settings()
+    if not all(
+        [
+            settings.fabric_sql_server,
+            settings.fabric_sql_database,
+            settings.entra_client_id,
+            settings.entra_client_secret,
+            settings.entra_tenant_id,
+        ]
+    ):
+        pytest.skip("backend/.env fabric-DB / Entra credentials absent — live parity test needs a live DB")
+
+    ctx = get_fabric_conn(settings)
+    try:
+        conn = ctx.__enter__()
+    except Exception as exc:
+        pytest.skip(f"fabric DB unreachable: {exc}")
+    try:
+        yield conn
+    finally:
+        ctx.__exit__(None, None, None)
+
+
 def _fetch_dw_doc_numbers(conn, cost_center: str, gl_account: str, month: int) -> set[str]:
     cursor = conn.cursor()
     try:
@@ -306,4 +352,107 @@ def test_web_actuals_match_sap_export() -> None:
     assert not mismatches, (
         f"web actuals != SAP export in {len(mismatches)} cell(s) — the DW is missing source documents "
         f"(plan/sap-actuals-dw-gap-fix.md). Full report: {REPORT_PATH}\n\n{report}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# ADR-0030 acceptance test — "data on db and web sync 100%" (jakkaritw)
+# ---------------------------------------------------------------------------
+
+ACCEPTANCE_ADMIN_EMAIL = "jakkaritw@chememan.com"
+
+
+@pytest.mark.integration
+def test_web_grid_matches_gold_after_hide_anti_join_no_month_is_none() -> None:
+    """ADR-0030 acceptance test, live, all 12 months of the CURRENT board year.
+
+    THE FLAW THIS REPLACES (found 2026-09-14, adversarial review of an
+    earlier draft): routing the comparison through a hand-called
+    `_sap_layer(months, None)` hardcodes the mask-OFF argument — it PASSES
+    identically whether or not ADR-0026's mask is still live in
+    `merge_budget_rows`/`get_budget_grid`, because that draft never called
+    either. Proven live: with the production mask still wired (watermark
+    2026-09-11, visible months 1-7), that shape reports 9,346 cells / 0
+    mismatches / app_sum 942,888,831.94 == reference 942,888,831.94 — a
+    clean PASS while the actual served grid was withholding 111,689,362.10
+    THB across 10,795 `None` cells. This version calls `get_budget_grid` —
+    the SAME function `GET /budget` calls — so a mask reintroduced ANYWHERE
+    between gold and the rendered rows (inside `_sap_layer`, `merge_budget_rows`,
+    or a brand new call site) makes this fail.
+
+    WHAT "100% SYNC" MEANS HERE — state the boundary, do not compare across it:
+    - Reference = `fetch_sap_actuals_cached` (gold + the `dbo.hide_document`
+      anti-join, ADR-0020 amendment 2026-08-11) — the EXACT dict `_sap_layer`
+      is built from. NOT raw gold: raw gold vs. hide-adjusted diverges by
+      hundreds of millions of THB for entirely legitimate reasons (measured
+      live 2026-09-14, FY2026: raw gold 1,197,679,168.17 vs. hide-adjusted
+      942,888,831.94 — a 254.8M THB difference that is CORRECT, not a bug).
+      There is NO one-directional "web <= db" invariant: hiding a
+      net-negative document set can RAISE a month's figure (measured live,
+      FY2026 month 08: 132,084,647.78 raw -> 135,016,913.79 after the hide
+      anti-join) — this test asserts exact equality against the hide-adjusted
+      reference, never an inequality, so that direction-flip is a non-issue.
+    - This proves CELL VALUES for rows that DO appear in the grid. It does
+      NOT prove the ROW SET: GL-master membership (`dbo.gl_group`), the
+      ADR-0010 net-zero rule, RLS/see-scope, and the admin-GL strip all
+      decide which (cc, gl) keys become a row at all — separate,
+      already-tested concerns (ADR-0010, `test_read_model.py`). Using an
+      ADMIN scope with `admin_view_enabled=True` here specifically skips RLS
+      and the admin-GL strip (measured live 2026-09-14: raw 1,197,679,168.17
+      -> after hide 942,888,831.94 -> after GL-master membership,
+      145 codes, 243,395,400.91 -> after the admin-GL strip for a
+      NON-admin, 228,854,897.43 — each step legitimate and each OUT of this
+      test's scope except the hide anti-join it deliberately includes).
+    - A month being 0.00 or NEGATIVE is a legitimate value, never an error
+      (measured live: FY2026 month 09 = -23,327,551.69; months 10-12 = 0.00,
+      no gold rows posted yet). Only `None` is an error — the literal,
+      machine-checked form of the acceptance criterion."""
+    from app.read_model import get_budget_grid
+    from app.rls import resolve_scope
+    from app.sap import MONTH_COLUMNS, fetch_sap_actuals_cached
+
+    board_year = date.today().year
+    planning_year = board_year + 1
+
+    with _gold_connection_or_skip() as gold_conn, _fabric_connection_or_skip() as fabric_conn:
+        scope = resolve_scope(ACCEPTANCE_ADMIN_EMAIL, fabric_conn)
+        assert scope.is_admin, (
+            f"{ACCEPTANCE_ADMIN_EMAIL} expected to be admin (ADMIN_EMAILS) — required for admin_view_enabled "
+            "to skip RLS/admin-GL-strip and give this test its widest, most defensible cell coverage"
+        )
+
+        rows = get_budget_grid(
+            fabric_conn, gold_conn, planning_year=planning_year, scope=scope, admin_view_enabled=True,
+        )
+        # Same boundary the SAP layer is built from (gold + hide_document
+        # anti-join) — see the "reference" bullet above. Sharing the TTL
+        # cache with get_budget_grid's own call is fine (arguably stronger):
+        # both reads then provably came from the same underlying gold read.
+        reference = fetch_sap_actuals_cached(gold_conn, fabric_conn, fiscal_year=board_year)
+
+        assert rows, f"get_budget_grid returned zero rows for planning_year={planning_year} — nothing to compare"
+
+        none_found: list[str] = []
+        mismatches: list[str] = []
+        compared = 0
+        for row in rows:
+            key = (row.cost_center, row.gl_account)
+            ref_months = reference.get(key, {})
+            for col in MONTH_COLUMNS:
+                web_value = getattr(row.sap, col)
+                compared += 1
+                if web_value is None:
+                    none_found.append(f"{key[0]}/{key[1]} {col} rendered None")
+                    continue
+                ref_value = round(ref_months.get(col, 0.0), 2)
+                if round(web_value, 2) != ref_value:
+                    mismatches.append(f"{key[0]}/{key[1]} {col}: web={web_value} gold+hide_anti_join={ref_value}")
+
+    assert not none_found, (
+        f"{len(none_found)} of {compared} SAP month cell(s) rendered None — ADR-0030 requires every month to "
+        f"be a real number, never null:\n" + "\n".join(none_found[:20])
+    )
+    assert not mismatches, (
+        f"web SAP layer != gold+hide_document-anti-join in {len(mismatches)} of {compared} cell(s) — the "
+        f"display layer diverged from the fetch (a reintroduced month mask?):\n" + "\n".join(mismatches[:20])
     )

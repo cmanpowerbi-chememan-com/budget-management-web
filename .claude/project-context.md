@@ -139,6 +139,37 @@ start` + `swa start`.
 
 ---
 
+## Issue tracker
+
+**GitHub Issues on this repo** — `cmanpowerbi-chememan-com/budget-management-web`. Use the `gh`
+CLI (installed, authenticated as `cmanpowerbi-chememan-com`); prefix with `rtk` for compact output:
+
+```bash
+rtk gh issue list --repo cmanpowerbi-chememan-com/budget-management-web
+gh issue create --repo cmanpowerbi-chememan-com/budget-management-web --title "..." --body-file <file>
+```
+
+This is the tracker the `wayfinder`, `to-tickets`, `to-spec`, `triage` and `qa` skills mean when
+they say "this repo's issue tracker". Configured 2026-09-14 — before that they fell back to local
+markdown, which is why `.scratch/sap-month-closed-rule/` (the SAP show-as-is map, complete) lives
+as files rather than issues. Finished markdown maps stay where they are; new efforts go here.
+
+Conventions:
+
+- **Wayfinder maps**: one issue labelled `wayfinder:map`; its tickets are **sub-issues** of it
+  (GitHub's native parent/child), each labelled `wayfinder:research` / `prototype` / `grilling` /
+  `task`.
+- **Blocking is not native on plain GitHub issues** — state it in the body as `Blocked by: #N`,
+  per the wayfinder fallback. The frontier is then: open sub-issues, unassigned, whose
+  `Blocked by` issues are all closed.
+- **Claiming**: assign the issue to yourself before doing any work on it.
+- Long bodies: write a file and pass `--body-file` — never pipe multi-line text through the shell
+  (PowerShell adds a BOM and mangles quoting; see the global CLAUDE.md Windows rules).
+
+`tracker/pending.json` is **not** replaced by any of this. It stays the cross-session task ledger
+and still gets an `add` when an effort starts and a `done` when it closes — quote the issue number
+and URL in the `ai` field so the next session can find the issue.
+
 ## Where the rest lives (links, not copies)
 
 - **See / Fill / Approval-unit model** → ADR-0007 (see-fill scope, shared CC), ADR-0008

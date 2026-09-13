@@ -3,7 +3,7 @@
  * function per endpoint, no caching/state here (that lives in the grid
  * hooks/components that call these). */
 import { apiFetch } from './client'
-import type { BudgetRow, DepartmentRow, GlAccount, PendingRowInput, PendingRowState } from './types'
+import type { BudgetRow, DepartmentRow, GlAccount, PendingRowInput, PendingRowState, SapCoverage } from './types'
 
 export interface BudgetGridFilter {
   year: number
@@ -36,6 +36,13 @@ export function fetchBudgetGrid(filter: BudgetGridFilter): Promise<BudgetRow[]> 
 /** `GET /budget/gl-accounts` — full GL master, flagged `is_special` (A8). */
 export function fetchGlAccounts(): Promise<GlAccount[]> {
   return apiFetch<GlAccount[]>('/budget/gl-accounts')
+}
+
+/** `GET /budget/sap-coverage` — how fresh the SAP · ใช้จริง layer is
+ * (ADR-0030). `year` is the PLANNING year, same as `fetchBudgetGrid` — the
+ * SAP layer itself is year-1, the endpoint does that translation. */
+export function fetchSapCoverage(year: number): Promise<SapCoverage> {
+  return apiFetch<SapCoverage>(`/budget/sap-coverage${buildQuery({ year })}`)
 }
 
 /** `GET /scope/departments` — caller's (cost_center, department, division,

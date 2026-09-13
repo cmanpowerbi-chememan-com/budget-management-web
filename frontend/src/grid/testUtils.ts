@@ -12,20 +12,20 @@ export function blankLayer(overrides: Partial<Record<MonthKey | 'total_year', nu
   return { ...base, ...overrides }
 }
 
-/** SAP-layer fixture (ADR-0026): months may be `null` (a month the backend
- * hides), `total_year` defaults to the sum of the VISIBLE months and
- * `has_actuals` to "any month carries a value" — exactly how the backend
- * derives them, so fixtures can't drift from the real payload. */
+/** SAP-layer fixture (ADR-0030: no month is ever `null`). `total_year`
+ * defaults to the sum of the 12 months and `has_actuals` to "any month
+ * carries a value" — exactly how the backend derives them, so fixtures
+ * can't drift from the real payload. */
 export function sapLayer(
-  overrides: Partial<Record<MonthKey, number | null>> & { total_year?: number; has_actuals?: boolean } = {},
+  overrides: Partial<Record<MonthKey, number>> & { total_year?: number; has_actuals?: boolean } = {},
 ): SapLayer {
-  const valueOf = (m: MonthKey): number | null => (m in overrides ? (overrides[m] as number | null) : 0)
-  const months = Object.fromEntries(MONTH_KEYS.map((m) => [m, valueOf(m)])) as Record<MonthKey, number | null>
+  const valueOf = (m: MonthKey): number => (m in overrides ? (overrides[m] as number) : 0)
+  const months = Object.fromEntries(MONTH_KEYS.map((m) => [m, valueOf(m)])) as Record<MonthKey, number>
   const values = MONTH_KEYS.map(valueOf)
   return {
     ...months,
-    total_year: overrides.total_year ?? values.reduce<number>((sum, v) => sum + (v ?? 0), 0),
-    has_actuals: overrides.has_actuals ?? values.some((v) => v !== null && v !== 0),
+    total_year: overrides.total_year ?? values.reduce<number>((sum, v) => sum + v, 0),
+    has_actuals: overrides.has_actuals ?? values.some((v) => v !== 0),
   } as SapLayer
 }
 

@@ -646,6 +646,102 @@ def notify_deadline_reminder(
     return send_mail(filler_email, subject, body, cc=cc_emails or None, dry_run=dry_run, settings=settings)
 
 
+# ---------------------------------------------------------------------------
+# ADR-0030 — stale SAP feed admin alert (supersedes ADR-0026's month mask)
+# ---------------------------------------------------------------------------
+
+# Module-level throttle state: at most one alert mail per calendar day,
+# regardless of how many requests observe the stale condition in between
+# (`GET /budget/sap-coverage` runs on every page load). Keyed by nothing but
+# the calendar day -- there is only one SAP feed, so "per stale condition"
+# collapses to "per day" in practice.
+_sap_stale_alert_state: dict[str, date | None] = {"last_sent_date": None}
+
+
+def _reset_sap_stale_alert_throttle() -> None:
+    """Test-only reset hook -- module state must never leak between tests
+    (same pattern as `_reset_graph_token_cache`)."""
+    _sap_stale_alert_state["last_sent_date"] = None
+
+
+def notify_sap_feed_stale(
+    *, watermark_date: date | None, days_behind: int | None, dry_run: bool, settings: Settings | None = None,
+) -> list[NotificationResult]:
+    """ADR-0030 admin alert: the SAP freshness watermark is stale (or
+    undeterminable). Recipients = `Settings.admin_emails_set` -- this list
+    doubles as the app's admin roster (`config.py:225`), so narrowing it to
+    quieten alerts would also remove admin rights; do not narrow it here.
+
+    One mail PER admin address -- three recipients is not worth a new
+    multi-recipient code path in `_post_send_mail`. Each send is its own
+    try/except so one admin's failure never blocks another's, and this
+    function itself never raises -- the caller sits on a request path
+    (`GET /budget/sap-coverage`) and a broken mail send must never break
+    the grid (ADR-0030 §3.4)."""
+    settings = settings or get_settings()
+    watermark_text = watermark_date.strftime("%d/%m/%Y") if watermark_date else "ไม่ทราบ (ไม่พบข้อมูลที่โหลดเลย)"
+    days_text = f"{days_behind} วัน" if days_behind is not None else "ไม่ทราบ"
+    subject = "แจ้งเตือน: ข้อมูล SAP บนเว็บ Budget Management ล่าช้ากว่าปกติ"
+    body = _wrap(
+        "<p>เรียน ผู้ดูแลระบบ</p>"
+        "<p>ข้อมูล SAP · ใช้จริง บนเว็บ Budget Management ล่าช้ากว่าปกติ รายละเอียดดังนี้:</p>"
+        + _label_value_table([
+            ("ข้อมูลคีย์ถึง (watermark)", watermark_text, "red"),
+            ("ช้ากว่าปกติ", days_text, None),
+        ])
+        + "<p>กรุณาตรวจสอบสถานะการโหลดข้อมูล SAP (PTF_SAP_GL_TRANS_D)</p>"
+    )
+    results: list[NotificationResult] = []
+    for admin_email in sorted(settings.admin_emails_set):
+        try:
+            results.append(send_mail(admin_email, subject, body, dry_run=dry_run, settings=settings))
+        except NotificationError:
+            logger.warning(
+                "notify_sap_feed_stale: send failed to=%s -- continuing to other admins",
+                admin_email, exc_info=True,
+            )
+    return results
+
+
+def maybe_alert_sap_feed_stale(
+    *, is_stale: bool, watermark_date: date | None, days_behind: int | None,
+    dry_run: bool, settings: Settings | None = None, today: Callable[[], date] = date.today,
+) -> list[NotificationResult]:
+    """Throttled wrapper around `notify_sap_feed_stale` -- at most one send
+    per calendar day (ADR-0030 §3.4). `today` is injectable so tests can
+    drive the throttle deterministically without a real day boundary.
+
+    The throttle marker is set only AFTER at least one admin's send actually
+    succeeds (M4 gate fix, 2026-09-14) -- `notify_sap_feed_stale` only
+    appends a successful `send_mail` call to its return list (a per-admin
+    `NotificationError` is caught and skipped), so an empty result means
+    every admin's send failed. Marking the day "sent" before knowing that
+    would burn the day's only alert on a single transient Graph failure and
+    leave nobody told the feed stopped -- the next call on the SAME day must
+    retry instead.
+
+    Never raises: sits on the SAME request path as the grid/coverage read
+    (`GET /budget/sap-coverage`) and must never turn a stale-feed WARNING
+    into a 500 -- on top of `notify_sap_feed_stale`'s own per-admin
+    try/except, this wrapper also swallows anything unexpected in the
+    build/throttle step itself."""
+    if not is_stale:
+        return []
+    now = today()
+    if _sap_stale_alert_state["last_sent_date"] == now:
+        return []
+    try:
+        results = notify_sap_feed_stale(
+            watermark_date=watermark_date, days_behind=days_behind, dry_run=dry_run, settings=settings
+        )
+    except Exception:
+        logger.warning("maybe_alert_sap_feed_stale: alert build/send failed -- swallowed", exc_info=True)
+        return []
+    if results:
+        _sap_stale_alert_state["last_sent_date"] = now
+    return results
+
+
 def notify_turn_reminder(
     conn: pyodbc.Connection, *, approver_empcode: str | None,
     items: list[tuple[str, int, int]], dry_run: bool, settings: Settings | None = None,

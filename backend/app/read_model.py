@@ -38,7 +38,7 @@ from app.config import Settings, get_settings
 from app.deadline import YEAR_NOT_OPEN, fiscal_year_state
 from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
 from app.rls import Scope
-from app.sap import MONTH_COLUMNS, fetch_sap_actuals_cached, resolve_sap_coverage_cached
+from app.sap import MONTH_COLUMNS, fetch_sap_actuals_cached
 
 _BOARD_COLUMNS = ("gl_name", "gl_group", "c_level", "division", "department")
 # NOTE: no "status" here — `budget.pending_budget` has no status column
@@ -228,30 +228,17 @@ class LayerAmounts(BaseModel):
 class SapLayer(LayerAmounts):
     """🟢 SAP · ใช้จริง — read-only, auto from the DW, never entered.
 
-    ADR-0026: a month whose postings are not complete yet is `None`, nulled
-    SERVER-SIDE — the 12 months are re-declared here (and ONLY here, not on
-    `LayerAmounts`) because Approved/Pending are budget figures a human typed
-    and are never incomplete. `total_year` sums the VISIBLE months only, so it
-    always reconciles against the cells on screen.
+    ADR-0030 (supersedes ADR-0026's month mask): every month renders exactly
+    as `gold.fact_gl_trans` has it — no month is ever null. `total_year` is
+    the plain Jan-Dec sum, identical to `fetch_sap_actuals`'s own `total_year`.
 
     `has_actuals` reports whether this (cost_center, gl_account) has ANY
-    non-zero month in the full year, hidden months included — the only thing
-    the client learns about a hidden month (never its amount). The grid needs
-    it for delete-eligibility ("a row with SAP history was not added on the
-    web"), which would otherwise silently flip the moment months are nulled."""
+    non-zero month in the full year. Now redundant with a plain month scan
+    (there is no hidden month left to need a separate signal for), but kept
+    rather than tidied away in the same release that removed the mask —
+    the grid's delete-eligibility rule ("a row with SAP history was not
+    added on the web") already depends on it."""
 
-    m01: float | None = 0.0
-    m02: float | None = 0.0
-    m03: float | None = 0.0
-    m04: float | None = 0.0
-    m05: float | None = 0.0
-    m06: float | None = 0.0
-    m07: float | None = 0.0
-    m08: float | None = 0.0
-    m09: float | None = 0.0
-    m10: float | None = 0.0
-    m11: float | None = 0.0
-    m12: float | None = 0.0
     has_actuals: bool = False
 
 
@@ -302,26 +289,19 @@ class BudgetRow(BaseModel):
     editable: bool = False
 
 
-def _sap_layer(months: dict[str, float] | None, visible_months: frozenset[int] | None = None) -> SapLayer:
-    """Build the display-side SAP layer, applying the ADR-0026 month mask.
+def _sap_layer(months: dict[str, float] | None) -> SapLayer:
+    """Build the display-side SAP layer — an IDENTITY MAP over the fetched
+    actuals (ADR-0030 supersedes ADR-0026's month mask: every month renders
+    exactly as `app.sap.fetch_sap_actuals` returned it, no month withheld).
 
-    `visible_months` = month numbers complete enough to show (`None` = show
-    every month, the pre-ADR-0026 behavior kept for callers that don't pass
-    it). Masking happens HERE rather than in `app.sap.fetch_sap_actuals` for
-    two reasons: that fetch stays a complete mirror of gold (the DB->web
-    parity harness reads it month by month), and `merge_budget_rows` still
-    needs the FULL year to decide row visibility (ADR-0010, unchanged).
-
-    The mask is applied uniformly, including to a key with no SAP row at all:
-    "0.00" in an incomplete month is a claim about that month too."""
+    A key with no SAP row at all (`months=None`) renders all twelve months
+    as 0.00 — the pre-ADR-0026 behavior, restored: a month that genuinely
+    has no postings is 0.00, never a special/blank value."""
     raw = months or {}
-    values: dict[str, float | None] = {}
-    for month, col in enumerate(MONTH_COLUMNS, start=1):
-        amount = raw.get(col, 0.0)
-        values[col] = amount if visible_months is None or month in visible_months else None
+    values = {col: raw.get(col, 0.0) for col in MONTH_COLUMNS}
     return SapLayer(
         **values,
-        total_year=round(sum(v for v in values.values() if v is not None), 2),
+        total_year=round(sum(values.values()), 2),
         has_actuals=any(raw.get(col, 0.0) for col in MONTH_COLUMNS),
     )
 
@@ -375,7 +355,6 @@ def merge_budget_rows(
     cc_dims: dict[str, dict[str, str | None]] | None = None,
     admin_gl_codes: frozenset[str] | None = None,
     master_gl_codes: frozenset[str] | None = None,
-    visible_sap_months: frozenset[int] | None = None,
     locked_departments: frozenset[str] | None = None,
     year_not_open: bool = False,
 ) -> list[BudgetRow]:
@@ -438,13 +417,6 @@ def merge_budget_rows(
     hidden as noise. Presence, not value: a genuinely all-zero board/pending
     row still shows (WIP safeguard: a blank "+ เพิ่ม Transaction" row must
     never vanish). Not flag-gated, not role-based; always applied.
-
-    `visible_sap_months` (ADR-0026): month numbers whose SAP actuals are
-    complete enough to display — every other month of the SAP layer is nulled
-    (see `_sap_layer`). `None` = mask nothing. This is a DISPLAY transform
-    only: the net-zero row-hide above still reads the FULL year, so a row
-    whose only actual falls in a hidden month keeps its row (ADR-0010 row
-    visibility is deliberately untouched).
 
     `locked_departments` (ADR-0013 read-only lock, UI parity port with
     `write_model._ensure_department_not_locked`, 2026-08-05; department
@@ -510,9 +482,9 @@ def merge_budget_rows(
     fill_ccs = set(scope.fill_cost_centers)
 
     # PER-MONTH SAP nonzero check per key (2026-08-11, jakkaritw — supersedes
-    # the full-year-net rule), computed BEFORE any month masking and before
-    # `remaining_sap` is drained — the net-zero row-hide rule must not change
-    # its answer just because some months are hidden from display (ADR-0026).
+    # the full-year-net rule), computed BEFORE `remaining_sap` is drained, from
+    # the raw sap_actuals dict rather than any built SapLayer — ADR-0010 row
+    # visibility must stay independent of the display layer's own shape.
     # A key counts as nonzero if ANY individual month rounds to nonzero at
     # 2dp, even if the months sum to zero for the year (a reversed accrual
     # posts +X in one month and -X in another — SAP doc 1110001154, CC
@@ -542,14 +514,14 @@ def merge_budget_rows(
         merged[key] = BudgetRow(
             cost_center=key[0],
             gl_account=key[1],
-            sap=_sap_layer(sap_months, visible_sap_months),
+            sap=_sap_layer(sap_months),
             board=_board_layer(jr),
             pending=_pending_layer(jr),
         )
 
     for key, months in remaining_sap.items():
         merged[key] = BudgetRow(
-            cost_center=key[0], gl_account=key[1], sap=_sap_layer(months, visible_sap_months)
+            cost_center=key[0], gl_account=key[1], sap=_sap_layer(months)
         )
 
     result: list[BudgetRow] = []
@@ -639,17 +611,20 @@ def get_budget_grid(
     join_rows = fetch_board_pending_rows(
         fabric_conn, board_year=board_year, pending_year=planning_year, cost_centers=see_cost_centers_filter
     )
-    # Both gold reads below are TTL-cached (perf fix — prod first-load
-    # 10-11s -> 2-3s, `Settings.sap_cache_ttl_seconds`): the answer only
-    # changes when new SAP data lands, not on every grid request.
-    # ADR-0020 amendment 2026-08-11: `fabric_conn` is also threaded through
-    # here so the cached loader can read `dbo.hide_document` (transactional
-    # DB) and anti-join hidden documents out of the SUM.
+    # TTL-cached (perf fix — prod first-load 10-11s -> 2-3s,
+    # `Settings.sap_cache_ttl_seconds`): the answer only changes when new SAP
+    # data lands, not on every grid request. ADR-0020 amendment 2026-08-11:
+    # `fabric_conn` is also threaded through here so the cached loader can
+    # read `dbo.hide_document` (transactional DB) and anti-join hidden
+    # documents out of the SUM.
     sap_actuals = fetch_sap_actuals_cached(gold_conn, fabric_conn, fiscal_year=board_year)
-    # ADR-0026: one extra gold read (~1.2s live, uncached) resolves which
-    # months of the SAP layer are complete enough to show. Any failure
-    # raises SapActualsFetchError -> 502: fail closed, never "show everything".
-    sap_coverage = resolve_sap_coverage_cached(gold_conn, fiscal_year=board_year)
+    # ADR-0030 (supersedes ADR-0026): this grid path no longer resolves SAP
+    # coverage at all — the mask it used to gate is gone, so a freshness
+    # read here would only add a gold query and a fail-closed 502 risk
+    # (D15 removal-impact inventory, "Risk 1") with no benefit to the grid.
+    # The freshness signal lives entirely on its own endpoint now
+    # (`GET /budget/sap-coverage`, `routers/budget.py`), which is also where
+    # the stale-feed admin alert (ADR-0030 §3.4) is triggered.
 
     # ADR-0013 read-only lock: skipped entirely for admin-wide (nothing would
     # consult it — merge_budget_rows bypasses the lock unconditionally for
@@ -691,7 +666,6 @@ def get_budget_grid(
         cc_dims=cc_dims,
         admin_gl_codes=admin_gl_codes,
         master_gl_codes=master_gl_codes,
-        visible_sap_months=frozenset(sap_coverage.visible_months),
         locked_departments=locked_departments,
         year_not_open=year_not_open,
     )

@@ -52,6 +52,12 @@ describe('BudgetGrid', () => {
     // trip tests here only need them to resolve quietly.
     vi.mocked(referenceApi.fetchTravelers).mockResolvedValue([])
     vi.mocked(referenceApi.fetchCountries).mockResolvedValue([])
+    // SAP freshness chip (ADR-0030) — called unconditionally on every
+    // mount/year change, same as fetchPendingForMe above; a healthy default
+    // so tests not exercising the chip itself see the plain legend text.
+    vi.mocked(budgetApi.fetchSapCoverage).mockResolvedValue({
+      fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false,
+    })
   })
 
   afterEach(() => {
@@ -1165,6 +1171,81 @@ describe('BudgetGrid', () => {
           expect.objectContaining({ cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027, m01: 900 }),
         ),
       )
+    })
+  })
+
+  describe('SAP freshness chip (ADR-0030)', () => {
+    beforeEach(() => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    })
+
+    it('healthy: shows the keyed-through date with no warning styling', async () => {
+      vi.mocked(budgetApi.fetchSapCoverage).mockResolvedValue({
+        fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const suffix = await screen.findByTestId('sap-freshness')
+      expect(suffix).toHaveTextContent('ข้อมูลคีย์ถึง 11 ก.ย. 69')
+      expect(suffix).not.toHaveTextContent('⚠')
+      expect(suffix.className).not.toContain('sap-freshness-warn')
+    })
+
+    it('stale: warns on the chip when the server marks the feed stale', async () => {
+      vi.mocked(budgetApi.fetchSapCoverage).mockResolvedValue({
+        fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 3, is_stale: true,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const suffix = await screen.findByTestId('sap-freshness')
+      expect(suffix).toHaveTextContent('⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69 (ช้ากว่าปกติ)')
+      expect(suffix.className).toContain('sap-freshness-warn')
+    })
+
+    it('unknown: warns with no date at all when nothing is loaded yet', async () => {
+      // watermark_date: null -> the backend ALWAYS pairs this with is_stale:
+      // true (app.sap.resolve_sap_coverage never reports an undeterminable
+      // watermark as healthy) -- this fixture matches that contract.
+      vi.mocked(budgetApi.fetchSapCoverage).mockResolvedValue({
+        fiscal_year: 2026, watermark_date: null, days_behind: null, is_stale: true,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const suffix = await screen.findByTestId('sap-freshness')
+      expect(suffix).toHaveTextContent('⚠ ไม่ทราบวันที่ข้อมูล')
+      expect(suffix.className).toContain('sap-freshness-warn')
+    })
+
+    it('still loading: no suffix yet before the first fetch resolves (not a failure, just not answered yet)', async () => {
+      let resolveFetch: (value: Awaited<ReturnType<typeof budgetApi.fetchSapCoverage>>) => void = () => {}
+      vi.mocked(budgetApi.fetchSapCoverage).mockImplementation(
+        () => new Promise((resolve) => { resolveFetch = resolve }),
+      )
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      await waitFor(() => expect(screen.getByTestId('status-legend')).toHaveTextContent('SAP · ใช้จริง'))
+      expect(screen.queryByTestId('sap-freshness')).not.toBeInTheDocument()
+
+      resolveFetch({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
+
+      const suffix = await screen.findByTestId('sap-freshness')
+      expect(suffix).toHaveTextContent('ข้อมูลคีย์ถึง 11 ก.ย. 69')
+    })
+
+    it('H1: a failed freshness fetch must WARN, never silently vanish (ADR-0030 §3.2 release-blocking chip)', async () => {
+      vi.mocked(budgetApi.fetchSapCoverage).mockRejectedValue(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const suffix = await screen.findByTestId('sap-freshness')
+      expect(suffix).toHaveTextContent('⚠ ไม่ทราบวันที่ข้อมูล')
+      expect(suffix.className).toContain('sap-freshness-warn')
     })
   })
 })

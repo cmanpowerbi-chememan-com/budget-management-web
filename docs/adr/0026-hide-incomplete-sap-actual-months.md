@@ -1,7 +1,11 @@
 # 26. Hide incomplete SAP-actual months (entry-date watermark + 23 days)
 
 Date: 2026-08-01
-Status: Accepted
+Status: **SUPERSEDED by ADR-0030 (2026-09-14)** — the month mask is removed; the SAP layer now
+shows gold as it stands. The entry-day watermark and the 4-day gap constant described below
+SURVIVE as a freshness signal. The 23-day constant and `visible_sap_months` do not. The
+measurements in this ADR remain valid and are quoted in ADR-0030; the rule they justified does not.
+Original status: Accepted
 Relates to: ADR-0020 (actuals read-through — its SQL contract is NOT touched by this ADR),
 ADR-0010 (row visibility — unchanged), plan/sap-actuals-dw-gap-fix.md §4.A.1a
 

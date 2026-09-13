@@ -38,43 +38,47 @@ export interface LayerAmounts {
 
 /** 🟢 SAP · ใช้จริง — read-only, standing year Y.
  *
- * ADR-0026: a month whose SAP postings are not complete yet arrives as
- * `null`, nulled server-side — the grid renders it as a muted en-dash, never
- * as 0 (a month is still gaining month-close entries for ~23 days after it
- * ends, so an early figure reads several times too low). `total_year` covers
- * the VISIBLE months only, so it always reconciles with the cells on screen.
+ * ADR-0030 (supersedes ADR-0026's month mask): every month renders exactly
+ * what `gold.fact_gl_trans` holds, as a plain number — no month is ever
+ * hidden/nulled server-side. `total_year` is the plain Jan–Dec sum.
+ * Freshness (how recently the feed was keyed) is a SEPARATE signal —
+ * `GET /budget/sap-coverage` (`SapCoverage` below) — not a property of any
+ * individual cell.
  *
  * `has_actuals` = this (cost_center, gl_account) has at least one non-zero
- * month in the full year, hidden months included. It is the ONLY thing the
- * client learns about a hidden month (never the amount) and exists so
- * delete-eligibility ("a row with SAP history was not added on the web")
- * keeps working while months are nulled. */
+ * month in the full year. Kept for delete-eligibility ("a row with SAP
+ * history was not added on the web") even though every month is now also
+ * directly scannable — see `isDeletableRow`'s comment in `grid/model.ts`. */
 export interface SapLayer {
-  m01: number | null
-  m02: number | null
-  m03: number | null
-  m04: number | null
-  m05: number | null
-  m06: number | null
-  m07: number | null
-  m08: number | null
-  m09: number | null
-  m10: number | null
-  m11: number | null
-  m12: number | null
+  m01: number
+  m02: number
+  m03: number
+  m04: number
+  m05: number
+  m06: number
+  m07: number
+  m08: number
+  m09: number
+  m10: number
+  m11: number
+  m12: number
   total_year: number
   has_actuals: boolean
 }
 
 /** `GET /budget/sap-coverage?year=` (`app.sap.SapCoverage`) — how fresh the
- * SAP layer is (ADR-0026). `fiscal_year` is the SAP layer's own year
- * (planning year - 1); `watermark_date` is the newest SAP *entry* date
- * loaded in the warehouse, i.e. "ข้อมูลคีย์ถึง". Month numbers are 1..12. */
+ * SAP layer is (ADR-0030). `fiscal_year` is the SAP layer's own year
+ * (planning year - 1). `watermark_date` is the newest SAP *entry* date
+ * loaded in the warehouse ("ข้อมูลคีย์ถึง"), `null` when no data is loaded at
+ * all. `days_behind` is `today - watermark_date` in days, `null` alongside a
+ * `null` watermark. `is_stale` is decided SERVER-SIDE (a browser clock is
+ * not a trustworthy input to a financial freshness claim) — the frontend
+ * only renders it, never recomputes it. */
 export interface SapCoverage {
   fiscal_year: number
-  watermark_date: string
-  visible_months: number[]
-  hidden_months: number[]
+  watermark_date: string | null
+  days_behind: number | null
+  is_stale: boolean
 }
 
 /** 🔵 Approved · งบอนุมัติ — read-only reference, standing year Y. */

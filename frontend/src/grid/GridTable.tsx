@@ -11,7 +11,7 @@ import {
   type RefObject,
   type TouchEvent as ReactTouchEvent,
 } from 'react'
-import type { BudgetRow, GlAccount } from '../api/types'
+import type { BudgetRow, GlAccount, LayerAmounts } from '../api/types'
 import { MonthCell } from './MonthCell'
 import {
   BLANK_COLUMN_FILTERS,
@@ -20,7 +20,6 @@ import {
   DEFAULT_COLUMN_WIDTHS,
   filterRows,
   fitColumnWidth,
-  formatSapMonth,
   formatThb,
   freezeOffsets,
   fullRowColSpan,
@@ -28,7 +27,6 @@ import {
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
-  HIDDEN_SAP_MONTH_TOOLTIP,
   identityColSpan,
   isDeletableRow,
   isEditableCell,
@@ -38,7 +36,6 @@ import {
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
-  sapCoverageLabel,
   sectionTotals,
   selectMeasureCandidates,
   subtotalLabelColSpan,
@@ -48,7 +45,6 @@ import {
   type ColumnWidths,
   type MonthKey,
   type MoneyColumnWidths,
-  type SapTotals,
 } from './model'
 
 export interface RowMessage {
@@ -391,12 +387,10 @@ function MonthCells({
   cc,
   gl,
   nowMonth,
-  totalYearTitle,
 }: {
-  /** SAP months may be `null` (a month hidden by ADR-0026); Approved months
-   * never are, and `number` is assignable here, so both layers share this
-   * one renderer. */
-  values: { [K in MonthKey]: number | null } & { total_year: number }
+  /** Shared renderer for the SAP and Approved layers — ADR-0030 removed the
+   * month mask, so both are always plain numbers now. */
+  values: LayerAmounts
   layerTestId: 'sap-value' | 'board-value'
   /** Data-layer pill color (mockup 0002.3budget-export.html) — SAP = green,
    * Approved (board, read-only) = blue. A zero value always mutes the pill
@@ -407,10 +401,6 @@ function MonthCells({
   /** Current-month key (UI-parity point 8a) — matching cell gets `.now` so
    * the whole column reads as "today" alongside the header highlight. */
   nowMonth: MonthKey
-  /** Coverage note for the year-total cell — set on the SAP layer only, and
-   * only while some months are hidden (ADR-0026), so the total is never read
-   * as a full year. */
-  totalYearTitle?: string
 }) {
   return (
     <>
@@ -418,23 +408,17 @@ function MonthCells({
           sum of m01..m12 for this row+layer, read straight off the stored
           total_year. */}
       <td className="month-cell total-year-cell" data-testid={`${layerTestId}-${cc}-${gl}-year`}>
-        <span
-          className={`month-value ${variant}${values.total_year === 0 ? ' zero' : ''}`}
-          title={totalYearTitle}
-        >
+        <span className={`month-value ${variant}${values.total_year === 0 ? ' zero' : ''}`}>
           {formatThb(values.total_year)}
         </span>
       </td>
       {MONTH_KEYS.map((m) => {
         const value = values[m]
-        const hidden = value === null
-        const className = `month-value ${variant}${hidden ? ' month-hidden' : value === 0 ? ' zero' : ''}`
+        const className = `month-value ${variant}${value === 0 ? ' zero' : ''}`
         const tdClassName = `month-cell${m === nowMonth ? ' now' : ''}`
         return (
           <td key={m} className={tdClassName} data-testid={`${layerTestId}-${cc}-${gl}-${m}`}>
-            <span className={className} title={hidden ? HIDDEN_SAP_MONTH_TOOLTIP : undefined}>
-              {formatSapMonth(value)}
-            </span>
+            <span className={className}>{formatThb(value)}</span>
           </td>
         )
       })}
@@ -548,7 +532,6 @@ function TxnBlock({
   onDeleteRow,
   nowMonth,
   columnsCollapsed,
-  sapTotalTitle,
 }: {
   row: BudgetRow
   glRef: GlAccount[]
@@ -562,9 +545,6 @@ function TxnBlock({
   /** Compact mode ("ซ่อนคอลัมน์" toggle) — hides GL Group/Remark/Status,
    * leaving Cost Center + GL Code as the frozen identity band. */
   columnsCollapsed: boolean
-  /** ADR-0026 coverage note for the SAP year-total cell (undefined when the
-   * whole year is shown). */
-  sapTotalTitle?: string
 }) {
   const meta = glMetaFor(row.gl_account, glRef)
   const editable = isEditableCell(row.editable, meta.is_special, meta.in_master)
@@ -642,15 +622,7 @@ function TxnBlock({
             </td>
           </>
         )}
-        <MonthCells
-          values={row.sap}
-          layerTestId="sap-value"
-          variant="sap"
-          cc={cc}
-          gl={gl}
-          nowMonth={nowMonth}
-          totalYearTitle={sapTotalTitle}
-        />
+        <MonthCells values={row.sap} layerTestId="sap-value" variant="sap" cc={cc} gl={gl} nowMonth={nowMonth} />
         {/* Trailing "ลบ" column — one shared cell per txn block (rowSpan=3,
            same pattern as the mockup's rowspan=3 action-cell) since the
            delete op targets the whole row, not one layer. Rendered ONLY on
@@ -748,7 +720,7 @@ function SubtotalRow({
   layer: 'sap' | 'board' | 'pending'
   columnsCollapsed: boolean
 }) {
-  const amounts: SapTotals = totals[layer]
+  const amounts: LayerAmounts = totals[layer]
   return (
     <tbody>
       <tr className="subtotal-row" data-layer={layer}>
@@ -770,8 +742,8 @@ function SubtotalRow({
           <span className="month-value">{formatThb(amounts.total_year)}</span>
         </td>
         {MONTH_KEYS.map((m) => (
-          <td key={m} className={`month-cell${amounts[m] === null ? ' month-hidden' : ''}`}>
-            <span className="month-value">{formatSapMonth(amounts[m])}</span>
+          <td key={m} className="month-cell">
+            <span className="month-value">{formatThb(amounts[m])}</span>
           </td>
         ))}
         <td className="action-cell" />
@@ -1099,12 +1071,6 @@ export function GridTable({
   // A side that legitimately has zero groups pre-filter (e.g. no SG&A rows
   // in this scope) still renders nothing, unchanged.
   const nowMonth = nowMonthKey()
-
-  // ADR-0026: months whose SAP actuals are incomplete arrive as null, so the
-  // rows themselves say what the SAP totals cover. `null` = all 12 months
-  // shown, and then nothing extra is rendered at all.
-  const sapCoverage = sapCoverageLabel(rows)
-  const sapTotalTitle = sapCoverage ? `รวมเฉพาะเดือนที่ข้อมูลครบ: ${sapCoverage}` : undefined
 
   // Frozen-column left offsets derived from the CURRENT widths (UI-parity
   // point 8c) — no DOM measurement, both side-tables read this SAME object
@@ -1445,7 +1411,6 @@ export function GridTable({
                               onDeleteRow={onDeleteRow}
                               nowMonth={nowMonth}
                               columnsCollapsed={columnsCollapsed}
-                              sapTotalTitle={sapTotalTitle}
                             />
                           ))}
                           {/* Group subtotal stays pending-only (it mirrors the
@@ -1460,11 +1425,12 @@ export function GridTable({
                           and SGA (6xxx) — via the shared render below. */}
                       {(
                         [
-                          // ADR-0026: the SAP grand total sums the complete
-                          // months only, so it says which ones (e.g.
-                          // "(Jan–Mar)") — a total that cannot be added up
-                          // from the cells on screen would look like a bug.
-                          ['sap', `รวมทั้งหมด · SAP · ใช้จริง${sapCoverage ? ` (${sapCoverage})` : ''}`],
+                          // ADR-0030: no coverage caveat — every month is
+                          // real, so the total is a plain full-year sum.
+                          // Freshness lives on the legend chip instead
+                          // (BudgetGrid's `.legend-item.sap`), not repeated
+                          // per grand-total row.
+                          ['sap', 'รวมทั้งหมด · SAP · ใช้จริง'],
                           ['board', 'รวมทั้งหมด · Approved · งบ'],
                           ['pending', 'รวมทั้งหมด · Pending · รออนุมัติ'],
                         ] as const

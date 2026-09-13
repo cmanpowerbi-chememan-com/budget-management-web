@@ -41,12 +41,12 @@ edit its filters/columns without a matching ADR-0020 update:
 A missing/failed DW connection or query must surface as a loud error to the
 caller (never a silently empty green actuals layer) — see `SapActualsFetchError`.
 
-ADR-0026 (hide incomplete months) lives in this module too, as a SEPARATE
-post-query rule: `SAP_ACTUALS_SQL` above is frozen, so the entry-day
-watermark is a second, small read (`SAP_ENTRY_DAYS_SQL`) and the month
-masking itself is applied where the display layer is built
-(`read_model._sap_layer`), never inside `fetch_sap_actuals` — the DB->web
-parity harness depends on that fetch staying a complete mirror of gold.
+ADR-0030 (supersedes ADR-0026's month mask, 2026-09-14): there is no longer
+any post-query month rule anywhere in this app — `fetch_sap_actuals` above
+IS the display value, byte for byte (the DB->web parity harness depends on
+that). The entry-day watermark (a second, small read, `SAP_ENTRY_DAYS_SQL`)
+survives, but only as a FRESHNESS SIGNAL (`SapCoverage`, `SAP_STALE_AFTER_DAYS`
+below) — it no longer decides which months may be displayed.
 
 ADR-0020 amendment 2026-08-11 (hide_document anti-join): the admin-maintained
 `dbo.hide_document` list (transactional Fabric SQL DB) was previously
@@ -59,12 +59,11 @@ a broken hide-list read must NEVER silently mean "nothing hidden" (that
 would un-hide up to ~1.3B THB of previously-hidden postings, see ADR-0020's
 amendment section for the measured leak).
 """
-import calendar
 import copy
 import logging
 import re
 from collections.abc import Iterable
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import pyodbc
 from pydantic import BaseModel
@@ -243,14 +242,15 @@ def fetch_sap_actuals(
 
 
 # ---------------------------------------------------------------------------
-# ADR-0026 — hide incomplete SAP-actual months (entry-day watermark + 23 days)
+# ADR-0030 — SAP freshness signal (entry-day watermark), supersedes ADR-0026
 # ---------------------------------------------------------------------------
 
-# Measured tail (ADR-0026, three months of company 1000): a posting month is
-# still gaining documents for ~23 days after it ends (March 2026 was 78.2%
-# complete at month-end, 100.0% on 23 Apr — nothing lands after day 23). If a
-# future month's tail runs longer, THIS CONSTANT changes, not the rule.
-SAP_MONTH_VISIBLE_LAG_DAYS = 23
+# Operational freshness threshold, NOT a "month is finished" rule (ADR-0026's
+# finished-month semantics are gone). Under the daily loader a batch stamped
+# day D carries entry-day D-1, so a healthy lag is 1 day — 3+ means the feed
+# stopped, not that any particular month is incomplete. jakkaritw's 2026-09-14
+# live case: lag 3 because PTF_SAP_GL_TRANS_D failed twice on 2026-09-13.
+SAP_STALE_AFTER_DAYS = 3
 
 # A run of this many consecutive missing entry-days truncates the watermark:
 # the loader landing an ISLAND of days (e.g. 2026-05-23 while 05-01..22 are
@@ -273,34 +273,23 @@ WHERE company_code='1000' AND fiscal_year >= ? AND utc_timestamp >= ?
 
 
 class SapCoverage(BaseModel):
-    """Which months of one fiscal year the SAP · ใช้จริง layer may display,
-    and the load freshness that decided it (ADR-0026). Returned as-is by
-    `GET /budget/sap-coverage` so the grid can label its own coverage."""
+    """Freshness of the SAP · ใช้จริง layer for one fiscal year (ADR-0030,
+    supersedes ADR-0026's `visible_months`/`hidden_months` mask — no month is
+    ever withheld now). Returned by `GET /budget/sap-coverage` so the grid's
+    legend chip can show "ข้อมูลคีย์ถึง <date>", or a stale warning."""
 
     fiscal_year: int
     #: Newest entry-day of the contiguous loaded run (SAP keying date, not a
-    #: posting date) — "ข้อมูลคีย์ถึง <date>" in the UI.
-    watermark_date: date
-    visible_months: list[int]
-    hidden_months: list[int]
-
-
-def visible_sap_months(
-    watermark_date: date, fiscal_year: int, lag_days: int = SAP_MONTH_VISIBLE_LAG_DAYS
-) -> tuple[int, ...]:
-    """Months of `fiscal_year` complete enough to display (ADR-0026):
-
-        visible(Y, M) <=> watermark >= last_day(Y, M) + lag_days
-
-    Pure — no DB, no clock. December of Y therefore needs a watermark in
-    January of Y+1, and February's cut-off follows the real month length
-    (leap years included)."""
-    visible = []
-    for month in range(1, 13):
-        last_day = date(fiscal_year, month, calendar.monthrange(fiscal_year, month)[1])
-        if watermark_date >= last_day + timedelta(days=lag_days):
-            visible.append(month)
-    return tuple(visible)
+    #: posting date) — "ข้อมูลคีย์ถึง <date>" in the UI. `None` when nothing is
+    #: loaded at all — treated as an unknown-freshness state, never raised.
+    watermark_date: date | None
+    #: `today - watermark_date` in days. `None` exactly when `watermark_date`
+    #: is `None`.
+    days_behind: int | None
+    #: `True` when `days_behind >= SAP_STALE_AFTER_DAYS`, and ALSO `True` when
+    #: `watermark_date` is `None` — unknown freshness is treated as stale,
+    #: never as healthy.
+    is_stale: bool
 
 
 def entry_day_watermark(
@@ -358,32 +347,37 @@ def fetch_sap_entry_days(conn: pyodbc.Connection, fiscal_year: int) -> list[date
     return sorted(days)
 
 
-def resolve_sap_coverage(conn: pyodbc.Connection, fiscal_year: int) -> SapCoverage:
-    """One DW read + the two pure rules above = which months of `fiscal_year`
-    the SAP layer may display (ADR-0026).
+def resolve_sap_coverage(
+    conn: pyodbc.Connection, fiscal_year: int, today: date | None = None
+) -> SapCoverage:
+    """One DW read + freshness math = how fresh the SAP · ใช้จริง layer is
+    (ADR-0030). `today` is injectable (defaults to `date.today()`) so callers
+    can test the staleness boundary deterministically.
 
-    Fails CLOSED and LOUD: if the watermark cannot be determined (no loaded
-    entry-days in the window, or an all-NULL `utc_timestamp`), this raises
-    `SapActualsFetchError` -> 502, so the grid shows nothing rather than
-    numbers that may be materially incomplete."""
+    No longer fails closed (ADR-0026's mask is gone, nothing may block the
+    grid on freshness): an undeterminable watermark reports
+    `is_stale=True` instead of raising. The pyodbc-level raise inside
+    `fetch_sap_entry_days` is untouched — a genuine gold-read failure
+    (revoked grant, dead connection, unparsable `utc_timestamp`) is still a
+    loud `SapActualsFetchError` -> 502 (ADR-0020, never-cut)."""
     entry_days = fetch_sap_entry_days(conn, fiscal_year)
     watermark = entry_day_watermark(entry_days)
+    today = today or date.today()
     if watermark is None:
-        raise SapActualsFetchError(
-            "SAP entry-day watermark is undeterminable for fiscal_year="
-            f"{fiscal_year} (no loaded entry-days since {fiscal_year - 1}-01-01) — "
-            "refusing to display possibly incomplete actuals (ADR-0026, fail closed)"
+        logger.warning(
+            "SAP coverage fiscal_year=%s watermark undeterminable (no loaded entry-days "
+            "since %s-01-01) — reporting stale, not raising (ADR-0030)",
+            fiscal_year, fiscal_year - 1,
         )
-    visible = visible_sap_months(watermark, fiscal_year)
+        return SapCoverage(fiscal_year=fiscal_year, watermark_date=None, days_behind=None, is_stale=True)
+
+    days_behind = (today - watermark).days
+    is_stale = days_behind >= SAP_STALE_AFTER_DAYS
     logger.info(
-        "SAP coverage fiscal_year=%s watermark=%s visible_months=%s", fiscal_year, watermark, list(visible)
+        "SAP coverage fiscal_year=%s watermark=%s days_behind=%s is_stale=%s",
+        fiscal_year, watermark, days_behind, is_stale,
     )
-    return SapCoverage(
-        fiscal_year=fiscal_year,
-        watermark_date=watermark,
-        visible_months=list(visible),
-        hidden_months=[month for month in range(1, 13) if month not in visible],
-    )
+    return SapCoverage(fiscal_year=fiscal_year, watermark_date=watermark, days_behind=days_behind, is_stale=is_stale)
 
 
 # ---------------------------------------------------------------------------
@@ -441,13 +435,16 @@ def fetch_sap_actuals_cached(
 
 
 def resolve_sap_coverage_cached(
-    conn: pyodbc.Connection, fiscal_year: int, settings: Settings | None = None
+    conn: pyodbc.Connection, fiscal_year: int, settings: Settings | None = None, today: date | None = None
 ) -> SapCoverage:
     """TTL-cached `resolve_sap_coverage`. Always returns `model_copy(deep=True)`
-    — same defensive-copy contract as `fetch_sap_actuals_cached`."""
+    — same defensive-copy contract as `fetch_sap_actuals_cached`. `today` is
+    NOT part of the cache key (the TTL default is 600s, far shorter than a
+    day, so this never straddles a day boundary in practice) — it is passed
+    straight through to the loader on a cache miss."""
     settings = settings or get_settings()
     result = _sap_coverage_cache.get_or_load(
-        fiscal_year, settings.sap_cache_ttl_seconds, lambda: resolve_sap_coverage(conn, fiscal_year)
+        fiscal_year, settings.sap_cache_ttl_seconds, lambda: resolve_sap_coverage(conn, fiscal_year, today=today)
     )
     return result.model_copy(deep=True)
 

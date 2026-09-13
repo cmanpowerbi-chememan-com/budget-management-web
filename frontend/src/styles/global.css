@@ -689,6 +689,21 @@ input:focus-visible {
 .legend-dot.pending {
   background: var(--status-pending);
 }
+/* SAP freshness suffix (ADR-0030 §3.2) — appended text inside the SAP
+   legend-item, not a new chip. Healthy state inherits `.legend`'s own
+   ink-3/mono styling with no extra rule; `.sap-freshness-warn` (stale OR
+   unknown watermark) gets the SAME gold/brown hue `.status-chip-pending`
+   already uses for a cautionary state (not `--status-rejected`'s red —
+   staleness is an operational warning, not a hard error). Bold weight is
+   the SECOND cue alongside the ⚠ glyph already in the string, so color is
+   never the only signal (same rule tokens.css documents for --error-on-shell).
+   #80500d measured 5.09:1 for `.status-chip-pending` against its OWN
+   lighter gold-tint background; against `.grid-toolbar`'s plain --surface
+   (pure white, no tint) the same hex clears AA with more margin, not less. */
+.sap-freshness-warn {
+  color: #80500d;
+  font-weight: 700;
+}
 
 /* Admin-only info strip — Approved (board_budget) layer is whole-company/
    whole-year from a SharePoint Excel, independent of the view filters (mirrors

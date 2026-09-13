@@ -7,7 +7,9 @@ import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_email
+from app.config import get_settings
 from app.db import get_fabric_conn, get_gold_conn
+from app.notifications import maybe_alert_sap_feed_stale
 from app.read_model import BudgetRow, get_budget_grid
 from app.rls import resolve_scope
 from app.sap import SapActualsFetchError, SapCoverage, resolve_sap_coverage_cached
@@ -56,20 +58,39 @@ def sap_coverage(
     year: int = Query(..., description="Planning fiscal year, same as GET /budget — the SAP layer is year-1"),
     email: str = Depends(get_current_user_email),
 ) -> SapCoverage:
-    """How fresh the SAP · ใช้จริง layer is and which of its months are shown
-    (ADR-0026) — the grid labels its own coverage from this ("ครบถึงเดือน
-    3/2026 · ข้อมูลคีย์ถึง 29 เม.ย. 69").
+    """Freshness of the SAP · ใช้จริง layer (ADR-0030, supersedes ADR-0026's
+    "which months are shown" coverage — no month is ever withheld now) — the
+    grid's legend chip labels itself from this ("ข้อมูลคีย์ถึง 11 ก.ย. 2026",
+    or a ⚠ stale variant when 3+ days behind).
 
     Deliberately its OWN endpoint rather than an envelope around
     `GET /budget`: coverage depends on the year alone, so switching ฝ่าย /
     cost center / admin mode re-reads the grid without re-reading this, and no
     existing response shape changes. Carries no financial figures and no
-    per-user data, so it needs auth but no RLS."""
+    per-user data, so it needs auth but no RLS.
+
+    A stale/undeterminable watermark ALSO fires a throttled admin alert mail
+    (ADR-0030 §3.4, at most one per calendar day) — this never blocks the
+    response; a broken alert build/send is caught and logged, never raised."""
     try:
         with get_gold_conn() as gold_conn:
             # TTL-cached (perf fix — Settings.sap_cache_ttl_seconds): the
             # entry-day watermark only changes when new SAP data lands.
-            return resolve_sap_coverage_cached(gold_conn, fiscal_year=year - 1)
+            coverage = resolve_sap_coverage_cached(gold_conn, fiscal_year=year - 1)
     except (SapActualsFetchError, pyodbc.Error) as exc:
         logger.exception("SAP coverage resolution failed for year=%s, email=%s", year, email)
         raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc
+
+    try:
+        settings = get_settings()
+        maybe_alert_sap_feed_stale(
+            is_stale=coverage.is_stale,
+            watermark_date=coverage.watermark_date,
+            days_behind=coverage.days_behind,
+            dry_run=settings.notifications_dry_run,
+            settings=settings,
+        )
+    except Exception:  # never-cut: the alert path must never break the chip's own data
+        logger.exception("SAP stale-feed alert failed for year=%s, email=%s", year, email)
+
+    return coverage

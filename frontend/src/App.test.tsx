@@ -39,6 +39,11 @@ function mockAuthAndScope() {
       if (url.includes('/budget/gl-accounts')) {
         return Promise.resolve(jsonResponse(200, []))
       }
+      if (url.includes('/budget/sap-coverage')) {
+        return Promise.resolve(
+          jsonResponse(200, { fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false }),
+        )
+      }
       if (url.includes('/budget')) {
         return Promise.resolve(jsonResponse(200, []))
       }

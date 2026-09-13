@@ -155,15 +155,15 @@ def test_budget_raw_pyodbc_error_also_returns_502_generic_detail(client):
 
 
 # ---------------------------------------------------------------------------
-# GET /budget/sap-coverage — ADR-0026 freshness metadata for the SAP layer
+# GET /budget/sap-coverage — ADR-0030 freshness metadata for the SAP layer
 # ---------------------------------------------------------------------------
 
-def _fake_coverage() -> SapCoverage:
+def _fake_coverage(is_stale: bool = False) -> SapCoverage:
     return SapCoverage(
         fiscal_year=2026,
         watermark_date=date(2026, 4, 29),
-        visible_months=[1, 2, 3],
-        hidden_months=[4, 5, 6, 7, 8, 9, 10, 11, 12],
+        days_behind=1,
+        is_stale=is_stale,
     )
 
 
@@ -184,7 +184,7 @@ def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
     _override_auth("filler@chememan.com")
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
         "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage()
-    ) as mock_resolve:
+    ) as mock_resolve, patch("app.routers.budget.maybe_alert_sap_feed_stale") as mock_alert:
         mock_gold.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/sap-coverage?year=2027")
 
@@ -192,19 +192,56 @@ def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
     body = response.json()
     assert body["fiscal_year"] == 2026
     assert body["watermark_date"] == "2026-04-29"
-    assert body["visible_months"] == [1, 2, 3]
-    assert body["hidden_months"] == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert body["days_behind"] == 1
+    assert body["is_stale"] is False
     _, kwargs = mock_resolve.call_args
     assert kwargs["fiscal_year"] == 2026
+    mock_alert.assert_called_once()
+    assert mock_alert.call_args.kwargs["is_stale"] is False
+
+
+def test_sap_coverage_stale_triggers_the_throttled_admin_alert(client):
+    """The endpoint hands the coverage's freshness verdict straight to
+    `maybe_alert_sap_feed_stale` — the throttle/send logic itself lives in
+    `app.notifications` and is tested there; this only proves the wiring."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
+        "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage(is_stale=True)
+    ), patch("app.routers.budget.maybe_alert_sap_feed_stale") as mock_alert:
+        mock_gold.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/sap-coverage?year=2027")
+
+    assert response.status_code == 200
+    assert response.json()["is_stale"] is True
+    _, kwargs = mock_alert.call_args
+    assert kwargs["is_stale"] is True
+    assert kwargs["watermark_date"] == date(2026, 4, 29)
+    assert kwargs["days_behind"] == 1
+
+
+def test_sap_coverage_alert_failure_never_breaks_the_response(client):
+    """Never-cut: a broken alert path must not turn a healthy coverage read
+    into a 500 — the grid's legend chip still needs this response."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
+        "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage(is_stale=True)
+    ), patch("app.routers.budget.maybe_alert_sap_feed_stale", side_effect=RuntimeError("smtp down")):
+        mock_gold.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/budget/sap-coverage?year=2027")
+
+    assert response.status_code == 200
+    assert response.json()["is_stale"] is True
 
 
 def test_sap_coverage_failure_returns_502_with_the_same_generic_detail(client):
-    """Fail closed + no leak: an undeterminable watermark is a loud 502, never
-    a 200 that implies "all 12 months are fine"."""
+    """ADR-0020, never-cut: a GENUINE gold-read failure (revoked grant, dead
+    connection) is still a loud 502 with no leak — ADR-0030 only removed the
+    fail-closed raise for an undeterminable WATERMARK (see test_sap.py), not
+    this one."""
     _override_auth("filler@chememan.com")
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
         "app.routers.budget.resolve_sap_coverage_cached",
-        side_effect=SapActualsFetchError("watermark undeterminable, grant revoked"),
+        side_effect=SapActualsFetchError("grant revoked"),
     ):
         mock_gold.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/sap-coverage?year=2027")

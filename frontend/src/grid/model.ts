@@ -453,15 +453,10 @@ export function filterRows(rows: BudgetRow[], glRef: GlAccount[], filters: Colum
   })
 }
 
-/** Subtotal shape for the SAP layer: a month hidden by ADR-0026 stays `null`
- * in the subtotal too — summing it as 0 would print a number that the cells
- * above it deliberately do not show. */
-export type SapTotals = { [K in MonthKey]: number | null } & { total_year: number }
-
 export interface GlGroupSection {
   glGroup: string
   rows: BudgetRow[]
-  subtotal: { sap: SapTotals; board: LayerAmounts; pending: LayerAmounts }
+  subtotal: { sap: LayerAmounts; board: LayerAmounts; pending: LayerAmounts }
 }
 
 function blankTotals(): LayerAmounts {
@@ -481,38 +476,25 @@ function addLayer(acc: LayerAmounts, layer: LayerAmounts): LayerAmounts {
   return result
 }
 
-/** Sums the SAP layer, keeping a hidden month (`null` in every contributing
- * row) hidden in the subtotal. A month that is null in SOME rows only cannot
- * happen from the backend (the mask is per-year, not per-row) — if it ever
- * did, the visible values still add up rather than poisoning the whole
- * column. */
-function addSapLayer(acc: SapTotals, layer: BudgetRow['sap']): SapTotals {
-  const result = { ...acc }
-  MONTH_KEYS.forEach((m) => {
-    const value = layer[m]
-    if (value === null) return
-    const running = result[m]
-    ;(result as unknown as Record<MonthKey, number>)[m] = (running ?? 0) + value
-  })
-  result.total_year += layer.total_year
-  return result
-}
-
-function blankSapTotals(): SapTotals {
-  const base = { total_year: 0 } as SapTotals
-  MONTH_KEYS.forEach((m) => {
-    ;(base as unknown as Record<MonthKey, number | null>)[m] = null
-  })
-  return base
+/** Blank SAP subtotal accumulator — every month starts at plain `0`, same as
+ * `blankTotals()` (ADR-0030: no SAP month is ever `null`). Before ADR-0030
+ * this initialised to `null` per month, which was harmless while every row's
+ * `addSapLayer` replaced the `null`s — until a side/group had ZERO rows, in
+ * which case nothing ever replaced them and the grand total for an empty
+ * section rendered `null` straight into `formatThb`. Kept as its own
+ * function (rather than calling `blankTotals()` at the 2 call sites below)
+ * so the SAP accumulator's meaning stays documented at its own definition. */
+function blankSapTotals(): LayerAmounts {
+  return blankTotals()
 }
 
 /** Sums the 3 layers across a list of rows. Callers must only pass rows
  * from ONE side (COST or SGA) — this function does not check the side
  * itself; `groupAndSortBySide` is what guarantees the split upstream. */
-export function sectionTotals(rows: BudgetRow[]): { sap: SapTotals; board: LayerAmounts; pending: LayerAmounts } {
+export function sectionTotals(rows: BudgetRow[]): { sap: LayerAmounts; board: LayerAmounts; pending: LayerAmounts } {
   return rows.reduce(
     (acc, r) => ({
-      sap: addSapLayer(acc.sap, r.sap),
+      sap: addLayer(acc.sap, r.sap),
       board: addLayer(acc.board, r.board),
       pending: addLayer(acc.pending, r.pending),
     }),
@@ -610,10 +592,13 @@ export function isEditableCell(rowEditable: boolean, isSpecialGl: boolean, glInM
  *     blank lock token and the API answered a raw 422. */
 export function isDeletableRow(row: BudgetRow, meta: GlMeta): boolean {
   if (!row.editable) return false
-  // `has_actuals` is the authority for rule 2 since ADR-0026: it also covers
-  // months the server nulled, which the month scan below cannot see (92 of
-  // 1,827 live FY2026 keys have their only actuals inside a hidden month).
-  // The scan stays as the local check for any payload without the flag.
+  // `has_actuals` is the authority for rule 2. Since ADR-0030 removed the
+  // month mask, every SAP month is a plain number and the scan on the next
+  // line already sees everything `has_actuals` sees — the two are
+  // equivalent now, not independent checks. `has_actuals` is kept anyway
+  // (server-computed, one flag vs. a 12-key scan) rather than deleted, so a
+  // payload shape change elsewhere in `sap` cannot silently make a row with
+  // real SAP history deletable.
   if (row.sap.has_actuals) return false
   if (MONTH_KEYS.some((m) => row.sap[m])) return false
   if (MONTH_KEYS.some((m) => row.board[m])) return false
@@ -891,41 +876,9 @@ export function formatThb(value: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// ADR-0026 — incomplete SAP months are hidden (nulled by the backend)
+// ADR-0030 — SAP actuals shown as-is; the entry-day watermark survives as a
+// freshness signal on the legend chip, never as a display gate.
 // ---------------------------------------------------------------------------
-
-/** En-dash for a month the backend hid. Deliberately NOT the em-dash
- * `formatThb` uses for a real 0 — a hidden month is "not known yet", a zero
- * is "known to be nothing". */
-export const HIDDEN_SAP_MONTH_MARK = '–'
-
-export const HIDDEN_SAP_MONTH_TOOLTIP = 'ข้อมูล SAP เดือนนี้ยังไม่ครบ จึงยังไม่แสดง'
-
-/** THB display for a SAP cell: a hidden month (`null`) becomes the en-dash,
- * anything else formats exactly like every other money cell. */
-export function formatSapMonth(value: number | null): string {
-  return value === null ? HIDDEN_SAP_MONTH_MARK : formatThb(value)
-}
-
-/** Months the SAP layer actually shows, read off the rows themselves — the
- * mask is applied per year, so a hidden month is `null` in every row. An
- * empty grid has nothing hidden (and nothing to caveat). */
-export function visibleSapMonths(rows: BudgetRow[]): MonthKey[] {
-  if (rows.length === 0) return [...MONTH_KEYS]
-  return MONTH_KEYS.filter((m) => rows.some((r) => r.sap[m] !== null))
-}
-
-/** Coverage caveat for the SAP year total, in the SAME month names as the
- * grid header ("Jan–Mar"). `null` when all 12 months are shown — there is
- * nothing to qualify, so no label should be rendered at all. */
-export function sapCoverageLabel(rows: BudgetRow[]): string | null {
-  const visible = visibleSapMonths(rows)
-  if (visible.length === MONTH_KEYS.length) return null
-  if (visible.length === 0) return 'ยังไม่มีเดือนที่ข้อมูลครบ'
-  const first = MONTH_LABELS[visible[0]]
-  const last = MONTH_LABELS[visible[visible.length - 1]]
-  return first === last ? first : `${first}–${last}`
-}
 
 const THAI_MONTH_ABBR = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -941,21 +894,32 @@ export function formatThaiShortDate(isoDate: string): string {
   return `${day} ${THAI_MONTH_ABBR[month - 1]} ${String(buddhistYear).padStart(2, '0')}`
 }
 
-/** The one freshness line above the grid: how far the SAP layer is complete,
- * when its data was last keyed, and which months are therefore not shown. */
-export function sapFreshnessLine(coverage: SapCoverage): string {
+/** `sapFreshnessLine`'s result: `isWarn` is DATA a caller switches on, never
+ * something re-derived by sniffing `⚠` out of `text` (H1/L1 gate fix,
+ * ADR-0030 — the visual treatment must not depend on the exact Thai
+ * wording). Also used verbatim for a FAILED coverage fetch (see `BudgetGrid`
+ * — same wording as `watermark_date === null`, since both mean "we don't
+ * know how fresh this is" from the user's point of view). */
+export interface SapFreshness {
+  text: string
+  isWarn: boolean
+}
+
+/** The freshness fragment appended to the existing SAP legend chip (never a
+ * new UI surface — see `BudgetGrid`'s `.legend-item.sap`). Three states, all
+ * decided by the BACKEND (`SapCoverage.is_stale`) — this function never
+ * computes staleness itself, only renders what it is told:
+ *  - healthy: `ข้อมูลคีย์ถึง 11 ก.ย. 2026`
+ *  - stale (`is_stale`): `⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026 (ช้ากว่าปกติ)`
+ *  - unknown (`watermark_date === null` — no data loaded at all): `⚠
+ *    ไม่ทราบวันที่ข้อมูล`, checked BEFORE `is_stale` since there is no date to
+ *    show either way. */
+export function sapFreshnessLine(coverage: SapCoverage): SapFreshness {
+  if (coverage.watermark_date === null) {
+    return { text: '⚠ ไม่ทราบวันที่ข้อมูล', isWarn: true }
+  }
   const keyedThrough = `ข้อมูลคีย์ถึง ${formatThaiShortDate(coverage.watermark_date)}`
-  const { fiscal_year: year, visible_months: visible, hidden_months: hidden } = coverage
-  if (hidden.length === 0) {
-    return `SAP · ใช้จริง ครบทั้ง 12 เดือนของปี ${year} (${keyedThrough})`
-  }
-  const hiddenRange =
-    hidden.length === 1 ? `${hidden[0]}/${year}` : `${hidden[0]}–${hidden[hidden.length - 1]}/${year}`
-  if (visible.length === 0) {
-    return `SAP · ใช้จริง ปี ${year} ยังไม่มีเดือนที่ข้อมูลครบ (${keyedThrough}) · จึงยังไม่แสดงตัวเลข`
-  }
-  return (
-    `SAP · ใช้จริง ครบถึงเดือน ${visible[visible.length - 1]}/${year} (${keyedThrough})` +
-    ` · เดือน ${hiddenRange} ยังไม่ครบ จึงยังไม่แสดง`
-  )
+  return coverage.is_stale
+    ? { text: `⚠ ${keyedThrough} (ช้ากว่าปกติ)`, isWarn: true }
+    : { text: keyedThrough, isWarn: false }
 }

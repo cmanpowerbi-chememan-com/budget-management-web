@@ -16,6 +16,7 @@ from app.sap import (
     HIDE_DOCUMENT_SQL,
     SAP_ACTUALS_SQL,
     SAP_ENTRY_DAYS_SQL,
+    SAP_STALE_AFTER_DAYS,
     SapActualsFetchError,
     entry_day_watermark,
     fetch_hidden_doc_periods,
@@ -24,7 +25,6 @@ from app.sap import (
     fetch_sap_entry_days,
     resolve_sap_coverage,
     resolve_sap_coverage_cached,
-    visible_sap_months,
 )
 
 
@@ -348,52 +348,8 @@ def test_fetch_sap_actuals_cached_raises_when_the_hide_list_read_fails():
 
 
 # ---------------------------------------------------------------------------
-# ADR-0026 — visible_sap_months (pure, no DB)
-# ---------------------------------------------------------------------------
-
-def test_visible_months_today_fy2026_watermark_20260429_shows_jan_to_mar_only():
-    """The live case the ADR was measured on: entry-days loaded through
-    2026-04-29, so March (31 Mar + 23d = 23 Apr) is complete but April
-    (30 Apr + 23d = 23 May) is not."""
-    assert visible_sap_months(date(2026, 4, 29), 2026) == (1, 2, 3)
-
-
-def test_visible_months_hidden_set_is_the_complement():
-    visible = visible_sap_months(date(2026, 4, 29), 2026)
-    assert [m for m in range(1, 13) if m not in visible] == [4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-
-def test_visible_months_boundary_march_appears_exactly_on_watermark_day_23():
-    assert 3 in visible_sap_months(date(2026, 4, 23), 2026)
-
-
-def test_visible_months_boundary_march_still_hidden_one_day_before():
-    assert 3 not in visible_sap_months(date(2026, 4, 22), 2026)
-
-
-def test_visible_months_prior_fiscal_year_is_fully_visible():
-    """FY2025's last cut-off (31 Dec 2025 + 23d = 23 Jan 2026) is long past,
-    so the reference year a planner compares against stays complete."""
-    assert visible_sap_months(date(2026, 4, 29), 2025) == tuple(range(1, 13))
-
-
-def test_visible_months_december_needs_a_watermark_in_the_next_calendar_year():
-    assert 12 not in visible_sap_months(date(2027, 1, 22), 2026)
-    assert 12 in visible_sap_months(date(2027, 1, 23), 2026)
-
-
-def test_visible_months_february_uses_the_real_month_length_in_a_leap_year():
-    """2028 is a leap year: 29 Feb + 23d = 23 Mar, not 22 Mar."""
-    assert 2 not in visible_sap_months(date(2028, 3, 22), 2028)
-    assert 2 in visible_sap_months(date(2028, 3, 23), 2028)
-
-
-def test_visible_months_watermark_before_the_year_hides_everything():
-    assert visible_sap_months(date(2025, 6, 30), 2026) == ()
-
-
-# ---------------------------------------------------------------------------
-# ADR-0026 — entry_day_watermark (pure, no DB)
+# ADR-0026 (freshness signal survives under ADR-0030) — entry_day_watermark
+# (pure, no DB)
 # ---------------------------------------------------------------------------
 
 def _days(*iso: str) -> list[date]:
@@ -407,12 +363,11 @@ def test_entry_day_watermark_is_the_newest_day_of_a_contiguous_run():
 
 def test_entry_day_watermark_ignores_an_island_load_above_a_long_gap():
     """The pathology contiguity exists for: a loader that lands 2026-05-23
-    while skipping 2026-05-01..22 must NOT reveal April (April needs
-    23 May) — the watermark truncates back to the run below the gap."""
+    while skipping 2026-05-01..22 must NOT report a fresh watermark — it
+    truncates back to the run below the gap."""
     days = _days("2026-04-27", "2026-04-28", "2026-04-29", "2026-05-23")
     watermark = entry_day_watermark(days)
     assert watermark == date(2026, 4, 29)
-    assert 4 not in visible_sap_months(watermark, 2026)
 
 
 def test_entry_day_watermark_tolerates_a_one_or_two_day_hole():
@@ -509,22 +464,51 @@ def test_fetch_sap_entry_days_raises_on_an_unparsable_entry_day():
         fetch_sap_entry_days(conn, fiscal_year=2026)
 
 
-def test_resolve_sap_coverage_reports_watermark_and_both_month_lists():
+def test_resolve_sap_coverage_reports_watermark_days_behind_and_is_stale():
+    """ADR-0030: watermark 2026-04-29, `today` 2026-05-02 -> 3 days behind,
+    at the stale boundary (>= SAP_STALE_AFTER_DAYS)."""
     conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
-    coverage = resolve_sap_coverage(conn, fiscal_year=2026)
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026, today=date(2026, 5, 2))
     assert coverage.fiscal_year == 2026
     assert coverage.watermark_date == date(2026, 4, 29)
-    assert coverage.visible_months == [1, 2, 3]
-    assert coverage.hidden_months == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert coverage.days_behind == 3
+    assert coverage.is_stale is True
 
 
-def test_resolve_sap_coverage_fails_closed_and_loud_when_no_entry_days_exist():
-    """Never-cut: an undeterminable watermark must NOT degrade into
-    "everything visible" — it raises, the router turns it into a 502, and no
-    possibly-incomplete number ever reaches the grid."""
+def test_resolve_sap_coverage_two_days_behind_is_healthy():
+    """One day below the SAP_STALE_AFTER_DAYS=3 boundary."""
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026, today=date(2026, 5, 1))
+    assert coverage.days_behind == 2
+    assert coverage.is_stale is False
+
+
+def test_resolve_sap_coverage_one_day_behind_is_the_normal_healthy_case():
+    """A batch stamped day D carries entry-day D-1 (ADR-0030 basis) — this
+    is what a healthy daily loader looks like every single day."""
+    conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026, today=date(2026, 4, 30))
+    assert coverage.days_behind == 1
+    assert coverage.is_stale is False
+
+
+def test_resolve_sap_coverage_reports_stale_not_raising_when_no_entry_days_exist():
+    """ADR-0030 (supersedes ADR-0026's fail-closed raise): an undeterminable
+    watermark is now an UNKNOWN-freshness state — reported as stale, never
+    raised. Nothing may block the grid on a freshness question; only a
+    genuine gold-read failure (see the pyodbc-level tests above) still
+    raises SapActualsFetchError."""
     conn = _make_conn(rows=[])
-    with pytest.raises(SapActualsFetchError):
-        resolve_sap_coverage(conn, fiscal_year=2026)
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026)
+    assert coverage.watermark_date is None
+    assert coverage.days_behind is None
+    assert coverage.is_stale is True
+
+
+def test_sap_stale_after_days_constant_is_three():
+    """Pin the ADR-0030 threshold — a healthy daily-loader lag is 1 day, so
+    3 is "the feed stopped", not "this month is finished"."""
+    assert SAP_STALE_AFTER_DAYS == 3
 
 
 # ---------------------------------------------------------------------------
@@ -677,15 +661,17 @@ def test_fetch_sap_actuals_cached_returns_a_defensive_copy():
 
 
 def test_resolve_sap_coverage_cached_returns_a_defensive_copy():
+    """Every call returns `model_copy(deep=True)` -- two calls within the TTL
+    never share the same `SapCoverage` instance. (ADR-0030 narrowed
+    `SapCoverage` to immutable scalars only, so object identity is the
+    remaining meaningful guarantee -- there is no mutable list left to prove
+    the copy via mutation, unlike `fetch_sap_actuals_cached` above.)"""
     conn = _make_conn(rows=[("20260427",), ("20260428",), ("20260429",)])
     settings = _cached_settings(ttl=600)
 
     first = resolve_sap_coverage_cached(conn, 2026, settings=settings)
-    first.visible_months.append(999)
-    first.hidden_months.clear()
-
     second = resolve_sap_coverage_cached(conn, 2026, settings=settings)
 
-    assert 999 not in second.visible_months
-    assert second.hidden_months == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert first is not second
+    assert first == second
     assert conn.cursor.return_value.execute.call_count == 1  # still one query

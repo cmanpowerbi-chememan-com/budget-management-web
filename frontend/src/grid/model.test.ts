@@ -14,11 +14,9 @@ import {
   DEPT_RESTRICTED_GL_REASON_TH,
   filterRows,
   fitColumnWidth,
-  formatSapMonth,
   formatThaiShortDate,
   formatThb,
   freezeOffsets,
-  HIDDEN_SAP_MONTH_MARK,
   fullRowColSpan,
   glMetaFor,
   groupAndSortBySide,
@@ -32,23 +30,22 @@ import {
   loadStoredColumnWidths,
   lockedCostCenterDepartments,
   mergeSavedRow,
+  MONTH_KEYS,
   MONTH_LABELS,
   nowMonthKey,
   persistColumnWidths,
   pendingAmountNoticeTh,
   roundPendingAmount,
   sanitizeMonthInput,
-  sapCoverageLabel,
   sapFreshnessLine,
   sectionTotals,
   selectMeasureCandidates,
   sideOfGl,
   subtotalLabelColSpan,
   validateNewTransaction,
-  visibleSapMonths,
   YEAR_NOT_OPEN_ADD_REASON_TH,
 } from './model'
-import { blankLayer, makeRow as row, sapLayer } from './testUtils'
+import { makeRow as row, sapLayer } from './testUtils'
 
 const GL_REF: GlAccount[] = [
   { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
@@ -970,125 +967,82 @@ describe('selectMeasureCandidates (UI-parity point 8d)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// ADR-0026 — incomplete SAP months (hidden = null from the server)
+// ADR-0030 — SAP actuals shown as-is (supersedes ADR-0026's month mask)
 // ---------------------------------------------------------------------------
 
-describe('ADR-0026 hidden SAP months', () => {
-  const JAN_TO_MAR_ROW = row({
-    cost_center: 'CC1',
-    gl_account: '5211800030',
-    sap: sapLayer({ m01: 100, m02: 50, m03: 25, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
-  })
-
-  it('formats a hidden month as a muted en-dash, never as a zero', () => {
-    expect(formatSapMonth(null)).toBe(HIDDEN_SAP_MONTH_MARK)
-    expect(formatSapMonth(null)).not.toBe(formatThb(0))
-    expect(formatSapMonth(0)).toBe(formatThb(0))
-    expect(formatSapMonth(1234.5)).toBe('1,234.50')
-  })
-
-  it('reads the visible months off the payload (a hidden month is null for every row)', () => {
-    expect(visibleSapMonths([JAN_TO_MAR_ROW])).toEqual(['m01', 'm02', 'm03'])
-  })
-
-  it('treats an empty grid as nothing-hidden (no coverage caveat to show)', () => {
-    expect(visibleSapMonths([])).toHaveLength(12)
-    expect(sapCoverageLabel([])).toBeNull()
-  })
-
-  it('labels the SAP total with its coverage, using the grid header month names', () => {
-    expect(sapCoverageLabel([JAN_TO_MAR_ROW])).toBe('Jan–Mar')
-  })
-
-  it('labels a single visible month without a range dash', () => {
-    const janOnly = row({
-      cost_center: 'CC1', gl_account: '5211800030',
-      sap: sapLayer({ m01: 5, m02: null, m03: null, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
-    })
-    expect(sapCoverageLabel([janOnly])).toBe('Jan')
-  })
-
-  it('adds no coverage caveat when all 12 months are shown', () => {
-    expect(sapCoverageLabel([row({ cost_center: 'CC1', gl_account: '5211800030', sap: sapLayer({ m01: 1 }) })])).toBeNull()
-  })
-
-  it('keeps a hidden month null in the SAP subtotal instead of summing it as zero', () => {
-    const totals = sectionTotals([JAN_TO_MAR_ROW, JAN_TO_MAR_ROW])
-    expect(totals.sap.m01).toBe(200)
-    expect(totals.sap.m04).toBeNull()
-    expect(totals.sap.total_year).toBe(350)
-  })
-
-  it('never nulls the Approved or Pending subtotals (SAP-layer rule only)', () => {
-    const r = row({
-      cost_center: 'CC1', gl_account: '5211800030',
-      sap: sapLayer({ m04: null }),
-      board: { ...blankLayer({ m04: 400, total_year: 400 }), gl_name: null, gl_group: null, c_level: null, division: null, department: null },
-      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, m04: 700, total_year: 700 },
-    })
-    const totals = sectionTotals([r])
-    expect(totals.board.m04).toBe(400)
-    expect(totals.pending.m04).toBe(700)
-  })
-
-  it('blocks delete for a row whose only SAP history sits in a hidden month', () => {
-    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
-    const aprilOnly = row({
-      cost_center: 'CC1', gl_account: '5211800030', editable: true,
-      sap: sapLayer({ m01: 0, m02: 0, m03: 0, m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null, has_actuals: true }),
-      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
-    })
-    expect(isDeletableRow(aprilOnly, meta)).toBe(false)
-  })
-
-  it('still allows delete for a web-added row with no SAP history at all', () => {
-    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
-    const webAdded = row({
-      cost_center: 'CC1', gl_account: '5211800030', editable: true,
-      sap: sapLayer({ m04: null, m05: null, m06: null, m07: null, m08: null, m09: null, m10: null, m11: null, m12: null }),
-      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
-    })
-    expect(webAdded.sap.has_actuals).toBe(false)
-    expect(isDeletableRow(webAdded, meta)).toBe(true)
-  })
-
+describe('SAP actuals shown as-is (ADR-0030)', () => {
   it('formats the watermark as a Thai short date with a Buddhist-era year', () => {
     expect(formatThaiShortDate('2026-04-29')).toBe('29 เม.ย. 69')
     expect(formatThaiShortDate('2026-12-31')).toBe('31 ธ.ค. 69')
     expect(formatThaiShortDate('2027-01-23')).toBe('23 ม.ค. 70')
   })
 
-  it('writes one freshness line naming the last complete month and the keyed-through date', () => {
-    const line = sapFreshnessLine({
-      fiscal_year: 2026,
-      watermark_date: '2026-04-29',
-      visible_months: [1, 2, 3],
-      hidden_months: [4, 5, 6, 7, 8, 9, 10, 11, 12],
+  describe('sapFreshnessLine — 3 states, all decided by the backend', () => {
+    it('healthy: the plain keyed-through date, no warning', () => {
+      const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
+      expect(line).toEqual({ text: 'ข้อมูลคีย์ถึง 11 ก.ย. 69', isWarn: false })
     })
-    expect(line).toContain('ครบถึงเดือน 3/2026')
-    expect(line).toContain('29 เม.ย. 69')
-    expect(line).toContain('4–12/2026')
+
+    it('stale: warns and marks the date stale, following the server verdict — never computed here', () => {
+      const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 3, is_stale: true })
+      expect(line).toEqual({ text: '⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69 (ช้ากว่าปกติ)', isWarn: true })
+    })
+
+    it('unknown: no date at all warns with a different message, not a blank chip', () => {
+      const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: null, days_behind: null, is_stale: false })
+      expect(line).toEqual({ text: '⚠ ไม่ทราบวันที่ข้อมูล', isWarn: true })
+    })
+
+    it('a null watermark wins over an is_stale flag — there is no date to qualify either way', () => {
+      const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: null, days_behind: null, is_stale: true })
+      expect(line).toEqual({ text: '⚠ ไม่ทราบวันที่ข้อมูล', isWarn: true })
+    })
+
+    it('isWarn is data, not a string to re-parse — a caller never string-sniffs the text for "⚠"', () => {
+      const healthy = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
+      const stale = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 3, is_stale: true })
+      expect(healthy.isWarn).toBe(false)
+      expect(stale.isWarn).toBe(true)
+    })
   })
 
-  it('says so plainly when the year is complete', () => {
-    const line = sapFreshnessLine({
-      fiscal_year: 2025,
-      watermark_date: '2026-04-29',
-      visible_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-      hidden_months: [],
-    })
-    expect(line).toContain('ครบทั้ง 12 เดือน')
-    expect(line).not.toContain('ยังไม่แสดง')
+  it('sums every SAP month as a plain number, never null', () => {
+    const r = row({ cost_center: 'CC1', gl_account: '5211800030', sap: sapLayer({ m01: 100, m02: 50, m03: 25 }) })
+    const totals = sectionTotals([r, r])
+    expect(totals.sap.m01).toBe(200)
+    expect(totals.sap.m04).toBe(0)
+    expect(totals.sap.total_year).toBe(350)
+    MONTH_KEYS.forEach((m) => expect(typeof totals.sap[m]).toBe('number'))
   })
 
-  it('says so plainly when not one month is complete yet', () => {
-    const line = sapFreshnessLine({
-      fiscal_year: 2026,
-      watermark_date: '2026-01-05',
-      visible_months: [],
-      hidden_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  it('blankSapTotals regression: an empty section grand total is all zeros, never null or NaN', () => {
+    const totals = sectionTotals([])
+    expect(totals.sap.total_year).toBe(0)
+    MONTH_KEYS.forEach((m) => expect(totals.sap[m]).toBe(0))
+    // The bug this guards: formatThb(null) used to render the string "null"
+    // (or throw) for an empty side/group's SAP grand total — never caught by
+    // an existing test because every other fixture always had rows.
+    expect(formatThb(totals.sap.total_year)).toBe('—')
+  })
+
+  it('blocks delete for a row with real SAP history', () => {
+    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
+    const withHistory = row({
+      cost_center: 'CC1', gl_account: '5211800030', editable: true,
+      sap: sapLayer({ m04: 500, has_actuals: true }),
+      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
     })
-    expect(line).toContain('ยังไม่มีเดือน')
-    expect(line).toContain('5 ม.ค. 69')
+    expect(isDeletableRow(withHistory, meta)).toBe(false)
+  })
+
+  it('still allows delete for a web-added row with no SAP history at all', () => {
+    const meta = { gl_group: 'Office expenses', gl_name: 'x', is_special: false, in_master: true }
+    const webAdded = row({
+      cost_center: 'CC1', gl_account: '5211800030', editable: true,
+      sap: sapLayer(),
+      pending: { ...row({ cost_center: 'x', gl_account: 'y' }).pending, updated_at: '2026-01-01T00:00:00Z' },
+    })
+    expect(webAdded.sap.has_actuals).toBe(false)
+    expect(isDeletableRow(webAdded, meta)).toBe(true)
   })
 })

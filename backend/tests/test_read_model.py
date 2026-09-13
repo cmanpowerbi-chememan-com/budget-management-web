@@ -6,7 +6,6 @@ Two layers of tests:
 - `merge_budget_rows` — pure function, no DB at all; this is where the
   never-cut visibility/RLS/editable rules are proven.
 """
-from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -22,7 +21,7 @@ from app.read_model import (
     merge_budget_rows,
 )
 from app.rls import Scope
-from app.sap import SapActualsFetchError, SapCoverage
+from app.sap import SapActualsFetchError
 
 
 def _blank_join_row(cost_center: str, gl_account: str, **overrides) -> dict:
@@ -45,26 +44,6 @@ def _scope(**overrides) -> Scope:
     )
     defaults.update(overrides)
     return Scope(**defaults)
-
-
-def _coverage(fiscal_year: int = 2026, visible: tuple[int, ...] = tuple(range(1, 13))) -> SapCoverage:
-    return SapCoverage(
-        fiscal_year=fiscal_year,
-        watermark_date=date(fiscal_year + 1, 1, 23),
-        visible_months=list(visible),
-        hidden_months=[m for m in range(1, 13) if m not in visible],
-    )
-
-
-@pytest.fixture(autouse=True)
-def _default_sap_coverage(monkeypatch):
-    """ADR-0026: `get_budget_grid` resolves the SAP entry-day watermark from
-    the (mocked) gold connection, which would fail closed against a MagicMock.
-    Default every test in this module to an all-months-visible coverage — i.e.
-    pre-ADR-0026 behavior — so the pre-existing wiring/RLS tests keep asserting
-    exactly what they were written for; the ADR-0026 tests below override this
-    with their own coverage."""
-    monkeypatch.setattr("app.read_model.resolve_sap_coverage_cached", lambda conn, fiscal_year: _coverage(fiscal_year))
 
 
 @pytest.fixture(autouse=True)
@@ -1106,11 +1085,9 @@ def test_net_zero_hidden_row_contributes_nothing_to_grid_totals():
 
 
 # ---------------------------------------------------------------------------
-# ADR-0026 — incomplete SAP months are nulled SERVER-SIDE (display transform)
+# ADR-0030 (supersedes ADR-0026's month mask) — the SAP layer is an identity
+# map, every month renders exactly as fetch_sap_actuals returned it
 # ---------------------------------------------------------------------------
-
-_JAN_TO_MAR = frozenset({1, 2, 3})
-
 
 def _sap_months(**values: float) -> dict[str, float]:
     """A SAP dict shaped exactly like `fetch_sap_actuals` returns it."""
@@ -1120,36 +1097,36 @@ def _sap_months(**values: float) -> dict[str, float]:
     return months
 
 
-def test_hidden_sap_month_is_none_not_zero_and_visible_months_keep_their_value():
-    """Never-cut (ADR-0026): a number that must not be displayed may not even
-    reach the client. The live April case — 22,008,580 THB against ~150M
-    normal months — must serialize as null, not as a small-looking number."""
+def test_every_sap_month_renders_the_real_value_no_month_is_ever_none():
+    """ADR-0030: no post-query rule withholds any month. The live April case
+    that ADR-0026 used to null (22,008,580 THB) now renders exactly like
+    every other month — and no month ever serializes as null."""
     sap_actuals = {("CC1", "GL1"): _sap_months(m01=157_832_827.0, m03=129_700_892.0, m04=22_008_580.0)}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows([], sap_actuals, scope)
 
     sap = rows[0].sap
     assert sap.m01 == 157_832_827.0
     assert sap.m03 == 129_700_892.0
-    assert sap.m04 is None
-    assert sap.model_dump()["m04"] is None  # serialized shape, not just the attribute
-    assert all(sap.model_dump()[c] is None for c in _ALL_MONTHS[3:])
+    assert sap.m04 == 22_008_580.0
+    dumped = sap.model_dump()
+    assert all(dumped[c] is not None for c in _ALL_MONTHS)  # serialized shape, not just the attribute
 
 
-def test_hidden_sap_months_are_excluded_from_total_year():
-    """A total spanning hidden months cannot be reconciled against the cells
-    on screen, so it sums the VISIBLE months only."""
+def test_sap_total_year_is_the_plain_jan_to_dec_sum():
+    """No qualifier, no "visible months only" carve-out (ADR-0030 §2.5) —
+    total_year is the plain sum of all twelve months."""
     sap_actuals = {("CC1", "GL1"): _sap_months(m01=100.0, m02=50.0, m03=25.0, m04=9_999.0, m12=1.0)}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows([], sap_actuals, scope)
 
-    assert rows[0].sap.total_year == 175.0
+    assert rows[0].sap.total_year == 10_175.0
 
 
-def test_hidden_months_never_touch_the_approved_or_pending_layers():
-    """Scope guard (ADR-0026): the rule applies to the SAP layer ONLY."""
+def test_sap_layer_changes_never_touch_the_approved_or_pending_layers():
+    """Scope guard: `_sap_layer` only ever builds the SAP layer."""
     join_rows = [
         _blank_join_row(
             "CC1", "GL1",
@@ -1159,7 +1136,7 @@ def test_hidden_months_never_touch_the_approved_or_pending_layers():
     ]
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows(join_rows, {}, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows(join_rows, {}, scope)
 
     assert rows[0].board.m04 == 4_000.0
     assert rows[0].board.total_year == 4_000.0
@@ -1167,56 +1144,53 @@ def test_hidden_months_never_touch_the_approved_or_pending_layers():
     assert rows[0].pending.total_year == 7_000.0
 
 
-def test_row_whose_only_actual_falls_in_a_hidden_month_still_appears():
-    """ADR-0010 row visibility is UNCHANGED by ADR-0026: the net-zero row-hide
-    decision reads the FULL year (hidden months included), so a key whose only
-    posting is in April keeps its row — it just shows no April number.
-    Live volume: 92 of 1,827 FY2026 keys are in exactly this state."""
+def test_row_whose_only_actual_falls_in_a_single_month_still_appears():
+    """ADR-0010 row visibility, reconfirmed post-mask-removal: a key whose
+    only posting is in April keeps its row and shows the real April number
+    (no month is ever withheld now)."""
     sap_actuals = {("CC1", "GL-APR-ONLY"): _sap_months(m04=22_008_580.0)}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows([], sap_actuals, scope)
 
     assert [r.gl_account for r in rows] == ["GL-APR-ONLY"]
-    assert rows[0].sap.m04 is None
-    assert rows[0].sap.total_year == 0.0
+    assert rows[0].sap.m04 == 22_008_580.0
+    assert rows[0].sap.total_year == 22_008_580.0
 
 
-def test_net_zero_reversal_key_stays_visible_when_all_months_masked():
-    """The hide decision is computed PRE-MASK on the full year (ADR-0026):
-    a cross-month reversal key is visible because EACH of its months is
-    individually nonzero — masking every month for display (`visible_sap_months
-    =frozenset()`) must not flip that decision, since the per-month check
-    reads the raw `sap_actuals` dict, never the masked display layer."""
+def test_net_zero_reversal_key_stays_visible_with_real_values_in_both_months():
+    """The row-hide decision reads the RAW `sap_actuals` dict (`sap_nonzero_keys`,
+    computed before the display layer is built) — a cross-month reversal key
+    is visible because EACH of its months is individually nonzero, and (with
+    no mask left anywhere) both months render their real signed value."""
     sap_actuals = {("CC1", "GL1"): _net_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=frozenset())
+    rows = merge_budget_rows([], sap_actuals, scope)
 
     assert [r.gl_account for r in rows] == ["GL1"]
-    assert rows[0].sap.m01 is None and rows[0].sap.m02 is None  # masked for display
-    assert rows[0].sap.total_year == 0.0  # masked total, but the row itself stays
+    assert rows[0].sap.m01 == 1648.13
+    assert rows[0].sap.m02 == -1648.13
+    assert rows[0].sap.total_year == 0.0  # both legs cancel for the year, the row itself stays
 
 
-def test_all_zero_sap_key_is_still_hidden_when_its_months_are_all_hidden():
-    """The other direction of the same rule: masking must not RESURRECT an
-    all-zero row (the full-year, per-month check is what decides, not the
-    visible sum)."""
+def test_all_zero_sap_key_is_hidden():
+    """The net-zero row-hide rule: an all-zero SAP key with no board/pending
+    row never shows, regardless of the display layer."""
     sap_actuals = {("CC1", "GL1"): _all_zero_sap_months()}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    assert merge_budget_rows([], sap_actuals, scope, visible_sap_months=frozenset()) == []
+    assert merge_budget_rows([], sap_actuals, scope) == []
 
 
-def test_has_actuals_flags_a_row_with_postings_in_a_hidden_month():
-    """`has_actuals` is the ONLY signal the client gets about hidden-month
-    postings (never the number) — the grid's delete-eligibility rule ("a row
-    with SAP history was not added on the web") would otherwise break the
-    moment its months are nulled."""
+def test_has_actuals_flags_a_row_with_any_nonzero_month():
+    """`has_actuals` reports presence of SAP history for delete-eligibility —
+    now redundant with a plain month scan (no month is ever hidden), but
+    still populated the same way."""
     sap_actuals = {("CC1", "GL-APR-ONLY"): _sap_months(m04=1.0)}
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows([], sap_actuals, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows([], sap_actuals, scope)
 
     assert rows[0].sap.has_actuals is True
 
@@ -1225,23 +1199,11 @@ def test_has_actuals_is_false_for_a_row_with_no_sap_postings_at_all():
     join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
-    rows = merge_budget_rows(join_rows, {}, scope, visible_sap_months=_JAN_TO_MAR)
+    rows = merge_budget_rows(join_rows, {}, scope)
 
     assert rows[0].sap.has_actuals is False
     assert rows[0].sap.m01 == 0.0
-    assert rows[0].sap.m04 is None  # masked uniformly: a 0 in an incomplete month is a claim too
-
-
-def test_no_visible_months_argument_masks_nothing_pre_adr_behavior():
-    """Default (`visible_sap_months=None`) = every month shown, so every
-    caller/test written before ADR-0026 keeps its exact behavior."""
-    sap_actuals = {("CC1", "GL1"): _sap_months(m01=100.0, m04=200.0)}
-    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
-
-    rows = merge_budget_rows([], sap_actuals, scope)
-
-    assert rows[0].sap.m04 == 200.0
-    assert rows[0].sap.total_year == 300.0
+    assert rows[0].sap.m04 == 0.0  # a key with no SAP row at all is 0.00 in every month, never None
 
 
 # ---------------------------------------------------------------------------
@@ -1655,50 +1617,35 @@ def test_get_budget_grid_flag_on_admin_caller_never_fetches_admin_gl_codes(monke
     assert calls["n"] == 0
 
 
-def test_get_budget_grid_resolves_sap_coverage_for_the_board_year_and_masks(monkeypatch):
-    """ADR-0026 wiring: the coverage is resolved for the SAP layer's own year
-    (planning_year - 1) on the GOLD connection, and its visible months are the
-    ones that survive into the response."""
-    captured = {}
+def test_read_model_no_longer_imports_resolve_sap_coverage():
+    """ADR-0030: the mask coverage used to gate is gone, so this module no
+    longer resolves SAP freshness at all — that signal lives entirely on
+    `GET /budget/sap-coverage` (`routers/budget.py`). Structural check (not
+    a monkeypatch) so a re-introduction under a different name/path would
+    also need a deliberate new import here, never sneak back silently."""
+    import app.read_model as read_model_module
 
-    def fake_resolve(conn, fiscal_year):
-        captured["fiscal_year"] = fiscal_year
-        captured["conn"] = conn
-        return _coverage(fiscal_year, visible=(1, 2, 3))
+    assert not hasattr(read_model_module, "resolve_sap_coverage_cached")
 
-    fabric_conn, gold_conn = MagicMock(name="fabric"), MagicMock(name="gold")
+
+def test_get_budget_grid_passes_sap_values_through_without_resolving_coverage(monkeypatch):
+    """Functional counterpart: `get_budget_grid` renders real SAP values with
+    NOTHING coverage-related mocked at all — proving it truly never touches
+    that code path any more (the old wiring test needed a coverage mock or
+    `get_budget_grid` would fail closed against a MagicMock gold_conn)."""
     monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
     monkeypatch.setattr(
         "app.read_model.fetch_sap_actuals_cached",
         lambda conn, fabric_conn, fiscal_year: {("CC1", "GL1"): _sap_months(m01=10.0, m04=99.0)},
     )
     monkeypatch.setattr("app.read_model.fetch_master_gl_codes", lambda conn: frozenset({"GL1"}))
-    monkeypatch.setattr("app.read_model.resolve_sap_coverage_cached", fake_resolve)
 
     scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
-    rows = get_budget_grid(fabric_conn, gold_conn, planning_year=2027, scope=scope)
+    rows = get_budget_grid(MagicMock(name="fabric"), MagicMock(name="gold"), planning_year=2027, scope=scope)
 
-    assert captured["fiscal_year"] == 2026
-    assert captured["conn"] is gold_conn
     assert rows[0].sap.m01 == 10.0
-    assert rows[0].sap.m04 is None
-    assert rows[0].sap.total_year == 10.0
-
-
-def test_get_budget_grid_propagates_a_watermark_failure_never_shows_everything(monkeypatch):
-    """Fail CLOSED: if the watermark cannot be determined the whole read is a
-    loud 502 — never a grid that quietly shows every (possibly incomplete)
-    month."""
-    monkeypatch.setattr("app.read_model.fetch_board_pending_rows", lambda conn, board_year, pending_year, cost_centers=None: [])
-    monkeypatch.setattr("app.read_model.fetch_sap_actuals_cached", lambda conn, fabric_conn, fiscal_year: {})
-
-    def raise_coverage_error(conn, fiscal_year):
-        raise SapActualsFetchError("watermark undeterminable")
-
-    monkeypatch.setattr("app.read_model.resolve_sap_coverage_cached", raise_coverage_error)
-
-    with pytest.raises(SapActualsFetchError):
-        get_budget_grid(MagicMock(), MagicMock(), planning_year=2027, scope=_scope())
+    assert rows[0].sap.m04 == 99.0
+    assert rows[0].sap.total_year == 109.0
 
 
 # ---------------------------------------------------------------------------

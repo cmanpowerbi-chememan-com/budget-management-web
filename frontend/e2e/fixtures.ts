@@ -26,6 +26,7 @@ import type {
   PendingForMeResponse,
   PendingLayer,
   PendingRowState,
+  SapCoverage,
   SapLayer,
   ScopeResponse,
   TravelerOption,
@@ -244,6 +245,10 @@ export interface World {
 
   budgetGridQueue: BudgetRow[][]
   budgetGridErrorStatus: number | null
+  /** `GET /budget/sap-coverage` (ADR-0030 freshness chip) — mutable, not a
+   * queue: fetched from `BudgetGrid`'s mount effect on every year change,
+   * same StrictMode-double-read reasoning as `approvalStatusByDept`. */
+  sapCoverage: SapCoverage
 
   saveRowQueue: Result<PendingRowState>[]
   detailLinesQueue: DetailLineState[][]
@@ -314,6 +319,7 @@ export function createWorld(overrides: Partial<World> = {}): World {
 
     budgetGridQueue: [[]],
     budgetGridErrorStatus: null,
+    sapCoverage: { fiscal_year: PLANNING_YEAR - 1, watermark_date: '2026-09-11', days_behind: 1, is_stale: false },
 
     saveRowQueue: [],
     detailLinesQueue: [[]],
@@ -474,6 +480,10 @@ export async function installMocks(page: Page, world: World): Promise<void> {
 
     if (path === '/budget/gl-accounts' && method === 'GET') {
       return fulfillJson(route, 200, world.glAccounts)
+    }
+
+    if (path === '/budget/sap-coverage' && method === 'GET') {
+      return fulfillJson(route, 200, world.sapCoverage)
     }
 
     if (path === '/budget/rows' && method === 'PUT') {

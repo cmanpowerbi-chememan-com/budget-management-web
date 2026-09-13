@@ -41,9 +41,8 @@ Real cc/filler pair and Entertainment GL code are DISCOVERED from the live
 DB at fixture setup, never hardcoded — the SharePoint-synced masters can
 change on their own sync cadence.
 """
-import calendar
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import pyodbc
 import pytest
@@ -73,7 +72,7 @@ from app.rls import resolve_scope
 from app.sap import (
     MONTH_COLUMNS,
     SAP_ENTRY_DAY_MAX_GAP_DAYS,
-    SAP_MONTH_VISIBLE_LAG_DAYS,
+    SAP_STALE_AFTER_DAYS,
     SapActualsFetchError,
     entry_day_watermark,
     fetch_sap_actuals,
@@ -945,33 +944,20 @@ def test_sap_entry_day_query_runs_live_and_the_loaded_run_is_contiguous() -> Non
 
 
 @pytest.mark.integration
-def test_sap_coverage_live_hides_only_a_trailing_run_of_months() -> None:
-    """The shape of the rule on live data: visible months are always a
-    PREFIX of the year (Jan..k) and hidden months the trailing rest, because
-    the watermark advances monotonically. Also re-derives the 23-day cut-off
-    for the last visible month and the first hidden one, so a wrong constant
-    or an off-by-one in `visible_sap_months` fails here too."""
+def test_sap_coverage_live_reports_freshness_not_a_month_mask() -> None:
+    """ADR-0030, proven live: `resolve_sap_coverage` no longer decides which
+    months may display — it reports how fresh the feed is. Re-derives
+    `is_stale` from `days_behind` directly against the live watermark, so a
+    wrong SAP_STALE_AFTER_DAYS constant or a broken boundary fails here too."""
     with get_gold_conn() as conn:
         coverage = resolve_sap_coverage(conn, fiscal_year=2026)
 
-    assert coverage.visible_months == sorted(coverage.visible_months)
-    assert coverage.visible_months + coverage.hidden_months == sorted(
-        coverage.visible_months + coverage.hidden_months
-    ), f"visible {coverage.visible_months} / hidden {coverage.hidden_months} interleave — not a trailing run"
-    assert len(coverage.visible_months) + len(coverage.hidden_months) == 12
-
-    if coverage.visible_months:
-        last_visible = coverage.visible_months[-1]
-        cut_off = date(2026, last_visible, calendar.monthrange(2026, last_visible)[1]) + timedelta(
-            days=SAP_MONTH_VISIBLE_LAG_DAYS
-        )
-        assert coverage.watermark_date >= cut_off
-    if coverage.hidden_months:
-        first_hidden = coverage.hidden_months[0]
-        cut_off = date(2026, first_hidden, calendar.monthrange(2026, first_hidden)[1]) + timedelta(
-            days=SAP_MONTH_VISIBLE_LAG_DAYS
-        )
-        assert coverage.watermark_date < cut_off
+    assert coverage.fiscal_year == 2026
+    # The live feed loads daily (ADR-0030 context) — nothing loaded at all
+    # would itself be newsworthy, not an expected live state.
+    assert coverage.watermark_date is not None, "no SAP entry-days loaded at all — feed may be down"
+    assert coverage.days_behind == (date.today() - coverage.watermark_date).days
+    assert coverage.is_stale == (coverage.days_behind >= SAP_STALE_AFTER_DAYS)
 
 
 @pytest.mark.integration

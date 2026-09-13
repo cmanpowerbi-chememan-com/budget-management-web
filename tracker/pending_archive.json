@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-08T11:18:51+0700",
+  "updated": "2026-09-14T02:23:47+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2424,6 +2424,321 @@
       "updated": "2026-08-08T22:03:24+0700",
       "ai": "Backend: app/deadline.py fiscal_year_state()+YearNotOpenError; write_model._ensure_year_open_for_write (renamed, 6 call sites); approval._submit_normal_chain now checks year state; read_model.merge_budget_rows/get_budget_grid gained year_not_open; routers/approval.py locked-departments gained year_not_open field. Frontend: types.ts/model.ts/AddTransactionForm.tsx/BudgetGrid.tsx threaded yearNotOpen through the existing lock-awareness feature. Tests: backend 899 passed (was 887, +12), frontend vitest 612 passed (was 606, +6), next build clean. plan.md updated. NOT committed, NOT deployed per task instructions. Fillable years on prod the moment this ships (table has only FY2027 row): 2027=OPEN, everything else NOT_OPEN=admin-only.",
       "agent": "claude"
+    },
+    {
+      "id": "log-20507ec",
+      "state": "done",
+      "created": "2026-08-09T23:48:49+0700",
+      "updated": "2026-08-09T23:48:49+0700",
+      "agent": "autolog",
+      "ai": "chore(stg): delete staging Easy Auth, replace it with an ingress IP allowlist [commit 20507ec]"
+    },
+    {
+      "id": "log-8dfdc6c",
+      "state": "done",
+      "created": "2026-08-09T23:34:48+0700",
+      "updated": "2026-08-09T23:34:48+0700",
+      "agent": "autolog",
+      "ai": "docs(sit): record the 16-item status in the run log, not just in chat [commit 8dfdc6c]"
+    },
+    {
+      "id": "notif-audit-cc-shared-admin",
+      "state": "done",
+      "created": "2026-08-09T22:15:29+0700",
+      "updated": "2026-08-09T23:25:22+0700",
+      "ai": "DONE+DEPLOYED-TO-STG. Commits 89148ef (see-overlay ADR-0029) + 5b60740 (audit cc + shared-admin + non-prod mail marking). Tests 925 pass. Image budget-web:5b60740 built (ACR run cm10) live on stg rev 0000032 Healthy/100. stg env: NOTIFICATIONS_DRY_RUN=false, NOTIFICATIONS_REDIRECT_ALL_TO=jakkaritw@chememan.com, NOTIFICATIONS_ENVIRONMENT_LABEL='ทดสอบ on stg server'. PRD UNTOUCHED (still 1bbddcb). AZ CLI TRAP: az mangles Thai BOTH ways - --set-env-vars drops it on WRITE, and az containerapp show / az rest get drops it on READ (fooled a raw-bytes check because bytes came from az stdout). Working write = requests.patch to ARM with az account get-access-token token; template must be key-whitelisted (ARM rejects imageType, customMetricsSettings). Mail proof rendered: subject '*** ทดสอบ on stg server *** รอการอนุมัติ...', To=jakkaritw only, banner prints real to/cc.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-attachments-both-cases",
+      "state": "done",
+      "created": "2026-08-10T12:10:42+0700",
+      "updated": "2026-08-10T12:10:42+0700",
+      "ai": "Attachments tested on stg (image ea23d64) as pornthipp, BOTH cases, 6/6 PASS after fixing my own oracle error. CASE A (normal file): first attempt used .txt -> HTTP 400 'file type .txt is not allowed - allowed: jpeg, jpg, pdf, png, xls, xlsx' = MY error not an app bug; retried with a generated minimal valid 594-byte PDF -> HTTP 200, appears in GET /attachments, download-url issued, and the bytes fetched back from chememan.sharepoint.com are BYTE-IDENTICAL to what was sent. Landed at site CMANDWPRD / library 'Budgeting and Management' / เอกสาร ฝ่าย/Data & Analytic/2027/ - so the SharePoint attachment path is proven end-to-end for the first time. CASE B (oversize): 12.5 MB -> HTTP 413 with the exact Thai message 'ไฟล์ใหญ่เกินกำหนด (12.5 MB) — อัปโหลดได้ไม่เกิน 10 MB' (bug-4 fix seen live for the first time) and the file did NOT land. CLEANED UP as jakkaritw asked: no DELETE endpoint exists in the API (upload/list/download only) so removal went via Graph on drive b!yMQKs8rOc0CSyxosit6gVJ... -> 204, and the app's own listing re-read shows 0 items. TWO GAPS FOUND, neither fixed: (1) NO delete-attachment endpoint at all - a filler who uploads a wrong file cannot remove it from the web; (2) the file-TYPE refusal message is still ENGLISH ('file type .txt is not allowed...') while the SIZE message is Thai."
+    },
+    {
+      "id": "log-d9f4ea8",
+      "state": "done",
+      "created": "2026-08-10T11:58:38+0700",
+      "updated": "2026-08-10T11:58:38+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record the NOT_OPEN-locks-admin decision and both deploys [commit d9f4ea8]"
+    },
+    {
+      "id": "notopen-year-locks-admin",
+      "state": "done",
+      "created": "2026-08-10T11:57:24+0700",
+      "updated": "2026-08-10T11:57:24+0700",
+      "ai": "jakkaritw 2026-08-10: NOT_OPEN year (no dbo.submission_deadline row) now refuses EVERYONE incl. admin - other years' pending data arrives ONLY via raw-file import (ส่วน ข, concept = approved-budget yearly file); import writes DB directly so unaffected. Commit ea23d64. 3 surfaces changed in lockstep: write_model._ensure_year_open_for_write checks state BEFORE is_admin return (PAST_DEADLINE keeps admin bypass = ADR-0012 current-cycle override, deliberately NOT changed); read_model editable=(admin_wide or fill-and-unlocked) AND NOT year_not_open + get_budget_grid now fetches year state for every caller; /approval/locked-departments reports year_not_open to admin too. Refusal message now says 'นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ' aligned write+submit paths. Tests: backend 925 pass (4 admin-bypass tests REVERSED, 6 admin fixtures +year-state row), frontend 612 untouched (flag flows through existing field). DEPLOYED BOTH ENVS jakkaritw-directed: stg rev 0000033 + prd rev 0000019 (RunningAtMaxScale/Healthy 100%, anon 401 = Easy Auth intact). LIVE VERIFY on stg 8/8: year_not_open=True both roles @2026 / False @2027; ADMIN grid 1374 rows ALL editable=False @2026; 1084 rows ALL editable=True @2027; admin PUT @2026 -> 403 file-import message; filler write+revert @2027 200/200. NOTE: probe param is admin_view_enabled (not admin_view)."
+    },
+    {
+      "id": "prd-deploy-5b60740",
+      "state": "done",
+      "created": "2026-08-10T11:21:55+0700",
+      "updated": "2026-08-10T11:57:52+0700",
+      "ai": "[CROSS-SESSION UPDATE ea23d64] prd has moved on: now rev 0000019 image ea23d64 (NOT_OPEN-locks-admin change, jakkaritw-directed 2026-08-10), superseding rev 0000018/5b60740 recorded here. NOTIFICATIONS_DRY_RUN=false carried over (env changes persist across image updates). Everything else in this entry still accurate."
+    },
+    {
+      "id": "log-724585d",
+      "state": "done",
+      "created": "2026-08-10T11:15:35+0700",
+      "updated": "2026-08-10T11:15:35+0700",
+      "agent": "autolog",
+      "ai": "chore(stg): widen the ingress allowlist after the /32 broke in hours [commit 724585d]"
+    },
+    {
+      "id": "stg-easyauth-deleted-ip-lock",
+      "state": "done",
+      "created": "2026-08-09T23:48:05+0700",
+      "updated": "2026-08-10T11:15:32+0700",
+      "ai": "[CROSS-SESSION UPDATE] IP RULE WIDENED 2026-08-10: the /32 allowlist broke within hours - jakkaritw's browser got 'RBAC: access denied' (that string IS Container Apps' Envoy response for an ingress IP-restriction denial, not an Azure RBAC/permission problem). Cause: dynamic ISP IP moved 49.229.177.23 -> 49.229.165.231 (third octet differs), so the rule now reads 49.229.0.0/16, verified reachable 200. TRADE-OFF STATED TO jakkaritw: /16 admits ~65k other subscribers of that Thai ISP range, so the gate is genuinely weaker than the /32 was; stg still has NO Easy Auth and still writes the PRODUCTION DB. Tighter options offered and NOT yet chosen: (a) office static egress IP instead of a mobile ISP range, (b) give staging its own database so exposure stops mattering. Recovery command + the whole trade-off recorded in plan/sit/sit-run-log.md section 26 note 1."
+    },
+    {
+      "id": "approved-budget-3part-sync-proof",
+      "state": "done",
+      "created": "2026-08-10T11:50:13+0700",
+      "updated": "2026-08-10T14:05:22+0700",
+      "ai": "SHIPPED + VERIFIED (except FY2026 data-blocked). Fixes in 19.dw: 42d9d09 ghost-row skip + c9052ff quantize 2dp ROUND_HALF_UP per-cell (delta gate APPROVE; suites 111+87 green; test-only ae19fe2/a061bfb). Deployed via deploy_notebooks.py --live: budget_masters_lib+NB_budget_masters_sync (run1) then budget_masters_lib (run2). Manual run 07f94b6e: rows_in=2694 (ALL 4 files read, ghost+quantize both proven), FY2023 LOADED 687r/107cc/SUM 287,177,280.80, FY2024 609r/95cc/221,798,618.19, FY2025 626r/103cc/245,282,692.38 — reconcile exact-pass, committed per-file. FY2026 file REJECTED: orphan CC 10OS014000 (1 row, excel row 437, GL 5210600010, 12,000 THB/yr) not in cc_filler_map (master has 10OS014010/14020/...); old FY2026 (364r/205,307,324.11, loaded 08-08) intact in DB by design (validate-before-DELETE). Both doomed retry loops cancelled (47049288, 07f94b6e). LEFTOVER: Nipaporn adds CC 10OS014000 to cc dept.xlsx OR fixes row 437 typo -> next 06:30 run (or manual) loads new FY2026. Schedule enabled daily 06:30 BKK. Web stg+prd read live -> 2023-2025 visible NOW.",
+      "agent": "claude"
+    },
+    {
+      "id": "log-5a9200c",
+      "state": "done",
+      "created": "2026-08-10T15:20:22+0700",
+      "updated": "2026-08-10T15:20:22+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): record the attachments work and the prd deploy of 4cb9e8f [commit 5a9200c]"
+    },
+    {
+      "id": "attachments-delete-and-thai-copy",
+      "state": "done",
+      "created": "2026-08-10T12:43:36+0700",
+      "updated": "2026-08-10T15:20:18+0700",
+      "ai": "[PRD DEPLOY 2026-08-10, jakkaritw-approved 'ขึ้น prd'] prd rev 0000020 image budget-web:4cb9e8f RunningAtMaxScale/Healthy traffic 100%, provisioningState Succeeded. Diff ea23d64->4cb9e8f = 5 commits, backend+frontend, NO .sql/migration. Posture re-verified: Easy Auth ON (anonymous 401 AND spoofed x-ms-client-principal-name 401 -> prd cannot be impersonated the way stg can, so live functional probing of prd is impossible from here BY DESIGN; behaviour proven on stg with the identical image content), 0 ingress IP rules, REDIRECT/LABEL/DEV_AUTH_EMAIL absent, APP_ENV=production, NOTIFICATIONS_DRY_RUN=false carried over. ROLLBACK = --image cmanbudgetacr.azurecr.io/budget-web:ea23d64 (prior rev 0000019). Fixed my verify_prd_deploy.py which had a hardcoded expected image tag and printed a false '<<< MISMATCH' - now takes the expected sha as argv[1]. jakkaritw can now hard-refresh prd and delete his 2.0MB test PNG in เอกสาร ฝ่าย/Data & Analytic/2027/ himself."
+    },
+    {
+      "id": "stg-prd-parity-check",
+      "state": "done",
+      "created": "2026-08-10T15:42:37+0700",
+      "updated": "2026-08-10T15:42:37+0700",
+      "ai": "jakkaritw 2026-08-10: 'make sure what edited on stg must be = to prd also'. Built scratchpad/compare_stg_prd.py - reusable: compares image + every env var + Easy Auth + ingress IP rules, and classifies each env difference as by-design (INTENDED_DIFFS: APP_ENV, DEV_AUTH_EMAIL, NOTIFICATIONS_REDIRECT_ALL_TO, NOTIFICATIONS_ENVIRONMENT_LABEL, NOTIFICATIONS_DRY_RUN, APP_BASE_URL) vs UNINTENDED DRIFT. Result after the 9110837 deploy: image IDENTICAL on both, zero unintended drift, 10 env vars identical (incl. both DB endpoints + ADMIN_EMAILS + NOTIFICATIONS_DRY_RUN=false). Deliberate security split intact: stg = Easy Auth DELETED + ingress allowlist 49.229.0.0/16; prd = Easy Auth on, RedirectToLoginPage, 0 IP rules. GOTCHA: the tool prints NOTIFICATIONS_ENVIRONMENT_LABEL as ' on stg server' - that is az MANGLING THAI ON READ, not drift; the real stored value has the Thai (proven earlier via requests against ARM). Run this after every deploy."
+    },
+    {
+      "id": "grid-two-decimals-everywhere",
+      "state": "done",
+      "created": "2026-08-10T15:42:37+0700",
+      "updated": "2026-08-10T15:42:37+0700",
+      "ai": "jakkaritw 2026-08-10: 'SAP ใช้จริง / Approved งบ / Pending รออนุมัติ ปรับให้เป็น 2 digit เหมือนกัน'. Commit 9110837. formatThb (frontend/src/grid/model.ts) no longer drops decimals on a whole-baht value - ALWAYS 2dp; zero still em-dash, ADR-0026 hidden-SAP en-dash untouched. Also switched DetailSubform's row-grand cell + footer year total from raw toLocaleString to formatThb (the last 2 direct callers, would have shown 5,250 next to 5,000.00). Propagates to every money display via MonthCell + GridTable + subform. 12 expectations updated across 4 test files; frontend 618 pass, next build clean. DEPLOYED TO BOTH ENVS same image budget-web:9110837 - stg rev 0000038, prd rev 0000021. Verified served bundle carries the change (chunk 2p-lvwrn0yetm.js, stg/local asset sets identical)."
+    },
+    {
+      "id": "push-27-commits",
+      "state": "done",
+      "created": "2026-08-10T15:54:29+0700",
+      "updated": "2026-08-10T15:54:29+0700",
+      "ai": "jakkaritw 2026-08-10: 'commit, push 27 ตัว'. PUSHED: origin/main is now 944a4a8, all 27 commits on the remote (verified d0672fc, the oldest, and 944a4a8, the newest, both contained in origin/main). CI green on the push: run 31371939537 conclusion success - Backend pytest 3.14, Backend type check, Frontend vitest 20.x, Test Summary all success. Before pushing I found and committed ONE uncommitted change: backend/app/approval.py's YearNotOpenError message was edited when ea23d64 aligned the write/submit wording but never STAGED, so the submit gate still says 'นำเข้าโดยผู้ดูแลระบบ' while the write gate says 'นำเข้าด้วยไฟล์โดยผู้ดูแลระบบ' - no test asserts approval.py's string, which is how it passed 3 green suites. Committed as 944a4a8; NOTE every deployed image up to 9110837 still carries the OLDER submit-path wording (text only, needs a rebuild to land). PARALLEL SESSION: a commit 2fd7b44 'docs(adr-0021): amend board_budget ingest' appeared on local main AFTER my push - NOT mine, deliberately left unpushed. Also removed the 8 temporary build worktrees from scratchpad; only the main tree remains. Left untouched (not mine, pre-existing): M frontend/next-env.d.ts, M setup/phase2_harness_dkl.py, D requirement_spec/.../Spec B ...docx, and the untracked .next/ + tests_data_sync xlsx + monthly_update files."
+    },
+    {
+      "id": "board-orphan-cc-rowskip",
+      "state": "done",
+      "created": "2026-08-10T15:20:04+0700",
+      "updated": "2026-08-10T15:50:55+0700",
+      "ai": "SHIPPED + VERIFIED LIVE. ac49872 (19.dw): orphan CC = per-row skip w/ per-CC THB warning + rows_rejected; blank-key/non-numeric/bad-filename stay whole-file rejects; gate #3 APPROVE (113+87 green). Deployed both notebooks --live, run 5cd3a10e Completed ~3min. FINAL DB: fy2023 687r/107cc/287,177,280.80; fy2024 609r/95cc/221,798,618.19; fy2025 626r/103cc/245,282,692.38; fy2026 697r/107cc/254,877,891.95 — ALL loaded 15:46:51, web stg+prd live. BONUS: Nipaporn added CC 10OS014000 to cc dept.xlsx BEFORE the run -> 12,000 THB row loaded normally (verified in board_budget + master, dims=People Experience/Facility Management/CPO/nitip) — skip path shipped as future-proofing, 0 rows actually skipped. ADR-0021 amendment added (04 repo). Leftover: 19.dw 10 commits not pushed to GitHub (local only); run-log lakehouse endpoint lag noted.",
+      "agent": "claude"
+    },
+    {
+      "id": "fy2026-orphan-cc-nipaporn",
+      "state": "done",
+      "created": "2026-08-10T15:17:45+0700",
+      "updated": "2026-08-10T15:50:55+0700",
+      "ai": "DONE BY NIPAPORN 2026-08-10 (before run 5cd3a10e): cc dept.xlsx row added exactly as proposed (10OS014000/Facility Management/CPO/People Experience/nitip) -> synced into cc_filler_map same run, FY2026 loaded FULL 697 rows incl the 12,000 THB row. Nothing left.",
+      "agent": "claude"
+    },
+    {
+      "id": "stg-manual-test-pornthipp",
+      "state": "done",
+      "created": "2026-08-09T21:58:17+0700",
+      "updated": "2026-08-10T15:59:36+0700",
+      "ai": "SESSION CLOSED 2026-08-10. Everything jakkaritw asked in this session shipped to BOTH envs on identical image and is pushed (origin/main 944a4a8, CI green run 31371939537). Delivered: ADR-0013 read-only lock verified by jakkaritw's own eyes on the browser; submit-button SIT 16/16 through the real API; full 3-step approval chain walked with real Graph mail; mail audit-cc to cmanpowerbi + shared-mailbox admin + non-prod TEST label/redirect; NOT_OPEN year now locks admin too; attachments delete button + Thai type copy + whole-library path guard; two-decimal amounts on all three layers. Env posture: stg = Easy Auth DELETED + ingress allowlist 49.229.0.0/16 + APP_ENV=local + DEV_AUTH_EMAIL=pornthipp + mail redirected to jakkaritw with the Thai TEST banner; prd = Easy Auth ON (header spoofing 401), 0 IP rules, real mail to real recipients, NOTIFICATIONS_DRY_RUN=false. Data left clean: FY2027 has ONLY jakkaritw's/pornthipp's own rows, no approval_status row (unlocked), attachment folder 0 files on stg. LEFTOVERS for the next session: (1) 944a4a8's submit-path Thai wording is committed but NOT in any built image - fold into the next deploy; (2) item 13 D3 admin-toggle test still needs นิภาพร's cookie; (3) 5 special GL groups + row-delete + browser inline-edit still untested on stg; (4) prd still holds jakkaritw's 2.0MB test PNG in เอกสาร ฝ่าย/Data & Analytic/2027 (he can now delete it himself); (5) a parallel session's commit 2fd7b44 sits unpushed on local main - not mine to push.",
+      "agent": "claude"
+    },
+    {
+      "id": "sp-testcase-email-alert",
+      "state": "done",
+      "created": "2026-08-10T20:45:14+0700",
+      "updated": "2026-08-10T20:55:57+0700",
+      "ai": "DONE 4b5ba29. Added 6 email-alert cases No 38-43 (TC-038..TC-043, module 'Email Alert / Notification') to sheet '2. Test Cases' of SharePoint Budget_SIT_Test_Cases_10.08.2026.xlsx (03_SIT folder, CMANDigitalTechnology). Cases mirror the 6 real notify_* fns in backend/app/notifications.py: turn / reject / approved / step_overridden / turn_reminder(7d grouped) / deadline_reminder(grouped). ALSO fixed silent breakage: Summary formulas + autofilter + 3 dropdown validations all stopped at row 40 -> extended to 46, added Summary module breakdown row B25. Verified live re-download: max_row 46, TC-043 present, rows 1-40 byte-identical. Backup of pre-edit file in requirement_spec/4_sit/*_before_email_alert.xlsx. Reusable script setup/update_sit_test_cases.py (--upload guards on lastModifiedDateTime). NOTE prerequisite for running these cases: NOTIFICATIONS_DRY_RUN must be false on the env under test (config default True).",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-approver23-jakkaritw",
+      "state": "done",
+      "created": "2026-08-10T16:07:26+0700",
+      "updated": "2026-08-10T21:13:05+0700",
+      "ai": "CODE DONE + GATED, NOT deployed, NOT committed (2026-08-10). Files (backend-only, 3): app/auth.py _apply_sit_impersonation, app/config.py sit_impersonate field, tests/test_auth.py (17 pass). Guard HARDENED after a security-weaken warning on the first cut: now THREE all-required conditions - (1) HARD app_env!='production' (dead on PRD which runs app_env=production; stg runs app_env=local, verified via az) (2) non-blank notifications_environment_label (3) sit_impersonate set. Alias runs ONLY on the real-header path, never manufactures identity (no-header still 401). Combined gate 06+07+08: 07 PASS (staging-safe + provably PRD-inert, file:line evidence read not comment), 06 Approve-w-suggestions (1 comment fix applied), 08 PASS 17 tests incl the copy-pasted-env disaster case. LEFTOVER before SIT can run: build image (clean worktree) -> deploy stg (AWAIT jakkaritw explicit deploy go) -> re-enable Easy Auth on stg + REMOVE ip allowlist (Easy Auth replaces the IP lock) -> SIT run needs a MID-SIT env FLIP: step2 SIT_IMPERSONATE=jakkaritw:nipapornt then step3 =jakkaritw:warapornt (jakkarit impersonates the 2 fixed budget-dept slots; laddawan=pornthip's real manager acts as pos1 herself). Cast confirmed: pornthipp@(101917, fills Data&Analytic, FY2027=5 rows) / laddawank@(101431) / jakkarit. REVERT after = unset SIT_IMPERSONATE + delete SIT approval rows. CAVEAT: stg+prd share ONE DB so SIT writes land in the shared approval tables (currently 0 rows, clean).",
+      "agent": "claude"
+    },
+    {
+      "id": "delete-fy2027-da-testdata",
+      "state": "done",
+      "created": "2026-08-10T23:35:13+0700",
+      "updated": "2026-08-10T23:35:13+0700",
+      "ai": "jakkaritw-approved 2026-08-10: wiped leftover SIT test data for FY2027 Data & Analytic (cc 10IT011300; 10IT0130000 had none). Verified-target-then-deleted (destructive, PRD-shared DB): all rows were pornthipp@ / SIT dates 08-09..08-10 / fake amounts (2640,9,9,9) / trip 'Laos purpose=test project=test' -> confirmed test data before delete. Backed up to scratchpad/DELETED_backup_FY2027_DataAnalytic.json first (recoverable). DELETED: pending_budget=5, pending_budget_detail=4 (detail_id 183-186, trip_id 37), budget_trip=1 (trip_id 37); children-before-parent, committed. POST-DELETE all 3 tables=0, approval_status/log already 0. Dept now EMPTY for the human SIT round (correct — pornthip enters fresh). PRD app untouched (data-only delete on shared DB)."
+    },
+    {
+      "id": "sit-groupBC-ai-run",
+      "state": "done",
+      "created": "2026-08-10T23:30:30+0700",
+      "updated": "2026-08-11T00:01:11+0700",
+      "ai": "Group B+C SIT on stg (568701a): TC-030 Thai labels PASS (full grid render, no mojibake). TC-031 friendly errors PASS at product level - raw API detail is English (write_model.py:401,507,1794 unlocalized) but frontend/src/api/client.ts:73-87 messageForStatus() rewrites every status to Thai before display (400/403/409/422 all covered), no leak either layer; minor UX gap: blanket 400 msg loses field-level reason unlike 422 path (LOW, not a defect). TC-029 audit PASS (7 approval_log rows ordered action/who/when/prev-new, log_id 637-643). TC-033a BLOCKED - stg APP_ENV=local + DEV_AUTH_EMAIL fallback (auth.py:41-42) means no-header requests resolve to pornthipp instead of 401; cannot exercise on this box, not a prod regression. TC-028 N/A confirmed via routers list (no export router). Group C: TC-038/041/039/040 all PASS via live log lines (container tail) - correct subjects/to/cc incl override 2-mail contract and exactly-one final-approval mail. TC-042/043 DEFERRED (cron, verify at go-live). Cleanup done: pending_budget/approval_status/approval_log all back to 0 for (Data & Analytic,2027), no other dept/year touched. No app code changed.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-groupA-ai-run",
+      "state": "done",
+      "created": "2026-08-10T22:28:08+0700",
+      "updated": "2026-08-10T23:31:22+0700",
+      "ai": "GROUP A DONE round2 exact-schemas: 30/30 items ZERO real app bugs. Security solid (SQLi literal-not-executed, XSS inert, filler-approve 403, empty-reject 400, RLS 0 other-dept rows, post-submit edit lock 403 ADR-0013). Chain submit->laddawan->nipaporn->waraporn->APPROVED +3 mails. MONEY: API=DB SUM=total_year=145,500.00; 33333.33x3=99,999.99 exact. Notes: TC-013 999,999,999,999 accepted (cap 1e16, typo-risk); TC-012 negative->400 by design; TC-036/037 tested in Draft (post-APPROVED locked) both PASS. Cleanup approval_status/log->0. Report scratchpad/SIT_GROUP_A_REPORT.md. jakkaritw 2026-08-10: approved wiping leftover FY2027 Data&Analytic test data.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-568701a-stg",
+      "state": "done",
+      "created": "2026-08-10T22:20:29+0700",
+      "updated": "2026-08-10T22:20:29+0700",
+      "ai": "Deployed SIT impersonation (commit 568701a) to STAGING ONLY. az acr build cm17 Succeeded -> az containerapp update -> rev cman-budget-web-stg--0000039 Running/Healthy/100 image budget-web:568701a. Verify-landed: /health 200, /me spoof pornthipp -> 200 {email:pornthipp, app_env:local}. Easy Auth still OFF + IP allowlist (49.229.0.0/16) still ON = correct for the AI 43-case phase. SIT_IMPERSONATE env NOT yet set (empty = passthrough). PRD UNTOUCHED. Commit local only, NOT pushed. Worktree removed. NEXT: AI runs 43 SIT cases via spoof header, THEN flip Easy Auth ON + remove IP for human SIT.",
+      "agent": "claude"
+    },
+    {
+      "id": "push-ebce6ba",
+      "state": "done",
+      "created": "2026-08-11T15:16:38+0700",
+      "updated": "2026-08-11T15:16:38+0700",
+      "ai": "jakkaritw-ordered push: 3 commits 4b5ba29+568701a+ebce6ba -> origin/main (2fd7b44..ebce6ba), branch now in sync. Note: 4b5ba29/568701a were other-session commits riding along",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-ebce6ba-stg-prd",
+      "state": "done",
+      "created": "2026-08-11T13:31:47+0700",
+      "updated": "2026-08-11T13:38:31+0700",
+      "ai": "DEPLOYED+VERIFIED: budget-web:ebce6ba (acr run cm18 Succeeded) -> stg rev 0000041 + prd rev 0000022, both Running/Healthy/traffic 100, image confirmed via revision show; FQDN probes 401 (Easy Auth ON = expected). Users now see per-month net-zero rule (doc 1110001154 m03 +13,150 visible in grid 2027, Corporate Strategy 2). Gate residual P2-J5 live harness re-run DEFERRED: stg Easy Auth ON blocks spoof-header harness - run at next Easy-Auth-OFF window; DB-side + 969 unit/integration evidence already recorded in #netzero-hide-posting-view-design",
+      "agent": "claude"
+    },
+    {
+      "id": "netzero-hide-posting-view-design",
+      "state": "done",
+      "created": "2026-08-11T12:48:09+0700",
+      "updated": "2026-08-11T13:29:52+0700",
+      "ai": "SHIPPED ebce6ba: per-month net-zero row-hide (any(round(month,2)!=0) keeps key; hide only when ALL 12 months=0.00). Gate APPROVE-WITH-SUGGESTIONS 969/969; 4 findings fixed pre-commit (presence-safeguard tests repointed to all-zero fixture, 2dp boundary test, comment rot, SIT NEW-A2-11 rewritten - was false-fail vs new rule). ADR-0010 amendment = canonical spec; ADR-0026/CONTEXT.md/plan.md updated. Harness P2-J5 hunk committed alone; unrelated section_h hunk (ADR-0027 leftover, parallel session) left uncommitted. SIT workbook 43 cases unaffected (no NEW-A2-11 mirror). NOT DEPLOYED - stg/prd await jakkaritw; P2-J5 live re-run required at deploy per gate residual",
+      "agent": "claude"
+    },
+    {
+      "id": "check-doc-1110001154-actuals",
+      "state": "done",
+      "created": "2026-08-11T12:28:30+0700",
+      "updated": "2026-08-11T12:39:40+0700",
+      "ai": "RESOLVED not-a-bug: doc 1110001154 IS in gold.fact_gl_trans (m03 +13,150 CC 10CS010000 GL 6210900999, passes SAP_ACTUALS_SQL). Hidden by net-zero row-hide (read_model.py:548, plan/hide-netzero-gl-rows.md): reversal doc 1900000600 (FB08, entry 20260402) posts -13,150 m04 same CCxGL -> FY2026 net=0.00; board_budget FY2026=0 rows, pending FY2027=0 rows -> whole row hidden BY DESIGN. Watermark 2026-04-29, FY2026 visible=[1,2,3] so if shown user would see +13,150 m03 with masked m04 = misleading. BS leg GL 2190100180 CC NULL excluded by design. Explained to jakkaritw, no code change.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-testcases-v2-approver23",
+      "state": "done",
+      "created": "2026-08-11T01:15:58+0700",
+      "updated": "2026-08-11T01:26:39+0700",
+      "ai": "[UPLOADED 2026-08-11] jakkaritw-approved overwrite: PUT v2 (47 cases) to SharePoint via Graph /shares content -> 200. Target file = Budget_SIT_Test_Cases_10.08.2026.xlsx (id 0144EZOPNXZH5BR72BGFBI7XYHO6B6VM5I), size 30540->29118. Re-downloaded + verified: Test Cases max_row=50, rows 47-50 = TC-044,045,046,047 present. Old 43-case version preserved in SharePoint version history (recoverable). New module 'Approval (Approver 2/3)' TC-044 approver2 approve, TC-045 approver3->APPROVED, TC-046 reject-to-filler, TC-047 out-of-order-approve-blocked; Summary auto-counts 47.",
+      "agent": "claude"
+    },
+    {
+      "id": "perdiem-verify-southafrica-master",
+      "state": "done",
+      "created": "2026-08-14T00:01:07+0700",
+      "updated": "2026-08-14T00:02:37+0700",
+      "ai": "[DECISION jakkaritw 2026-08-14] NOT a program bug — CLOSED as admin/master-data housekeeping, NO code change, NO app-side workaround. The per-diem engine is confirmed faithful to the masters (80 USD x 33.00 FX x 35 days = 92,400.00 exact). The South-Africa='asian' classification (and Papua New Guinea likewise) is the master-file owner's (Nipaporn) call to correct on SharePoint; the app will recompute automatically after the next master sync. DO NOT 'fix' country_group in code, do not hardcode a geography override, and do not re-raise this as a defect in future sessions — it was reviewed and deliberately left to the admin."
+    },
+    {
+      "id": "sit-frontback-reconcile",
+      "state": "done",
+      "created": "2026-08-13T23:56:11+0700",
+      "updated": "2026-08-13T23:56:11+0700",
+      "ai": "Front-end grid vs back-end DB reconcile, FY2027 Data & Analytic cc 10IT013000 (pre-SIT data): ALL MATCH, 0 mismatch. PENDING layer screen==budget.pending_budget exactly: 6211100110 Jan 5,000,000.00; 6210400010 Dec 92,400.00; 6210400020 Dec 450,000.00; 6210400030 Dec 500,000.00; 6210400999 Dec 80,000.00; 6211400010 empty. Group subtotals: Maintenance-License 5,000,000.00, Travelling Expense 1,122,400.00, Other admin 0. GRAND TOTAL Pending screen 6,122,400.00 == DB 6,122,400.00. Child rows: pending_budget_detail SUM == parent total_year for all 4 travel GLs. SAP layer from gold.fact_gl_trans FY2026 (planning_year-1) cc 10IT013000: 6211100110 m03 844.91 + 6210400010 m03 500.00 = 1,344.91 == screen 1,344.91 exactly (company_code 1000, raw sum, no reversal filter needed). NET-ZERO RULE PROVEN LIVE: GL 6211400010 has 3 txns in m03 netting to 0.00 -> grid correctly shows '-' (per-month net-zero row-hide working as designed); it also has 624.50 in m04 which is outside the declared Jan-Mar actuals window. Approved layer '-' correct (no board_budget table in this DB / none for 10IT). approval_status=APPROVED. LEFTOVER FOUND: 1 stray pending_budget row cc=10SC012000 gl=6120300010 total=0.00 created by nipapornt@ (jakkarit impersonating) during pre-SIT — different dept, zero value, flag for cleanup."
+    },
+    {
+      "id": "board-alert-low-cleanup",
+      "state": "done",
+      "created": "2026-08-13T01:47:53+0700",
+      "updated": "2026-08-13T02:14:28+0700",
+      "ai": "SHIPPED + LIVE 2026-08-13. 19.dw 616fe44 (+344/-57, 21 new tests, suite 313 green, PUSHED ahead=0): (A) cells_coerced_zero counts only rows entering groups — orphan-skipped/defect rows excluded, amounts+reconcile provably untouched (gate verified hunk-level); (B) summarize_board_run([]) -> explicit 'no approved_budget_*.xlsx files found in SharePoint folder' error_msg, status stays failed, marker-first intact; (C) dedupe marker now carries mode= — probe-sent no longer suppresses first live send; legacy no-mode markers conservative-suppress (no email storm on deploy); 4 NB marker call sites + decision all pass BOARD_ALERT_MODE; (D) empty recipient constant for valid mode -> explanatory note in run log + exact-40/41 boundary tests cc/gl. blank_key raw-on-exception = accepted-by-design, unchanged. Gate (single agent): 06 APPROVE, 07 PASS, 08 313/313 re-run clean HEAD; 1 LOW coverage note (orphan skip-total THB w/ coerced cells asserted by inspection only) + 1 INFO. Deployed both NBs --live, getDefinition verified. LOW backlog from wf_d359a0fd-22b now CLEARED (2 fixed 8a3318b + 3 fixed 616fe44 + 1 accepted-by-design + summarize-empty test added).",
+      "agent": "claude"
+    },
+    {
+      "id": "board-alert-low-hardening",
+      "state": "done",
+      "created": "2026-08-13T00:46:17+0700",
+      "updated": "2026-08-13T01:08:59+0700",
+      "ai": "SHIPPED + LIVE 2026-08-13. 19.dw 8a3318b (+153/-23, 12 new tests, suite 292 green): (1) board_alert_recipients(mode) fail-CLOSED — typo/None/casing -> empty recipients + 'fail-closed' note into run-log marker path (traced end-to-end by gate); (2) cc/gl/blank_key values length-capped 40 via _board_email_truncate at render gateway (defect dicts keep raw values by design). Combined gate (single agent): 06 APPROVE_WITH_SUGGESTIONS, 07 PASS, 08 292/292 re-run at clean HEAD; 2 trivial new LOW (empty-live-list latent note gap, no exact-40 boundary test). Deployed both NBs --live, getDefinition verified both. 19.dw PUSHED to GitHub (16 commits incl parallel session's fact-actual docs, ahead now 0; second push after 8a3318b, ahead 0). LOW ledger from wf_d359a0fd-22b now: 2 fixed, 5 remain (coerced-count on orphan rows, empty-folder NULL error_msg, probe->live 12h dedupe overlap, summarize([]) untested, blank_key raw-on-exception=accepted-by-design).",
+      "agent": "claude"
+    },
+    {
+      "id": "board-lane-tolerant-ingest-email-alert",
+      "state": "done",
+      "created": "2026-08-12T23:08:43+0700",
+      "updated": "2026-08-13T00:36:37+0700",
+      "ai": "SHIPPED + VERIFIED LIVE end-to-end 2026-08-13 ~00:30 BKK. 19.dw commits: 3e32488 (tolerant ingest: dash/blank->0.00 coerced+counted, per-file isolation, scan-all defects cap20 w/ excel rows, email alert builder+transport+12h dedupe marker-first, 80 new tests) + 98b0cc6 (BOARD_ALERT_MODE probe->live after jakkaritw 'email ok'). Gate wf_d359a0fd-22b all 3 legs APPROVE_WITH_SUGGESTIONS, 0 HIGH/MED, 7 LOW logged. Deployed deploy_notebooks.py --live x2, getDefinition verified (6 symbols + mode=live). Probe email 202 -> jakkaritw, format confirmed ok, Mail.Send role True. Manual run pl_budget_daily Completed 17:27-17:30 UTC: ALL 4 FY reloaded same batch (loaded 2026-08-13 00:28:44): fy2023 687r/345,053,396.01 fy2024 626r/273,576,137.45 fy2025 642r/297,287,871.03 fy2026 715r/299,438,655.95 — Nipaporn's 08-11 files ALL in, zero file edits needed; incident row 10SC012000/6211800040 m01=0.00 fy2024(total 34,000)+fy2025(total 62,000) verified in DB. ADR-0021 amendment 2026-08-12 in 04 repo. Alert email now LIVE to nipapornt+warapornt+jakkaritw. LEFTOVERS: 7 LOW suggestions unfixed (incl fail-open unknown mode, cc/gl length cap); 19.dw commits local-only not pushed; 19.dw post-commit lane-tracker warning obsolete (lh_tracker.py deleted by parallel session); 2 pre-existing unrelated test fails in other lanes (registry parity).",
+      "agent": "claude"
+    },
+    {
+      "id": "board-sync-0812-partial-fail",
+      "state": "done",
+      "created": "2026-08-12T22:46:38+0700",
+      "updated": "2026-08-13T00:36:37+0700",
+      "ai": "[CROSS-SESSION UPDATE 3e32488/98b0cc6] RESOLVED 2026-08-13 by #board-lane-tolerant-ingest-email-alert: lane now coerces dash/blank->0.00, per-file isolation, live email alert. Manual run 00:28 loaded ALL 4 FY new sums (345.05M/273.58M/297.29M/299.44M) — Nipaporn never edited the files; the zero-fill recommendation below is OBSOLETE. Original probe record: ROOT CAUSE FOUND (read-only): run log modern_lh_cman_dw.config.ingest_run_log 08-12 = non-numeric ' -   ' cc=10SC012000 gl=6211800040 file approved_budget_2024.xlsx rejected; 2024 r628 text-dash x10 + 2025 r644 blank x9; loop died at 2024 so 2025/2026 never attempted; fy2023 committed 345,053,396.01.",
+      "agent": "claude"
+    },
+    {
+      "id": "push-fdc6f6e",
+      "state": "done",
+      "created": "2026-08-12T01:41:05+0700",
+      "updated": "2026-08-12T01:41:05+0700",
+      "ai": "jakkaritw-ordered push: fdc6f6e -> origin/main (ebce6ba..fdc6f6e), branch in sync. Session fully closed: both defects (net-zero per-month ebce6ba + hide_document filter fdc6f6e) committed, deployed stg+prd, pushed",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-fdc6f6e-stg-prd",
+      "state": "done",
+      "created": "2026-08-11T16:35:30+0700",
+      "updated": "2026-08-11T16:39:55+0700",
+      "ai": "DEPLOYED+VERIFIED: budget-web:fdc6f6e (acr cm19 Succeeded) -> stg rev 0000042 + prd rev 0000023, both Running/Healthy/traffic 100, image confirmed. Hidden docs now excluded from web actuals live (fy2026 -106,698,916.11 / fy2025 -429,217,094.58; doc 1110000365 cells -> 0.00 after TTL <=600s). NOT pushed to GitHub yet",
+      "agent": "claude"
+    },
+    {
+      "id": "hide-document-not-applied",
+      "state": "done",
+      "created": "2026-08-11T15:27:55+0700",
+      "updated": "2026-08-11T16:24:02+0700",
+      "ai": "SHIPPED fdc6f6e: dbo.hide_document anti-join wired into SAP actuals (6th never-cut filter, ADR-0020 amendment). fetch_hidden_doc_periods (doc regex + month 1..12 + >1000-row guard, all loud 502) + parameterized NOT EXISTS VALUES on (doc, month); empty list = frozen SQL byte-identical; cached loader takes fabric_conn; watermark NOT filtered; parity pinned None. Gate APPROVE-W-SUGG 985/985; LIVE reconcile EXACT: fy2026 -106,698,916.11 (454,455,854.76->347,756,938.65) / fy2025 -429,217,094.58; KKCA01/PBKK02 x 5120300020 m01 -> 0.00. Docs: ADR-0020 amendment, data-sources.md, SIT NEW-A6-26 rewritten positive. NOT deployed, NOT pushed - await jakkaritw",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-mail-real-recipients",
+      "state": "done",
+      "created": "2026-08-14T23:00:34+0700",
+      "updated": "2026-08-14T23:04:02+0700",
+      "ai": "[VERIFIED PASS by jakkaritw 2026-08-14, inbox eyecheck] Real-recipient mail confirmed delivered and correctly rendered: To=Pornthip Phermsaphiran, Cc=Laddawan Kearnoi + CMAN_PowerBI, from CMAN_PowerBI, subject '*** ทดสอบ on stg server *** ถูกตีกลับ งบประมาณของฝ่าย Data & Analytic ปีงบประมาณ 2027', red test banner + Thai 'ไม่ใช่คำขออนุมัติจริง ไม่ต้องดำเนินการ' line, detail table (ฝ่าย/ปีงบประมาณ 2027 (หน้าจอ: Year 2026)/สถานะ ถูกตีกลับ/เหตุผล), deep link 'คลิกที่นี่เพื่อแก้ไขและส่งใหม่', Best Regards signature. This is the real-recipient proof of TC-039 (reject mail incl. cc to approver1). Redirect stays OFF for the human SIT round."
+    },
+    {
+      "id": "admin-submit-mid-cycle-403-sit",
+      "state": "done",
+      "created": "2026-08-15T00:41:34+0700",
+      "updated": "2026-08-15T01:13:23+0700",
+      "ai": "Option B shipped (backend+frontend, TDD, UNCOMMITTED, not deployed). Backend: ApprovalStatusState.is_post_deadline bool field (app/approval.py), populated by new router helper _set_is_post_deadline (app/routers/approval.py, wired into submit/approve/reject/override-step/status -- placed at router not inside app.approval's pure fns, same seam as current_approver_name, avoids breaking test_approval.py mocked cursor sequences). Frontend: canSubmit() in approval/model.ts -- admin+locked status (PENDING_*/APPROVED) now returns is_post_deadline instead of unconditional true; DRAFT/REJECTED/admin-never-submitted doors unaffected. types.ts +is_post_deadline field. ApprovalActionBar.tsx:164 passes it through. Tests: backend 990->996 (+6), frontend model.test.ts+9 ApprovalActionBar.test.tsx+2net (replaced 1 outdated test), suite 629 passed. tsc clean, next build clean. plan.md updated (Current Phase 2026-08-15). NOT committed, NOT deployed per dispatch scope.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-tc046-reject-from-step3",
+      "state": "done",
+      "created": "2026-08-15T00:18:57+0700",
+      "updated": "2026-08-15T00:18:57+0700",
+      "ai": "TC-046 PASS (real UI, real mail, 2026-08-14): reject issued from step 3 goes STRAIGHT back to the filler, not stepwise backwards. Setup: jakkaritw impersonating warapornt (SIT_IMPERSONATE), approval_status fixture-set to PENDING_APPROVER3 (jakkaritw explicitly authorised the direct DB state edit after I raised the concern; scope pinned to Data & Analytic/2027, backed up to scratchpad/backup_approval_state.json). Action: Admin-mode OFF -> dept appeared via ADR-0029 approver see-overlay -> clicked ตีกลับทั้งฝ่าย, reason 'test'. EVIDENCE approval_status: status=REJECTED, rejected_by_empcode=100427 (วราพร), reject_reason='test', approver3_actioned_at stays NULL. approval_log 648: REJECT by warapornt@ previous=PENDING_APPROVER3 -> new=REJECTED (NOT back to PENDING_APPROVER2) = the exact TC-046 assertion. MAIL (redirect already off, real recipients): To=Pornthip Phermsaphiran, Cc=Laddawan Kearnoi + CMAN_PowerBI, subject '*** ทดสอบ on stg server *** ถูกตีกลับ...', reason 'test' rendered, deep link present — note cc is the FROZEN approver1 (laddawan) even though the rejecter was step 3, which is the designed behaviour."
     }
   ]
 }

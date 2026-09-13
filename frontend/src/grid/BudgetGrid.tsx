@@ -3,8 +3,8 @@ import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
 import { fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError, isDepartmentLockedError } from '../api/client'
-import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from '../api/budget'
-import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
+import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
+import type { BudgetRow, DepartmentRow, GlAccount, SapCoverage } from '../api/types'
 import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
 import { ApprovalActionBar } from '../approval/ApprovalActionBar'
 import { AttachmentsModal } from '../attachments/AttachmentsModal'
@@ -16,7 +16,7 @@ import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
 import {
-  buildNewRowPayload, buildSavePayload, glMetaFor, isCostCenterLocked, lockedCostCenterDepartments, mergeSavedRow, type MonthKey,
+  buildNewRowPayload, buildSavePayload, glMetaFor, isCostCenterLocked, lockedCostCenterDepartments, mergeSavedRow, sapFreshnessLine, type MonthKey,
 } from './model'
 import { DeptPicker } from '../picker/DeptPicker'
 import { buildDeptHierarchy, resolveInitialDept } from '../picker/model'
@@ -219,6 +219,31 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     loadLockedDepartments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, hasNoScope, adminViewEnabled])
+
+  // SAP freshness chip (ADR-0030 — supersedes the ADR-0026 month mask):
+  // `GET /budget/sap-coverage` is auth-only/no-RLS, refetched whenever the
+  // planning year changes. A failed read never turns into a page error (the
+  // grid itself already has its own loud error state) — but per ADR-0030
+  // §3.2 the chip IS the release-blocking safety net for a stale/dead SAP
+  // feed, so a failure must WARN, not go silent (H1 gate fix): it renders
+  // the same "unknown freshness" wording as a null watermark, via
+  // `sapCoverageFailed` below. `sapCoverage` stays `null` only for the very
+  // first render, before the first fetch has resolved either way — that
+  // moment says nothing, same as before.
+  const [sapCoverage, setSapCoverage] = useState<SapCoverage | null>(null)
+  const [sapCoverageFailed, setSapCoverageFailed] = useState(false)
+  useEffect(() => {
+    if (hasNoScope) return
+    fetchSapCoverage(year)
+      .then((coverage) => {
+        setSapCoverage(coverage)
+        setSapCoverageFailed(false)
+      })
+      .catch(() => {
+        setSapCoverage(null)
+        setSapCoverageFailed(true)
+      })
+  }, [year, hasNoScope])
 
   /** Refreshes everything a submit/approve/reject/override can invalidate —
    * the รออนุมัติ badge list, the "+ เพิ่ม Transaction" lock-awareness
@@ -493,6 +518,24 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     )
   }
 
+  // SAP freshness suffix for the legend chip (ADR-0030 §3.2). `null` ONLY
+  // for the very first render, before the first fetch has resolved either
+  // way — that moment says nothing extra, same as before this feature
+  // existed. A FAILED fetch (`sapCoverageFailed`) is a distinct, non-null
+  // state that must warn (H1 gate fix) — it reuses the exact "unknown
+  // freshness" wording `sapFreshnessLine` already produces for a null
+  // watermark, rather than inventing a second string for the same meaning
+  // ("we don't know how fresh this is"). `isWarn` comes back as DATA on the
+  // result (L1 gate fix) — the frontend never re-derives staleness by
+  // string-sniffing `text` for `⚠`, and never computes staleness itself
+  // (ADR-0030).
+  const sapFreshness = sapCoverage
+    ? sapFreshnessLine(sapCoverage)
+    : sapCoverageFailed
+      ? sapFreshnessLine({ fiscal_year: year - 1, watermark_date: null, days_behind: null, is_stale: true })
+      : null
+  const isSapStale = sapFreshness?.isWarn ?? false
+
   return (
     <div className={`budget-grid${isFullscreen ? ' is-fullscreen' : ''}`} data-testid="budget-grid">
       <div className="grid-toolbar">
@@ -520,6 +563,14 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
             <span className="legend-item">
               <span className="legend-dot sap" />
               SAP · ใช้จริง ({year - 1})
+              {sapFreshness && (
+                <span
+                  className={`sap-freshness${isSapStale ? ' sap-freshness-warn' : ''}`}
+                  data-testid="sap-freshness"
+                >
+                  {' '}· {sapFreshness.text}
+                </span>
+              )}
             </span>
             <span className="legend-item">
               <span className="legend-dot approved" />
