@@ -21,7 +21,7 @@ freshness date on the legend chip and an admin alert when the feed goes stale.
 | # | Change |
 |---|---|
 | 2.1 | Remove the month mask: `visible_sap_months`, `SAP_MONTH_VISIBLE_LAG_DAYS`, and the mask application in `_sap_layer` |
-| 2.2 | Keep the watermark as a freshness signal and expose it: `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 ก.ย. 2026` |
+| 2.2 | Keep the watermark as a freshness signal and expose it: `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 Sep 26` |
 | 2.3 | Stale state on that chip: `⚠ ข้อมูลคีย์ถึง <date>` when the newest entry date is ≥ 3 days behind today |
 | 2.4 | Admin alert mail on the stale condition, throttled to one per day |
 | 2.5 | `total_year` becomes the plain Jan–Dec sum; the "รวมเฉพาะเดือนที่ข้อมูลครบ" label is removed |
@@ -51,8 +51,8 @@ posting date. Wording is `ข้อมูลคีย์ถึง` ("keyed throu
 `backend/app/routers/budget.py:61`.
 
 ```
-healthy : ● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 13 ก.ย. 2026
-stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026
+healthy : ● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 13 Sep 26
+stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลคีย์ถึง 11 Sep 26
 ```
 
 The frontend wiring exists and is unused: `sapFreshnessLine` (`frontend/src/grid/model.ts:946`)
@@ -72,19 +72,30 @@ A data hole needs no extra rule: the watermark is the end of the **contiguous** 
 
 ### 3.4 The alert mail
 
-- Path: `backend/app/notifications.py`; sender `cmanpowerbi@chememan.com`; recipients
-  `ADMIN_EMAILS` — today jakkaritw, nipapornt, warapornt. Precedent: the board_budget ingest alert
-  (2026-08-13).
+- Path: `backend/app/notifications.py`; sender `cmanpowerbi@chememan.com`; recipient
+  `SAP_STALE_ALERT_TO` (`Settings.sap_stale_alert_to`) — set to `jakkaritw@chememan.com` on both
+  stg and prd. Precedent: the board_budget ingest alert (2026-08-13).
+- **Single-recipient decision (revised 2026-09-14, jakkaritw, after 4 identical mails landed in
+  his inbox on staging):** the alert originally fanned out to every `ADMIN_EMAILS` address (then
+  jakkaritw, nipapornt, warapornt, plus the shared `cmanpowerbi` mailbox — 4 addresses total —
+  collapsed onto his inbox by staging's `NOTIFICATIONS_REDIRECT_ALL_TO`). It is an operational
+  "the feed stopped" signal, not an approval notification, and only he acts on it, so it now
+  targets exactly one address via the dedicated `SAP_STALE_ALERT_TO` env var. A blank value falls
+  back to the original one-mail-per-`ADMIN_EMAILS`-address behaviour, so a container that forgets
+  to set it still alerts someone rather than going silent.
 - **Throttle: one mail per PROCESS per calendar day.** The check sits on a request path;
   un-throttled it sends one mail per page load. The marker is process-local and prd runs
-  2 replicas × `--workers 2` = 4 processes, so the real worst case is 4 mails per recipient on a
+  2 replicas × `--workers 2` = 4 processes, so the real worst case is 4 mails to the recipient on a
   broken day. **jakkaritw accepted this on 2026-09-14** rather than add a shared store; say so in
-  the code comment so the next reader does not "fix" it silently.
+  the code comment so the next reader does not "fix" it silently. Unchanged by the single-recipient
+  change above.
 - **Set the marker only AFTER a send succeeds.** Otherwise one transient Graph 500 consumes the
   day's only alert and nobody is told the feed stopped.
 - **Coupling to know:** `ADMIN_EMAILS` also defines who is an app admin
-  (`backend/app/config.py:225 admin_emails_set`), so anyone added for alerting gains admin rights.
-  The prd/stg container values have never been read — confirm them, do not trust the local `.env`.
+  (`backend/app/config.py:225 admin_emails_set`) — this is exactly why the alert recipient is a
+  SEPARATE setting rather than a narrowed `ADMIN_EMAILS`; narrowing that list to quieten mail would
+  also remove admin rights. The prd/stg container values have never been read — confirm them, do
+  not trust the local `.env`.
 
 ### 3.5 Nothing blocks
 

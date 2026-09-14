@@ -14,7 +14,7 @@ import {
   DEPT_RESTRICTED_GL_REASON_TH,
   filterRows,
   fitColumnWidth,
-  formatThaiShortDate,
+  formatChipDate,
   formatThb,
   freezeOffsets,
   fullRowColSpan,
@@ -971,21 +971,26 @@ describe('selectMeasureCandidates (UI-parity point 8d)', () => {
 // ---------------------------------------------------------------------------
 
 describe('SAP actuals shown as-is (ADR-0030)', () => {
-  it('formats the watermark as a Thai short date with a Buddhist-era year', () => {
-    expect(formatThaiShortDate('2026-04-29')).toBe('29 เม.ย. 69')
-    expect(formatThaiShortDate('2026-12-31')).toBe('31 ธ.ค. 69')
-    expect(formatThaiShortDate('2027-01-23')).toBe('23 ม.ค. 70')
+  it('formats the watermark as a short English date with a 2-digit Gregorian year', () => {
+    expect(formatChipDate('2026-04-29')).toBe('29 Apr 26')
+    expect(formatChipDate('2026-12-31')).toBe('31 Dec 26')
+    expect(formatChipDate('2027-01-23')).toBe('23 Jan 27')
+  })
+
+  it('does not pad a single-digit day, and zero-pads a year ending before 10 (2005 -> 05)', () => {
+    expect(formatChipDate('2026-09-05')).toBe('5 Sep 26')
+    expect(formatChipDate('2005-01-01')).toBe('1 Jan 05')
   })
 
   describe('sapFreshnessLine — 3 states, all decided by the backend', () => {
     it('healthy: the plain keyed-through date, no warning', () => {
       const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
-      expect(line).toEqual({ text: 'ข้อมูลคีย์ถึง 11 ก.ย. 69', isWarn: false })
+      expect(line).toEqual({ text: 'ข้อมูลคีย์ถึง 11 Sep 26', isWarn: false })
     })
 
     it('stale: warns and marks the date stale, following the server verdict — never computed here', () => {
       const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 3, is_stale: true })
-      expect(line).toEqual({ text: '⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69', isWarn: true })
+      expect(line).toEqual({ text: '⚠ ข้อมูลคีย์ถึง 11 Sep 26', isWarn: true })
     })
 
     it('unknown: no date at all warns with a different message, not a blank chip', () => {

@@ -669,16 +669,25 @@ def notify_sap_feed_stale(
     *, watermark_date: date | None, days_behind: int | None, dry_run: bool, settings: Settings | None = None,
 ) -> list[NotificationResult]:
     """ADR-0030 admin alert: the SAP freshness watermark is stale (or
-    undeterminable). Recipients = `Settings.admin_emails_set` -- this list
-    doubles as the app's admin roster (`config.py:225`), so narrowing it to
-    quieten alerts would also remove admin rights; do not narrow it here.
+    undeterminable).
 
-    One mail PER admin address -- three recipients is not worth a new
-    multi-recipient code path in `_post_send_mail`. Each send is its own
-    try/except so one admin's failure never blocks another's, and this
-    function itself never raises -- the caller sits on a request path
-    (`GET /budget/sap-coverage`) and a broken mail send must never break
-    the grid (ADR-0030 §3.4)."""
+    Recipient (jakkaritw, 2026-09-14): `Settings.sap_stale_alert_to`, ONE
+    address -- this is an operational "the feed stopped" signal, not an
+    approval notification, and only he acts on it. Staging previously sent
+    one mail per `admin_emails_set` address (up to 4, collapsed onto his
+    inbox by `notifications_redirect_all_to` -- see
+    docs/adr/0030-show-sap-actuals-as-is.md).
+
+    Blank setting falls back to the ORIGINAL behaviour: one mail per
+    `Settings.admin_emails_set` address -- this list doubles as the app's
+    admin roster (`config.py:225`), so narrowing IT to quieten alerts would
+    also remove admin rights; do not narrow it here. A container that
+    forgets `SAP_STALE_ALERT_TO` must still alert someone, not go silent.
+
+    Each recipient's send is its own try/except so one failure never blocks
+    another's, and this function itself never raises -- the caller sits on a
+    request path (`GET /budget/sap-coverage`) and a broken mail send must
+    never break the grid (ADR-0030 §3.4)."""
     settings = settings or get_settings()
     watermark_text = watermark_date.strftime("%d/%m/%Y") if watermark_date else "ไม่ทราบ (ไม่พบข้อมูลที่โหลดเลย)"
     days_text = f"{days_behind} วัน" if days_behind is not None else "ไม่ทราบ"
@@ -692,14 +701,16 @@ def notify_sap_feed_stale(
         ])
         + "<p>กรุณาตรวจสอบสถานะการโหลดข้อมูล SAP (PTF_SAP_GL_TRANS_D)</p>"
     )
+    dedicated_recipient = (settings.sap_stale_alert_to or "").strip()
+    recipients = [dedicated_recipient] if dedicated_recipient else sorted(settings.admin_emails_set)
     results: list[NotificationResult] = []
-    for admin_email in sorted(settings.admin_emails_set):
+    for recipient_email in recipients:
         try:
-            results.append(send_mail(admin_email, subject, body, dry_run=dry_run, settings=settings))
+            results.append(send_mail(recipient_email, subject, body, dry_run=dry_run, settings=settings))
         except NotificationError:
             logger.warning(
-                "notify_sap_feed_stale: send failed to=%s -- continuing to other admins",
-                admin_email, exc_info=True,
+                "notify_sap_feed_stale: send failed to=%s -- continuing to other recipients",
+                recipient_email, exc_info=True,
             )
     return results
 

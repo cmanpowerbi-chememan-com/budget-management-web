@@ -79,11 +79,30 @@ Alternatives considered and rejected:
    `SAP_ENTRY_DAY_MAX_GAP_DAYS = 4`, `SAP_ENTRY_DAYS_SQL`, `SapCoverage` and
    `GET /budget/sap-coverage` all stay and finally get a consumer.
 4. **The grid states its freshness in one string**, appended to the existing legend chip:
-   `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 ก.ย. 2026`. The date is the newest SAP **entry date**
+   `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 Sep 26`. The date is the newest SAP **entry date**
    of the contiguous run — not a load date, not a posting date. No per-month marker.
-5. **Stale feed warns, and mails the admins.** When the newest entry date is **3 or more days
+
+   **Date format, set 2026-09-14 by jakkaritw:** `11 Sep 26` — day, English 3-letter month,
+   2-digit Gregorian year. Deliberately NOT the Thai/Buddhist `11 ก.ย. 69` the rest of the app
+   uses: this is an operational timestamp about a data feed, and the unambiguous Gregorian form is
+   what an operator reconciles against a DW run log.
+5. **Stale feed warns, and mails ONE person.** When the newest entry date is **3 or more days
    behind today**, the chip becomes `⚠ ข้อมูลคีย์ถึง <date>` and an alert goes to
-   `ADMIN_EMAILS` (jakkaritw, nipapornt, warapornt). A healthy lag is 1 day.
+   `jakkaritw@chememan.com`. A healthy lag is 1 day.
+
+   **Recipient, revised 2026-09-14 after jakkaritw saw FOUR identical copies on staging
+   (root cause: `ADMIN_EMAILS` resolves to 4 addresses — jakkaritw, nipapornt, warapornt,
+   plus the shared `cmanpowerbi` mailbox that is an admin in every environment by
+   construction — and staging's `NOTIFICATIONS_REDIRECT_ALL_TO` collapsed all four onto his
+   inbox).** This is an operational "the feed stopped" signal, not an approval notification,
+   and only he acts on it — so it now goes to ONE dedicated address, set via the new env var
+   `SAP_STALE_ALERT_TO` (`backend/app/config.py` `Settings.sap_stale_alert_to`,
+   `notify_sap_feed_stale` in `backend/app/notifications.py`). **Deliberately NOT** narrowing
+   `ADMIN_EMAILS` itself — that list doubles as the app's admin roster
+   (`admin_emails_set`, `config.py:225`), so narrowing it to quieten this one alert would
+   also remove admin rights. A blank `SAP_STALE_ALERT_TO` (a container that forgot to set it)
+   falls back to the original one-mail-per-`ADMIN_EMAILS`-address behaviour, so a forgotten
+   env var still alerts someone rather than going silent.
 
    **Wording, revised 2026-09-14 after seeing it on staging (jakkaritw):** the stale chip drops the
    `(ช้ากว่าปกติ)` suffix and reads `⚠ ข้อมูลคีย์ถึง <date>`. Stale and healthy now differ only by
@@ -97,7 +116,7 @@ Alternatives considered and rejected:
    extra write on a request path, because the alert only fires on days the feed is genuinely
    broken. If the volume ever becomes a nuisance, that is the fix — not a longer threshold.
    A data hole needs no separate rule: the watermark is the end of the contiguous run, so the
-   2026-06 outage would have read `⚠ ข้อมูลคีย์ถึง 30 พ.ค. 2026` right through September.
+   2026-06 outage would have read `⚠ ข้อมูลคีย์ถึง 30 May 26` right through September.
 6. **Nothing blocks on staleness.** The loud 502 remains only for an actual gold read failure —
    revoked grant, dead connection, unparsable `utc_timestamp` — per ADR-0020.
 7. `total_year` becomes the plain Jan–Dec sum of the fiscal year, identical to

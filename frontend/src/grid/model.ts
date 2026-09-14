@@ -880,18 +880,20 @@ export function formatThb(value: number): string {
 // freshness signal on the legend chip, never as a display gate.
 // ---------------------------------------------------------------------------
 
-const THAI_MONTH_ABBR = [
-  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+const EN_MONTH_ABBR = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
-/** `2026-04-29` -> `29 เม.ย. 69` (Buddhist era, 2 digits) — how the finance
- * team reads dates. Parsed from the ISO parts, never via `new Date()`, so a
- * timezone never shifts the day. */
-export function formatThaiShortDate(isoDate: string): string {
+/** `2026-04-29` -> `29 Apr 26` (Gregorian, 2 digits) — the SAP freshness
+ * chip's date format (jakkaritw, 2026-09-14: switched from a Thai/Buddhist
+ * short date to English/Gregorian for this operational timestamp; the
+ * `ข้อมูลคีย์ถึง` label around it stays Thai). Parsed from the ISO parts,
+ * never via `new Date()`, so a timezone never shifts the day. */
+export function formatChipDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-').map(Number)
-  const buddhistYear = (year + 543) % 100
-  return `${day} ${THAI_MONTH_ABBR[month - 1]} ${String(buddhistYear).padStart(2, '0')}`
+  const shortYear = year % 100
+  return `${day} ${EN_MONTH_ABBR[month - 1]} ${String(shortYear).padStart(2, '0')}`
 }
 
 /** `sapFreshnessLine`'s result: `isWarn` is DATA a caller switches on, never
@@ -909,8 +911,8 @@ export interface SapFreshness {
  * new UI surface — see `BudgetGrid`'s `.legend-item.sap`). Three states, all
  * decided by the BACKEND (`SapCoverage.is_stale`) — this function never
  * computes staleness itself, only renders what it is told:
- *  - healthy: `ข้อมูลคีย์ถึง 11 ก.ย. 2026`
- *  - stale (`is_stale`): `⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026` — differs from healthy
+ *  - healthy: `ข้อมูลคีย์ถึง 11 Sep 26`
+ *  - stale (`is_stale`): `⚠ ข้อมูลคีย์ถึง 11 Sep 26` — differs from healthy
  *    ONLY by the `⚠` prefix (jakkaritw, 2026-09-14: dropped the trailing
  *    "(ช้ากว่าปกติ)" parenthetical); `isWarn: true` still carries the warning
  *    styling, so no marker is lost, only the redundant wording.
@@ -921,7 +923,7 @@ export function sapFreshnessLine(coverage: SapCoverage): SapFreshness {
   if (coverage.watermark_date === null) {
     return { text: '⚠ ไม่ทราบวันที่ข้อมูล', isWarn: true }
   }
-  const keyedThrough = `ข้อมูลคีย์ถึง ${formatThaiShortDate(coverage.watermark_date)}`
+  const keyedThrough = `ข้อมูลคีย์ถึง ${formatChipDate(coverage.watermark_date)}`
   return coverage.is_stale
     ? { text: `⚠ ${keyedThrough}`, isWarn: true }
     : { text: keyedThrough, isWarn: false }

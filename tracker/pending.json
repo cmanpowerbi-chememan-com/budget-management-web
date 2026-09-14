@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-14T09:51:47+0700",
+  "updated": "2026-09-14T10:08:06+0700",
   "tasks": [
+    {
+      "id": "sap-stale-alert-single-recipient",
+      "state": "done",
+      "created": "2026-09-14T10:07:58+0700",
+      "updated": "2026-09-14T10:08:05+0700",
+      "ai": "Added Settings.sap_stale_alert_to (env SAP_STALE_ALERT_TO, blank default) config.py; notify_sap_feed_stale (notifications.py) sends to it alone when set, falls back to admin_emails_set fan-out when blank. +4 tests test_notifications.py. Docs corrected: docs/adr/0030-show-sap-actuals-as-is.md §5, docs/specs/feature-sap-show-as-is.md §3.4. plan.md updated. pytest -q -m 'not integration' -> 1128 passed, 49 deselected (was 1124). checks.sh clean. NOT committed/pushed/deployed per instruction -- jakkaritw sets SAP_STALE_ALERT_TO=jakkaritw@chememan.com on both stg+prd containers at deploy time.",
+      "agent": "claude"
+    },
     {
       "id": "sap-tz-bangkok-fix",
       "state": "done",
@@ -31,8 +39,8 @@
       "id": "sap-show-as-is-implement",
       "state": "doing",
       "created": "2026-09-14T03:17:38+0700",
-      "updated": "2026-09-14T09:43:29+0700",
-      "ai": "[COPY CHANGE + TIMEZONE FIX IN FLIGHT 2026-09-14, after jakkaritw saw the chip on staging] (1) COPY: he asked to drop the '(ช้ากว่าปกติ)' suffix. Done in model.ts:923 - the stale state is now '⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69', so stale and healthy differ ONLY by the ⚠ prefix and the warning colour, which is the intent; isWarn: true unchanged; the unknown state '⚠ ไม่ทราบวันที่ข้อมูล' untouched. Tests updated at model.test.ts:988 and BudgetGrid.test.tsx:1205. VERIFIED BY ME: zero live occurrences left in frontend/src (the one grep hit is a docstring explaining the removal). vitest 794 passed, next build clean. Docs re-synced by me: ADR-0030, the spec, MAP.md, issues/03-frontend.md, tickets/D14 - plus a dated wording-revision note in the ADR so the change is not silently lost. The D15 research report keeps the old wording deliberately: it is a dated artifact of what was recommended then. (2) TIMEZONE, jakkaritw chose to fix before production: sap.py:365 uses date.today() and the container has NO TZ var, so the staleness maths runs on the UTC date while the users are UTC+7. Live proof from the staging log at 2026-09-13T21:42Z (= 2026-09-14 04:42 ICT): 'watermark=2026-09-11 days_behind=2 is_stale=False' where a Thai reader counts 3 and expects stale. notifications.py:579 already formats the mail body in Asia/Bangkok, so the feature contradicted itself. Agent dispatched to move both the coverage default and the alert throttle onto the Bangkok calendar date via one shared helper, with the frozen-clock regression test for exactly that instant. NEXT: verify -> amend/commit -> ONE acr build -> stg -> jakkaritw looks -> prd with separate approval. Staging currently runs 12631e4 which has NEITHER of these two changes.",
+      "updated": "2026-09-14T09:57:47+0700",
+      "ai": "[STAGING ROUND 2 LIVE 2026-09-14, verified] commit ee41f00 (local only, on top of 12631e4, NOT pushed) -> image budget-web:ee41f00 -> cman-budget-web-stg revision 0000072, runningState Running. TIMEZONE FIX PROVEN IN PRODUCTION-LIKE CONDITIONS, not just in tests: the container logged 'SAP coverage fiscal_year=2026 watermark=2026-09-11 days_behind=3 is_stale=True' at 2026-09-14T02:57Z (= 09:57 ICT). The same container on the previous image logged days_behind=2 is_stale=False for the SAME watermark - that is the defect closed, end to end. IMPLEMENTATION NOTE worth keeping: the agent did NOT write a new Bangkok-date helper, it found app/deadline.py:67 bangkok_today() already in the repo (used by the submission-deadline gate) and pointed both resolve_sap_coverage (sap.py:375) and maybe_alert_sap_feed_stale (notifications.py:709) at it, so the chip and the once-per-day throttle CANNOT disagree about the date - same function, not parallel copies. Suites re-run by me: backend 1124 passed / 49 deselected. Copy change also live: the stale chip now reads '⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69' with no suffix. REPORTED NOT FIXED (deliberate, out of ADR-0030 scope): main.py:64 board_year = date.today().year has the same zone bug at warmup; it can only mis-warm the cache for ~7 hours on 31 Dec. ROLLBACK for stg is unchanged in shape: previous image 12631e4 (this feature, round 1) or 6a9d323 (pre-feature); NOTIFICATIONS_REDIRECT_ALL_TO=jakkaritw@chememan.com is still set and MUST be removed when testing ends - see .scratch/sap-month-closed-rule/stg_rollback_adr0030.md. AWAITING: jakkaritw's eyes on the chip + inbox, then a separate explicit approval for prd.",
       "agent": "claude"
     },
     {

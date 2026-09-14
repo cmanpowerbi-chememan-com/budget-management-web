@@ -1222,6 +1222,93 @@ def test_notify_sap_feed_stale_one_admins_failure_does_not_block_another(monkeyp
     assert len(results) == 2  # the one raising admin is skipped, the other two still sent
 
 
+def test_notify_sap_feed_stale_dedicated_recipient_sends_exactly_one_mail(monkeypatch):
+    """2026-09-14, jakkaritw: staging sent 4 identical copies to his inbox
+    (one per admin_emails_set address, collapsed by
+    notifications_redirect_all_to). SAP_STALE_ALERT_TO set -> exactly ONE
+    mail, to that address -- never to the admin roster."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+    settings = _settings(
+        admin_emails="nipapornt@chememan.com,warapornt@chememan.com",
+        sap_stale_alert_to="jakkaritw@chememan.com",
+    )
+
+    results = notify_sap_feed_stale(
+        watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings
+    )
+
+    to_emails = [a[0] for a, _k in calls]
+    assert to_emails == ["jakkaritw@chememan.com"]
+    assert len(results) == 1
+
+
+def test_notify_sap_feed_stale_blank_setting_falls_back_to_admin_roster(monkeypatch):
+    """Regression guard on the fallback: SAP_STALE_ALERT_TO unset/blank
+    keeps today's one-mail-per-admin_emails_set-address behaviour, so a
+    container that forgets the env var still alerts someone."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+    settings = _settings(
+        admin_emails="nipapornt@chememan.com,jakkaritw@chememan.com", sap_stale_alert_to="",
+    )
+
+    results = notify_sap_feed_stale(
+        watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings
+    )
+
+    to_emails = {a[0] for a, _k in calls}
+    assert to_emails == {"nipapornt@chememan.com", "jakkaritw@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
+    assert len(results) == 3
+
+
+def test_maybe_alert_sap_feed_stale_throttle_holds_with_dedicated_recipient(monkeypatch):
+    """The once-per-day throttle is unchanged by the dedicated-recipient
+    path -- second call same day still throttled."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+    settings = _settings(sap_stale_alert_to="jakkaritw@chememan.com")
+    fixed_today = date(2026, 9, 14)
+
+    first = maybe_alert_sap_feed_stale(
+        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
+        settings=settings, today=lambda: fixed_today,
+    )
+    second = maybe_alert_sap_feed_stale(
+        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
+        settings=settings, today=lambda: fixed_today,
+    )
+
+    assert len(first) == 1
+    assert second == []  # throttled -- same calendar day
+    assert len(calls) == 1
+
+
+def test_maybe_alert_sap_feed_stale_dedicated_recipient_failure_does_not_burn_throttle(monkeypatch):
+    """M4 rule still holds for the dedicated recipient: a failed send must
+    not consume the day's only alert."""
+    monkeypatch.setattr(
+        "app.notifications.send_mail",
+        lambda *a, **k: (_ for _ in ()).throw(NotificationError("graph sendMail failed: 500")),
+    )
+    settings = _settings(sap_stale_alert_to="jakkaritw@chememan.com")
+    fixed_today = date(2026, 9, 14)
+
+    first = maybe_alert_sap_feed_stale(
+        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
+        settings=settings, today=lambda: fixed_today,
+    )
+
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: "SENTINEL")
+    second = maybe_alert_sap_feed_stale(
+        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
+        settings=settings, today=lambda: fixed_today,
+    )
+
+    assert first == []  # the one send failed -- no successful send that day
+    assert len(second) == 1  # NOT throttled -- retries the same day
+
+
 def test_maybe_alert_sap_feed_stale_skips_when_not_stale(monkeypatch):
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
 
