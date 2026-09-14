@@ -4,9 +4,8 @@ monkeypatched at the module level, matching the never-cut safety rule (no
 test may send a real email). DB lookups are always a mocked pyodbc connection.
 """
 import logging
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock
-from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -14,17 +13,14 @@ from app.config import SHARED_ADMIN_MAILBOX, Settings
 from app.notifications import (
     NotificationError,
     build_deep_link,
-    maybe_alert_sap_feed_stale,
     notify_approved,
     notify_deadline_reminder,
     notify_reject,
-    notify_sap_feed_stale,
     notify_step_overridden,
     notify_turn,
     notify_turn_reminder,
     send_mail,
 )
-from app.sap import resolve_sap_coverage
 
 
 def _never_called(*args, **kwargs):
@@ -55,17 +51,6 @@ def _reset_graph_token_cache():
     notifications._reset_graph_token_cache()
     yield
     notifications._reset_graph_token_cache()
-
-
-@pytest.fixture(autouse=True)
-def _reset_sap_stale_alert_throttle():
-    """ADR-0030: the module-level "last alert sent" marker must never leak
-    between tests, same reasoning as the Graph token cache above."""
-    from app import notifications
-
-    notifications._reset_sap_stale_alert_throttle()
-    yield
-    notifications._reset_sap_stale_alert_throttle()
 
 
 # ---------------------------------------------------------------------------
@@ -1153,292 +1138,3 @@ def test_send_mail_non_retryable_status_fails_immediately(monkeypatch):
 
     assert len(posts) == 1
     assert sleeps == []
-
-
-# ---------------------------------------------------------------------------
-# ADR-0030 — notify_sap_feed_stale / maybe_alert_sap_feed_stale
-# ---------------------------------------------------------------------------
-
-def test_notify_sap_feed_stale_sends_one_mail_per_admin(monkeypatch):
-    """Recipients = Settings.admin_emails_set (config.py:225 — this list
-    doubles as the app's admin roster), one mail per address."""
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-    settings = _settings(admin_emails="nipapornt@chememan.com,jakkaritw@chememan.com")
-
-    results = notify_sap_feed_stale(
-        watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings
-    )
-
-    to_emails = {a[0] for a, _k in calls}
-    assert to_emails == {"nipapornt@chememan.com", "jakkaritw@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
-    assert len(results) == 3
-    for _a, kwargs in calls:
-        assert kwargs["dry_run"] is True
-
-
-def test_notify_sap_feed_stale_body_shows_the_watermark_and_days_behind(monkeypatch):
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-
-    notify_sap_feed_stale(watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=_settings())
-
-    (_to_email, subject, body), _kwargs = calls[0]
-    assert "ล่าช้ากว่าปกติ" in subject
-    assert "11/09/2026" in body
-    assert "3 วัน" in body
-
-
-def test_notify_sap_feed_stale_null_watermark_renders_an_unknown_placeholder(monkeypatch):
-    """The undeterminable-watermark case (ADR-0030: reported stale, never
-    raised) must still render a readable body, not a Python "None"."""
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-
-    notify_sap_feed_stale(watermark_date=None, days_behind=None, dry_run=True, settings=_settings())
-
-    (_to_email, _subject, body), _kwargs = calls[0]
-    assert "ไม่ทราบ" in body
-    assert "None" not in body
-
-
-def test_notify_sap_feed_stale_one_admins_failure_does_not_block_another(monkeypatch):
-    """Each admin's send is its own try/except -- one NotificationError must
-    not stop the rest of the roster from being alerted."""
-    attempted = []
-
-    def _fake_send_mail(to_email, subject, body, *, dry_run, settings=None):
-        attempted.append(to_email)
-        if to_email == "jakkaritw@chememan.com":
-            raise NotificationError("graph sendMail failed: 500")
-        return "SENTINEL"
-
-    monkeypatch.setattr("app.notifications.send_mail", _fake_send_mail)
-    settings = _settings(admin_emails="jakkaritw@chememan.com,nipapornt@chememan.com")
-
-    results = notify_sap_feed_stale(watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings)
-
-    assert set(attempted) == {"jakkaritw@chememan.com", "nipapornt@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
-    assert len(results) == 2  # the one raising admin is skipped, the other two still sent
-
-
-def test_notify_sap_feed_stale_dedicated_recipient_sends_exactly_one_mail(monkeypatch):
-    """2026-09-14, jakkaritw: staging sent 4 identical copies to his inbox
-    (one per admin_emails_set address, collapsed by
-    notifications_redirect_all_to). SAP_STALE_ALERT_TO set -> exactly ONE
-    mail, to that address -- never to the admin roster."""
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-    settings = _settings(
-        admin_emails="nipapornt@chememan.com,warapornt@chememan.com",
-        sap_stale_alert_to="jakkaritw@chememan.com",
-    )
-
-    results = notify_sap_feed_stale(
-        watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings
-    )
-
-    to_emails = [a[0] for a, _k in calls]
-    assert to_emails == ["jakkaritw@chememan.com"]
-    assert len(results) == 1
-
-
-def test_notify_sap_feed_stale_blank_setting_falls_back_to_admin_roster(monkeypatch):
-    """Regression guard on the fallback: SAP_STALE_ALERT_TO unset/blank
-    keeps today's one-mail-per-admin_emails_set-address behaviour, so a
-    container that forgets the env var still alerts someone."""
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-    settings = _settings(
-        admin_emails="nipapornt@chememan.com,jakkaritw@chememan.com", sap_stale_alert_to="",
-    )
-
-    results = notify_sap_feed_stale(
-        watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True, settings=settings
-    )
-
-    to_emails = {a[0] for a, _k in calls}
-    assert to_emails == {"nipapornt@chememan.com", "jakkaritw@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
-    assert len(results) == 3
-
-
-def test_maybe_alert_sap_feed_stale_throttle_holds_with_dedicated_recipient(monkeypatch):
-    """The once-per-day throttle is unchanged by the dedicated-recipient
-    path -- second call same day still throttled."""
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-    settings = _settings(sap_stale_alert_to="jakkaritw@chememan.com")
-    fixed_today = date(2026, 9, 14)
-
-    first = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=settings, today=lambda: fixed_today,
-    )
-    second = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=settings, today=lambda: fixed_today,
-    )
-
-    assert len(first) == 1
-    assert second == []  # throttled -- same calendar day
-    assert len(calls) == 1
-
-
-def test_maybe_alert_sap_feed_stale_dedicated_recipient_failure_does_not_burn_throttle(monkeypatch):
-    """M4 rule still holds for the dedicated recipient: a failed send must
-    not consume the day's only alert."""
-    monkeypatch.setattr(
-        "app.notifications.send_mail",
-        lambda *a, **k: (_ for _ in ()).throw(NotificationError("graph sendMail failed: 500")),
-    )
-    settings = _settings(sap_stale_alert_to="jakkaritw@chememan.com")
-    fixed_today = date(2026, 9, 14)
-
-    first = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=settings, today=lambda: fixed_today,
-    )
-
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: "SENTINEL")
-    second = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=settings, today=lambda: fixed_today,
-    )
-
-    assert first == []  # the one send failed -- no successful send that day
-    assert len(second) == 1  # NOT throttled -- retries the same day
-
-
-def test_maybe_alert_sap_feed_stale_skips_when_not_stale(monkeypatch):
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: pytest.fail("must not be called"))
-
-    results = maybe_alert_sap_feed_stale(
-        is_stale=False, watermark_date=date(2026, 9, 13), days_behind=1, dry_run=True, settings=_settings(),
-    )
-
-    assert results == []
-
-
-def test_maybe_alert_sap_feed_stale_sends_once_then_throttles_the_same_day(monkeypatch):
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
-    fixed_today = date(2026, 9, 14)
-
-    first = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: fixed_today,
-    )
-    second = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: fixed_today,
-    )
-
-    assert len(first) == 1  # one admin in the default settings (SHARED_ADMIN_MAILBOX)
-    assert second == []  # throttled -- same calendar day
-    assert len(calls) == 1
-
-
-def test_maybe_alert_sap_feed_stale_resends_on_a_new_calendar_day(monkeypatch):
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: "SENTINEL")
-    days = iter([date(2026, 9, 14), date(2026, 9, 15)])
-
-    first = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: next(days),
-    )
-    second = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: next(days),
-    )
-
-    assert len(first) == 1
-    assert len(second) == 1  # a new day resets the throttle
-
-
-def test_maybe_alert_sap_feed_stale_does_not_burn_the_day_when_every_send_fails(monkeypatch):
-    """M4 gate fix: the throttle marker must be set only AFTER a send
-    actually succeeds. Before this fix the marker was written before
-    calling `notify_sap_feed_stale`, so one transient Graph failure across
-    every admin consumed the day's only alert and nobody was ever told."""
-    monkeypatch.setattr(
-        "app.notifications.send_mail",
-        lambda *a, **k: (_ for _ in ()).throw(NotificationError("graph sendMail failed: 500")),
-    )
-    fixed_today = date(2026, 9, 14)
-
-    first = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: fixed_today,
-    )
-
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: "SENTINEL")
-    second = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: fixed_today,
-    )
-
-    assert first == []  # every admin's send failed -- no successful send that day
-    assert len(second) == 1  # NOT throttled -- the marker was never set, so the same day retries
-
-
-def test_stale_alert_throttle_day_agrees_with_coverages_bangkok_reckoning(monkeypatch):
-    """Regression, staging 2026-09-13: `resolve_sap_coverage` (the chip) and
-    `maybe_alert_sap_feed_stale` (the once-per-day admin-mail throttle) must
-    land on the exact SAME Bangkok calendar day when neither is given an
-    explicit `today` -- both call the ONE shared `app.deadline.bangkok_today`
-    helper, so they can never drift apart across a UTC/Bangkok midnight
-    boundary the way `date.today()` (UTC, no `TZ` on the container) would.
-
-    The identity assertion below is the deterministic (wall-clock-proof)
-    discriminator: before the fix, `today`'s default is the plain built-in
-    `date.today`, not `bangkok_today` -- it fails immediately, regardless of
-    what day the test happens to run on."""
-    import inspect
-
-    from app import deadline, notifications
-
-    assert (
-        inspect.signature(maybe_alert_sap_feed_stale).parameters["today"].default
-        is deadline.bangkok_today
-    )
-
-    calls = []
-    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append(1) or "SENTINEL")
-
-    class _FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            fixed_utc = datetime(2026, 9, 13, 21, 42, tzinfo=ZoneInfo("UTC"))
-            return fixed_utc.astimezone(tz) if tz else fixed_utc
-
-    monkeypatch.setattr("app.deadline.datetime", _FixedDateTime)
-
-    conn = MagicMock()
-    conn.cursor.return_value.fetchall.return_value = [("20260911",)]
-    coverage = resolve_sap_coverage(conn, fiscal_year=2026)  # today NOT injected
-    assert coverage.is_stale is True
-
-    results = maybe_alert_sap_feed_stale(
-        is_stale=coverage.is_stale, watermark_date=coverage.watermark_date,
-        days_behind=coverage.days_behind, dry_run=True, settings=_settings(),
-    )  # today NOT injected -- must be read as the SAME 2026-09-14 Bangkok day
-
-    assert len(results) == 1
-    assert len(calls) == 1
-    assert notifications._sap_stale_alert_state["last_sent_date"] == date(2026, 9, 14)
-
-
-def test_maybe_alert_sap_feed_stale_never_raises_on_a_broken_alert_build(monkeypatch):
-    """Never-cut: this sits on a request path (GET /budget/sap-coverage) --
-    a broken alert must never turn into an unhandled exception there."""
-    monkeypatch.setattr(
-        "app.notifications.notify_sap_feed_stale",
-        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
-
-    results = maybe_alert_sap_feed_stale(
-        is_stale=True, watermark_date=date(2026, 9, 11), days_behind=3, dry_run=True,
-        settings=_settings(), today=lambda: date(2026, 9, 14),
-    )
-
-    assert results == []

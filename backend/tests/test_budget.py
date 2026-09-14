@@ -158,12 +158,12 @@ def test_budget_raw_pyodbc_error_also_returns_502_generic_detail(client):
 # GET /budget/sap-coverage — ADR-0030 freshness metadata for the SAP layer
 # ---------------------------------------------------------------------------
 
-def _fake_coverage(is_stale: bool = False) -> SapCoverage:
+def _fake_coverage() -> SapCoverage:
     return SapCoverage(
         fiscal_year=2026,
         watermark_date=date(2026, 4, 29),
         days_behind=1,
-        is_stale=is_stale,
+        is_stale=False,
     )
 
 
@@ -184,7 +184,7 @@ def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
     _override_auth("filler@chememan.com")
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
         "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage()
-    ) as mock_resolve, patch("app.routers.budget.maybe_alert_sap_feed_stale") as mock_alert:
+    ) as mock_resolve:
         mock_gold.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/sap-coverage?year=2027")
 
@@ -196,41 +196,30 @@ def test_sap_coverage_resolves_the_sap_layer_year_not_the_planning_year(client):
     assert body["is_stale"] is False
     _, kwargs = mock_resolve.call_args
     assert kwargs["fiscal_year"] == 2026
-    mock_alert.assert_called_once()
-    assert mock_alert.call_args.kwargs["is_stale"] is False
 
 
-def test_sap_coverage_stale_triggers_the_throttled_admin_alert(client):
-    """The endpoint hands the coverage's freshness verdict straight to
-    `maybe_alert_sap_feed_stale` — the throttle/send logic itself lives in
-    `app.notifications` and is tested there; this only proves the wiring."""
+def test_sap_coverage_serializes_a_stale_payload(client):
+    """A STALE coverage must reach the client as-is (ADR-0030): the freshness
+    signal travels in the payload, so `is_stale` / `days_behind` /
+    `watermark_date` must survive serialization untouched."""
     _override_auth("filler@chememan.com")
+    stale = SapCoverage(
+        fiscal_year=2026,
+        watermark_date=date(2026, 4, 27),
+        days_behind=3,
+        is_stale=True,
+    )
     with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
-        "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage(is_stale=True)
-    ), patch("app.routers.budget.maybe_alert_sap_feed_stale") as mock_alert:
+        "app.routers.budget.resolve_sap_coverage_cached", return_value=stale
+    ):
         mock_gold.return_value.__enter__.return_value = MagicMock()
         response = client.get("/budget/sap-coverage?year=2027")
 
     assert response.status_code == 200
-    assert response.json()["is_stale"] is True
-    _, kwargs = mock_alert.call_args
-    assert kwargs["is_stale"] is True
-    assert kwargs["watermark_date"] == date(2026, 4, 29)
-    assert kwargs["days_behind"] == 1
-
-
-def test_sap_coverage_alert_failure_never_breaks_the_response(client):
-    """Never-cut: a broken alert path must not turn a healthy coverage read
-    into a 500 — the grid's legend chip still needs this response."""
-    _override_auth("filler@chememan.com")
-    with patch("app.routers.budget.get_gold_conn") as mock_gold, patch(
-        "app.routers.budget.resolve_sap_coverage_cached", return_value=_fake_coverage(is_stale=True)
-    ), patch("app.routers.budget.maybe_alert_sap_feed_stale", side_effect=RuntimeError("smtp down")):
-        mock_gold.return_value.__enter__.return_value = MagicMock()
-        response = client.get("/budget/sap-coverage?year=2027")
-
-    assert response.status_code == 200
-    assert response.json()["is_stale"] is True
+    body = response.json()
+    assert body["is_stale"] is True
+    assert body["days_behind"] == 3
+    assert body["watermark_date"] == "2026-04-27"
 
 
 def test_sap_coverage_failure_returns_502_with_the_same_generic_detail(client):

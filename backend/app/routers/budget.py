@@ -7,9 +7,7 @@ import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_email
-from app.config import get_settings
 from app.db import get_fabric_conn, get_gold_conn
-from app.notifications import maybe_alert_sap_feed_stale
 from app.read_model import BudgetRow, get_budget_grid
 from app.rls import resolve_scope
 from app.sap import SapActualsFetchError, SapCoverage, resolve_sap_coverage_cached
@@ -69,9 +67,10 @@ def sap_coverage(
     existing response shape changes. Carries no financial figures and no
     per-user data, so it needs auth but no RLS.
 
-    A stale/undeterminable watermark ALSO fires a throttled admin alert mail
-    (ADR-0030 §3.4, at most one per calendar day) — this never blocks the
-    response; a broken alert build/send is caught and logged, never raised."""
+    Freshness is surfaced to the user ONLY via this response (the grid's
+    legend chip) — there is no admin alert mail (ADR-0030 amendment
+    2026-09-14: the stale-feed mail was withdrawn after arriving 3x on the
+    same day from prd's multiple worker processes)."""
     try:
         with get_gold_conn() as gold_conn:
             # TTL-cached (perf fix — Settings.sap_cache_ttl_seconds): the
@@ -80,17 +79,5 @@ def sap_coverage(
     except (SapActualsFetchError, pyodbc.Error) as exc:
         logger.exception("SAP coverage resolution failed for year=%s, email=%s", year, email)
         raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc
-
-    try:
-        settings = get_settings()
-        maybe_alert_sap_feed_stale(
-            is_stale=coverage.is_stale,
-            watermark_date=coverage.watermark_date,
-            days_behind=coverage.days_behind,
-            dry_run=settings.notifications_dry_run,
-            settings=settings,
-        )
-    except Exception:  # never-cut: the alert path must never break the chip's own data
-        logger.exception("SAP stale-feed alert failed for year=%s, email=%s", year, email)
 
     return coverage

@@ -70,12 +70,10 @@ def bangkok_today() -> date:
     would flip the post-deadline boundary by hours.
 
     Also the shared "what day is it" helper for `app.sap.resolve_sap_coverage`
-    (the SAP freshness watermark, ADR-0030) and
-    `app.notifications.maybe_alert_sap_feed_stale` (its once-per-day
-    throttle) — both compare a Thailand-entered date against a Thailand
-    reader's calendar, same reasoning as the deadline gate below. ONE
-    function, not three separate `date.today()`/`datetime.now()`
-    expressions, so none of them can ever disagree about which day it is
+    (the SAP freshness watermark, ADR-0030) — comparing a Thailand-entered
+    date against a Thailand reader's calendar, same reasoning as the deadline
+    gate below. ONE function, not separate `date.today()`/`datetime.now()`
+    expressions, so callers can never disagree about which day it is
     (staging defect, 2026-09-13: a container with no `TZ` env var read the
     SAP watermark as one day less stale than a Thai reader would)."""
     return datetime.now(_BANGKOK_TZ).date()

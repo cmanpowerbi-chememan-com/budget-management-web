@@ -133,19 +133,6 @@ class Settings(BaseSettings):
     # it when it would duplicate the To or an existing cc.
     notifications_audit_cc_email: str = SHARED_ADMIN_MAILBOX
 
-    # ADR-0030 stale-SAP-feed alert recipient (jakkaritw, 2026-09-14): staging
-    # sent 4 identical copies to his inbox (one per `admin_emails_set`
-    # address, collapsed onto him by `notifications_redirect_all_to`). This
-    # is an operational "the feed stopped" signal, not an approval
-    # notification, and only he acts on it -- so it gets its OWN recipient
-    # instead of riding the admin roster. Blank (the default) falls back to
-    # the ORIGINAL one-mail-per-`admin_emails_set`-address behaviour
-    # (`notifications.notify_sap_feed_stale`), so a container that forgets
-    # this env var still alerts someone, not go silent. Deliberately separate
-    # from `admin_emails`: narrowing THAT list to quieten this one alert
-    # would also remove admin rights (`admin_emails_set` above).
-    sap_stale_alert_to: str = ""
-
     # §7.3 bulk-send hardening (jobs/send_reminders.py only — event mails
     # from the router never sleep): pacing between reminder mails so one
     # round can't ram the Exchange Online throttle (~30/min/mailbox), and a

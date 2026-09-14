@@ -623,8 +623,9 @@ def get_budget_grid(
     # read here would only add a gold query and a fail-closed 502 risk
     # (D15 removal-impact inventory, "Risk 1") with no benefit to the grid.
     # The freshness signal lives entirely on its own endpoint now
-    # (`GET /budget/sap-coverage`, `routers/budget.py`), which is also where
-    # the stale-feed admin alert (ADR-0030 §3.4) is triggered.
+    # (`GET /budget/sap-coverage`, `routers/budget.py`). The chip that endpoint
+    # feeds is the ONLY stale-feed signal — the admin alert mail that ADR-0030
+    # §3.4 once described was deleted on 2026-09-14 (see that ADR's amendment).
 
     # ADR-0013 read-only lock: skipped entirely for admin-wide (nothing would
     # consult it — merge_budget_rows bypasses the lock unconditionally for

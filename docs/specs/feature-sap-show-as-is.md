@@ -72,6 +72,8 @@ A data hole needs no extra rule: the watermark is the end of the **contiguous** 
 
 ### 3.4 The alert mail
 
+> ⚠ **WITHDRAWN 2026-09-14 — the alert mail was deleted entirely (jakkaritw: watch the chip on the web page instead). Kept below as the historical record only; see "Amendment 2026-09-14 — stale alert mail removed" at the end of this document. Do NOT follow this section as live instructions.**
+
 - Path: `backend/app/notifications.py`; sender `cmanpowerbi@chememan.com`; recipient
   `SAP_STALE_ALERT_TO` (`Settings.sap_stale_alert_to`) — set to `jakkaritw@chememan.com` on both
   stg and prd. Precedent: the board_budget ingest alert (2026-08-13).
@@ -234,7 +236,8 @@ nobody, admin included.
 
 ## 7. Rollout
 
-0. **Before the staging deploy, point staging's alert mail at one person.** Both containers today
+0. ⚠ **WITHDRAWN 2026-09-14 — SKIP THIS STEP. The alert mail no longer exists, so there is nothing to redirect. Setting `NOTIFICATIONS_REDIRECT_ALL_TO` on staging now would silently divert every approval/turn/reject notification to one inbox for no reason.**
+   ~~Before the staging deploy, point staging's alert mail at one person.~~ Both containers today
    have `NOTIFICATIONS_DRY_RUN=false` with no environment label and no redirect, so a staging test
    would mail three real colleagues unmarked — and the feed is stale right now
    (`days_behind = 3` on 2026-09-14), so the alert fires on the first page load. jakkaritw's call,
@@ -252,3 +255,17 @@ nobody, admin included.
    appears as 34,078,172.54 THB**. Do NOT quote 942,888,831.94 or 131,428,306.25 to users — those
    are reference-population figures from before the `dbo.gl_group` master filter, which is what
    §6b compares against. Reconcile the release against §6b; announce the on-screen numbers.
+
+## Amendment 2026-09-14 — stale alert mail removed
+
+§3.4 ("The alert mail") is withdrawn. jakkaritw cancelled it after it arrived 3 times in his
+inbox the same day, caused by the throttle being per-PROCESS while prd runs 4 processes (2
+Container App replicas × `uvicorn --workers 2`) with independent in-memory markers. A shared
+Fabric SQL day-marker fix was considered and briefly chosen, then withdrawn — he opted to delete
+the mail entirely instead of fixing the throttle.
+
+Freshness now surfaces ONLY via the §3.2/§3.3 chip. `notify_sap_feed_stale`,
+`maybe_alert_sap_feed_stale`, and `Settings.sap_stale_alert_to` (`SAP_STALE_ALERT_TO`) no longer
+exist in the codebase. `GET /budget/sap-coverage` is unchanged otherwise — same response, no mail
+side-effect. Accepted trade-off, carried over unchanged: if nobody opens the web page, nobody
+learns the feed stopped.

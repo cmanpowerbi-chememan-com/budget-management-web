@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-14T02:23:47+0700",
+  "updated": "2026-09-14T09:43:29+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2739,6 +2739,14 @@
       "created": "2026-08-15T00:18:57+0700",
       "updated": "2026-08-15T00:18:57+0700",
       "ai": "TC-046 PASS (real UI, real mail, 2026-08-14): reject issued from step 3 goes STRAIGHT back to the filler, not stepwise backwards. Setup: jakkaritw impersonating warapornt (SIT_IMPERSONATE), approval_status fixture-set to PENDING_APPROVER3 (jakkaritw explicitly authorised the direct DB state edit after I raised the concern; scope pinned to Data & Analytic/2027, backed up to scratchpad/backup_approval_state.json). Action: Admin-mode OFF -> dept appeared via ADR-0029 approver see-overlay -> clicked ตีกลับทั้งฝ่าย, reason 'test'. EVIDENCE approval_status: status=REJECTED, rejected_by_empcode=100427 (วราพร), reject_reason='test', approver3_actioned_at stays NULL. approval_log 648: REJECT by warapornt@ previous=PENDING_APPROVER3 -> new=REJECTED (NOT back to PENDING_APPROVER2) = the exact TC-046 assertion. MAIL (redirect already off, real recipients): To=Pornthip Phermsaphiran, Cc=Laddawan Kearnoi + CMAN_PowerBI, subject '*** ทดสอบ on stg server *** ถูกตีกลับ...', reason 'test' rendered, deep link present — note cc is the FROZEN approver1 (laddawan) even though the rejecter was step 3, which is the designed behaviour."
+    },
+    {
+      "id": "sc-qas-theme-revise",
+      "state": "done",
+      "created": "2026-08-15T00:48:14+0700",
+      "updated": "2026-08-15T08:42:09+0700",
+      "ai": "PUSHED + VERIFIED LANDED: 74b532c on github cmanpowerbi-chememan-com/cman-design-system main (3a01b43..74b532c, origin/main == local HEAD confirmed via fetch), 19 files +3124/-1248. Theme extracted from LIVE Chememan Supply Chain app sc-qas.chememan.com (NOT SAP; ASP.NET MVC + Bootstrap 5.3.2 + FontAwesome 6.5.0 + jQuery 3.7.1 + select2 + flatpickr), 6 dumps / 4 unique pages + /Content/site.css. Values: brand #1a472a green + #2d6a4f teal; 14-step --cman-surface-* scale (--cman-neutral-* kept as aliases); 10 status colors; radius 4/6/8/16; navbar 44px + sidebar 240/64px; type .65-1.5rem; NO font-family declared anywhere => Bootstrap system stack (recorded as fact, no webfont added). Old CI palette preserved byte-for-byte in tokens/brand-ci-legacy.css (148/148 declarations, re-diffed vs HEAD~1). New: reference/sc-qas-extracted/ (raw auditable CSS, site.css byte-identical to server), examples/app-shell.html, tools/check-tokens.py (key-based 3-file drift guard, 12/12 mutation catch after rewrite; v1 was 5/12), .gitignore. GATES: round-1 NOT-SAFE-TO-PUSH (HIGH = live customer data 1120001/AFRISERVE AGENCIES LTD + PO 4210000405 + id 1264 + 'of 1039' + employee name in docs) -> scrubbed; round-2 SAFE-TO-PUSH (06 APPROVE-WITH-SUGGESTIONS, 07 PASS, 08 GAPS) -> 4 MED + 2 LOW doc fixes applied at jakkaritw's choice -> final verify all green (check-tokens exit 0, verify_ds 10/10, verify_shell 13/13, leak grep 0 hits, no new file gitignored). jakkaritw approved push via AskUserQuestion 'fix 4 first then push'. STILL OPEN (needs jakkaritw): delete the 7 stale nested dirs tokens/tokens, typography/typography, components/components, patterns/patterns, adapters/adapters, assets/assets, examples/examples -- they still hold the OLD #00522C system at colliding paths; README documents them as do-not-read + gives the command. NOT DONE / OUT OF SCOPE: the sc-qas app itself was never modified -- its source is not on this machine (grepped all 24 C:\\\\NN.* + inetpub, 0 .csproj/.cshtml), so the original 'adjust web theme' ask is unfulfilled; only the design system was built. SECURITY: jakkaritw pasted plaintext password for user zladdawank in chat -> ROTATE; scratchpad creds.json deleted; 0 tokens/PII/cookies in the pushed repo (verified).",
+      "agent": "claude"
     }
   ]
 }

@@ -86,7 +86,7 @@ Alternatives considered and rejected:
    2-digit Gregorian year. Deliberately NOT the Thai/Buddhist `11 ก.ย. 69` the rest of the app
    uses: this is an operational timestamp about a data feed, and the unambiguous Gregorian form is
    what an operator reconciles against a DW run log.
-5. **Stale feed warns, and mails ONE person.** When the newest entry date is **3 or more days
+5. **Stale feed warns, and mails ONE person.** ⚠ **The mail half of this item is WITHDRAWN 2026-09-14 — see "Amendment 2026-09-14 — stale alert mail removed" at the end of this ADR. The chip half still stands.** When the newest entry date is **3 or more days
    behind today**, the chip becomes `⚠ ข้อมูลคีย์ถึง <date>` and an alert goes to
    `jakkaritw@chememan.com`. A healthy lag is 1 day.
 
@@ -149,3 +149,24 @@ executable form is the parity harness — see the spec.
   fixtures fail to compile rather than pass.
 - The rule no longer self-heals on its own the way ADR-0026 did — the alert mail is what makes a
   stalled feed someone's problem.
+
+## Amendment 2026-09-14 — stale alert mail removed
+
+jakkaritw cancelled the stale-feed admin alert mail (§3.4/§5 above) the same day it shipped: it
+arrived 3 times in his inbox on 2026-09-14. Root cause was the accepted "throttle: one mail per
+PROCESS per calendar day" trade-off above — prd runs 2 Container App replicas × `uvicorn --workers
+2` = 4 independent processes, each with its own in-memory throttle marker, so a stale day could
+mail up to 4 copies to one recipient.
+
+A shared day-marker row in Fabric SQL (making the throttle truly once-per-day across all 4
+processes) was considered and briefly picked, then withdrawn in the same conversation — jakkaritw
+chose to cancel the mail outright instead of building a shared-throttle fix.
+
+Decision: rely on the §3.2 freshness chip alone. No admin alert mail exists for a stale SAP feed.
+`notify_sap_feed_stale`, `maybe_alert_sap_feed_stale`, the module-level throttle state, and
+`Settings.sap_stale_alert_to` (`SAP_STALE_ALERT_TO`) are deleted from `backend/app/notifications.py`
+/ `backend/app/config.py`. `GET /budget/sap-coverage` keeps resolving and returning `SapCoverage`
+unchanged — only the mail side-effect is gone.
+
+Accepted trade-off (explicitly acknowledged): if nobody opens the web page, nobody learns the feed
+stopped. The §3.4 mail was the safety net for that gap; it is withdrawn along with the mail.

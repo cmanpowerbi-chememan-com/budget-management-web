@@ -1,8 +1,31 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-14T10:08:06+0700",
+  "updated": "2026-09-14T13:41:32+0700",
   "tasks": [
+    {
+      "id": "uat-expected-result-images",
+      "state": "doing",
+      "created": "2026-09-14T13:36:56+0700",
+      "updated": "2026-09-14T13:41:32+0700",
+      "ai": "DONE 10/54: UAT-01..10 built into requirement_spec/5_uat/expected_result_image/ (annotated web-result images, gold numbered circles + Thai legend). 01/02 live (getBoundingClientRect via serve.py injector); 03-10 saved test-run shots + PIL markers. NEXT: 11-54. Tooling _build/build_expected_result_images.py (SPECS) + annlib.py. serve.py running on fresh 13:21 login (Pornthip).",
+      "agent": "claude"
+    },
+    {
+      "id": "sap-stale-alert-remove",
+      "state": "doing",
+      "created": "2026-09-14T13:35:00+0700",
+      "updated": "2026-09-14T13:35:00+0700",
+      "ai": "jakkaritw 2026-09-14: CANCEL the SAP stale alert mail entirely -- he will watch the freshness chip on the web page instead. Chose FULL DELETE over an env flag (AskUserQuestion). Supersedes option A (shared DB day-marker) picked minutes earlier; that fix is NOT being built. Scope: strip notify_sap_feed_stale + maybe_alert_sap_feed_stale + _sap_stale_alert_state + _reset_sap_stale_alert_throttle (notifications.py), the call site in routers/budget.py sap_coverage, Settings.sap_stale_alert_to (config.py:147), related tests, and amend ADR-0030 (the mail was its 3.4 safety net; chip stays the 3.2 one). Accepted trade-off: zero web traffic = nobody learns the feed stopped."
+    },
+    {
+      "id": "sap-stale-alert-frequency-diag",
+      "state": "done",
+      "created": "2026-09-14T13:27:24+0700",
+      "updated": "2026-09-14T13:27:40+0700",
+      "ai": "ROOT CAUSE CONFIRMED, no code change yet. Throttle _sap_stale_alert_state (notifications.py:659) is module-level in-memory = PER PROCESS. prd runs 2 replicas (minR=maxR=2, rev 0000037, both started 2026-09-14T03:28:54Z=10:28 BKK) x uvicorn --workers 2 (backend/Dockerfile:102) = 4 independent processes -> up to 4 mails/day, one per process on its first GET /budget/sap-coverage while is_stale. Observed 3 (11:45/12:46/12:55 BKK), 4th process not yet hit. Also every deploy/restart wipes the marker -> extra round on deploy days. 0316591 fixed only the admin_emails_set fanout (4 addrs -> SAP_STALE_ALERT_TO=jakkaritw@chememan.com, verified set on prd), not the process fanout. Fix options put to jakkaritw: (A) shared day-marker row in Fabric SQL, insert-if-not-exists, send only if insert wins (no mail-log table exists today); (B) move alert off the request path to a scheduled job (fires even with zero web traffic); (C) --workers 1 = partial, still 2/day. Awaiting his pick.",
+      "agent": "claude"
+    },
     {
       "id": "sap-stale-alert-single-recipient",
       "state": "done",
@@ -37,10 +60,10 @@
     },
     {
       "id": "sap-show-as-is-implement",
-      "state": "doing",
+      "state": "done",
       "created": "2026-09-14T03:17:38+0700",
-      "updated": "2026-09-14T09:57:47+0700",
-      "ai": "[STAGING ROUND 2 LIVE 2026-09-14, verified] commit ee41f00 (local only, on top of 12631e4, NOT pushed) -> image budget-web:ee41f00 -> cman-budget-web-stg revision 0000072, runningState Running. TIMEZONE FIX PROVEN IN PRODUCTION-LIKE CONDITIONS, not just in tests: the container logged 'SAP coverage fiscal_year=2026 watermark=2026-09-11 days_behind=3 is_stale=True' at 2026-09-14T02:57Z (= 09:57 ICT). The same container on the previous image logged days_behind=2 is_stale=False for the SAME watermark - that is the defect closed, end to end. IMPLEMENTATION NOTE worth keeping: the agent did NOT write a new Bangkok-date helper, it found app/deadline.py:67 bangkok_today() already in the repo (used by the submission-deadline gate) and pointed both resolve_sap_coverage (sap.py:375) and maybe_alert_sap_feed_stale (notifications.py:709) at it, so the chip and the once-per-day throttle CANNOT disagree about the date - same function, not parallel copies. Suites re-run by me: backend 1124 passed / 49 deselected. Copy change also live: the stale chip now reads '⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69' with no suffix. REPORTED NOT FIXED (deliberate, out of ADR-0030 scope): main.py:64 board_year = date.today().year has the same zone bug at warmup; it can only mis-warm the cache for ~7 hours on 31 Dec. ROLLBACK for stg is unchanged in shape: previous image 12631e4 (this feature, round 1) or 6a9d323 (pre-feature); NOTIFICATIONS_REDIRECT_ALL_TO=jakkaritw@chememan.com is still set and MUST be removed when testing ends - see .scratch/sap-month-closed-rule/stg_rollback_adr0030.md. AWAITING: jakkaritw's eyes on the chip + inbox, then a separate explicit approval for prd.",
+      "updated": "2026-09-14T10:30:59+0700",
+      "ai": "[PRODUCTION LIVE 2026-09-14 - ADR-0030 SHIPPED, approved by jakkaritw after he verified staging himself] commit 0316591 -> image budget-web:0316591 -> cman-budget-web-prd revision 0000037, RunningAtMaxScale, active, 100% traffic, 2 replicas; SAP_STALE_ALERT_TO=jakkaritw@chememan.com applied; anon GET on cman-budget-web-prd.kindstone-f34836dd.southeastasia.azurecontainerapps.io = 401 (Easy Auth on, serving); container log confirms the new path live: 'SAP coverage fiscal_year=2026 watermark=2026-09-11 days_behind=3 is_stale=True'. Staging is on the same image at revision 0000073. JAKKARITW'S OWN STAGING SIGN-OFF, all 3 checks passed: (1) chip reads '⚠ ข้อมูลคีย์ถึง 11 Sep 26'; (2) exactly ONE alert mail; (3) Solution Delivery September = 30,010.07 THB, which I reproduced through get_budget_grid itself (planning_year 2027 = SAP FY2026, admin view, department_filter='Solution Delivery'): m09 30,010.07 / m08 194,816.07 / year total 1,882,283.36 / None cells = 0. Zero None cells IS the 'db and web sync 100%' criterion holding on a real department. WHAT CHANGED FOR USERS: the on-screen admin-wide SAP grand total moved 210,143,094.26 -> 243,395,400.91 (+33,252,306.65) and Aug-2026 now shows 34,078,172.54. NOT announced to users yet - jakkaritw did not ask for an announcement. ROLLBACK: .scratch/sap-month-closed-rule/prd_rollback_adr0030.md - image 6a9d323 / prd rev 0000036 plus --remove-env-vars SAP_STALE_ALERT_TO; NO database change was made. Rolling back restores the mask, so the grand total would drop back to 210,143,094.26 - expected, not data loss. prd BEFORE snapshot: .scratch/sap-month-closed-rule/prd_env_BEFORE_adr0030.json. GOTCHA FOUND WHILE VERIFYING: budget.chememan.com is NOT bound to the container app (customDomains is null) - curl returned HTTP 000 against it; probe the platform FQDN instead. UNCHANGED BY THIS DEPLOY, still owed: APP_ENV=uat on prd and SIT_IMPERSONATE (6 targets) - task #prd-appenv-uat-revert-after-uat still stands. STILL OPEN from the gate, none blocking: M6 (+1 unpooled Fabric connection per page view - worth timing on prd), L3 (a genuine 0.00 month renders as a dash so FY2026 m10-12 look like the old hidden state), L6 (test_sap_actuals_parity.py pins board_year to date.today().year and will fail every 1 Jan), and main.py:64 board_year = date.today().year has the same UTC-vs-Bangkok bug at warmup (~7h window on 31 Dec only). Commits 12631e4 + ee41f00 + 0316591 are LOCAL ONLY - not pushed, per the standing keep-it-local rule.",
       "agent": "claude"
     },
     {
