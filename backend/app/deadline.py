@@ -67,7 +67,17 @@ class YearNotOpenError(PermissionError):
 def bangkok_today() -> date:
     """Anchor "today" to Asia/Bangkok explicitly instead of the server-local
     `date.today()` — a server running in a different timezone (e.g. UTC)
-    would flip the post-deadline boundary by hours."""
+    would flip the post-deadline boundary by hours.
+
+    Also the shared "what day is it" helper for `app.sap.resolve_sap_coverage`
+    (the SAP freshness watermark, ADR-0030) and
+    `app.notifications.maybe_alert_sap_feed_stale` (its once-per-day
+    throttle) — both compare a Thailand-entered date against a Thailand
+    reader's calendar, same reasoning as the deadline gate below. ONE
+    function, not three separate `date.today()`/`datetime.now()`
+    expressions, so none of them can ever disagree about which day it is
+    (staging defect, 2026-09-13: a container with no `TZ` env var read the
+    SAP watermark as one day less stale than a Thai reader would)."""
     return datetime.now(_BANGKOK_TZ).date()
 
 

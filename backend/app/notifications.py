@@ -30,6 +30,7 @@ import httpx
 import pyodbc
 
 from app.config import Settings, get_settings
+from app.deadline import bangkok_today
 
 logger = logging.getLogger(__name__)
 
@@ -705,11 +706,19 @@ def notify_sap_feed_stale(
 
 def maybe_alert_sap_feed_stale(
     *, is_stale: bool, watermark_date: date | None, days_behind: int | None,
-    dry_run: bool, settings: Settings | None = None, today: Callable[[], date] = date.today,
+    dry_run: bool, settings: Settings | None = None, today: Callable[[], date] = bangkok_today,
 ) -> list[NotificationResult]:
     """Throttled wrapper around `notify_sap_feed_stale` -- at most one send
     per calendar day (ADR-0030 §3.4). `today` is injectable so tests can
     drive the throttle deterministically without a real day boundary.
+
+    Default is `bangkok_today` (Asia/Bangkok calendar date), the SAME helper
+    `app.sap.resolve_sap_coverage` defaults to -- not `date.today()` (the
+    container's UTC OS date). The throttle's "which day is this" and the
+    freshness chip's "how many days behind" must never be able to disagree
+    about what day it is; sharing one helper makes that structurally
+    impossible instead of merely coincidental. See `bangkok_today`'s
+    docstring (`app.deadline`) for the full reasoning.
 
     The throttle marker is set only AFTER at least one admin's send actually
     succeeds (M4 gate fix, 2026-09-14) -- `notify_sap_feed_stale` only

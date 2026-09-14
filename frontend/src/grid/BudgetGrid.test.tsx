@@ -1202,7 +1202,7 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69 (ช้ากว่าปกติ)')
+      expect(suffix).toHaveTextContent('⚠ ข้อมูลคีย์ถึง 11 ก.ย. 69')
       expect(suffix.className).toContain('sap-freshness-warn')
     })
 

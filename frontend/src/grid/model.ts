@@ -910,7 +910,10 @@ export interface SapFreshness {
  * decided by the BACKEND (`SapCoverage.is_stale`) — this function never
  * computes staleness itself, only renders what it is told:
  *  - healthy: `ข้อมูลคีย์ถึง 11 ก.ย. 2026`
- *  - stale (`is_stale`): `⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026 (ช้ากว่าปกติ)`
+ *  - stale (`is_stale`): `⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026` — differs from healthy
+ *    ONLY by the `⚠` prefix (jakkaritw, 2026-09-14: dropped the trailing
+ *    "(ช้ากว่าปกติ)" parenthetical); `isWarn: true` still carries the warning
+ *    styling, so no marker is lost, only the redundant wording.
  *  - unknown (`watermark_date === null` — no data loaded at all): `⚠
  *    ไม่ทราบวันที่ข้อมูล`, checked BEFORE `is_stale` since there is no date to
  *    show either way. */
@@ -920,6 +923,6 @@ export function sapFreshnessLine(coverage: SapCoverage): SapFreshness {
   }
   const keyedThrough = `ข้อมูลคีย์ถึง ${formatThaiShortDate(coverage.watermark_date)}`
   return coverage.is_stale
-    ? { text: `⚠ ${keyedThrough} (ช้ากว่าปกติ)`, isWarn: true }
+    ? { text: `⚠ ${keyedThrough}`, isWarn: true }
     : { text: keyedThrough, isWarn: false }
 }

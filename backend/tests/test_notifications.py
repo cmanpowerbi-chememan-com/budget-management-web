@@ -4,8 +4,9 @@ monkeypatched at the module level, matching the never-cut safety rule (no
 test may send a real email). DB lookups are always a mocked pyodbc connection.
 """
 import logging
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -23,6 +24,7 @@ from app.notifications import (
     notify_turn_reminder,
     send_mail,
 )
+from app.sap import resolve_sap_coverage
 
 
 def _never_called(*args, **kwargs):
@@ -1290,6 +1292,53 @@ def test_maybe_alert_sap_feed_stale_does_not_burn_the_day_when_every_send_fails(
 
     assert first == []  # every admin's send failed -- no successful send that day
     assert len(second) == 1  # NOT throttled -- the marker was never set, so the same day retries
+
+
+def test_stale_alert_throttle_day_agrees_with_coverages_bangkok_reckoning(monkeypatch):
+    """Regression, staging 2026-09-13: `resolve_sap_coverage` (the chip) and
+    `maybe_alert_sap_feed_stale` (the once-per-day admin-mail throttle) must
+    land on the exact SAME Bangkok calendar day when neither is given an
+    explicit `today` -- both call the ONE shared `app.deadline.bangkok_today`
+    helper, so they can never drift apart across a UTC/Bangkok midnight
+    boundary the way `date.today()` (UTC, no `TZ` on the container) would.
+
+    The identity assertion below is the deterministic (wall-clock-proof)
+    discriminator: before the fix, `today`'s default is the plain built-in
+    `date.today`, not `bangkok_today` -- it fails immediately, regardless of
+    what day the test happens to run on."""
+    import inspect
+
+    from app import deadline, notifications
+
+    assert (
+        inspect.signature(maybe_alert_sap_feed_stale).parameters["today"].default
+        is deadline.bangkok_today
+    )
+
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append(1) or "SENTINEL")
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            fixed_utc = datetime(2026, 9, 13, 21, 42, tzinfo=ZoneInfo("UTC"))
+            return fixed_utc.astimezone(tz) if tz else fixed_utc
+
+    monkeypatch.setattr("app.deadline.datetime", _FixedDateTime)
+
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [("20260911",)]
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026)  # today NOT injected
+    assert coverage.is_stale is True
+
+    results = maybe_alert_sap_feed_stale(
+        is_stale=coverage.is_stale, watermark_date=coverage.watermark_date,
+        days_behind=coverage.days_behind, dry_run=True, settings=_settings(),
+    )  # today NOT injected -- must be read as the SAME 2026-09-14 Bangkok day
+
+    assert len(results) == 1
+    assert len(calls) == 1
+    assert notifications._sap_stale_alert_state["last_sent_date"] == date(2026, 9, 14)
 
 
 def test_maybe_alert_sap_feed_stale_never_raises_on_a_broken_alert_build(monkeypatch):

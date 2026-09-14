@@ -22,7 +22,7 @@ freshness date on the legend chip and an admin alert when the feed goes stale.
 |---|---|
 | 2.1 | Remove the month mask: `visible_sap_months`, `SAP_MONTH_VISIBLE_LAG_DAYS`, and the mask application in `_sap_layer` |
 | 2.2 | Keep the watermark as a freshness signal and expose it: `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 ก.ย. 2026` |
-| 2.3 | Stale state on that chip: `⚠ ข้อมูลคีย์ถึง <date> (ช้ากว่าปกติ)` when the newest entry date is ≥ 3 days behind today |
+| 2.3 | Stale state on that chip: `⚠ ข้อมูลคีย์ถึง <date>` when the newest entry date is ≥ 3 days behind today |
 | 2.4 | Admin alert mail on the stale condition, throttled to one per day |
 | 2.5 | `total_year` becomes the plain Jan–Dec sum; the "รวมเฉพาะเดือนที่ข้อมูลครบ" label is removed |
 | 2.6 | Turn `test_sap_actuals_parity.py` into the executable form of "db and web sync 100%" |
@@ -52,7 +52,7 @@ posting date. Wording is `ข้อมูลคีย์ถึง` ("keyed throu
 
 ```
 healthy : ● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 13 ก.ย. 2026
-stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026 (ช้ากว่าปกติ)
+stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลคีย์ถึง 11 ก.ย. 2026
 ```
 
 The frontend wiring exists and is unused: `sapFreshnessLine` (`frontend/src/grid/model.ts:946`)

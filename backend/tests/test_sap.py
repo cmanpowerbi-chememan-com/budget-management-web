@@ -6,7 +6,8 @@ never-cut financial contract: verbatim, no sign flip, no doc_status filter,
 excluded-CC list WITHOUT 10SC012000, and any failure must raise (never a
 silent-empty actuals layer).
 """
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pyodbc
 import pytest
@@ -502,6 +503,43 @@ def test_resolve_sap_coverage_reports_stale_not_raising_when_no_entry_days_exist
     coverage = resolve_sap_coverage(conn, fiscal_year=2026)
     assert coverage.watermark_date is None
     assert coverage.days_behind is None
+    assert coverage.is_stale is True
+
+
+def test_resolve_sap_coverage_default_today_reckons_by_bangkok_calendar_date(monkeypatch):
+    """Regression, staging 2026-09-13: `resolve_sap_coverage`'s default
+    `today` (no `today=` passed by the caller) must land on the Asia/Bangkok
+    calendar date, not the container's OS date (UTC, no `TZ` env var). A UTC
+    instant of 2026-09-13T21:42 is already 2026-09-14 04:42 in Bangkok
+    (UTC+7). Against watermark 2026-09-11 that is 3 days behind and stale,
+    not 2 and healthy -- the exact live mismatch the container logged.
+
+    `app.sap.date` is pinned to a fake whose `.today()` returns the WRONG
+    (UTC) 2026-09-13 -- what the old buggy `date.today()` call returned for
+    this same instant -- so the assertions below discriminate the fix
+    regardless of the real wall-clock day the test happens to run on."""
+
+    class _FixedDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 9, 13)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            fixed_utc = datetime(2026, 9, 13, 21, 42, tzinfo=ZoneInfo("UTC"))
+            return fixed_utc.astimezone(tz) if tz else fixed_utc
+
+    monkeypatch.setattr("app.sap.date", _FixedDate)
+    # bangkok_today() is defined in app.deadline and looked up there at call
+    # time, regardless of which module imported the function reference.
+    monkeypatch.setattr("app.deadline.datetime", _FixedDateTime)
+    conn = _make_conn(rows=[("20260910",), ("20260911",)])
+
+    coverage = resolve_sap_coverage(conn, fiscal_year=2026)  # today NOT injected
+
+    assert coverage.watermark_date == date(2026, 9, 11)
+    assert coverage.days_behind == 3
     assert coverage.is_stale is True
 
 

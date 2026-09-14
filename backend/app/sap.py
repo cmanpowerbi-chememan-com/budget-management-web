@@ -70,6 +70,7 @@ from pydantic import BaseModel
 
 from app.cache import TTLCache
 from app.config import Settings, get_settings
+from app.deadline import bangkok_today
 
 logger = logging.getLogger(__name__)
 
@@ -351,8 +352,17 @@ def resolve_sap_coverage(
     conn: pyodbc.Connection, fiscal_year: int, today: date | None = None
 ) -> SapCoverage:
     """One DW read + freshness math = how fresh the SAP · ใช้จริง layer is
-    (ADR-0030). `today` is injectable (defaults to `date.today()`) so callers
-    can test the staleness boundary deterministically.
+    (ADR-0030). `today` is injectable (defaults to `bangkok_today()`) so
+    callers can test the staleness boundary deterministically.
+
+    Bangkok, not `date.today()`: the watermark is a SAP ENTRY DATE keyed by
+    people working in Thailand, and the users reading the freshness chip are
+    in Thailand, so "how many days behind" is a Thai-calendar question. A
+    container has no `TZ` env var (and none should be added to patch this —
+    the code must be correct on its own), so `date.today()` reads the OS's
+    UTC date. Staging defect, 2026-09-13 21:42 UTC (already 2026-09-14 04:42
+    in Bangkok): the app read `days_behind=2, is_stale=False` while a Thai
+    reader counting from the same watermark already saw 3 days and stale.
 
     No longer fails closed (ADR-0026's mask is gone, nothing may block the
     grid on freshness): an undeterminable watermark reports
@@ -362,7 +372,7 @@ def resolve_sap_coverage(
     loud `SapActualsFetchError` -> 502 (ADR-0020, never-cut)."""
     entry_days = fetch_sap_entry_days(conn, fiscal_year)
     watermark = entry_day_watermark(entry_days)
-    today = today or date.today()
+    today = today or bangkok_today()
     if watermark is None:
         logger.warning(
             "SAP coverage fiscal_year=%s watermark undeterminable (no loaded entry-days "

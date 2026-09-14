@@ -82,8 +82,12 @@ Alternatives considered and rejected:
    `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 ก.ย. 2026`. The date is the newest SAP **entry date**
    of the contiguous run — not a load date, not a posting date. No per-month marker.
 5. **Stale feed warns, and mails the admins.** When the newest entry date is **3 or more days
-   behind today**, the chip becomes `⚠ ข้อมูลคีย์ถึง <date> (ช้ากว่าปกติ)` and an alert goes to
-   `ADMIN_EMAILS` (jakkaritw, nipapornt, warapornt). A healthy lag is 1 day. The threshold is an
+   behind today**, the chip becomes `⚠ ข้อมูลคีย์ถึง <date>` and an alert goes to
+   `ADMIN_EMAILS` (jakkaritw, nipapornt, warapornt). A healthy lag is 1 day.
+
+   **Wording, revised 2026-09-14 after seeing it on staging (jakkaritw):** the stale chip drops the
+   `(ช้ากว่าปกติ)` suffix and reads `⚠ ข้อมูลคีย์ถึง <date>`. Stale and healthy now differ only by
+   the `⚠` prefix and the warning colour, which is the intent — the date itself is the message. The threshold is an
    **operational freshness** constant — it says "the feed stopped", never "this month is finished".
 
    **Throttle: one mail per process per calendar day, NOT one per day — accepted knowingly
