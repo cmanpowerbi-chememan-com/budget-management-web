@@ -1,0 +1,2 @@
+# the big generated PDF is not tracked — regenerate via _build/gen_oversize_pdf.py
+*.pdf
