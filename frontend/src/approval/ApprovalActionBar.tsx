@@ -8,7 +8,7 @@ import {
   buildOverrideConfirmText,
   buildSubmitConfirmText,
   canSubmit,
-  isPendingLocked,
+  isEditLocked,
   statusChipLabel,
   submitBlockedReasonLabel,
 } from './model'
@@ -230,22 +230,22 @@ export function ApprovalActionBar({
   // them anyway). Reject stays approver-only — an override never rejects.
   const showApprove =
     showApproveReject || (isAdmin && status.status === 'PENDING_APPROVER1' && !status.can_act)
-  const locked = isPendingLocked(status.status) && isFillerOfDept && !adminViewEnabled
+  const locked = isEditLocked(status.status) && isFillerOfDept && !adminViewEnabled
   // Filler-blocked-hint fix (2026-08-16, same day as SIT defect fix #2,
   // jakkaritw: "ใส่ข้อความให้ผู้กรอกด้วย"): the hint used to be gated to
   // admins only (`adminViewEnabled && !isFillerOfDept`), so a Filler who
   // lost the Submit button silently (empty department / year not open /
   // past deadline / already submitted) got no explanation at all — exactly
   // the asymmetry this closes. Now shows for WHOEVER is actually blocked.
-  // `!locked` avoids a duplicate line with the pending-lock hint just below:
-  // both would otherwise fire together for a Filler on a PENDING_*
-  // department (`locked` says "Submitted..."; the server's
+  // `!locked` avoids a duplicate line with the locked-note just below: both
+  // would otherwise fire together for a Filler on a PENDING_*/APPROVED
+  // department (`locked` says "Submitted/Approved..."; the server's
   // `invalid_approval_state` reason says almost the same thing) — `locked`
   // is the more specific of the two, so it wins and the generic hint stays
-  // silent there. The one case `locked` does NOT cover is a Filler on an
-  // APPROVED department (not "pending"), where `invalid_approval_state`
-  // still surfaces on its own — see `submitBlockedReasonLabel`'s docstring
-  // for the copy itself.
+  // silent there. Issue #13 (2026-09-17): `isEditLocked` now covers APPROVED
+  // too (was `isPendingLocked`, PENDING_* only) — the old "does NOT cover
+  // APPROVED" gap this comment used to document is closed; see the
+  // `locked` note below for the APPROVED-specific wording.
   const submitBlockedHint = !showSubmit && !locked ? submitBlockedReasonLabel(status.submit_blocked_reason) : null
 
   return (
@@ -256,7 +256,17 @@ export function ApprovalActionBar({
         <span className={`status-chip status-chip-${statusToneClass(status.status)}`} data-testid="approval-status-chip">
           {statusChipLabel(status)}
         </span>
-        {locked && <span className="act-status">Submitted — locked for editing until it is rejected</span>}
+        {/* Issue #13 (2026-09-17): APPROVED gets its own wording — "submitted"
+         * would misdescribe a department that already finished the whole
+         * chain, and the longest-lived locked state deserves the clearest
+         * explanation (user story 12). */}
+        {locked && (
+          <span className="act-status">
+            {status.status === 'APPROVED'
+              ? 'Approved — locked for editing until it is rejected'
+              : 'Submitted — locked for editing until it is rejected'}
+          </span>
+        )}
         {submitBlockedHint && (
           <span className="act-status" data-testid="approval-submit-blocked-hint">
             {submitBlockedHint}

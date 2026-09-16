@@ -262,6 +262,38 @@ describe('TripManager', () => {
     await waitFor(() => expect(screen.getAllByText(/900/).length).toBeGreaterThan(0))
   })
 
+  // Issue #13, decision H (2026-09-17): the ฝ่าย locked while this modal was
+  // open (a submit from another tab/device/co-Filler mid-edit).
+  it('a department-locked trip save shows the Thai message only (no raw English detail appended) and calls onDepartmentLocked', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    vi.mocked(subformApi.createTrip).mockRejectedValue(
+      new ApiError(
+        403,
+        'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+        'Accounting/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked',
+      ),
+    )
+    const onDepartmentLocked = vi.fn()
+    render(
+      <TripManager
+        costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST}
+        onClose={vi.fn()} onSaved={vi.fn()} onDepartmentLocked={onDepartmentLocked}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fillNewTripBasics()
+    fireEvent.click(saveAllButton())
+
+    await waitFor(() => expect(onDepartmentLocked).toHaveBeenCalled())
+    expect(screen.getByTestId('trip-card-error-new-0')).toHaveTextContent(
+      'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+    )
+    expect(screen.queryByText(/mid-approval or approved/)).not.toBeInTheDocument()
+  })
+
   it('sends a client_token on create, keeps the SAME token on retry after an error, and re-enables save-all', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
     mockNoManualLines()
@@ -921,6 +953,31 @@ describe('TripManager', () => {
       await waitFor(() => expect(subformApi.deleteTrip).toHaveBeenCalledWith(10, '2026-03-01T00:00:00'))
       await waitFor(() => expect(screen.queryByTestId('trip-card-existing-10')).not.toBeInTheDocument())
       expect(onSaved).toHaveBeenCalled()
+    })
+
+    it('a department-locked delete shows the Thai message only and calls onDepartmentLocked', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ updated_at: '2026-03-01T00:00:00' })])
+      mockNoManualLines()
+      vi.mocked(subformApi.deleteTrip).mockRejectedValue(
+        new ApiError(
+          403,
+          'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+          'Accounting/2027 is APPROVED — mid-approval or approved, editing is locked',
+        ),
+      )
+      const onDepartmentLocked = vi.fn()
+      render(
+        <TripManager
+          costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST}
+          onClose={vi.fn()} onSaved={vi.fn()} onDepartmentLocked={onDepartmentLocked}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ลบทริป' }))
+
+      await waitFor(() => expect(onDepartmentLocked).toHaveBeenCalled())
+      expect(screen.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeInTheDocument()
     })
 
     it('does nothing when the user cancels the confirm dialog', async () => {

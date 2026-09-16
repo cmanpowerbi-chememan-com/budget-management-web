@@ -192,11 +192,14 @@ describe('AddTransactionForm', () => {
     expect(screen.getByLabelText('Cost Center')).toBeInTheDocument()
   })
 
-  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, decision by
-  // jakkaritw: keep the control VISIBLE but non-actionable, reason on
-  // screen — never hide it silently, same tone as the locked subform button.
+  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, REDESIGNED
+  // 2026-09-17 issue #13 decision 1: the form is now scoped to ONE ฝ่าย at a
+  // time — a single `departmentLocked` boolean replaces the old
+  // per-Cost-Center `lockedCostCenters` map). jakkaritw's decision: keep the
+  // control VISIBLE but non-actionable, reason on screen — never hide it
+  // silently, same tone as the locked subform button.
   describe('department-lock awareness (ADR-0013 UI parity)', () => {
-    it('department open (nothing in lockedCostCenters) — unchanged: the button works and add still succeeds', async () => {
+    it('ฝ่ายเปิด (departmentLocked=false) — unchanged: the button works and add still succeeds', async () => {
       const onAdd = vi.fn().mockResolvedValue({ ok: true })
       render(
         <AddTransactionForm
@@ -204,7 +207,7 @@ describe('AddTransactionForm', () => {
           glRef={GL_REF}
           existingRows={[]}
           onAdd={onAdd}
-          lockedCostCenters={{}}
+          selectedDepartment="Accounting"
         />,
       )
       const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
@@ -217,67 +220,84 @@ describe('AddTransactionForm', () => {
       await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC1', '5211800030'))
     })
 
-    it('every Fill-scope Cost Center locked — the "+ เพิ่ม Transaction" button is visible but disabled, with a Thai reason on screen', () => {
+    it('the ฝ่าย on screen is locked — the "+ เพิ่ม Transaction" button is visible but disabled, naming the ฝ่าย in the Thai reason', () => {
       render(
         <AddTransactionForm
           fillCostCenters={['CC1']}
           glRef={GL_REF}
           existingRows={[]}
           onAdd={vi.fn()}
-          lockedCostCenters={{ CC1: 'Accounting' }}
+          selectedDepartment="Accounting"
+          departmentLocked
         />,
       )
       const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
       expect(trigger).toBeInTheDocument() // visible, not hidden
       expect(trigger).toBeDisabled() // not actionable
-      expect(screen.getByText(/ถูกล็อกไว้/)).toBeInTheDocument() // the reason is on screen
+      expect(screen.getByText(/Accounting/)).toBeInTheDocument()
+      expect(screen.getByText(/อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/)).toBeInTheDocument()
     })
 
-    it('one locked and one open Cost Center — the button stays actionable, and the OPEN one can still be added (a blanket disable would break this)', async () => {
-      const onAdd = vi.fn().mockResolvedValue({ ok: true })
+    it('a picked Cost Center outside the selected ฝ่าย is rejected (defense-in-depth), onAdd never called', () => {
+      const onAdd = vi.fn()
+      const departments: DepartmentRow[] = [
+        { cost_center: 'CC1', department: 'Accounting', division: null, c_level: null },
+        { cost_center: 'CC2', department: 'IT', division: null, c_level: null },
+      ]
       render(
         <AddTransactionForm
           fillCostCenters={['CC1', 'CC2']}
           glRef={GL_REF}
           existingRows={[]}
           onAdd={onAdd}
-          lockedCostCenters={{ CC1: 'Accounting' }}
+          selectedDepartment="Accounting"
+          departments={departments}
         />,
       )
-      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
-      expect(trigger).not.toBeDisabled()
-      fireEvent.click(trigger)
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       pickCcOption('CC2')
       pickGlOption(/5211800030/)
       fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
-      await waitFor(() => expect(onAdd).toHaveBeenCalledWith('CC2', '5211800030'))
+      expect(screen.getByText(/ไม่ได้อยู่ในฝ่าย/)).toBeInTheDocument()
+      expect(onAdd).not.toHaveBeenCalled()
     })
 
-    it('picking the LOCKED Cost Center in that same mix is rejected with the reason shown, and onAdd is never called', () => {
-      const onAdd = vi.fn()
+    it('no ฝ่าย selected (departmentUnknown) — the button is disabled with a distinct "ยังไม่ทราบฝ่าย" reason', () => {
       render(
         <AddTransactionForm
-          fillCostCenters={['CC1', 'CC2']}
+          fillCostCenters={[]}
           glRef={GL_REF}
           existingRows={[]}
-          onAdd={onAdd}
-          lockedCostCenters={{ CC1: 'Accounting' }}
+          onAdd={vi.fn()}
+          departmentUnknown
         />,
       )
-      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-      pickCcOption('CC1')
-      pickGlOption(/5211800030/)
-      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).toBeDisabled()
+      expect(screen.getByText(/ยังไม่ทราบฝ่าย/)).toBeInTheDocument()
+    })
 
-      expect(screen.getByText(/Accounting/)).toBeInTheDocument()
-      expect(onAdd).not.toHaveBeenCalled()
+    it('the lock-status fetch failed (lockStatusUnavailable) — the button is disabled with its own reason, never falls open', () => {
+      render(
+        <AddTransactionForm
+          fillCostCenters={['CC1']}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={vi.fn()}
+          selectedDepartment="Accounting"
+          lockStatusUnavailable
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).toBeDisabled()
+      expect(screen.getByText(/ไม่สามารถตรวจสอบสถานะฝ่าย/)).toBeInTheDocument()
     })
   })
 
   // 2026-08-08 3-state extension: a YEAR-wide lock (every department, not
-  // just the ones already mid-approval) — distinct from the per-department
-  // lockedCostCenters above.
+  // just the one on screen) — distinct from the per-department
+  // departmentLocked above.
   describe('year-not-open awareness (2026-08-08 3-state extension)', () => {
     it('yearNotOpen — the button is visible but disabled, with the year-wide Thai reason on screen, even though no Cost Center is individually locked', () => {
       render(
@@ -302,13 +322,14 @@ describe('AddTransactionForm', () => {
           glRef={GL_REF}
           existingRows={[]}
           onAdd={vi.fn()}
-          lockedCostCenters={{ CC1: 'Accounting' }}
+          selectedDepartment="Accounting"
+          departmentLocked
           yearNotOpen
         />,
       )
       expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeDisabled()
       expect(screen.getByText(/ไม่เปิดให้กรอกในเว็บ/)).toBeInTheDocument()
-      expect(screen.queryByText(/ถูกล็อกไว้/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/)).not.toBeInTheDocument()
     })
 
     it('yearNotOpen is optional — omitting it entirely behaves like "the year is open" (unchanged)', async () => {

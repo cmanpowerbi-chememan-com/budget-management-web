@@ -31,6 +31,7 @@ import {
   isDeletableRow,
   isEditableCell,
   loadStoredColumnWidths,
+  lockReasonTooltipTh,
   MONTH_COLUMN_WIDTH_FLOOR,
   MONTH_KEYS,
   MONTH_LABELS,
@@ -691,7 +692,7 @@ function TxnBlock({
         <PendingCells
           row={row}
           editable={editable}
-          disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : undefined}
+          disabledReason={meta.is_special ? SPECIAL_GL_TOOLTIP : lockReasonTooltipTh(row)}
           onCommitMonth={onCommitMonth}
           nowMonth={nowMonth}
         />

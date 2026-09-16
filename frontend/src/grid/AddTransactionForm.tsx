@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
 import {
-  ALL_COST_CENTERS_LOCKED_REASON_TH, DEPT_DATA_UNAVAILABLE_REASON_TH, YEAR_NOT_OPEN_ADD_REASON_TH,
-  isGlPickableForCostCenter, validateNewTransaction,
+  DEPARTMENT_UNKNOWN_ADD_REASON_TH, DEPT_DATA_UNAVAILABLE_REASON_TH, LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH,
+  YEAR_NOT_OPEN_ADD_REASON_TH, isGlPickableForCostCenter, lockedAddReasonTh, validateNewTransaction,
 } from './model'
 
 export interface AddResult {
@@ -23,24 +23,36 @@ export interface AddTransactionFormProps {
    * jakkaritw 2026-08-05): skips the create call entirely and opens that
    * GL's own subform directly — always resolves `{ok:true}`. */
   onAdd: (costCenter: string, glAccount: string) => Promise<AddResult>
-  /** cost_center -> department, LOCKED entries only (ADR-0013 UI parity,
-   * 2026-08-08 bug fix) — built by `BudgetGrid` from `GET
-   * /approval/locked-departments` + the caller's own CC->department
-   * mapping, the SAME live source the server's `row.editable` resolves
-   * from first. Optional/defaults to `{}` — "nothing is locked", the
-   * pre-existing behavior. jakkaritw's decision: keep the button VISIBLE,
-   * never hidden — disable it + show the reason when EVERY Fill-scope CC
-   * is locked; a specific locked pick is rejected the same way a
-   * duplicate-row pick already is. */
-  lockedCostCenters?: Record<string, string>
   /** `true` when the whole fiscal_year is NOT_OPEN (2026-08-08 3-state
-   * extension) — from `GET /approval/locked-departments`'s `year_not_open`,
-   * the SAME fetch that already feeds `lockedCostCenters`. A year-wide lock
-   * takes precedence over the per-department `allLocked` reason below: the
-   * button is disabled and shows this reason regardless of which Cost
-   * Centers are individually locked. Optional/defaults to `false` — "the
-   * year is open", the pre-existing behavior. */
+   * extension) — from `GET /approval/locked-departments`'s `year_not_open`.
+   * A year-wide lock takes precedence over every other disabled reason
+   * below. Optional/defaults to `false` — "the year is open", the
+   * pre-existing behavior. */
   yearNotOpen?: boolean
+  /** Issue #13, decision 1 (2026-09-17): the ฝ่าย this form is scoped to —
+   * `fillCostCenters` above is expected to ALREADY be narrowed to this
+   * ฝ่าย's own Cost Centers by the caller (`BudgetGrid`, via
+   * `approval/model.costCentersOfDepartment`). Used here only to name the
+   * ฝ่าย in the locked-reason message. Optional/defaults to `null`. */
+  selectedDepartment?: string | null
+  /** Issue #13, decision 1: `true` when `selectedDepartment` is currently
+   * mid-approval/APPROVED — replaces the old per-Cost-Center
+   * `lockedCostCenters` map now that the form only ever shows ONE ฝ่าย's
+   * Cost Centers at a time. jakkaritw's decision (2026-08-08, reaffirmed
+   * 2026-09-17): keep the button VISIBLE, never hidden — disable it and
+   * show the reason instead. Optional/defaults to `false`. */
+  departmentLocked?: boolean
+  /** Issue #13, decision 1/G: `true` when no ฝ่าย is selected/known — either
+   * nothing has been picked yet, or `GET /scope/departments` failed. The
+   * button disables with a distinct Thai reason rather than silently
+   * falling open and offering every Fill Cost Center regardless of ฝ่าย.
+   * Optional/defaults to `false`. */
+  departmentUnknown?: boolean
+  /** Issue #13, decision G: `true` when the lock-status fetch itself
+   * (`GET /approval/locked-departments`) failed — disables the button with
+   * its own Thai reason instead of assuming "nothing is locked".
+   * Optional/defaults to `false`. */
+  lockStatusUnavailable?: boolean
   /** One row per Cost Center in the caller's scope (`GET /scope/departments`,
    * already fetched by `BudgetGrid`) — resolves the picked Cost Center's
    * department for `DEPT_RESTRICTED_GL_GROUPS` (jakkaritw 2026-08-29:
@@ -68,7 +80,8 @@ export interface AddTransactionFormProps {
  * rows, 400+ Fill-scope cost centers): type to filter, Enter picks the
  * first match, Esc closes, click also picks. */
 export function AddTransactionForm({
-  fillCostCenters, glRef, existingRows, onAdd, lockedCostCenters = {}, yearNotOpen = false,
+  fillCostCenters, glRef, existingRows, onAdd, yearNotOpen = false,
+  selectedDepartment = null, departmentLocked = false, departmentUnknown = false, lockStatusUnavailable = false,
   departments = [], isAdmin = false, departmentsLoadFailed = false,
 }: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
@@ -145,7 +158,7 @@ export function AddTransactionForm({
 
   async function handleSubmit() {
     const validation = validateNewTransaction({
-      costCenter, glAccount, fillCostCenters, glRef, existingRows, lockedCostCenters, yearNotOpen, departments, isAdmin,
+      costCenter, glAccount, fillCostCenters, glRef, existingRows, selectedDepartment, yearNotOpen, departments, isAdmin,
     })
     if (!validation.ok) {
       setError(validation.errorTh ?? 'ข้อมูลไม่ถูกต้อง')
@@ -162,16 +175,23 @@ export function AddTransactionForm({
     }
   }
 
-  // jakkaritw's decision (2026-08-08): every Fill-scope Cost Center locked
-  // -> the button stays VISIBLE (never hidden silently) but non-actionable,
-  // with the Thai reason shown right beside it — same "say why on screen"
-  // tone as the subform's own 🔒 ดูรายละเอียด lock affordance.
-  const allLocked = fillCostCenters.length > 0 && fillCostCenters.every((cc) => cc in lockedCostCenters)
-  // `yearNotOpen` is a YEAR-wide lock (every department, not just the ones
-  // already mid-approval) — checked first, so its reason wins over the
-  // per-department `allLocked` one whenever both happen to be true.
-  const disabled = yearNotOpen || allLocked
-  const disabledReason = yearNotOpen ? YEAR_NOT_OPEN_ADD_REASON_TH : allLocked ? ALL_COST_CENTERS_LOCKED_REASON_TH : null
+  // jakkaritw's decision (2026-08-08, reaffirmed 2026-09-17 issue #13): the
+  // button stays VISIBLE (never hidden silently) but non-actionable, with
+  // the Thai reason shown right beside it — same "say why on screen" tone as
+  // the subform's own 🔒 ดูรายละเอียด lock affordance. Precedence: a
+  // year-wide lock outranks everything; not knowing the ฝ่าย at all outranks
+  // not knowing whether it's locked (which in turn outranks knowing it IS
+  // locked) — each state is strictly less informative than the next.
+  const disabled = yearNotOpen || departmentUnknown || lockStatusUnavailable || departmentLocked
+  const disabledReason = yearNotOpen
+    ? YEAR_NOT_OPEN_ADD_REASON_TH
+    : departmentUnknown
+      ? DEPARTMENT_UNKNOWN_ADD_REASON_TH
+      : lockStatusUnavailable
+        ? LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH
+        : departmentLocked
+          ? lockedAddReasonTh(selectedDepartment ?? 'ฝ่ายนี้')
+          : null
 
   if (!open) {
     return (

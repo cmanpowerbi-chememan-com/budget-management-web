@@ -29,7 +29,7 @@ no special-cased branches needed for "invalid approver1" vs "self-submit".
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pyodbc
 from pydantic import BaseModel
@@ -102,6 +102,14 @@ PENDING_STATUSES: frozenset[str] = frozenset(_STATUS_TO_POSITION)
 # already notes this cannot currently be reached by a non-admin, since their
 # Fill scope is itself derived from `dbo.cc_filler_map`.
 LOCKED_APPROVAL_STATUSES: frozenset[str] = PENDING_STATUSES | {APPROVED}
+
+# Issue #13 (2026-09-17): the machine-readable reason a grid row / a saved
+# write is NOT editable — ONE definition shared by `read_model.BudgetRow`
+# (computed alongside `editable`) and `write_model.PendingRowState` (mirrors
+# the same fields on a save response), so the client never has to infer why
+# from the `editable` boolean alone. "none" = editable (not a lock reason at
+# all, just "no reason it's locked").
+LockReason = Literal["none", "not_in_fill_scope", "department_locked", "year_not_open"]
 
 # Append-only action log values this module writes.
 ACTION_SUBMIT = "SUBMIT"
@@ -343,6 +351,11 @@ class ApprovalStatusState(BaseModel):
     # `mid_chain_admin_overwrite`). `None` when `can_submit` is True or
     # unknown (fail-closed default).
     submit_blocked_reason: str | None = None
+    # Issue #13 (2026-09-17): `status in LOCKED_APPROVAL_STATUSES` -- the same
+    # department-level lock `write_model`/`read_model` already enforce,
+    # surfaced here so the client's Add-transaction gate and focus-revalidate
+    # check can read ONE boolean instead of re-deriving it from `status`.
+    locked: bool = False
 
 
 def _occupant_for_position(position: int, approver1_empcode: str | None) -> str:
@@ -371,6 +384,7 @@ def _to_state(row: dict, department: str, fiscal_year: int, caller_empcode: str 
         current_position=current_position,
         current_approver_empcode=current_approver,
         can_act=bool(caller_empcode is not None and current_approver is not None and caller_empcode == current_approver),
+        locked=row["status"] in LOCKED_APPROVAL_STATUSES,
     )
 
 

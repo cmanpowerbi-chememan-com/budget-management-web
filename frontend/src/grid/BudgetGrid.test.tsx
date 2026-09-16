@@ -15,8 +15,13 @@ vi.mock('../api/subform')
 vi.mock('../api/approval')
 vi.mock('../api/reference')
 
+// Issue #13, decision E: `admitRows` (BudgetGrid.loadGrid) now keeps only
+// rows whose `department` matches the selected ฝ่าย — defaults to
+// 'Solution Delivery' (the DEPARTMENTS fixture below auto-selects it for
+// CC1, the single-Cost-Center scope most tests use); a test scoped to a
+// different/no selected department overrides this explicitly.
 function makeRow(cc: string, gl: string, overrides: Partial<BudgetRow> = {}): BudgetRow {
-  return makeRowFromOverrides({ cost_center: cc, gl_account: gl, editable: true, ...overrides })
+  return makeRowFromOverrides({ cost_center: cc, gl_account: gl, editable: true, department: 'Solution Delivery', ...overrides })
 }
 
 const SCOPE: ScopeState = {
@@ -36,6 +41,15 @@ const GL_REF = [
 const DEPARTMENTS = [
   { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
 ]
+
+/** Drives the DeptPicker UI to switch the selected ฝ่าย — issue #13 scoped
+ * "+ เพิ่ม Transaction" to the ฝ่าย on screen, so a test exercising 2+ ฝ่าย in
+ * one render must actually switch between them (a deep-linked
+ * `initialFilter.dept` only ever applies once, at mount). */
+function switchDepartment(target: string) {
+  fireEvent.click(document.querySelector('.dept-picker-trigger') as Element)
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${target}`) }))
+}
 
 describe('BudgetGrid', () => {
   beforeEach(() => {
@@ -509,6 +523,42 @@ describe('BudgetGrid', () => {
       await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
       await waitFor(() => expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument())
     })
+
+    // Issue #13, decision H (2026-09-17): this delete path had no
+    // department-locked branch at all before — only persistRow's did.
+    it('on a department-locked refusal, shows the Thai message only and reloads the grid (no raw English detail)', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+      vi.mocked(budgetApi.deleteRow).mockRejectedValue(
+        new ApiError(
+          403,
+          'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+          'Solution Delivery/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked',
+        ),
+      )
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT', submitter_empcode: null,
+        submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+        approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+        updated_at: null, current_position: null, current_approver_empcode: null, current_approver_name: null,
+        can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
+        submit_blocked_reason: null, locked: false,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      const deleteBtn = await screen.findByTestId('delete-row-CC1-5211800030')
+      fireEvent.click(deleteBtn)
+
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      expect(screen.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeInTheDocument()
+      expect(screen.queryByText(/mid-approval or approved/)).not.toBeInTheDocument()
+    })
   })
 
   describe('mount-time grid fetch (gated on ฝ่าย resolution — single fetch, no flicker)', () => {
@@ -583,8 +633,8 @@ describe('BudgetGrid', () => {
     vi.mocked(budgetApi.saveRow).mockResolvedValue({
       cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
       m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-      total_year: 0, remark: null, template: 'USER', gl_name: 'Office COST', gl_group: 'Office expenses', c_level: null, division: null, department: null,
-      updated_at: '2026-01-01T00:00:00Z',
+      total_year: 0, remark: null, template: 'USER', gl_name: 'Office COST', gl_group: 'Office expenses', c_level: null, division: null,
+      department: 'Solution Delivery', updated_at: '2026-01-01T00:00:00Z', editable: true, lock_reason: 'none',
     })
 
     render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
@@ -712,7 +762,10 @@ describe('BudgetGrid', () => {
 
       const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
       await waitFor(() => expect(trigger).toBeDisabled())
-      expect(screen.getByText(/ถูกล็อกไว้/)).toBeInTheDocument()
+      // The reason names the LOCKED ฝ่าย on screen — one text node combining
+      // both, so this uniquely targets the disabled-reason span (not the
+      // dept-picker trigger, which also just says "Solution Delivery" alone).
+      expect(screen.getByText(/Solution Delivery.*อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/)).toBeInTheDocument()
     })
 
     // 2026-08-08 3-state extension: a YEAR-wide lock (from the SAME
@@ -739,8 +792,8 @@ describe('BudgetGrid', () => {
       vi.mocked(budgetApi.saveRow).mockResolvedValue({
         cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
         m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
-        updated_at: '2026-01-01T00:00:00Z',
+        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null,
+        department: 'Solution Delivery', updated_at: '2026-01-01T00:00:00Z', editable: true, lock_reason: 'none',
       })
 
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
@@ -760,7 +813,15 @@ describe('BudgetGrid', () => {
       expect(await screen.findByTestId('pending-input-CC1-5211800030-m01')).toBeInTheDocument()
     })
 
-    it('one locked and one open department — the button stays actionable and the OPEN Cost Center can still be added (a blanket disable would break this)', async () => {
+    // Issue #13, G1 (2026-09-17): this test used to pin the PHANTOM-ROW
+    // bug — with BOTH Cost Centers offered by one shared Add form, adding
+    // to the OPEN one while the LOCKED one was on screen (or vice versa)
+    // rendered a live editable row under the wrong/locked ฝ่าย heading.
+    // Rewritten to pin the FIX: the Add form is scoped to the ฝ่าย on
+    // screen — disabled while looking at the locked one, and only offers
+    // (and only succeeds for) the OPEN ฝ่าย's own Cost Center once the
+    // picker switches there.
+    it('picker on the locked ฝ่าย disables Add; switching to the open ฝ่าย re-enables it and only offers that ฝ่าย\'s own Cost Center', async () => {
       const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
       const twoDepartments = [
         ...DEPARTMENTS,
@@ -773,23 +834,133 @@ describe('BudgetGrid', () => {
       vi.mocked(budgetApi.saveRow).mockResolvedValue({
         cost_center: 'CC2', gl_account: '5211800030', fiscal_year: 2027,
         m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
-        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
-        updated_at: '2026-01-01T00:00:00Z',
+        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null,
+        department: 'Warehouse', updated_at: '2026-01-01T00:00:00Z', editable: true, lock_reason: 'none',
       })
 
       render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: null }} />)
 
-      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
-      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
-      expect(trigger).not.toBeDisabled() // >1 ฝ่าย with only one locked -> never a blanket disable
+      // Auto-selects "Solution Delivery" (alphabetically first within the
+      // shared division) — locked per the mock above.
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+
+      switchDepartment('Warehouse')
+      await waitFor(() => expect(trigger).not.toBeDisabled())
+
       fireEvent.click(trigger)
       fireEvent.focus(screen.getByLabelText('Cost Center'))
+      // CC1 (the locked ฝ่าย's own Cost Center) is not even offered anymore.
+      expect(screen.queryByRole('option', { name: 'CC1' })).not.toBeInTheDocument()
       fireEvent.click(screen.getByRole('option', { name: 'CC2' }))
       fireEvent.focus(screen.getByLabelText('GL Code'))
       fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
       fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
 
+      // The new row renders under Warehouse (the ฝ่าย on screen) — never a
+      // phantom row appended regardless of which ฝ่าย it actually belongs to.
       expect(await screen.findByTestId('pending-input-CC2-5211800030-m01')).toBeInTheDocument()
+    })
+
+    // Issue #13, decision E: the row-admission function's defensive branch —
+    // unreachable via the form itself (validateNewTransaction already blocks
+    // a Cost Center outside the selected ฝ่าย), but a live CC->ฝ่าย remap
+    // landing between the form opening and the save completing could still
+    // make the server's response disagree with what was on screen.
+    it('an added row whose response department differs from the one on screen is NOT appended', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({
+        cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 0, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null,
+        department: 'Some Other Department', updated_at: '2026-01-01T00:00:00Z', editable: true, lock_reason: 'none',
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      await waitFor(() => expect(budgetApi.saveRow).toHaveBeenCalled())
+      expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument()
+    })
+
+    // Issue #13, decision G: the lock-status fetch itself failing must never
+    // silently fall open — the button disables with its own reason, but the
+    // grid itself still loads (rows carry their own server-truth editable).
+    it('a failed GET /approval/locked-departments disables Add (never falls open) while the grid still loads', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockRejectedValue(new Error('network down'))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+      expect(screen.getByText(/ไม่สามารถตรวจสอบสถานะฝ่าย/)).toBeInTheDocument()
+      // The grid itself is unaffected — it still renders.
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+    })
+
+    // Issue #13, decision I (2026-09-17): a tab left open before a submit
+    // (by another tab/device/co-Filler) must lock itself within one focus
+    // change, not never.
+    it('a focus event that reveals the ฝ่าย just became locked reloads the grid', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'PENDING_APPROVER1', submitter_empcode: null,
+        submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+        approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+        updated_at: null, current_position: 1, current_approver_empcode: null, current_approver_name: null,
+        can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
+        submit_blocked_reason: null, locked: true,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+
+      fireEvent(window, new Event('focus'))
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+    })
+
+    it('a focus event with no status change does NOT reload the grid', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT', submitter_empcode: null,
+        submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+        approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+        updated_at: null, current_position: null, current_approver_empcode: null, current_approver_name: null,
+        can_act: false, notification_warning: null, is_post_deadline: false, can_submit: true,
+        submit_blocked_reason: null, locked: false,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+
+      fireEvent(window, new Event('focus'))
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1) // status agrees with lockedDepartments -> no reload
     })
   })
 
@@ -822,36 +993,41 @@ describe('BudgetGrid', () => {
 
       render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: null }} />)
 
+      // Auto-selects "Talent & Culture" (its division, 'Corporate Affairs',
+      // sorts before 'Finance Division') — its own Cost Center gets the GL.
       fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+
+      // Issue #13, decision 1: switching to Accounting scopes the Add form
+      // to ITS Cost Center — the seminar GL is withheld there instead.
+      switchDepartment('Accounting')
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       fireEvent.focus(screen.getByLabelText('Cost Center'))
       fireEvent.click(screen.getByRole('option', { name: '10AC012000' }))
       fireEvent.focus(screen.getByLabelText('GL Code'))
       expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
       expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
-
-      fireEvent.focus(screen.getByLabelText('Cost Center'))
-      fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
-      fireEvent.focus(screen.getByLabelText('GL Code'))
-      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
     })
 
-    // Gate finding MED-1: BudgetGrid swallows a /scope/departments failure
-    // (departments = [], no banner). The picker must not then hide the seminar
-    // GLs in silence — this is the wiring of that signal.
-    it('a failed /scope/departments makes the picker say WHY the restricted GLs are missing', async () => {
+    // Issue #13, decision 1/G (2026-09-17): a `GET /scope/departments`
+    // failure means the ฝ่าย on screen cannot be known either (both come
+    // from the same fetch) — the Add button now disables ENTIRELY with its
+    // own distinct reason, superseding the old inline "why is this GL
+    // missing" message (unreachable now: the form can no longer even open).
+    it('a failed /scope/departments disables Add with the distinct "ยังไม่ทราบฝ่าย" reason', async () => {
       const scope: ScopeState = { ...SCOPE, fillCostCenters: ['10HR012000'], seeCostCenters: ['10HR012000'] }
       mockGrid()
       vi.mocked(budgetApi.fetchDepartments).mockRejectedValue(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง'))
 
       render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: null }} />)
 
-      fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
-      fireEvent.focus(screen.getByLabelText('Cost Center'))
-      fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
-      fireEvent.focus(screen.getByLabelText('GL Code'))
-
-      expect(screen.getByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).toBeInTheDocument()
-      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+      expect(screen.getByText(/ยังไม่ทราบฝ่าย/)).toBeInTheDocument()
     })
 
     it('an admin gets the seminar GL on a cost center outside Talent & Culture', async () => {
@@ -859,6 +1035,10 @@ describe('BudgetGrid', () => {
         ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['10AC012000'], seeCostCenters: ['10AC012000'],
       }
       mockGrid()
+      // This admin's OWN personal-view department list (admin_view_enabled
+      // defaults off — the "โหมด Admin" hat is a deliberate, visible act) —
+      // only their own Cost Center's ฝ่าย, same as any Filler would see.
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue([TWO_DEPARTMENTS[0]])
 
       render(<BudgetGrid scope={adminScope} initialFilter={{ dept: null, year: null }} />)
 

@@ -528,6 +528,100 @@ def test_live_cc_dims_beats_stale_snapshot_direction_1_old_department_locked():
     assert rows[0].editable is True
 
 
+# ---------------------------------------------------------------------------
+# merge_budget_rows — `department` + `lock_reason` per row (issue #13,
+# 2026-09-17): computed at the SAME point as `editable`, from the same
+# inputs, so `editable == (lock_reason == "none")` always holds.
+# ---------------------------------------------------------------------------
+
+def test_row_carries_its_own_resolved_department():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert rows[0].department == "DEPT1"
+
+
+def test_editable_row_has_lock_reason_none():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert rows[0].editable is True
+    assert rows[0].lock_reason == "none"
+
+
+def test_see_only_row_lock_reason_is_not_in_fill_scope():
+    join_rows = [_blank_join_row("CC2", "GL1", pending_cost_center="CC2")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"])
+
+    rows = merge_budget_rows(join_rows, {}, scope)
+
+    assert rows[0].editable is False
+    assert rows[0].lock_reason == "not_in_fill_scope"
+
+
+def test_locked_department_row_lock_reason_is_department_locked():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, locked_departments=frozenset({"DEPT1"}))
+
+    assert rows[0].editable is False
+    assert rows[0].lock_reason == "department_locked"
+
+
+def test_not_in_fill_scope_outranks_department_locked_in_lock_reason():
+    """A row that is BOTH out of Fill scope AND in a locked department
+    reports the scope reason — matches the `editable` boolean's own
+    short-circuit (`cc in fill_ccs and not row_locked`): `row_locked` is
+    never even consulted once the CC is out of scope."""
+    join_rows = [_blank_join_row("CC2", "GL1", pending_cost_center="CC2", pending_department="DEPT1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1", "CC2"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, locked_departments=frozenset({"DEPT1"}))
+
+    assert rows[0].editable is False
+    assert rows[0].lock_reason == "not_in_fill_scope"
+
+
+def test_year_not_open_row_lock_reason_is_year_not_open():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+
+    rows = merge_budget_rows(join_rows, {}, scope, year_not_open=True)
+
+    assert rows[0].editable is False
+    assert rows[0].lock_reason == "year_not_open"
+
+
+def test_year_not_open_outranks_admin_in_lock_reason():
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1")]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(join_rows, {}, scope, admin_view_enabled=True, year_not_open=True)
+
+    assert rows[0].editable is False
+    assert rows[0].lock_reason == "year_not_open"
+
+
+def test_admin_in_locked_department_is_editable_with_lock_reason_none():
+    """ADR-0012: admin-wide bypasses the department lock entirely, so the
+    row stays editable AND its lock_reason is 'none' — the lock reason must
+    never say 'department_locked' for a row the admin can, in fact, edit."""
+    join_rows = [_blank_join_row("CC1", "GL1", pending_cost_center="CC1", pending_department="DEPT1")]
+    scope = _scope(email="admin@chememan.com", is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
+
+    rows = merge_budget_rows(
+        join_rows, {}, scope, admin_view_enabled=True, locked_departments=frozenset({"DEPT1"})
+    )
+
+    assert rows[0].editable is True
+    assert rows[0].lock_reason == "none"
+
+
 def test_department_filter_groups_the_row_under_the_live_department_not_the_snapshot():
     """jakkaritw's accepted consequence (2026-08-07): after a remap, the row
     moves to the NEW department's grid entirely — "ย้ายฝ่ายแล้วก็ควรย้ายทั้งตัว

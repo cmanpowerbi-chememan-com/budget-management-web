@@ -59,6 +59,14 @@ function defaultOnUnauthorized(): void {
  * but needs a different message. */
 export const DEPARTMENT_LOCKED_DETAIL_MARKER = 'mid-approval or approved, editing is locked'
 
+/** Stable marker substring inside `write_model.DepartmentUnknownError`'s
+ * message (issue #13, decision 2: an unmapped department now REFUSES the
+ * write instead of the old fail-open policy). Unreachable via the normal UI
+ * (a non-admin's Fill scope is itself derived from the same mapping) —
+ * mapped here anyway so a crafted/edge-case request never shows a raw
+ * English fragment. */
+export const DEPARTMENT_UNKNOWN_DETAIL_MARKER = 'cannot verify approval-lock status'
+
 /** Stable marker substrings inside `deadline.PastDeadlineError`'s message
  * (`"the submission deadline for fiscal_year=<Y> has passed"`, raised by both
  * `write_model.py`'s per-item write guards and `approval.py`'s submit gate —
@@ -78,6 +86,9 @@ function messageForStatus(status: number, detail?: string): string {
       // say WHY the save was refused and what to do next (a reload gets the
       // now-read-only, correct grid), not a generic "no permission" line.
       return 'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่'
+    }
+    if (detail?.includes(DEPARTMENT_UNKNOWN_DETAIL_MARKER)) {
+      return 'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin'
     }
     if (detail?.includes(PAST_DEADLINE_DETAIL_PREFIX) && detail.includes(PAST_DEADLINE_DETAIL_SUFFIX)) {
       return 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'

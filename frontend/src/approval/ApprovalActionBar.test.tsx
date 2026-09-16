@@ -30,6 +30,7 @@ function state(overrides: Partial<ApprovalStatusState> = {}): ApprovalStatusStat
     is_post_deadline: false,
     can_submit: true,
     submit_blocked_reason: null,
+    locked: false,
     ...overrides,
   }
 }
@@ -320,12 +321,17 @@ describe('ApprovalActionBar', () => {
     expect(screen.queryByTestId('approval-submit-blocked-hint')).not.toBeInTheDocument()
   })
 
-  it('shows the invalid_approval_state hint for a Filler on an APPROVED department (the pending-lock hint does not cover this status)', async () => {
+  // Issue #13 (2026-09-17): `isEditLocked` now covers APPROVED too (was
+  // `isPendingLocked`, PENDING_* only) — the longest-lived locked state now
+  // gets the same explicit note as a PENDING_* one, with wording that names
+  // it as "Approved" rather than "Submitted".
+  it('shows the APPROVED-worded locked note for a Filler on an APPROVED department, and suppresses the generic hint (dedup, same as PENDING_*)', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
       state({ status: 'APPROVED', can_submit: false, submit_blocked_reason: 'invalid_approval_state' }),
     )
     render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
-    await waitFor(() => expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument())
+    await screen.findByText('Approved — locked for editing until it is rejected')
+    expect(screen.queryByTestId('approval-submit-blocked-hint')).not.toBeInTheDocument()
   })
 
   it("on a 409 from override-step, shows the server's Thai detail as-is", async () => {

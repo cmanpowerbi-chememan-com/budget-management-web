@@ -1067,6 +1067,31 @@ def test_get_status_no_record_returns_draft():
     result = get_approval_status(conn, DEPT, FY)
     assert result.status == "DRAFT"
     assert result.current_position is None
+    assert result.locked is False
+
+
+@pytest.mark.parametrize("status", [PENDING_APPROVER1, PENDING_APPROVER2, PENDING_APPROVER3, APPROVED])
+def test_get_status_locked_true_for_pending_or_approved(status):
+    """Issue #13 (2026-09-17): `locked` mirrors LOCKED_APPROVAL_STATUSES
+    exactly — the same set `write_model`/`read_model` already enforce — so
+    the client's Add-button gate and focus-revalidate check can read one
+    boolean instead of re-deriving it from `status` itself."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = _status_row(
+        status=status, approver1_empcode="200", submitter_empcode="999"
+    )
+    result = get_approval_status(conn, DEPT, FY)
+    assert result.locked is True
+
+
+@pytest.mark.parametrize("status", [DRAFT, REJECTED])
+def test_get_status_locked_false_for_draft_or_rejected(status):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = _status_row(
+        status=status, approver1_empcode="200", submitter_empcode="999"
+    )
+    result = get_approval_status(conn, DEPT, FY)
+    assert result.locked is False
 
 
 def test_get_status_reports_current_approver_and_can_act():

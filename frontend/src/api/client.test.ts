@@ -202,6 +202,22 @@ describe('apiFetch', () => {
     })
   })
 
+  it('maps a department_unknown 403 (issue #13 decision 2) to a specific message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, {
+          detail: 'CC1 has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status',
+        }),
+      ),
+    )
+
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 403,
+      message: 'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin',
+    })
+  })
+
   it('keeps the generic forbidden Thai message for a plain (non-department-locked) 403', async () => {
     vi.stubGlobal(
       'fetch',

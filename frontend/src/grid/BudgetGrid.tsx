@@ -1,23 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
-import { fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
+import { fetchApprovalStatus, fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount, SapCoverage } from '../api/types'
-import { isFillerOfDepartment } from '../approval/model'
+import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
 import { ApprovalActionBar } from '../approval/ApprovalActionBar'
 import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
 import { confirmDialog } from '../platform/confirm'
+import { publishNotice } from '../platform/notice'
 import { DetailSubform } from '../subform/DetailSubform'
 import { deriveTravelSideFromGl, type TripSide } from '../subform/model'
 import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
 import {
-  buildNewRowPayload, buildSavePayload, glMetaFor, isCostCenterLocked, lockedCostCenterDepartments, mergeSavedRow, sapFreshnessLine, type MonthKey,
+  admitRows, buildNewRowPayload, buildSavePayload, glMetaFor, mergeSavedRow, sapFreshnessLine, type MonthKey,
 } from './model'
 import { DeptPicker } from '../picker/DeptPicker'
 import { buildDeptHierarchy, resolveInitialDept } from '../picker/model'
@@ -113,6 +114,12 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // (the live CC->department mapping already fetched for the ฝ่าย picker)
   // in `lockedCostCenters` below.
   const [lockedDepartments, setLockedDepartments] = useState<Set<string>>(new Set())
+  // Issue #13, decision G (2026-09-17): the fetch above failing must NEVER
+  // silently act as though nothing were locked (the old catch reset
+  // `lockedDepartments`/`yearNotOpen` to their "open" defaults) — the Add
+  // button disables itself with its own Thai reason instead, via this flag
+  // (see `AddTransactionForm`'s `lockStatusUnavailable`).
+  const [lockedDepartmentsFailed, setLockedDepartmentsFailed] = useState(false)
   // 2026-08-08 3-state extension: `year` has no `dbo.submission_deadline` row
   // at all — a YEAR-wide lock (every department, not just the ones already
   // mid-approval), fetched from the SAME `GET /approval/locked-departments`
@@ -214,15 +221,20 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     if (hasNoScope || adminViewEnabled) {
       setLockedDepartments(new Set())
       setYearNotOpen(false)
+      setLockedDepartmentsFailed(false)
       return
     }
     try {
       const result = await fetchLockedDepartments(year)
       setLockedDepartments(new Set(result.departments))
       setYearNotOpen(result.year_not_open)
+      setLockedDepartmentsFailed(false)
     } catch {
-      setLockedDepartments(new Set()) // fail-open — never blocks "+ เพิ่ม Transaction" on a fetch error
-      setYearNotOpen(false)
+      // Issue #13, decision G: NEVER fall open — leave the last-known
+      // `lockedDepartments`/`yearNotOpen` untouched (stale is safer than
+      // wrong) and disable "+ เพิ่ม Transaction" via `lockedDepartmentsFailed`
+      // instead of pretending the check succeeded and found nothing locked.
+      setLockedDepartmentsFailed(true)
     }
   }
 
@@ -275,7 +287,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     setError(null)
     try {
       const data = await fetchBudgetGrid({ year, department: department ?? undefined, adminViewEnabled })
-      setRows(data)
+      setRows(admitRows(data, department))
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
       setError(message)
@@ -316,18 +328,44 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     [isPureAdmin, departments, scope.fillCostCenters],
   )
 
-  /** cost_center -> department, LOCKED entries only, for every Cost Center
-   * "+ เพิ่ม Transaction" can offer — feeds `AddTransactionForm`'s lock
-   * check (see `model.lockedCostCenterDepartments`). `lockedDepartments` is
-   * already empty for admin-wide (`loadLockedDepartments` above), so no
-   * separate admin bypass is needed here. */
-  const lockedCostCenters = useMemo(
-    () => lockedCostCenterDepartments(fillCostCenters, departments, lockedDepartments),
-    [fillCostCenters, departments, lockedDepartments],
-  )
+  /** Issue #13, decision F (2026-09-17): "+ เพิ่ม Transaction" now offers
+   * ONLY the Cost Centers of the ฝ่าย on screen — a Filler with Cost Centers
+   * in 2+ ฝ่าย (38 of 71) must switch the picker to add to the OTHER one,
+   * never have both mixed into a single Add form (the G1 bug this whole
+   * change exists to close). Reuses `approval/model.costCentersOfDepartment`
+   * (the caller's own live `GET /scope/departments` rows) crossed with the
+   * caller's Fill scope. */
+  const fillCostCentersOfSelectedDept = useMemo(() => {
+    if (!department) return []
+    const fillSet = new Set(fillCostCenters)
+    return costCentersOfDepartment(departments, department).filter((cc) => fillSet.has(cc))
+  }, [department, departments, fillCostCenters])
+
+  // `lockedDepartments` is already empty for admin-wide (`loadLockedDepartments`
+  // above), so `selectedDepartmentLocked` is always false there — no separate
+  // admin bypass needed here.
+  const selectedDepartmentLocked = department !== null && lockedDepartments.has(department)
 
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
   const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
+
+  /** Issue #13, decision H (2026-09-17): the ONE reaction to "the server
+   * says this write is now department-locked" — shared by `persistRow` and
+   * `handleDeleteRow` below (called inline) and by `onDepartmentLocked`
+   * passed down to `DetailSubform`/`TripManager` (called via their own
+   * save/delete catch). Bumps `dataVersion` (so `ApprovalActionBar`
+   * refreshes its Submit/locked-note state too), reloads the grid so its
+   * rows match the server, and refreshes `lockedDepartments` too (same
+   * bundle `handleApprovalChanged` already reloads after a submit/approve/
+   * reject) so "+ เพิ่ม Transaction" locks itself in the same beat, not just
+   * the grid cells. Also the target of decision I's focus-revalidation (a
+   * status change detected proactively gets the exact same remedy as one
+   * discovered via a refused write). */
+  function refreshAfterLockChange() {
+    setDataVersion((v) => v + 1)
+    loadGrid()
+    loadLockedDepartments()
+  }
 
   /** Shared save path for any Pending-layer edit (month cell or remark) —
    * optimistic local replace, `PUT /budget/rows`, then the server-
@@ -364,7 +402,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       // mapping), not a generic conflict line.
       if (err instanceof ApiError && isDepartmentLockedError(err)) {
         setRowMessages((prev) => ({ ...prev, [key]: { kind: 'error', text: err.message } }))
-        await loadGrid()
+        refreshAfterLockChange()
         return
       }
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'บันทึกไม่สำเร็จ'
@@ -430,7 +468,13 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   async function handleAddTransaction(costCenter: string, glAccount: string): Promise<AddResult> {
     const meta = glMetaFor(glAccount, glRef)
     if (meta.is_special) {
-      openSpecialForm(costCenter, glAccount, meta.gl_group, false)
+      // Issue #13, decision F/G5 (2026-09-17): derives readOnly from the
+      // SELECTED ฝ่าย's own lock state — was a literal `false`, so a special
+      // GL picked from the Add form always opened a fully editable subform
+      // even while the ฝ่าย on screen was locked (the row path just below,
+      // `handleOpenSpecial`, already used `!row.editable` correctly; only
+      // this Add-form path had the bug).
+      openSpecialForm(costCenter, glAccount, meta.gl_group, selectedDepartmentLocked)
       return { ok: true }
     }
     try {
@@ -459,15 +503,36 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           department: saved.department,
           updated_at: saved.updated_at,
         } as BudgetRow['pending'],
-        // Derived, not hardcoded (jakkaritw 2026-08-08 bug fix): the create
-        // above only ever succeeds for a Cost Center this SAME
-        // `lockedCostCenters` answer says is not locked (the Add form's own
-        // `validateNewTransaction` check already refused it otherwise) —
-        // this stays the honest, self-correcting source of truth rather
-        // than a value that merely HAPPENS to always be true today.
-        editable: !isCostCenterLocked(costCenter, lockedCostCenters),
+        // Issue #13, decision E (2026-09-17): taken straight from the
+        // server's own save response, never derived client-side — was
+        // `!isCostCenterLocked(costCenter, lockedCostCenters)` (removed),
+        // which answered "is this Cost Center's ฝ่าย locked" but never
+        // checked whether the row actually belongs to the ฝ่าย ON SCREEN
+        // (the G1 bug: a Filler with 2 ฝ่าย could add to their OTHER, open
+        // ฝ่าย while looking at a locked one, and this line would compute
+        // `editable: true` for a row about to be admitted under the wrong
+        // heading). `admitRows` below is what actually closes that gap.
+        editable: saved.editable,
+        department: saved.department,
+        lock_reason: saved.lock_reason,
       }
-      setRows((prev) => [...prev, newRow])
+      // Issue #13, decision E: the ONE admission point — a row whose
+      // department does not match the ฝ่าย on screen is never appended.
+      // Defensive only: `validateNewTransaction` (via `AddTransactionForm`)
+      // already rejects a Cost Center outside the selected ฝ่าย before this
+      // is ever called, so `saved.department` should always match `department`
+      // in practice; this is the backstop for the rare case it doesn't
+      // (e.g. a live CC->ฝ่าย remap landing between the form opening and the
+      // save completing).
+      let admitted = true
+      setRows((prev) => {
+        const next = admitRows([...prev, newRow], department)
+        admitted = next.length > prev.length
+        return next
+      })
+      if (!admitted) {
+        publishNotice(`บันทึกไปที่ฝ่าย "${saved.department ?? '-'}" แล้ว สลับฝ่ายเพื่อดู`)
+      }
       // Same reason persistRow / handleSpecialSaved bump dataVersion: a
       // non-special GL picked here can ALSO be the department's first-ever
       // row, so the Submit button must not stay stuck on a stale department_empty.
@@ -496,6 +561,14 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         await loadGrid()
+        return
+      }
+      // Issue #13, decision H: department-locked refused the same way as a
+      // save (Thai message only, shared refresh) — this delete path had no
+      // such branch before, unlike persistRow's.
+      if (err instanceof ApiError && isDepartmentLockedError(err)) {
+        setRowMessages((prev) => ({ ...prev, [key]: { kind: 'error', text: err.message } }))
+        refreshAfterLockChange()
         return
       }
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'ลบไม่สำเร็จ'
@@ -529,6 +602,55 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       window.removeEventListener('keydown', onKey)
     }
   }, [isFullscreen])
+
+  // Issue #13, decision I (2026-09-17): revalidate the selected ฝ่าย's lock
+  // state on tab focus/visibility ONLY — no polling, no interval. A tab left
+  // open before a submit (by this user, another tab, another device, or a
+  // co-Filler) must lock itself within one focus change, not never. Refs
+  // (not effect deps) carry `department`/`lockedDepartments` so the two
+  // listeners are attached exactly ONCE per mount, not re-attached on every
+  // state change — and `inFlight` keeps this to exactly ONE
+  // `GET /approval/status` call per focus/visibility event (a prior change
+  // elsewhere in this app once produced ~240 status calls per grid by
+  // accident; this must never repeat that).
+  const departmentRef = useRef(department)
+  const lockedDepartmentsRef = useRef(lockedDepartments)
+  useEffect(() => {
+    departmentRef.current = department
+  }, [department])
+  useEffect(() => {
+    lockedDepartmentsRef.current = lockedDepartments
+  }, [lockedDepartments])
+  useEffect(() => {
+    if (hasNoScope) return
+    let inFlight = false
+    async function revalidate() {
+      const dept = departmentRef.current
+      if (!dept || inFlight) return
+      inFlight = true
+      try {
+        const status = await fetchApprovalStatus(dept, year)
+        if (status.locked !== lockedDepartmentsRef.current.has(dept)) {
+          refreshAfterLockChange()
+        }
+      } catch {
+        // Best-effort background check — a failed revalidation just tries
+        // again on the next focus/visibility event, never blocks the page.
+      } finally {
+        inFlight = false
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'visible') revalidate()
+    }
+    window.addEventListener('focus', revalidate)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', revalidate)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasNoScope, year])
 
   if (hasNoScope) {
     return (
@@ -569,12 +691,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         <YearPicker year={year} onChange={setYear} />
         <DeptPicker rows={departments} selected={department} onSelect={setDepartment} pendingApprovalDepartments={pendingApprovalDepartments} />
         <AddTransactionForm
-          fillCostCenters={fillCostCenters}
+          fillCostCenters={fillCostCentersOfSelectedDept}
           glRef={glRef}
           existingRows={rows}
           onAdd={handleAddTransaction}
-          lockedCostCenters={lockedCostCenters}
           yearNotOpen={yearNotOpen}
+          selectedDepartment={department}
+          departmentLocked={selectedDepartmentLocked}
+          departmentUnknown={department === null}
+          lockStatusUnavailable={lockedDepartmentsFailed}
           departments={departments}
           isAdmin={scope.isAdmin}
           departmentsLoadFailed={departmentsLoadFailed}
@@ -693,6 +818,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           readOnly={detailTarget.readOnly}
           onClose={() => setDetailTarget(null)}
           onSaved={handleSpecialSaved}
+          onDepartmentLocked={() => {
+            setDetailTarget((prev) => (prev ? { ...prev, readOnly: true } : prev))
+            refreshAfterLockChange()
+          }}
         />
       )}
 
@@ -704,6 +833,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           readOnly={tripManagerOpenFor.readOnly}
           onClose={() => setTripManagerOpenFor(null)}
           onSaved={handleSpecialSaved}
+          onDepartmentLocked={() => {
+            setTripManagerOpenFor((prev) => (prev ? { ...prev, readOnly: true } : prev))
+            refreshAfterLockChange()
+          }}
         />
       )}
 

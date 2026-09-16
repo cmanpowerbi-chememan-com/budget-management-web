@@ -401,6 +401,40 @@ describe('DetailSubform', () => {
     expect(onSaved).toHaveBeenCalled()
   })
 
+  // Issue #13, decision H (2026-09-17): the ฝ่าย locked while this modal was
+  // open (a submit from another tab/device/co-Filler mid-edit).
+  it('a department-locked save shows the Thai message only (no raw English detail appended) and calls onDepartmentLocked', async () => {
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+    vi.mocked(subformApi.saveDetailLine).mockRejectedValue(
+      new ApiError(
+        403,
+        'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+        'Accounting/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked',
+      ),
+    )
+    const onDepartmentLocked = vi.fn()
+    render(
+      <DetailSubform
+        costCenter="CC1"
+        glAccount="5211900030"
+        glGroup="Entertainment"
+        glName={null}
+        fiscalYear={2027}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        onDepartmentLocked={onDepartmentLocked}
+      />,
+    )
+    await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+    fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
+    fireEvent.click(screen.getByTestId('save-all'))
+
+    await waitFor(() => expect(onDepartmentLocked).toHaveBeenCalled())
+    expect(screen.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeInTheDocument()
+    expect(screen.queryByText(/mid-approval or approved/)).not.toBeInTheDocument()
+  })
+
   // jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
   // (half-up) and has no decimals — SUPERSEDES bug-subform-no-decimals
   // (7ba8f49, shipped one day earlier), which had allowed a typed decimal
@@ -854,6 +888,36 @@ describe('DetailSubform', () => {
 
       expect(subformApi.deleteDetailLine).not.toHaveBeenCalled()
       expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument()
+    })
+
+    it('a department-locked delete shows the Thai message only and calls onDepartmentLocked', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine({ updated_at: '2026-02-01T00:00:00' })])
+      vi.mocked(subformApi.deleteDetailLine).mockRejectedValue(
+        new ApiError(
+          403,
+          'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+          'Accounting/2027 is APPROVED — mid-approval or approved, editing is locked',
+        ),
+      )
+      const onDepartmentLocked = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          onDepartmentLocked={onDepartmentLocked}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ลบรายการ' }))
+
+      await waitFor(() => expect(onDepartmentLocked).toHaveBeenCalled())
+      expect(screen.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeInTheDocument()
     })
 
     it('a 409 conflict on delete refetches the lines and shows a Thai message', async () => {

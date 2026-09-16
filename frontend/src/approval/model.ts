@@ -8,7 +8,12 @@ import type { ApprovalStatusState, DepartmentRow } from '../api/types'
 const NIPAPORN_EMPCODE = '101032'
 const WARAPORN_EMPCODE = '100427'
 
-const PENDING_STATUSES = new Set(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3'])
+// Issue #13 (2026-09-17): mirrors `app.approval.LOCKED_APPROVAL_STATUSES`
+// exactly (PENDING_* + APPROVED) — was `PENDING_STATUSES` (PENDING_* only,
+// used by the now-removed `isPendingLocked`), which drifted from the
+// server's own definition the day ADR-0013 shipped write-side enforcement
+// for APPROVED too. ONE definition here so the two can never drift again.
+const LOCKED_STATUSES = new Set(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])
 
 const BASE_STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Draft — not submitted',
@@ -50,11 +55,15 @@ export function statusChipLabel(state: Pick<ApprovalStatusState, 'status' | 'cur
   return BASE_STATUS_LABEL[state.status] ?? state.status
 }
 
-/** True while the department is locked to a PENDING_* step — informational
- * only (the note text), the backend write path does NOT yet enforce this
- * lock (flagged as a known gap, see the A10 final report). */
-export function isPendingLocked(status: string): boolean {
-  return PENDING_STATUSES.has(status)
+/** True while the department is locked for editing — PENDING_* (mid-chain)
+ * OR APPROVED (fully signed off). Renamed from `isPendingLocked` (issue #13,
+ * 2026-09-17) once APPROVED joined the set: the backend write path DOES
+ * enforce this lock, for both statuses (ADR-0013, `write_model
+ * ._ensure_department_not_locked`) — the note this drives is informational
+ * (explains a state the server already refuses), not the enforcement
+ * itself. */
+export function isEditLocked(status: string): boolean {
+  return LOCKED_STATUSES.has(status)
 }
 
 /** Every distinct Cost Center of `department`, from the caller's own

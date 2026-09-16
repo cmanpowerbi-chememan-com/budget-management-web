@@ -651,68 +651,86 @@ export function buildNewRowPayload(costCenter: string, glAccount: string, fiscal
 }
 
 // ---------------------------------------------------------------------------
-// "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix) — ADR-0013's
-// read-only lock ported to a (CC, GL) pair that has no row yet, so a Filler
-// can no longer pick+add into a locked department and only THEN get a late
-// 403 `department_locked`. `lockedCostCenters` (cost_center -> department,
-// LOCKED entries only) is built once in `BudgetGrid` from `GET
-// /approval/locked-departments` + the caller's own CC->department mapping
-// (`GET /scope/departments`) — the SAME live source `_resolve_live_department`
-// prioritizes server-side, so this can never disagree with `row.editable`.
+// "+ เพิ่ม Transaction" lock-awareness — ADR-0013's read-only lock ported to
+// a (CC, GL) pair that has no row yet, so a Filler can no longer pick+add
+// into a locked department and only THEN get a late 403 `department_locked`.
+//
+// REDESIGNED 2026-09-17 (issue #13, decision 1): the form is now scoped to
+// ONE ฝ่าย at a time — the one on screen — so a single `departmentLocked`
+// boolean replaces the old per-Cost-Center `lockedCostCenters` map (a
+// Filler with Cost Centers in 2 ฝ่าย could otherwise add a row into whichever
+// ฝ่าย was open, then have the client append it under the LOCKED ฝ่าย's
+// heading — see `admitRows` below for the other half of that fix).
 // ---------------------------------------------------------------------------
 
-/** True when `costCenter` resolves (via `lockedCostCenters`) to a currently
- * locked department. ONE helper, used by BOTH `validateNewTransaction`
- * (reject before ever calling the API) and `BudgetGrid.handleAddTransaction`
- * (the newly-created row's own `editable`) — so the two call sites can never
- * disagree with each other. */
-export function isCostCenterLocked(costCenter: string, lockedCostCenters: Record<string, string>): boolean {
-  return costCenter in lockedCostCenters
-}
-
-/** Thai reason shown inline when a specific Cost Center pick is rejected —
- * names the department so the user knows exactly why, same tone as the
- * subform's own ADR-0013 lock copy ("อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้"). */
+/** Thai reason shown when the ฝ่าย on screen is locked — names it so the
+ * user knows exactly why, same tone as the subform's own ADR-0013 lock copy
+ * ("อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้"). */
 export function lockedAddReasonTh(department: string): string {
   return `ฝ่าย "${department}" อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว ไม่สามารถเพิ่มรายการใหม่ในฝ่ายนี้ได้ในสถานะนี้`
 }
 
-/** Thai reason shown next to the "+ เพิ่ม Transaction" button itself when
- * EVERY Cost Center the caller can Fill is locked — the button stays
- * visible (never hidden silently, jakkaritw 2026-08-08) but is disabled. */
-export const ALL_COST_CENTERS_LOCKED_REASON_TH =
-  'Cost Center ที่คุณกรอกงบได้ทั้งหมดถูกล็อกไว้ (ฝ่ายอยู่ระหว่างอนุมัติหรืออนุมัติแล้ว) ไม่สามารถเพิ่มรายการใหม่ได้ในสถานะนี้'
-
 /** Thai reason shown next to "+ เพิ่ม Transaction" when the whole fiscal_year
  * is NOT_OPEN (2026-08-08 3-state extension, jakkaritw) — a year-wide lock,
- * not a per-department one, so it takes precedence over
- * `ALL_COST_CENTERS_LOCKED_REASON_TH` (see `AddTransactionForm`). Same
- * wording as the server's `year_not_open` detail (`app.deadline.YearNotOpenError`)
- * so the pre-emptive client message and the (never-reached, since the button
- * is disabled) server error would read identically. */
+ * not a per-department one, so it takes precedence over the other reasons
+ * below (see `AddTransactionForm`). Same wording as the server's
+ * `year_not_open` detail (`app.deadline.YearNotOpenError`) so the
+ * pre-emptive client message and the (never-reached, since the button is
+ * disabled) server error would read identically. */
 export const YEAR_NOT_OPEN_ADD_REASON_TH = 'ปีงบประมาณนี้ไม่เปิดให้กรอกในเว็บ — ข้อมูลปีนี้นำเข้าโดยผู้ดูแลระบบ'
 
-/** Builds `lockedCostCenters` (cost_center -> department, LOCKED entries
- * only) for every cost_center in `costCenters` — one CC->department lookup
- * (`departmentRows`, the caller's OWN live `dbo.cc_filler_map` mapping,
- * already fetched for the ฝ่าย picker) crossed with the locked-departments
- * set (`GET /approval/locked-departments`). A cost_center with no row in
- * `departmentRows` (unresolvable department) is treated as NOT locked —
- * the same fail-open policy `write_model._ensure_department_not_locked`
- * documents for its own "department resolves to None" case, so the client
- * can never lock something the server itself would let through. */
-export function lockedCostCenterDepartments(
-  costCenters: string[],
-  departmentRows: DepartmentRow[],
-  lockedDepartments: Set<string>,
-): Record<string, string> {
-  const departmentByCc = new Map(departmentRows.map((d) => [d.cost_center, d.department]))
-  const result: Record<string, string> = {}
-  for (const cc of costCenters) {
-    const department = departmentByCc.get(cc)
-    if (department && lockedDepartments.has(department)) result[cc] = department
+/** Issue #13, decision 1: shown when no ฝ่าย is selected/known (the
+ * department list never resolved, or a stale re-render before the picker
+ * auto-selects one) — never falls open and offers every Fill Cost Center
+ * regardless of which ฝ่าย it belongs to. */
+export const DEPARTMENT_UNKNOWN_ADD_REASON_TH = 'ยังไม่ทราบฝ่ายที่เลือก กรุณาเลือกฝ่ายหรือโหลดหน้าใหม่'
+
+/** Issue #13, decision G: shown when the lock-status fetch itself
+ * (`GET /approval/locked-departments`) failed — the button must never
+ * silently act as though nothing were locked just because the check could
+ * not be completed. */
+export const LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH = 'ไม่สามารถตรวจสอบสถานะฝ่ายได้ กรุณาโหลดหน้าใหม่'
+
+/** Issue #13, decision J: a month cell read-only because the caller has no
+ * Fill scope on that Cost Center at all (`lock_reason: 'not_in_fill_scope'`)
+ * — short, matches the subform's own "อ่านอย่างเดียว" tone. */
+export const NOT_IN_FILL_SCOPE_CELL_TOOLTIP_TH = 'ดูอย่างเดียว — คุณไม่มีสิทธิ์กรอกงบ Cost Center นี้'
+
+/** Issue #13, decision J: the tooltip for a read-only month cell, derived
+ * from the row's server-computed `lock_reason` — a plain GL locked by
+ * department status used to carry NO tooltip at all (only a special-GL cell
+ * did, via `GridTable`'s own `SPECIAL_GL_TOOLTIP`/`SPECIAL_GL_LOCKED_TOOLTIP`,
+ * which still take precedence — see the call site). `undefined` for
+ * `'none'` (the row IS editable, nothing to explain) — same "no tooltip on
+ * an editable cell" behavior as before this feature. */
+export function lockReasonTooltipTh(row: Pick<BudgetRow, 'lock_reason' | 'department'>): string | undefined {
+  switch (row.lock_reason) {
+    case 'department_locked':
+      return lockedAddReasonTh(row.department ?? 'ฝ่ายนี้')
+    case 'year_not_open':
+      return YEAR_NOT_OPEN_ADD_REASON_TH
+    case 'not_in_fill_scope':
+      return NOT_IN_FILL_SCOPE_CELL_TOOLTIP_TH
+    default:
+      return undefined
   }
-  return result
+}
+
+/** Issue #13, decision E: the ONE point through which a row enters `rows`
+ * state — `BudgetGrid.loadGrid`'s full replace AND `handleAddTransaction`'s
+ * single-row append both pass through this, so a future "add a row" path
+ * cannot produce a phantom row under the wrong ฝ่าย heading (the G1 bug: a
+ * row saved to the Filler's OTHER, open ฝ่าย rendered live and editable
+ * under the LOCKED ฝ่าย on screen). Keeps only rows whose server-resolved
+ * `department` matches `selectedDepartment`; `null` (no ฝ่าย selected —
+ * admin-wide "all departments" view) admits everything, the pre-existing
+ * "no department filter" behavior. `GET /budget` already filters server-side
+ * when a department is selected, so this is a no-op there in practice — the
+ * real bug it closes is a locally-built row (`handleAddTransaction`) that
+ * never went through that server-side filter at all. */
+export function admitRows(rows: BudgetRow[], selectedDepartment: string | null): BudgetRow[] {
+  if (selectedDepartment === null) return rows
+  return rows.filter((r) => r.department === selectedDepartment)
 }
 
 /** GL groups only ONE department may budget for: gl_group -> owning department
@@ -773,10 +791,12 @@ export interface NewTransactionInput {
   fillCostCenters: string[]
   glRef: GlAccount[]
   existingRows: BudgetRow[]
-  /** cost_center -> department, LOCKED entries only (see `lockedCostCenterDepartments`
-   * above). Optional — omitted/empty means "nothing is locked", same as
-   * before this feature existed. */
-  lockedCostCenters?: Record<string, string>
+  /** Issue #13, decision F: the ฝ่าย currently on screen — a picked Cost
+   * Center must belong to it (defense-in-depth; the combobox itself is
+   * already scoped to this ฝ่าย's Cost Centers by the caller, see
+   * `BudgetGrid`). `null`/omitted skips the check — matches the pre-existing
+   * behavior for callers that never scoped by ฝ่าย. */
+  selectedDepartment?: string | null
   /** `true` when the whole fiscal_year is NOT_OPEN (2026-08-08 3-state
    * extension) — checked FIRST, ahead of the Cost Center/GL picks, since a
    * year-wide lock makes any pick irrelevant. Optional/defaults to `false` —
@@ -811,9 +831,20 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   if (!input.fillCostCenters.includes(input.costCenter)) {
     return { ok: false, errorTh: `${input.costCenter} ไม่อยู่ในสิทธิ์กรอกงบของคุณ` }
   }
-  const lockedDepartment = (input.lockedCostCenters ?? {})[input.costCenter]
-  if (lockedDepartment) {
-    return { ok: false, errorTh: lockedAddReasonTh(lockedDepartment) }
+  // Issue #13, decision F: a picked Cost Center AFFIRMATIVELY known (via
+  // `departments`) to belong to a DIFFERENT ฝ่าย than the one on screen is
+  // rejected here — defense-in-depth, since `fillCostCenters` itself is
+  // already scoped to `selectedDepartment` by the caller (BudgetGrid), so
+  // this only fires on a stale selection. Only rejects on a definite
+  // mismatch, never on "unknown" (an empty/incomplete `departments` list) —
+  // this check must never turn into a NEW way to fail-closed on missing
+  // department data, on top of the pre-existing `DEPT_RESTRICTED_GL_GROUPS`
+  // one above.
+  if (input.selectedDepartment != null) {
+    const ccDepartment = (input.departments ?? []).find((d) => d.cost_center === input.costCenter)?.department
+    if (ccDepartment !== undefined && ccDepartment !== input.selectedDepartment) {
+      return { ok: false, errorTh: `Cost Center นี้ไม่ได้อยู่ในฝ่าย "${input.selectedDepartment}"` }
+    }
   }
   // A picked GL that is no longer in the master (an admin removed it from
   // `dbo.gl_group` and `glRef` refetched under the open form) must not skip the

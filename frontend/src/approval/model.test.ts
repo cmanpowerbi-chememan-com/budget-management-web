@@ -5,8 +5,8 @@ import {
   buildSubmitConfirmText,
   canSubmit,
   costCentersOfDepartment,
+  isEditLocked,
   isFillerOfDepartment,
-  isPendingLocked,
   statusChipLabel,
   submitBlockedReasonLabel,
 } from './model'
@@ -58,13 +58,13 @@ describe('statusChipLabel', () => {
   })
 })
 
-describe('isPendingLocked', () => {
-  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3'])('is true for %s', (status) => {
-    expect(isPendingLocked(status)).toBe(true)
+describe('isEditLocked', () => {
+  it.each(['PENDING_APPROVER1', 'PENDING_APPROVER2', 'PENDING_APPROVER3', 'APPROVED'])('is true for %s', (status) => {
+    expect(isEditLocked(status)).toBe(true)
   })
 
-  it.each(['DRAFT', 'APPROVED', 'REJECTED'])('is false for %s', (status) => {
-    expect(isPendingLocked(status)).toBe(false)
+  it.each(['DRAFT', 'REJECTED'])('is false for %s', (status) => {
+    expect(isEditLocked(status)).toBe(false)
   })
 })
 

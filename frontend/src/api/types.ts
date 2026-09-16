@@ -105,6 +105,12 @@ export interface PendingLayer extends LayerAmounts {
   updated_at: string | null
 }
 
+/** Issue #13 (2026-09-17): the machine-readable reason a row / a saved write
+ * is NOT editable — mirrors `app.approval.LockReason` exactly. `'none'` when
+ * `editable` is `true` (not a lock reason at all, just "no reason it's
+ * locked"). */
+export type LockReason = 'none' | 'not_in_fill_scope' | 'department_locked' | 'year_not_open'
+
 /** One visible `(cost_center, gl_account)` row of the main grid — always
  * carries all 3 layers (zero-filled when a layer has no data). */
 export interface BudgetRow {
@@ -114,6 +120,14 @@ export interface BudgetRow {
   board: BoardLayer
   pending: PendingLayer
   editable: boolean
+  /** Issue #13: the row's own live-resolved department (server-computed at
+   * the same point as `editable`) — the client compares this against the
+   * SELECTED ฝ่าย instead of trusting a row to belong wherever it was asked
+   * for; see `grid/model.ts`'s `admitRows`. */
+  department: string | null
+  /** Why `editable` is `false` (or `'none'` when it is `true`) — drives the
+   * locked-cell tooltip (`MonthCell.tsx`). */
+  lock_reason: LockReason
 }
 
 /** `GET /budget/gl-accounts` — the GL master, flagged `is_special` so the
@@ -369,6 +383,11 @@ export interface ApprovalStatusState {
    * / `mid_chain_admin_overwrite` (`app.approval.ERROR_CODE_BY_EXCEPTION`'s
    * values). `null` when `can_submit` is `true` or unknown. */
   submit_blocked_reason: string | null
+  /** Issue #13 (2026-09-17): `status in LOCKED_APPROVAL_STATUSES` (PENDING_*
+   * or APPROVED) — the same department-level lock the grid/write endpoints
+   * already enforce, so the Add-button gate and focus-revalidate check can
+   * read one boolean instead of re-deriving it from `status`. */
+  locked: boolean
 }
 
 /** `GET /approval/pending-for-me` (`routers/approval.PendingForMeResponse`)
@@ -429,4 +448,10 @@ export interface PendingRowState {
   division: string | null
   department: string | null
   updated_at: string
+  /** Issue #13: mirrors `BudgetRow`'s same fields — a save that reaches a
+   * success response has already passed the server's lock guard, so these
+   * are always `true`/`'none'` today. Present anyway so a freshly saved row
+   * never needs different handling than one just read from `GET /budget`. */
+  editable: boolean
+  lock_reason: LockReason
 }

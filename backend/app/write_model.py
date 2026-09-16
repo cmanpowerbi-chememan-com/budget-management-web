@@ -67,7 +67,7 @@ from typing import Literal
 import pyodbc
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.approval import LOCKED_APPROVAL_STATUSES
+from app.approval import LOCKED_APPROVAL_STATUSES, LockReason
 from app.config import Settings, get_settings
 from app.deadline import YEAR_NOT_OPEN, YEAR_PAST_DEADLINE, PastDeadlineError, YearNotOpenError, fiscal_year_state
 from app.gl_access import normalize_edit_by
@@ -242,6 +242,19 @@ class DepartmentLockedError(PermissionError):
     (ADR-0012: "Admin can EDIT any CC's Pending, always")."""
 
 
+class DepartmentUnknownError(PermissionError):
+    """Issue #13, decision 2 (jakkaritw, 2026-09-17): a non-admin's
+    cost_center resolved to NO department in `dbo.cc_filler_map` (a NULL
+    department column, or the row itself missing). Refuses the write instead
+    of the old fail-open "treat as not locked" policy — this is unreachable
+    for a non-admin in normal operation (their Fill scope is itself derived
+    from the same mapping, so any cost_center they may address already has a
+    department row), so it currently protects nothing either way; a visible
+    refusal is safer than silently allowing a write whose lock status can
+    never be verified. Admin is unaffected — `_ensure_department_not_locked`
+    already returns before this check for `scope.is_admin`."""
+
+
 # HTTP status per error code — the single source of truth the router reads
 # (per_diem's fail-loud errors are 5xx: a missing FX/rate year is an app data
 # problem, never the caller's fault, and must never look like a 4xx typo).
@@ -267,6 +280,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "past_deadline": 403,
     "year_not_open": 403,
     "department_locked": 403,
+    "department_unknown": 403,
     "missing_per_diem_rate": 500,
     "missing_fx_rate": 500,
 }
@@ -293,6 +307,7 @@ _ERROR_CODE_BY_EXCEPTION: dict[type[Exception], str] = {
     PastDeadlineError: "past_deadline",
     YearNotOpenError: "year_not_open",
     DepartmentLockedError: "department_locked",
+    DepartmentUnknownError: "department_unknown",
 }
 _CAUGHT_PER_ITEM = tuple(_ERROR_CODE_BY_EXCEPTION)  # never includes the per_diem fail-loud errors — those propagate
 
@@ -541,24 +556,72 @@ def _ensure_department_not_locked(
     and detail-line delete have no dims computed yet at this point in their
     flow).
 
-    Unknown CC->department mapping (`department` resolves to `None`): treated
-    as "not locked" rather than inventing a new failure mode. This cannot
-    currently be reached by a non-admin — their Fill scope is itself derived
-    from `dbo.cc_filler_map`, so any cost_center they may address already has
-    a department row — but is flagged here as the chosen fail-open behavior
-    for that edge, mirroring `is_post_deadline`'s own "missing row is OPEN"
-    policy elsewhere in this module."""
+    Unknown CC->department mapping (`department` resolves to `None`):
+    REFUSES the write (`DepartmentUnknownError`), changed 2026-09-17 (issue
+    #13, decision 2) from the old fail-open "treat as not locked" policy —
+    see that exception's docstring for why. Still unreachable for a
+    non-admin in normal operation — their Fill scope is itself derived from
+    `dbo.cc_filler_map`, so any cost_center they may address already has a
+    department row."""
     if scope.is_admin:
         return
     if department is _UNRESOLVED_DEPARTMENT:
         department = _lookup_cc_dims(conn, cost_center)["department"]
     if department is None:
-        return
+        raise DepartmentUnknownError(
+            f"{cost_center} has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status"
+        )
     status = _lookup_department_approval_status(conn, department, fiscal_year)
     if status in LOCKED_APPROVAL_STATUSES:
         raise DepartmentLockedError(
             f"{department}/{fiscal_year} is {status} — mid-approval or approved, editing is locked"
         )
+
+
+def _ensure_department_and_year_open(
+    conn: pyodbc.Connection, cost_center: str, fiscal_year: int, scope: Scope,
+    *, department: str | None = _UNRESOLVED_DEPARTMENT,
+) -> None:
+    """The 2nd+3rd leg of the one authorize-write guard (`_authorize_write`
+    below) — department-not-locked then year-open, in that order, the two
+    checks that are ALREADY adjacent at every one of the six write paths.
+    Factored out on its own (rather than inlined into `_authorize_write`) so
+    the 3 `save_*` paths can call it directly, AFTER their own Fill-scope
+    check and dims lookup (so `department` is already known and this never
+    re-queries `dbo.cc_filler_map` for it) — see `_authorize_write`'s
+    docstring for why those 3 paths cannot simply call `_authorize_write`
+    itself."""
+    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope, department=department)
+    _ensure_year_open_for_write(conn, fiscal_year, scope)
+
+
+def _authorize_write(
+    conn: pyodbc.Connection, cost_center: str, fiscal_year: int, scope: Scope,
+    *, department: str | None = _UNRESOLVED_DEPARTMENT,
+) -> None:
+    """The one authorize-write guard (issue #13, 2026-09-17): Fill-scope-or-
+    admin, then department-not-locked, then year-open — the exact trio every
+    write worker in this module already ran, now one named call so a future
+    write path either calls this or visibly does not (user story 22).
+
+    Used AS-IS, single call, by the 3 delete workers (`_delete_one_detail_line`,
+    `_delete_one_trip`, `_delete_one_pending_row`), where the three checks are
+    genuinely adjacent — none of them has a department pre-resolved yet at
+    that point.
+
+    NOT used by the 3 `save_*` workers (`_save_one_pending_row`,
+    `_save_one_detail_line`, `_save_one_trip`): `_ensure_write_scope` must
+    fire before ANY database call so an out-of-scope write costs zero queries
+    (pinned by `test_forbidden_when_cost_center_outside_fill_scope_no_db_call`
+    and its siblings) — but the department/year check needs `dims["department"]`
+    already resolved (a `dbo.gl_group` + `dbo.cc_filler_map` round trip) to
+    avoid re-querying it. Those 3 workers therefore call `_ensure_write_scope`
+    at their own early point (unchanged) and `_ensure_department_and_year_open`
+    once dims are in hand — same checks, same order, same semantics, just
+    split across two calls instead of one to preserve the no-DB-call-on-403
+    guarantee."""
+    _ensure_write_scope(cost_center, scope, conn)
+    _ensure_department_and_year_open(conn, cost_center, fiscal_year, scope, department=department)
 
 
 def _run_per_item(conn: pyodbc.Connection, items, fn, on_result) -> list:
@@ -638,6 +701,15 @@ class PendingRowState(BaseModel):
     division: str | None
     department: str | None
     updated_at: datetime
+    # Issue #13 (2026-09-17): mirrors `read_model.BudgetRow`'s same fields —
+    # a save that reaches this point has already passed `_authorize_write`/
+    # `_ensure_department_and_year_open`, so it is ALWAYS "none"/editable
+    # (admin bypasses the department lock, ADR-0012; a non-admin write only
+    # ever succeeds when in scope, unlocked, and the year is open). Present
+    # on every row anyway so the client never has to special-case a freshly
+    # saved row's lock state against one just read from GET /budget.
+    editable: bool = True
+    lock_reason: LockReason = "none"
 
 
 class RowSaveResult(BaseModel):
@@ -672,8 +744,7 @@ def _save_one_pending_row(
     total_year = sum(months)  # D6: already-quantized Decimals — exact, no extra rounding needed
     now = _now()
 
-    _ensure_department_not_locked(conn, row.cost_center, row.fiscal_year, scope, department=dims["department"])
-    _ensure_year_open_for_write(conn, row.fiscal_year, scope)
+    _ensure_department_and_year_open(conn, row.cost_center, row.fiscal_year, scope, department=dims["department"])
     # jakkaritw 2026-08-19: round-to-100 + cap, checked LAST (see the two
     # helpers' docstring) — right before the write, after every more
     # specific gate above has already had first refusal.
@@ -1065,8 +1136,7 @@ def _save_one_detail_line(
     now = _now()
     meta_json_str = json.dumps(cleaned_meta, ensure_ascii=False) if cleaned_meta else None
 
-    _ensure_department_not_locked(conn, line.cost_center, line.fiscal_year, scope, department=dims["department"])
-    _ensure_year_open_for_write(conn, line.fiscal_year, scope)
+    _ensure_department_and_year_open(conn, line.cost_center, line.fiscal_year, scope, department=dims["department"])
     # jakkaritw 2026-08-19: round-to-100 + cap, checked LAST — see the two
     # helpers' docstring. Per-diem lines never reach this function at all
     # (`PerDiemDirectEditError` above already refused them), so this can
@@ -1515,8 +1585,7 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
     # create, update, AND the side-flip path below (all reached only after
     # this point), so a blocked past-deadline/locked-department trip never
     # touches the DB.
-    _ensure_department_not_locked(conn, trip.cost_center, trip.fiscal_year, scope)
-    _ensure_year_open_for_write(conn, trip.fiscal_year, scope)
+    _ensure_department_and_year_open(conn, trip.cost_center, trip.fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1790,9 +1859,7 @@ def _delete_one_detail_line(
     cost_center, gl_account, fiscal_year = owner
 
     _ensure_not_excluded(cost_center)
-    _ensure_write_scope(cost_center, scope, conn)
-    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_year_open_for_write(conn, fiscal_year, scope)
+    _authorize_write(conn, cost_center, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1858,9 +1925,7 @@ def _delete_one_trip(
     cost_center, side, fiscal_year = trip
 
     _ensure_not_excluded(cost_center)
-    _ensure_write_scope(cost_center, scope, conn)
-    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_year_open_for_write(conn, fiscal_year, scope)
+    _authorize_write(conn, cost_center, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:
@@ -1945,9 +2010,7 @@ def _delete_one_pending_row(
     no implicit commit, so committing earlier would silently discard them
     on connection close)."""
     _ensure_not_excluded(cost_center)
-    _ensure_write_scope(cost_center, scope, conn)
-    _ensure_department_not_locked(conn, cost_center, fiscal_year, scope)
-    _ensure_year_open_for_write(conn, fiscal_year, scope)
+    _authorize_write(conn, cost_center, fiscal_year, scope)
 
     cursor = conn.cursor()
     try:

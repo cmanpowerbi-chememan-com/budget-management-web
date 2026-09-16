@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DepartmentRow, GlAccount, PendingRowState } from '../api/types'
 import {
+  admitRows,
   applyMonthEdit,
   BLANK_COLUMN_FILTERS,
   buildNewRowPayload,
@@ -23,12 +24,11 @@ import {
   groupChipClass,
   hasStoredColumnWidthsOverride,
   identityColSpan,
-  isCostCenterLocked,
   isDeletableRow,
   isEditableCell,
   isGlPickableForCostCenter,
   loadStoredColumnWidths,
-  lockedCostCenterDepartments,
+  lockReasonTooltipTh,
   mergeSavedRow,
   MONTH_KEYS,
   MONTH_LABELS,
@@ -397,28 +397,40 @@ describe('validateNewTransaction', () => {
     expect(result.ok).toBe(true)
   })
 
-  // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, ADR-0013 UI
-  // parity): a Cost Center whose department is mid-approval/APPROVED must
-  // be rejected here, BEFORE ever calling the API — same pattern as the
-  // existing duplicate-row check above.
-  it('rejects a Cost Center whose department is locked, naming the department in the Thai reason', () => {
+  // Issue #13, decision F (2026-09-17): a picked Cost Center AFFIRMATIVELY
+  // known to belong to a DIFFERENT ฝ่าย than `selectedDepartment` is rejected
+  // here, BEFORE ever calling the API — same pattern as the existing
+  // duplicate-row check above. Defense-in-depth: the combobox itself is
+  // already scoped to the selected ฝ่าย's own Cost Centers.
+  it('rejects a Cost Center known (via departments) to belong to a different ฝ่าย, naming the selected ฝ่าย in the Thai reason', () => {
     const result = validateNewTransaction({
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
-      lockedCostCenters: { CC1: 'Accounting' },
+      selectedDepartment: 'Accounting',
+      departments: [{ cost_center: 'CC1', department: 'IT', division: null, c_level: null }],
     })
     expect(result.ok).toBe(false)
     expect(result.errorTh).toContain('Accounting')
   })
 
-  it('accepts a Cost Center that is NOT in the locked map, even when lockedCostCenters has other entries', () => {
+  it('accepts a Cost Center known to belong to the selected ฝ่าย', () => {
     const result = validateNewTransaction({
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
-      lockedCostCenters: { CC9: 'Warehouse' },
+      selectedDepartment: 'Accounting',
+      departments: [{ cost_center: 'CC1', department: 'Accounting', division: null, c_level: null }],
     })
     expect(result.ok).toBe(true)
   })
 
-  it('lockedCostCenters is optional — omitting it entirely behaves like "nothing is locked"', () => {
+  it('accepts a Cost Center absent from departments — unknown is never treated as a mismatch', () => {
+    const result = validateNewTransaction({
+      costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
+      selectedDepartment: 'Accounting',
+      departments: [],
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('selectedDepartment is optional — omitting it entirely skips the ฝ่าย check', () => {
     const result = validateNewTransaction({
       costCenter: 'CC1', glAccount: '5210400010', fillCostCenters: ['CC1'], glRef: GL_REF, existingRows: existing,
     })
@@ -558,36 +570,50 @@ describe('isGlPickableForCostCenter', () => {
   })
 })
 
-describe('isCostCenterLocked', () => {
-  it('true when the cost center is a key in the locked map', () => {
-    expect(isCostCenterLocked('CC1', { CC1: 'Accounting' })).toBe(true)
+// Issue #13, decision E (2026-09-17): the ONE row-admission point.
+describe('admitRows', () => {
+  it('selectedDepartment=null admits every row unchanged (admin-wide "all departments" view)', () => {
+    const rows = [row({ cost_center: 'CC1', gl_account: 'GL1', department: 'Accounting' }), row({ cost_center: 'CC2', gl_account: 'GL2', department: 'IT' })]
+    expect(admitRows(rows, null)).toEqual(rows)
   })
 
-  it('false when the cost center is absent from the locked map', () => {
-    expect(isCostCenterLocked('CC1', { CC9: 'Warehouse' })).toBe(false)
-    expect(isCostCenterLocked('CC1', {})).toBe(false)
+  it('keeps only rows whose department matches the selected one', () => {
+    const rows = [
+      row({ cost_center: 'CC1', gl_account: 'GL1', department: 'Accounting' }),
+      row({ cost_center: 'CC2', gl_account: 'GL2', department: 'IT' }),
+    ]
+    const result = admitRows(rows, 'Accounting')
+    expect(result.map((r) => r.cost_center)).toEqual(['CC1'])
+  })
+
+  it('drops a row whose department is null when a specific ฝ่าย is selected', () => {
+    const rows = [row({ cost_center: 'CC1', gl_account: 'GL1', department: null })]
+    expect(admitRows(rows, 'Accounting')).toEqual([])
   })
 })
 
-describe('lockedCostCenterDepartments', () => {
-  const departmentRows: DepartmentRow[] = [
-    { cost_center: 'CC1', department: 'Accounting', division: null, c_level: null },
-    { cost_center: 'CC2', department: 'Warehouse', division: null, c_level: null },
-  ]
-
-  it('maps only the cost centers whose department is in the locked set', () => {
-    const result = lockedCostCenterDepartments(['CC1', 'CC2'], departmentRows, new Set(['Accounting']))
-    expect(result).toEqual({ CC1: 'Accounting' })
+describe('lockReasonTooltipTh', () => {
+  it('returns undefined for lock_reason "none" (editable — no tooltip)', () => {
+    expect(lockReasonTooltipTh({ lock_reason: 'none', department: 'Accounting' })).toBeUndefined()
   })
 
-  it('a cost center missing from departmentRows is treated as NOT locked (fail-open, mirrors the server\'s own unresolvable-department policy)', () => {
-    const result = lockedCostCenterDepartments(['CC9'], departmentRows, new Set(['Accounting', 'Warehouse']))
-    expect(result).toEqual({})
+  it('names the department for "department_locked"', () => {
+    const text = lockReasonTooltipTh({ lock_reason: 'department_locked', department: 'Accounting' })
+    expect(text).toContain('Accounting')
   })
 
-  it('returns an empty object when nothing is locked', () => {
-    const result = lockedCostCenterDepartments(['CC1', 'CC2'], departmentRows, new Set())
-    expect(result).toEqual({})
+  it('falls back to a generic department phrase when department is null', () => {
+    const text = lockReasonTooltipTh({ lock_reason: 'department_locked', department: null })
+    expect(text).toBeTruthy()
+  })
+
+  it('reuses the year-not-open copy for "year_not_open"', () => {
+    expect(lockReasonTooltipTh({ lock_reason: 'year_not_open', department: null })).toBe(YEAR_NOT_OPEN_ADD_REASON_TH)
+  })
+
+  it('returns a short read-only sentence for "not_in_fill_scope"', () => {
+    const text = lockReasonTooltipTh({ lock_reason: 'not_in_fill_scope', department: null })
+    expect(text).toBeTruthy()
   })
 })
 

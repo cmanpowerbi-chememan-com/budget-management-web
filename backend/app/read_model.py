@@ -33,7 +33,7 @@ from datetime import datetime
 from pydantic import BaseModel
 import pyodbc
 
-from app.approval import LOCKED_APPROVAL_STATUSES
+from app.approval import LOCKED_APPROVAL_STATUSES, LockReason
 from app.config import Settings, get_settings
 from app.deadline import YEAR_NOT_OPEN, fiscal_year_state
 from app.gl_access import fetch_admin_gl_codes, fetch_master_gl_codes
@@ -287,6 +287,14 @@ class BudgetRow(BaseModel):
     board: BoardLayer = BoardLayer()
     pending: PendingLayer = PendingLayer()
     editable: bool = False
+    # Issue #13 (2026-09-17): the row's own live-resolved department (same
+    # value `_resolve_live_department` already computes below, for the
+    # client to compare against the SELECTED ฝ่าย — a cross-department row
+    # must never be admitted into the grid) and WHY `editable` is False,
+    # computed at the exact same point as `editable` from the same inputs.
+    # "none" when `editable` is True (see `LockReason`'s own docstring).
+    department: str | None = None
+    lock_reason: LockReason = "none"
 
 
 def _sap_layer(months: dict[str, float] | None) -> SapLayer:
@@ -546,7 +554,28 @@ def merge_budget_rows(
         # year is file-import-only, so no web identity — admin included — gets
         # a writable cell there. Within an OPEN year, admin_wide still bypasses
         # the per-department approval lock (ADR-0012) exactly as before.
-        row.editable = (admin_wide or (cc in fill_ccs and not row_locked)) and not year_not_open
+        #
+        # `lock_reason` (issue #13, 2026-09-17) is the SAME decision spelled
+        # out as its reason, checked in the same precedence `editable`'s own
+        # boolean expression implies: year_not_open first (outranks admin),
+        # then admin_wide (never locked once the year IS open), then
+        # out-of-Fill-scope (the `cc in fill_ccs` term short-circuits
+        # `row_locked` in the boolean above — a row outside Fill scope is
+        # "not_in_fill_scope" even if its department also happens to be
+        # locked), then the department lock itself.
+        if year_not_open:
+            lock_reason = "year_not_open"
+        elif admin_wide:
+            lock_reason = "none"
+        elif cc not in fill_ccs:
+            lock_reason = "not_in_fill_scope"
+        elif row_locked:
+            lock_reason = "department_locked"
+        else:
+            lock_reason = "none"
+        row.editable = lock_reason == "none"
+        row.department = row_dept
+        row.lock_reason = lock_reason
         result.append(row)
 
     return sorted(result, key=lambda r: (r.cost_center, r.gl_account))

@@ -117,6 +117,42 @@ def test_admin_bypasses_fill_scope_restriction():
     assert results[0].ok is True
 
 
+def test_successful_pending_row_save_has_editable_true_and_lock_reason_none():
+    """Issue #13, decision D: a save response mirrors the same lock fields
+    the grid read carries. Reaching a successful result already implies the
+    write passed `_ensure_department_and_year_open` (or the admin bypass),
+    so this is always true/none for a saved row."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        None,  # department-lock check -> not locked
+        _OPEN_DEADLINE,  # deadline check -> open
+    ]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].row.editable is True
+    assert results[0].row.lock_reason == "none"
+
+
+def test_admin_saving_locked_department_row_has_editable_true_and_lock_reason_none():
+    """ADR-0012: admin bypasses the department lock on write, so the saved
+    row's mirrored lock fields must say editable/none too — never claim the
+    just-saved row is locked when the admin's own write just succeeded."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        (1,), ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
+        _OPEN_DEADLINE,
+    ]
+    scope = _admin_scope()
+    results = save_pending_rows(conn, [_row(cost_center="ANY-CC", m01=100)], "admin@chememan.com", scope)
+    assert results[0].ok is True
+    assert results[0].row.editable is True
+    assert results[0].row.lock_reason == "none"
+
+
 def test_excluded_cost_center_rejected_even_for_admin():
     conn = MagicMock()
     scope = _admin_scope()
@@ -1984,26 +2020,30 @@ def test_two_pending_rows_one_department_locked_blocks_independently():
     assert results[1].ok is True
 
 
-def test_pending_row_unknown_department_mapping_is_not_locked():
-    """Unknown CC->department mapping (department resolves to None): treated
-    as 'not locked' rather than inventing a new failure mode. Cannot
-    currently be reached by a non-admin in practice (their Fill scope is
-    itself derived from dbo.cc_filler_map, so any cost_center they may
-    address already has a department) — this locks in the chosen fail-open
-    behavior for that edge (mirrors is_post_deadline's own missing-row-is-
-    OPEN policy elsewhere in this module)."""
+def test_pending_row_unknown_department_mapping_is_refused():
+    """2026-09-17 (issue #13), jakkaritw decision 2: an unmapped department
+    now REFUSES the write (`department_unknown`) — reversed from the old
+    fail-open 'treat as not locked' policy. Still unreachable for a
+    non-admin in practice (their Fill scope is itself derived from
+    dbo.cc_filler_map, so any cost_center they may address already has a
+    department), but a visible refusal is safer than an unverifiable
+    fail-open write."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Bank Charge", "Bank Charge Fee"), None,  # dims: cc_dims lookup -> no row, department unresolved
-        _OPEN_DEADLINE,  # deadline check -> open (department=None short-circuits the lock check with NO extra query)
     ]
     scope = _scope()
     results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
-    assert results[0].ok is True
+    assert results[0].ok is False
+    assert results[0].error == "department_unknown"
+    conn.commit.assert_not_called()
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("approval_status" in s for s in executed_sql), (
         "department already known to be unresolved (None) — must not re-query dbo.cc_filler_map"
+    )
+    assert not any(
+        "INSERT INTO budget.pending_budget" in s or "UPDATE budget.pending_budget" in s for s in executed_sql
     )
 
 
@@ -2845,6 +2885,22 @@ def test_delete_pending_row_rejected_when_department_is_locked(locked_status):
     conn.commit.assert_not_called()
     executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
     assert not any("DELETE FROM budget.pending_budget" in s for s in executed_sql)
+
+
+def test_delete_pending_row_unknown_department_mapping_is_refused():
+    """Same refusal as the save path (decision 2) — proves `_authorize_write`
+    (the single guard the 3 delete workers now share) carries the new
+    failure mode through unchanged."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        None,  # cc_dims lookup -> no row, department unresolved
+    ]
+    scope = _scope()
+    result = delete_pending_row(conn, "CC1", "GL1", 2027, STALE, "filler@chememan.com", scope)
+    assert result.ok is False
+    assert result.error == "department_unknown"
+    conn.commit.assert_not_called()
 
 
 def test_delete_pending_row_admin_bypasses_deadline_and_department_lock():

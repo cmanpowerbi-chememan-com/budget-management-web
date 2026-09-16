@@ -84,6 +84,27 @@ describe('GridTable', () => {
     expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument()
   })
 
+  // Issue #13, decision J (2026-09-17): a plain GL locked by department
+  // status used to carry NO tooltip at all — only a special-GL cell did.
+  it('carries a Thai tooltip on a plain GL cell locked by department status', () => {
+    const rows = [
+      makeRow({
+        cost_center: 'CC1', gl_account: '5211800030', editable: false,
+        department: 'Accounting', lock_reason: 'department_locked',
+      }),
+    ]
+    render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+    expect(screen.getAllByTitle(/Accounting/).length).toBeGreaterThan(0)
+  })
+
+  it('carries a Thai tooltip for a year-not-open lock reason too', () => {
+    const rows = [
+      makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: false, lock_reason: 'year_not_open' }),
+    ]
+    render(<GridTable rows={rows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+    expect(screen.getAllByTitle(/ไม่เปิดให้กรอกในเว็บ/).length).toBeGreaterThan(0)
+  })
+
   it('shows an empty state when there are no rows', () => {
     render(<GridTable rows={[]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
     expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument()

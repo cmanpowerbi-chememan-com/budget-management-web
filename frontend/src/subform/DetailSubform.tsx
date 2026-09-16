@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ApiError } from '../api/client'
+import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteDetailLine, fetchDetailLines, saveDetailLine } from '../api/subform'
 import type { DetailLineState } from '../api/types'
 import { formatThb, MONTH_KEYS, MONTH_LABELS } from '../grid/model'
@@ -35,6 +35,13 @@ export interface DetailSubformProps {
    * parent grid refetches so the aggregate Pending cell (server-recomputed
    * SUM of detail) stays in sync. */
   onSaved: () => void
+  /** Issue #13, decision H (2026-09-17): called when a save or delete is
+   * refused because the ฝ่าย was locked while this modal was open (a submit
+   * from another tab/device/co-Filler mid-edit) — the parent flips this
+   * modal read-only and reloads the grid. Optional; omitting it just skips
+   * that reaction (the row still shows the Thai refusal message either
+   * way). */
+  onDepartmentLocked?: () => void
 }
 
 type RowStatus = 'idle' | 'deleting' | 'error'
@@ -71,6 +78,7 @@ export function DetailSubform({
   readOnly = false,
   onClose,
   onSaved,
+  onDepartmentLocked,
 }: DetailSubformProps) {
   const [rows, setRows] = useState<RowState[]>([])
   const [loading, setLoading] = useState(true)
@@ -164,6 +172,17 @@ export function DetailSubform({
             if (anySaved) onSaved()
             return
           }
+          // Issue #13, decision H: the ฝ่าย locked while this modal was open
+          // — Thai message ONLY (never append err.detail), abort the rest of
+          // the batch (every other line would refuse the same way), and let
+          // the parent flip this modal read-only + reload the grid behind it.
+          if (err instanceof ApiError && isDepartmentLockedError(err)) {
+            nextRows[i] = { ...row, status: 'error', errorText: err.message }
+            setRows(nextRows)
+            if (anySaved) onSaved()
+            onDepartmentLocked?.()
+            return
+          }
           anyError = true
           const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'บันทึกไม่สำเร็จ'
           nextRows[i] = { ...row, status: 'error', errorText: message }
@@ -202,6 +221,12 @@ export function DetailSubform({
         setConflictMessage(DELETE_CONFLICT_MESSAGE)
         const lines = await fetchDetailLines(costCenter, glAccount, fiscalYear)
         setRows(rowsFromServer(lines))
+        return
+      }
+      // Issue #13, decision H: same refusal handling as saveAll above.
+      if (err instanceof ApiError && isDepartmentLockedError(err)) {
+        setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'error', errorText: err.message } : r)))
+        onDepartmentLocked?.()
         return
       }
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'ลบไม่สำเร็จ'

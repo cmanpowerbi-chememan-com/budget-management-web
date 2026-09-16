@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ApiError } from '../api/client'
+import { ApiError, isDepartmentLockedError } from '../api/client'
 import { fetchCountries, fetchTravelers } from '../api/reference'
 import { createTrip, deleteTrip, fetchDetailLines, fetchTrips, saveDetailLine, updateTrip } from '../api/subform'
 import type { CountryOption, DetailLineState, TravelerOption, TripListItem, TripState } from '../api/types'
@@ -62,6 +62,10 @@ export interface TripManagerProps {
    * refetches so all 8 travel GL cells (both sides, in case of a side flip)
    * show server-recomputed sums. */
   onSaved: () => void
+  /** Issue #13, decision H (2026-09-17): called when a save or delete is
+   * refused because the ฝ่าย was locked while this modal was open — the
+   * parent flips this modal read-only and reloads the grid. Optional. */
+  onDepartmentLocked?: () => void
 }
 
 type Status = 'idle' | 'saving' | 'deleting' | 'error'
@@ -447,7 +451,9 @@ function DestinationField({ ariaLabel, options, value, onChange, fallback }: Des
  * accommodation) are entered per month, locked to the trip's selected
  * travel_months. Per-diem is NEVER computed here — only the server's own
  * response/read is ever shown (never-cut). */
-export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = false, onClose, onSaved }: TripManagerProps) {
+export function TripManager({
+  costCenter, fiscalYear, lockedSide, readOnly = false, onClose, onSaved, onDepartmentLocked,
+}: TripManagerProps) {
   const [cards, setCards] = useState<TripCardState[]>([])
   /** Always mirrors the LATEST `cards` state — read by long-running async
    * handlers (delete's 409 catch) that must see edits made to a SIBLING card
@@ -564,6 +570,12 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
     const nextCards: TripCardState[] = snapshot.slice()
     let anyWriteSucceeded = false
     let sawConflict = false
+    // Issue #13, decision H (2026-09-17): set by EITHER catch branch below
+    // when the ฝ่าย locked while this modal was open — dispatched ONCE after
+    // the loop (same deferred pattern `sawConflict` already uses), rather
+    // than aborting mid-batch, so every card's own result still lands in
+    // `nextCards` before the parent flips this modal read-only.
+    let sawDepartmentLocked = false
     try {
       for (let i = 0; i < snapshot.length; i++) {
         const card = snapshot[i]
@@ -605,6 +617,11 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
               nextCards[i] = { ...card, status: 'error', errorText: SAVE_ALL_CONFLICT_MESSAGE }
               continue
             }
+            if (err instanceof ApiError && isDepartmentLockedError(err)) {
+              sawDepartmentLocked = true
+              nextCards[i] = { ...card, status: 'error', errorText: err.message }
+              continue
+            }
             nextCards[i] = { ...card, status: 'error', errorText: tripErrorMessage(err) }
             continue
           }
@@ -641,6 +658,10 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
               sawConflict = true
               nextManualStatus[type] = 'error'
               nextManualError[type] = SAVE_ALL_CONFLICT_MESSAGE
+            } else if (err instanceof ApiError && isDepartmentLockedError(err)) {
+              sawDepartmentLocked = true
+              nextManualStatus[type] = 'error'
+              nextManualError[type] = err.message
             } else {
               nextManualStatus[type] = 'error'
               nextManualError[type] = manualErrorMessage(err)
@@ -675,6 +696,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
       setCards(nextCards)
       if (anyWriteSucceeded) onSaved()
       if (sawConflict) setConflictMessage(SAVE_ALL_BATCH_CONFLICT_MESSAGE)
+      if (sawDepartmentLocked) onDepartmentLocked?.()
     } finally {
       setSaving(false)
     }
@@ -724,6 +746,12 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
           return
         }
         await load()
+        return
+      }
+      // Issue #13, decision H: same refusal handling as saveAll above.
+      if (err instanceof ApiError && isDepartmentLockedError(err)) {
+        setCards((prev) => prev.map((c) => (c.localId === localId ? { ...c, status: 'error', errorText: err.message } : c)))
+        onDepartmentLocked?.()
         return
       }
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'ลบทริปไม่สำเร็จ'

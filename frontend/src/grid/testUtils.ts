@@ -45,6 +45,8 @@ export function makeRow(overrides: Partial<BudgetRow> & { cost_center: string; g
       updated_at: null,
     },
     editable: false,
+    department: null,
+    lock_reason: 'none',
     ...overrides,
   }
 }
