@@ -135,7 +135,8 @@ def _lead_p(inner_html: str) -> str:
 def _lead_link_p(link: str, text: str) -> str:
     """Action-link paragraph at the lead size, anchor ALSO bold — the click
     target itself must stand out, not just the surrounding sentence."""
-    return f'<p style="{_LEAD}"><a href="{link}" style="font-weight:bold;">{text}</a></p>'
+    # 2026-09-17: the anchor repeats the size because Outlook's Word engine can reset link sizing from the paragraph.
+    return f'<p style="{_LEAD}"><a href="{link}" style="{_LEAD}font-weight:bold;">{text}</a></p>'
 
 
 def _wrap(content_html: str) -> str:

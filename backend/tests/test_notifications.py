@@ -471,10 +471,10 @@ def _assert_lead_paragraphs(body: str, *, greeting: str, outcome: str, link: tup
     expected_occurrences = 2
     if link is not None:
         url, text = link
-        assert f'<p style="{_LEAD_STYLE}"><a href="{url}" style="font-weight:bold;">{text}</a></p>' in body
-        expected_occurrences = 3
+        assert f'<p style="{_LEAD_STYLE}"><a href="{url}" style="{_LEAD_STYLE}font-weight:bold;">{text}</a></p>' in body
+        expected_occurrences = 4
     # Count, not just substring search — proves the table/signature did NOT
-    # also pick up the 17px style (a leak would push the count past 2 or 3).
+    # also pick up the 17px style (a leak would push the count past 2 or 4).
     assert body.count(_LEAD_STYLE) == expected_occurrences
     assert '<p style="margin-top:24px;">Best Regards,<br><b>Budget Management Team</b></p>' in body
 
