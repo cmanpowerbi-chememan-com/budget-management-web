@@ -1358,7 +1358,7 @@ def test_per_diem_detail_line_is_recomputed_fresh_never_reusing_a_stale_stored_a
         _OPEN_DEADLINE,  # deadline check -> row exists, not yet passed (OPEN)
         (99,),  # an existing per-diem detail line already exists (detail_id=99) — its OLD amount is never read
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (None, None),  # echo fix: project/remark not sent -> read back the actually-stored values (none here)
+        (None, None, None),  # echo fix: purpose/project/remark not sent -> read back the actually-stored values (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -1431,7 +1431,13 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
         _OPEN_DEADLINE,                # 6 deadline check -> open
         None,                         # 7 existing per-diem line under NEW (SGA) gl -> none, INSERT
     ])
-    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA")])
+    # Padded to 3 elements each: both `_lookup_gl_group` (2-col mode) and
+    # `_lookup_cc_dims` (3-col mode) index positionally and tolerate extra
+    # elements, but the post-recompute echo lookup (remark defaults None on
+    # this trip -> fires once, landing on whichever cycle position is next)
+    # now strictly unpacks 3 values — padding both members avoids that call
+    # landing on a 2-tuple by coincidence of call count.
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee", None), ("deptA", "divA", "clA")])
 
     def _fetchone_side_effect():
         try:
@@ -2340,7 +2346,7 @@ def test_trip_update_ignores_client_token_never_dedups_an_edit():
         _OPEN_DEADLINE,               # deadline check -> open
         None,                        # existing trip-detail lookup -> INSERT
         ("Bank Charge", "Bank Charge Fee"), ("deptA", "divA", "clA"),
-        (None, None),                # echo fix: project/remark not sent -> read back the actually-stored values (none here)
+        (None, None, None),          # echo fix: purpose/project/remark not sent -> read back the actually-stored values (none here)
     ]
     cursor.rowcount = 1
     scope = _scope()
@@ -2418,9 +2424,9 @@ def _trip_update_fetchone_sequence():
     """The update path's mock sequence — same shape as
     test_trip_update_ignores_client_token_never_dedups_an_edit. Ends right
     after the parent-cell recompute (which never issues its own SELECT when
-    `cursor.rowcount` mocks a matched row) — callers append one more item
-    only if their scenario triggers an extra read after that (e.g. the
-    project echo-fix lookup when `project` is None)."""
+    `cursor.rowcount` mocks a matched row) — callers append one more 3-tuple
+    (project, purpose, remark) only if their scenario triggers the combined
+    echo lookup after that (i.e. any of the three is omitted/None)."""
     return [
         ("Somchai", "Manager"), (500, None, None),
         ("CC1", "COST", 2027),      # old-trip lookup (side-flip capture)
@@ -2435,10 +2441,10 @@ def _trip_update_fetchone_sequence():
 def test_trip_update_with_project_sets_project_column():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    # remark is NOT sent (defaults None) -> the combined project/remark echo
-    # lookup still fires for remark's sake even though project itself needs
-    # no lookup here (_lookup_trip_project_and_remark, ONE round trip).
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
+    # remark is NOT sent (defaults None) -> the combined echo lookup still
+    # fires for remark's sake even though project itself needs no lookup
+    # here (_lookup_trip_project_purpose_and_remark, ONE round trip).
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None, None)]
     cursor.rowcount = 1
     scope = _scope()
     results = save_trip(
@@ -2469,7 +2475,7 @@ def test_trip_update_without_project_keeps_the_legacy_update_shape():
     claimed null)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project", "Legacy Remark")]
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project", "site visit", "Legacy Remark")]
     cursor.rowcount = 1
     scope = _scope()
     # project=None (omitted) is explicit here: _trip()'s own default is now
@@ -2513,13 +2519,66 @@ def test_trip_input_rejects_missing_purpose_on_create():
 
 def test_trip_input_accepts_omitted_purpose_on_update_but_rejects_a_sent_blank_one():
     """Symmetric to project: UPDATE (trip_id set) may omit purpose entirely
-    (None = leave the stored value untouched); a SENT blank/whitespace
-    purpose is still rejected."""
+    (None = leave the stored value untouched at the VALIDATOR layer); a SENT
+    blank/whitespace purpose is still rejected. This is only the input-shape
+    contract — the save/SQL layer honoring that same "leave untouched"
+    promise (gate-caught bug: the UPDATE used to unconditionally NULL the
+    column) is proven separately below by
+    test_trip_update_without_purpose_keeps_the_stored_value."""
     assert _trip(trip_id=42, purpose=None, expected_updated_at=STALE).purpose is None
     with pytest.raises(ValidationError):
         _trip(trip_id=42, purpose="", expected_updated_at=STALE)
     with pytest.raises(ValidationError):
         _trip(trip_id=42, purpose="   ", expected_updated_at=STALE)
+
+
+def test_trip_update_with_purpose_sets_purpose_column():
+    """Symmetric to project/remark: a SENT purpose on UPDATE must appear in
+    the SET clause and be echoed back."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    # remark is NOT sent (defaults None) -> the combined echo lookup still
+    # fires for remark's sake even though purpose itself needs no lookup here.
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Test Project", None, None)]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, purpose="new purpose", expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "purpose = ?" in update_calls[0].args[0]
+    assert "new purpose" in update_calls[0].args[1:]
+    assert results[0].trip.purpose == "new purpose"
+
+
+def test_trip_update_without_purpose_keeps_the_stored_value():
+    """2026-09-16 (pre-deploy gate finding on 2a553eb): a PUT that omits
+    purpose (None = "leave the stored value untouched", per
+    TripInput._validate_project_and_purpose_required) used to unconditionally
+    write `purpose = ?` with the request's None as the param — silently
+    NULLing a required column that was never sent for clearing (purpose has
+    no "clear it" contract at all, unlike remark). Fixed to use the SAME
+    conditional-column trick as project/remark: the WRITE itself must never
+    reference `purpose` when it was omitted, no None purpose param reaches
+    the DB, and the echoed TripState must reflect the ACTUAL stored value."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    # remark also defaults None here (not sent) -> same combined lookup,
+    # now returning (project, purpose, remark) as one row.
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Test Project", "Legacy Purpose", None)]
+    cursor.rowcount = 1
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=42, purpose=None, expected_updated_at=STALE)], "filler@chememan.com", scope
+    )
+    assert results[0].ok is True
+    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
+    assert len(update_calls) == 1
+    assert "purpose = ?" not in update_calls[0].args[0]
+    assert None not in update_calls[0].args[1:], "no stray None param — purpose must never be silently NULLed"
+    assert results[0].trip.purpose == "Legacy Purpose"
 
 
 def test_trip_input_accepts_a_fully_filled_create():
@@ -2592,9 +2651,9 @@ def test_trip_create_without_remark_keeps_the_legacy_insert_shape():
 def test_trip_update_with_remark_sets_remark_column():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    # project is NOT sent (defaults None) -> the combined project/remark echo
-    # lookup still fires for project's sake even though remark itself needs
-    # no lookup here (_lookup_trip_project_and_remark, ONE round trip).
+    # remark is sent here, and project/purpose both fall back to _trip()'s
+    # own non-blank defaults (required-on-CREATE, issue #11) -> the combined
+    # echo lookup never fires; the appended tuple is unused/never consumed.
     cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
     cursor.rowcount = 1
     scope = _scope()
@@ -2634,7 +2693,7 @@ def test_trip_update_without_remark_keeps_the_legacy_update_shape():
     ACTUAL stored value, not just parrot back the request's None."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, "Legacy Remark")]
+    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None, "Legacy Remark")]
     cursor.rowcount = 1
     scope = _scope()
     results = save_trip(

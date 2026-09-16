@@ -824,24 +824,28 @@ def _lookup_trip(conn: pyodbc.Connection, trip_id: int) -> tuple[str, str, int] 
     return (row[0], row[1], row[2]) if row else None
 
 
-def _lookup_trip_project_and_remark(conn: pyodbc.Connection, trip_id: int) -> tuple[str | None, str | None]:
-    """The CURRENTLY STORED `(project, remark)` values for trip_id, fetched
-    in ONE round trip. Used ONLY to echo the actually-persisted value(s) in
-    the immediate save response when an UPDATE left one or both columns
-    untouched (request sent None = "leave as-is") — echoing the request's
-    None back would otherwise lie about a still-present stored value.
-    Fetching both columns together (rather than two single-column lookups)
-    avoids doubling the DB round trips on every project-less+remark-less
-    UPDATE. Unconditional SELECT of both columns, same accepted
-    migration-before-deploy dependency as subform_read.fetch_trips (see
-    docs/specs/budget-transactional-data-model.md)."""
+def _lookup_trip_project_purpose_and_remark(
+    conn: pyodbc.Connection, trip_id: int
+) -> tuple[str | None, str | None, str | None]:
+    """The CURRENTLY STORED `(project, purpose, remark)` values for trip_id,
+    fetched in ONE round trip. Used ONLY to echo the actually-persisted
+    value(s) in the immediate save response when an UPDATE left one or more
+    of these columns untouched (request sent None = "leave as-is") —
+    echoing the request's None back would otherwise lie about a
+    still-present stored value. Fetching all three columns together (rather
+    than separate single-column lookups) avoids extra DB round trips on
+    every UPDATE that omits any combination of the three. Unconditional
+    SELECT of all three columns, same accepted migration-before-deploy
+    dependency as subform_read.fetch_trips (see
+    docs/specs/budget-transactional-data-model.md) — `purpose` predates the
+    project/remark migrations and always exists on the live table."""
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT project, remark FROM budget.budget_trip WHERE trip_id = ?", trip_id)
+        cursor.execute("SELECT project, purpose, remark FROM budget.budget_trip WHERE trip_id = ?", trip_id)
         row = cursor.fetchone()
     finally:
         cursor.close()
-    return (row[0], row[1]) if row else (None, None)
+    return (row[0], row[1], row[2]) if row else (None, None, None)
 
 
 def _lookup_detail_owner(conn: pyodbc.Connection, detail_id: int) -> tuple[str, str, int] | None:
@@ -1222,11 +1226,17 @@ class TripInput(BaseModel):
 
         CREATE (`trip_id is None`) must send both, non-blank. UPDATE
         (`trip_id` set) may still omit either field entirely — `None` keeps
-        meaning "leave the stored value untouched" (the same conditional-
-        column trick as `project`/`remark` above), so replay and partial-
-        update callers keep working. Only a value that IS sent must be
-        non-blank after stripping whitespace — this adds a lower bound
-        only, the max_length limits above are unchanged."""
+        meaning "leave the stored value untouched" via the same conditional-
+        column trick `project`/`remark` already use, so replay and partial-
+        update callers keep working. `_save_one_trip`'s UPDATE branch builds
+        a `purpose_set` fragment exactly like `project_set`/`remark_set`
+        (fixed 2026-09-16, pre-deploy gate finding: the UPDATE used to write
+        `purpose = ?` unconditionally, silently NULLing the stored value
+        whenever purpose was omitted — see
+        test_trip_update_without_purpose_keeps_the_stored_value). Only a
+        value that IS sent must be non-blank after stripping whitespace —
+        this adds a lower bound only, the max_length limits above are
+        unchanged."""
         if self.project is not None and not self.project.strip():
             raise ValueError("project must not be blank")
         if self.purpose is not None and not self.purpose.strip():
@@ -1566,17 +1576,26 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
         else:
             if trip.expected_updated_at is None:
                 raise InvalidRequestError("editing an existing trip requires expected_updated_at")
-            # `project = ?` / `remark = ?` only when a value was sent (None =
-            # leave the stored value untouched) — a project-less/remark-less
-            # UPDATE stays byte-identical to the pre-migration statement.
+            # `purpose = ?` / `project = ?` / `remark = ?` are each included
+            # only when a value was sent (None = leave the stored value
+            # untouched). 2026-09-16 pre-deploy-gate fix: `purpose` used to
+            # be written unconditionally here, so an UPDATE that omitted it
+            # (legal per TripInput._validate_project_and_purpose_required —
+            # required on CREATE only) silently NULLed a required column
+            # that was never sent for clearing. `purpose` now follows the
+            # SAME conditional-column trick project/remark already used.
             # `remark` may still be cleared with "" (untouched by issue #11 —
-            # it is not a required field). `project` can no longer arrive as
+            # it is not a required field; `purpose` has no "clear it"
+            # contract at all). `purpose`/`project` can no longer arrive as
             # "" here: 2026-09-16 (issue #11) TripInput._validate_project_
-            # and_purpose_required rejects a SENT-but-blank project with a
-            # 422 before save_trip ever runs, so `project == ""` is
-            # unreachable through the public API — Project is required on
-            # every save, so "clear it" is no longer a legal request; only
-            # "leave it as the (non-blank) stored value" (omit the field) is.
+            # and_purpose_required rejects a SENT-but-blank purpose/project
+            # with a 422 before save_trip ever runs, so `purpose == ""` /
+            # `project == ""` are unreachable through the public API — both
+            # are required on every save, so "clear it" is no longer a legal
+            # request; only "leave it as the (non-blank) stored value" (omit
+            # the field) is.
+            purpose_set = "purpose = ?, " if trip.purpose is not None else ""
+            purpose_params = (trip.purpose,) if trip.purpose is not None else ()
             project_set = "project = ?, " if trip.project is not None else ""
             project_params = (trip.project,) if trip.project is not None else ()
             remark_set = "remark = ?, " if trip.remark is not None else ""
@@ -1585,13 +1604,13 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
                 f"""
                 UPDATE budget.budget_trip
                 SET traveler_empcode = ?, traveler_name = ?, position = ?, destination = ?,
-                    country_group = ?, days = ?, travel_months = ?, purpose = ?, {project_set}{remark_set}side = ?,
+                    country_group = ?, days = ?, travel_months = ?, {purpose_set}{project_set}{remark_set}side = ?,
                     _user = ?, _updated_at = ?
                 WHERE trip_id = ? AND cost_center = ? AND fiscal_year = ? AND _updated_at = ?
                 """,
                 trip.traveler_empcode, traveler_name, position, trip.destination,
-                trip.country_group, trip.days, travel_months_csv, trip.purpose,
-                *project_params, *remark_params, trip.side,
+                trip.country_group, trip.days, travel_months_csv,
+                *purpose_params, *project_params, *remark_params, trip.side,
                 user_email, now,
                 trip.trip_id, trip.cost_center, trip.fiscal_year, trip.expected_updated_at,
             )
@@ -1635,18 +1654,23 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
 
     conn.commit()
 
-    # Echo the ACTUALLY-PERSISTED project/remark values, not just the
-    # request's — a project-less/remark-less UPDATE (trip.project/trip.remark
-    # is None) leaves that column untouched, so echoing the request's None
-    # back would misreport a still-present stored value as cleared. Only
-    # look up when at least one of the two is actually needed (None on an
-    # existing trip), and in ONE round trip for both — a project-less CREATE
-    # (or remark-less CREATE) never wrote that column at all, so None is
-    # already correct there with no read.
+    # Echo the ACTUALLY-PERSISTED purpose/project/remark values, not just the
+    # request's — an UPDATE that omits any of the three (trip.purpose /
+    # trip.project / trip.remark is None) leaves that column untouched, so
+    # echoing the request's None back would misreport a still-present stored
+    # value as cleared (this was the 2026-09-16 gate-caught bug for
+    # purpose — the WRITE itself is fixed above, but the response must also
+    # never echo the pre-update None). Only look up when at least one of the
+    # three is actually needed (None on an existing trip), and in ONE round
+    # trip for all three — a CREATE never wrote a column that was never
+    # sent, so None is already correct there with no read.
+    persisted_purpose = trip.purpose
     persisted_project = trip.project
     persisted_remark = trip.remark
-    if trip.trip_id is not None and (trip.project is None or trip.remark is None):
-        db_project, db_remark = _lookup_trip_project_and_remark(conn, trip_id)
+    if trip.trip_id is not None and (trip.purpose is None or trip.project is None or trip.remark is None):
+        db_project, db_purpose, db_remark = _lookup_trip_project_purpose_and_remark(conn, trip_id)
+        if trip.purpose is None:
+            persisted_purpose = db_purpose
         if trip.project is None:
             persisted_project = db_project
         if trip.remark is None:
@@ -1658,7 +1682,7 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
             trip_id=trip_id, cost_center=trip.cost_center, fiscal_year=trip.fiscal_year,
             traveler_empcode=trip.traveler_empcode, traveler_name=traveler_name, position=position,
             destination=trip.destination, country_group=trip.country_group, days=trip.days,
-            travel_months=sorted(trip.travel_months, key=int), purpose=trip.purpose,
+            travel_months=sorted(trip.travel_months, key=int), purpose=persisted_purpose,
             project=persisted_project, remark=persisted_remark, side=trip.side,
             updated_at=now, per_diem_months=per_diem_months,
         ),
