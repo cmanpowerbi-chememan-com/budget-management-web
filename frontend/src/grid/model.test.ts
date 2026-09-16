@@ -693,37 +693,6 @@ describe('filterRows', () => {
     expect(filterRows(remarked, GL_REF, { ...BLANK_COLUMN_FILTERS, remark: 'x' })).toEqual([])
   })
 
-  describe('status filter — keeps rows whose MATCHED layer has any non-zero month', () => {
-    const blank = row({ cost_center: 'x', gl_account: 'x' })
-    const sapOnly = { ...blank, cost_center: 'CC-SAP', sap: { ...blank.sap, m01: 100 } }
-    const approvedOnly = { ...blank, cost_center: 'CC-APP', board: { ...blank.board, m02: 50 } }
-    const pendingOnly = {
-      ...blank,
-      cost_center: 'CC-PEN',
-      pending: { ...blank.pending, m03: 25 },
-    }
-    const mixed = [sapOnly, approvedOnly, pendingOnly]
-
-    it('"sap" keeps only rows with an actual value in the SAP layer', () => {
-      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'sap' })).toEqual([sapOnly])
-    })
-
-    it('"งบ" matches the Approved layer label and keeps only rows with an approved value', () => {
-      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'งบ' })).toEqual([approvedOnly])
-    })
-
-    it('"pending" keeps only rows with a pending value', () => {
-      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'pending' })).toEqual([pendingOnly])
-    })
-
-    it('a query matching no layer label hides everything', () => {
-      expect(filterRows(mixed, GL_REF, { ...BLANK_COLUMN_FILTERS, status: 'zzz' })).toEqual([])
-    })
-
-    it('blank status filter is a no-op', () => {
-      expect(filterRows(mixed, GL_REF, BLANK_COLUMN_FILTERS)).toEqual(mixed)
-    })
-  })
 })
 
 describe('identityColSpan / fullRowColSpan / subtotalLabelColSpan (compact-mode "ซ่อนคอลัมน์" toggle)', () => {

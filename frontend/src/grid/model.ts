@@ -95,10 +95,9 @@ export interface ColumnFilters {
   gl: string
   glGroup: string
   remark: string
-  status: string
 }
 
-export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '', remark: '', status: '' }
+export const BLANK_COLUMN_FILTERS: ColumnFilters = { cc: '', gl: '', glGroup: '', remark: '' }
 
 /** Identity-column widths (UI-parity point 8c) — replaces point 1's STATIC
  * freeze offsets (fixed `--frz1/2/3` px in CSS) with state-derived offsets,
@@ -420,35 +419,15 @@ function matchesFilter(value: string, filter: string): boolean {
  * substring match, empty filter = matches everything. `gl_group` is
  * resolved via `glMetaFor` (never `row.gl_group`, which doesn't exist on
  * `BudgetRow` — group membership always comes from the GL master). */
-/** STATUS-column layer labels (as rendered in the status cells). The status
- * filter keeps a row only when the layer whose label CONTAINS the query has
- * any non-zero month — e.g. "sap" → rows with actuals, "งบ" → rows with an
- * approved value, "pending" → rows with a pending value. A query matching no
- * layer label hides everything (same all-or-nothing rule as other filters). */
-const STATUS_LAYER_LABELS: { layer: 'sap' | 'board' | 'pending'; label: string }[] = [
-  { layer: 'sap', label: 'sap · ใช้จริง' },
-  { layer: 'board', label: 'approved · งบ' },
-  { layer: 'pending', label: 'pending · รออนุมัติ' },
-]
-
-function matchesStatusFilter(row: BudgetRow, query: string): boolean {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-  const layers = STATUS_LAYER_LABELS.filter((l) => l.label.includes(q))
-  if (layers.length === 0) return false
-  return layers.some((l) => MONTH_KEYS.some((m) => row[l.layer][m]))
-}
-
 export function filterRows(rows: BudgetRow[], glRef: GlAccount[], filters: ColumnFilters): BudgetRow[] {
-  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim() && !filters.remark.trim() && !filters.status.trim()) return rows
+  if (!filters.cc.trim() && !filters.gl.trim() && !filters.glGroup.trim() && !filters.remark.trim()) return rows
   return rows.filter((r) => {
     const meta = glMetaFor(r.gl_account, glRef)
     return (
       matchesFilter(r.cost_center, filters.cc) &&
       matchesFilter(r.gl_account, filters.gl) &&
       matchesFilter(meta.gl_group, filters.glGroup) &&
-      matchesFilter(r.pending.remark ?? '', filters.remark) &&
-      matchesStatusFilter(r, filters.status)
+      matchesFilter(r.pending.remark ?? '', filters.remark)
     )
   })
 }

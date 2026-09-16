@@ -367,18 +367,6 @@ describe('GridTable', () => {
       expect(grandSap.querySelector('td.total-year-cell')).toHaveTextContent('101')
     })
 
-    it('filters by the STATUS column — keeps only rows whose matched layer has a value', () => {
-      const base = makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true })
-      const withSap = { ...base, sap: { ...base.sap, m01: 100 } }
-      const noSap = makeRow({ cost_center: 'CC2', gl_account: '5211800030', editable: true })
-      render(<GridTable rows={[withSap, noSap]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
-
-      fireEvent.change(screen.getByTestId('filter-status'), { target: { value: 'sap' } })
-
-      expect(screen.getByTestId('txn-CC1-5211800030')).toBeInTheDocument()
-      expect(screen.queryByTestId('txn-CC2-5211800030')).not.toBeInTheDocument()
-    })
-
     it('shows an empty-filtered message and keeps the filter input editable when nothing matches', () => {
       render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
 
@@ -411,14 +399,15 @@ describe('GridTable', () => {
       expect(screen.queryByTestId('txn-CC2-South-5211900030')).not.toBeInTheDocument()
     })
 
-    it('renders a col-filter input under the Status th and a col-filter-spacer under every month th', () => {
+    it('renders a col-filter-spacer under the Status th (no input) and under every month th', () => {
       render(<GridTable rows={filterRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const table = screen.getByTestId('side-section-COST').querySelector('table.data-table') as HTMLTableElement
       const colRow = table.querySelector('thead tr.col-row') as HTMLTableRowElement
       const ths = [...colRow.querySelectorAll('th')]
       const statusTh = ths.find((th) => th.querySelector('.th-label')?.textContent === 'Status')
-      // Status got its own filter input (2026-07-21) — months keep spacers.
-      expect(statusTh?.querySelector('[data-testid="filter-status"]')).toBeInTheDocument()
+      // Status filter removed 2026-09-16 — jakkaritw: Status ไม่ต้องกรอง.
+      expect(statusTh?.querySelector('[data-testid="filter-status"]')).not.toBeInTheDocument()
+      expect(statusTh?.querySelector('.col-filter-spacer')).toBeInTheDocument()
       const monthThs = colRow.querySelectorAll('th.month-col')
       expect(monthThs).toHaveLength(12)
       monthThs.forEach((th) => expect(th.querySelector('.col-filter-spacer')).toBeInTheDocument())

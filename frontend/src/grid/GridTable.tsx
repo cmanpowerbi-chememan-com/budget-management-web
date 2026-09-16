@@ -1231,10 +1231,12 @@ export function GridTable({
                     </tr>
                     {/* Column-filter row (UI-parity point 8b, mockup
                        col-filter-row): every `.th-label` keeps its spot, a
-                       `.col-filter` input sits below the 3 filterable
-                       identity columns, a same-height `.col-filter-spacer`
-                       below Status + each month so every header cell in the
-                       row stays the same height. State is shared with the
+                       `.col-filter` input sits below the 4 filterable
+                       identity columns (Cost Center / GL Code / GL Group /
+                       Remark), a same-height `.col-filter-spacer` below
+                       Status + each month so every header cell in the
+                       row stays the same height. Status is not filterable
+                       (jakkaritw 2026-09-16). State is shared with the
                        OTHER side-table (`colFilters` lives in this
                        component, not per-table), so typing here also
                        filters the other side. */}
@@ -1358,14 +1360,7 @@ export function GridTable({
                             >
                               <ChevronsLeftIcon />
                             </button>
-                            <input
-                              type="text"
-                              className="col-filter"
-                              placeholder="กรอง…"
-                              data-testid="filter-status"
-                              value={colFilters.status}
-                              onChange={updateFilter('status')}
-                            />
+                            <div className="col-filter-spacer" />
                           </th>
                         </>
                       )}
