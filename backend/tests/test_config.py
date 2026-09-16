@@ -58,12 +58,22 @@ def test_admin_emails_union_never_duplicates_the_shared_mailbox():
     assert settings.admin_emails_set == {"jakkaritw@chememan.com", SHARED_ADMIN_MAILBOX.lower()}
 
 
-def test_shared_mailbox_is_sender_and_audit_cc_and_admin():
-    """All three roles read the ONE constant, so they can never drift apart."""
+def test_shared_mailbox_is_sender_and_admin_by_default():
+    """Sender + admin roles read the shared constant by default and can never
+    drift apart. The third role (audit cc) is a separate opt-in switch — see
+    test_audit_cc_email_defaults_to_off below."""
     settings = Settings(_env_file=None)
     assert settings.notifications_sender_email == SHARED_ADMIN_MAILBOX
-    assert settings.notifications_audit_cc_email == SHARED_ADMIN_MAILBOX
     assert SHARED_ADMIN_MAILBOX.lower() in settings.admin_emails_set
+
+
+def test_audit_cc_email_defaults_to_off():
+    """OFF by default since 2026-09-17 (jakkaritw, email-alert-copy #12) —
+    every mail was cc'ing the mailbox it was also sent FROM, which read as a
+    mistake to the recipient. Setting the env var to SHARED_ADMIN_MAILBOX (or
+    any address) re-enables the audit copy without a code change."""
+    settings = Settings(_env_file=None)
+    assert settings.notifications_audit_cc_email == ""
 
 
 def test_notifications_dry_run_defaults_true():

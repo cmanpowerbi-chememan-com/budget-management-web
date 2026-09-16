@@ -27,11 +27,12 @@ _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 # the exact same value as the field default, never a duplicated literal.
 _DEFAULT_APP_BASE_URL = "https://budget.chememan.com"
 
-# The shared reporting mailbox. jakkaritw, 2026-08-09: it plays THREE roles at
-# once, and they must never drift apart, so all three read this one constant:
+# The shared reporting mailbox. jakkaritw, 2026-08-09: it plays THREE roles,
+# and they must never drift apart, so all three read this one constant:
 #   1. the mailbox every notification is sent AS (`notifications_sender_email`),
-#   2. the mailbox cc'd on EVERY notification (`notifications_audit_cc_email`),
-#      so the whole mail trail is searchable in one inbox — not only in Sent Items,
+#   2. the mailbox notifications CAN cc for an audit trail
+#      (`notifications_audit_cc_email` — OFF by default since 2026-09-17;
+#      that field's own comment explains why and how to re-enable it),
 #   3. a full admin, in EVERY environment (`admin_emails_set` below).
 # Role 3 is deliberately code-level, not env-level: ADMIN_EMAILS is set per
 # container, so an env-only grant would silently exist on staging and be missing
@@ -128,10 +129,19 @@ class Settings(BaseSettings):
     # cc's this mailbox, on top of whatever cc the individual mail already
     # carries (reject/final-approve cc the frozen approver1, reminders cc the
     # derived approver1). Sent Items alone was not enough — a cc'd copy lands in
-    # the Inbox where it is searchable and shareable. Set to "" to switch the
-    # audit copy off without a code change; `notifications.send_mail` also drops
-    # it when it would duplicate the To or an existing cc.
-    notifications_audit_cc_email: str = SHARED_ADMIN_MAILBOX
+    # the Inbox where it is searchable and shareable. Set to a mailbox address
+    # to switch the audit copy on without a code change; `notifications.send_mail`
+    # also drops it when it would duplicate the To or an existing cc.
+    #
+    # OFF by default since 2026-09-17 (jakkaritw: "ปิดสวิตช์ เก็บกลไกไว้" — switch
+    # it off, keep the mechanism): every mail showed `From: CMAN_PowerBI` and
+    # `Cc: CMAN_PowerBI` on the same message, which read as a mistake to the
+    # recipient. The mechanism itself (this setting, `_with_audit_cc`, its
+    # de-dup rules, its tests) stays in place — set `NOTIFICATIONS_AUDIT_CC_EMAIL`
+    # in the container env to turn the copy back on, no code change needed.
+    # Confirmed neither container sets it today, so this default is what
+    # actually runs on deploy.
+    notifications_audit_cc_email: str = ""
 
     # §7.3 bulk-send hardening (jobs/send_reminders.py only — event mails
     # from the router never sleep): pacing between reminder mails so one

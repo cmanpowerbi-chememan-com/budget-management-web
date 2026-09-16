@@ -187,7 +187,10 @@ def test_send_mail_sendmail_failure_raises_notification_error(monkeypatch):
 
 
 def test_send_mail_includes_cc_recipients_when_cc_given(monkeypatch):
-    """2026-07-31 revamp: `cc` lands in the Graph payload as ccRecipients."""
+    """2026-07-31 revamp: `cc` lands in the Graph payload as ccRecipients.
+    Audit cc is OFF by default since 2026-09-17 (config.py), so this test
+    turns it on explicitly to keep exercising the append-after-business-cc
+    ordering below."""
     posts = []
 
     def _fake_post(url, **kwargs):
@@ -204,7 +207,8 @@ def test_send_mail_includes_cc_recipients_when_cc_given(monkeypatch):
 
     result = send_mail(
         "someone@chememan.com", "subject", "<p>body</p>",
-        cc=["vp@chememan.com", "boss@chememan.com"], dry_run=False, settings=_settings(),
+        cc=["vp@chememan.com", "boss@chememan.com"], dry_run=False,
+        settings=_settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX),
     )
 
     assert result.sent is True
@@ -246,7 +250,9 @@ def test_send_mail_omits_cc_recipients_key_when_audit_cc_is_switched_off(monkeyp
 
 def test_send_mail_audit_cc_is_added_when_there_is_no_business_cc(monkeypatch):
     """The whole point of the 2026-08-09 change: even a plain To-only mail
-    (turn notice, submitted notice) leaves a copy in the shared inbox."""
+    (turn notice, submitted notice) leaves a copy in the shared inbox. Audit
+    cc is OFF by default since 2026-09-17 (config.py) — turned on explicitly
+    here to keep exercising the "no business cc" append case."""
     posts = []
 
     def _fake_post(url, **kwargs):
@@ -260,7 +266,10 @@ def test_send_mail_audit_cc_is_added_when_there_is_no_business_cc(monkeypatch):
         return resp
 
     monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
-    send_mail("someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
+    send_mail(
+        "someone@chememan.com", "subject", "<p>body</p>", cc=None, dry_run=False,
+        settings=_settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX),
+    )
 
     cc = [r["emailAddress"]["address"] for r in posts[1][1]["json"]["message"]["ccRecipients"]]
     assert cc == [SHARED_ADMIN_MAILBOX]
@@ -269,7 +278,9 @@ def test_send_mail_audit_cc_is_added_when_there_is_no_business_cc(monkeypatch):
 def test_send_mail_audit_cc_suppressed_when_it_is_the_recipient(monkeypatch):
     """Mail addressed TO the shared mailbox must not also cc it — one copy,
     not two. Matched case-insensitively, since empcode->email lookups and env
-    values do not agree on casing."""
+    values do not agree on casing. Audit cc is turned on explicitly (OFF by
+    default since 2026-09-17) so this actually exercises the suppression
+    rule rather than trivially passing because the cc is already off."""
     posts = []
 
     def _fake_post(url, **kwargs):
@@ -283,14 +294,18 @@ def test_send_mail_audit_cc_suppressed_when_it_is_the_recipient(monkeypatch):
         return resp
 
     monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
-    send_mail(SHARED_ADMIN_MAILBOX.upper(), "subject", "<p>body</p>", cc=None, dry_run=False, settings=_settings())
+    send_mail(
+        SHARED_ADMIN_MAILBOX.upper(), "subject", "<p>body</p>", cc=None, dry_run=False,
+        settings=_settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX),
+    )
 
     assert "ccRecipients" not in posts[1][1]["json"]["message"]
 
 
 def test_send_mail_audit_cc_not_duplicated_when_already_in_business_cc(monkeypatch):
     """A caller that already cc'd the shared mailbox (approver1 resolving to
-    it) must not end up with it twice."""
+    it) must not end up with it twice. Audit cc is turned on explicitly (OFF
+    by default since 2026-09-17) so this actually exercises the de-dup rule."""
     posts = []
 
     def _fake_post(url, **kwargs):
@@ -306,7 +321,8 @@ def test_send_mail_audit_cc_not_duplicated_when_already_in_business_cc(monkeypat
     monkeypatch.setattr("app.notifications.httpx.post", _fake_post)
     send_mail(
         "someone@chememan.com", "subject", "<p>body</p>",
-        cc=[SHARED_ADMIN_MAILBOX.title()], dry_run=False, settings=_settings(),
+        cc=[SHARED_ADMIN_MAILBOX.title()], dry_run=False,
+        settings=_settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX),
     )
 
     cc = [r["emailAddress"]["address"] for r in posts[1][1]["json"]["message"]["ccRecipients"]]
@@ -366,7 +382,8 @@ def test_environment_label_shouts_in_subject_and_banners_the_body(monkeypatch):
 def test_redirect_delivers_to_the_catcher_only_and_drops_every_cc(monkeypatch):
     """The whole point: staging may run with real sends on, without emailing a
     single live colleague. Business cc AND the audit cc are both live people,
-    so both must go."""
+    so both must go — audit cc turned on explicitly (OFF by default since
+    2026-09-17) so an active one is actually there to be dropped."""
     posts = _capture(monkeypatch)
     send_mail(
         "laddawank@chememan.com", "รอการอนุมัติ", "<p>body</p>", cc=["boss@chememan.com"],
@@ -374,6 +391,7 @@ def test_redirect_delivers_to_the_catcher_only_and_drops_every_cc(monkeypatch):
         settings=_settings(
             notifications_environment_label=STG_LABEL,
             notifications_redirect_all_to="jakkaritw@chememan.com",
+            notifications_audit_cc_email=SHARED_ADMIN_MAILBOX,
         ),
     )
 
@@ -384,7 +402,8 @@ def test_redirect_delivers_to_the_catcher_only_and_drops_every_cc(monkeypatch):
 
 def test_redirect_banner_still_names_the_real_recipients(monkeypatch):
     """A redirected mail is useless as a test unless it says who the app
-    actually resolved — that IS the thing under test."""
+    actually resolved — that IS the thing under test. Audit cc turned on
+    explicitly (OFF by default since 2026-09-17) so it is there to be named."""
     posts = _capture(monkeypatch)
     send_mail(
         "laddawank@chememan.com", "รอการอนุมัติ", "<p>body</p>", cc=["boss@chememan.com"],
@@ -392,6 +411,7 @@ def test_redirect_banner_still_names_the_real_recipients(monkeypatch):
         settings=_settings(
             notifications_environment_label=STG_LABEL,
             notifications_redirect_all_to="jakkaritw@chememan.com",
+            notifications_audit_cc_email=SHARED_ADMIN_MAILBOX,
         ),
     )
 
@@ -417,13 +437,46 @@ def test_redirect_without_a_label_still_reroutes(monkeypatch):
 
 def test_dry_run_log_shows_the_audit_cc_a_real_send_would_carry(monkeypatch, caplog):
     """A dry run that hid the audit cc would be a misleading rehearsal — the
-    preview must list exactly what a real send posts."""
+    preview must list exactly what a real send posts. Audit cc is OFF by
+    default since 2026-09-17 (config.py), so this test turns it on explicitly
+    to keep exercising the preview-shows-the-real-cc behavior."""
     monkeypatch.setattr("app.notifications.httpx.post", _never_called)
+    on = _settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX)
     with caplog.at_level(logging.INFO, logger="app.notifications"):
-        result = send_mail("someone@chememan.com", "s", "<p>b</p>", dry_run=True, settings=_settings())
+        result = send_mail("someone@chememan.com", "s", "<p>b</p>", dry_run=True, settings=on)
 
     assert result.sent is False and result.dry_run is True
     assert SHARED_ADMIN_MAILBOX in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Shared assertion for the enlarged lead-paragraph style (PRD email-alert-copy
+# #12, jakkaritw 2026-09-17): the greeting, the outcome sentence and (where a
+# mail type has one) the action-link paragraph render at 17px with the anchor
+# also bold; the label/value table and the signature stay at the 14px base.
+# The style string is a literal here, not an import of app.notifications._LEAD
+# — tests assert on the rendered HTML output, never on a private symbol.
+# ---------------------------------------------------------------------------
+_LEAD_STYLE = "font-size:17px;"
+
+
+def _assert_lead_paragraphs(body: str, *, greeting: str, outcome: str, link: tuple[str, str] | None) -> None:
+    """`link` is `(url, text)` for the 4 builders whose body ends in a
+    "คลิกที่นี่..." action-link paragraph; None for the 2 grouped-table
+    builders (notify_deadline_reminder, notify_turn_reminder), which never
+    had that paragraph shape to begin with — asserting `link=None` there
+    documents that omission instead of silently skipping it."""
+    assert f'<p style="{_LEAD_STYLE}">{greeting}</p>' in body
+    assert f'<p style="{_LEAD_STYLE}">{outcome}</p>' in body
+    expected_occurrences = 2
+    if link is not None:
+        url, text = link
+        assert f'<p style="{_LEAD_STYLE}"><a href="{url}" style="font-weight:bold;">{text}</a></p>' in body
+        expected_occurrences = 3
+    # Count, not just substring search — proves the table/signature did NOT
+    # also pick up the 17px style (a leak would push the count past 2 or 3).
+    assert body.count(_LEAD_STYLE) == expected_occurrences
+    assert '<p style="margin-top:24px;">Best Regards,<br><b>Budget Management Team</b></p>' in body
 
 
 # ---------------------------------------------------------------------------
@@ -448,12 +501,12 @@ def test_notify_turn_resolves_email_and_sends_dry_run(monkeypatch):
     assert kwargs["dry_run"] is True
 
 
-def test_notify_turn_subject_format_and_body_shows_both_years(monkeypatch):
+def test_notify_turn_subject_format_and_body_shows_single_planning_year(monkeypatch):
     """Subject = status-first short form with the planning year only
-    (2026-07-28 user-requested format). Body keeps the gate residual fix:
-    recipient must see the SAME year the on-screen YearPicker shows
-    (label = planning - 1), alongside the correct planning year, so the
-    two never look contradictory."""
+    (2026-07-28 user-requested format, unchanged). Body (jakkaritw,
+    2026-09-17): the on-screen-label parenthetical is REMOVED — it read as
+    two contradictory years in one sentence — so the body now states the
+    planning year alone, same as the subject always has."""
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
     calls = []
@@ -466,8 +519,46 @@ def test_notify_turn_subject_format_and_body_shows_both_years(monkeypatch):
 
     (to_email, subject, body), kwargs = calls[0]
     assert subject == "รอการอนุมัติ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
-    assert "2027" in body
-    assert "Year 2026" in body
+    assert "ปีงบประมาณ 2027" in body
+    assert "หน้าจอ" not in body
+    assert "Year 2026" not in body
+
+
+def test_notify_turn_no_shared_mailbox_cc_by_default(monkeypatch):
+    """A turn mail never carries a business cc — with the audit-cc switch OFF
+    by default (config.py, 2026-09-17), the final Graph payload must carry no
+    ccRecipients key at all, not even the shared mailbox."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    posts = _capture(monkeypatch)
+
+    notify_turn(
+        conn, department="Accounting", fiscal_year=2027, approver_empcode="200",
+        submitter_email="filler@chememan.com", dry_run=False, settings=_settings(),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    assert "ccRecipients" not in message
+
+
+def test_notify_turn_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_turn(
+        conn, department="Accounting", fiscal_year=2027, approver_empcode="200",
+        submitter_email="filler@chememan.com", dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้อนุมัติ",
+        outcome="มีงบประมาณรอการอนุมัติจากท่าน รายละเอียดดังนี้:",
+        link=(link, "คลิกที่นี่เพื่อตรวจสอบและอนุมัติ"),
+    )
 
 
 def test_notify_turn_no_email_found_skips_without_error(monkeypatch):
@@ -539,7 +630,9 @@ def test_notify_reject_sends_to_submitter(monkeypatch):
     assert kwargs["cc"] is None  # no approver1 empcode -> no cc
 
 
-def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
+def test_notify_reject_subject_format_and_body_shows_single_planning_year(monkeypatch):
+    """Body (jakkaritw, 2026-09-17): the on-screen-label parenthetical is
+    REMOVED — the planning year alone is stated, same as the subject."""
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
@@ -550,8 +643,9 @@ def test_notify_reject_subject_format_and_body_shows_both_years(monkeypatch):
 
     (to_email, subject, body), kwargs = calls[0]
     assert subject == "ถูกตีกลับ งบประมาณของฝ่าย Accounting ปีงบประมาณ 2027"
-    assert "2027" in body
-    assert "Year 2026" in body
+    assert "ปีงบประมาณ 2027" in body
+    assert "หน้าจอ" not in body
+    assert "Year 2026" not in body
 
 
 def test_notify_reject_no_submitter_email_skips(monkeypatch):
@@ -616,6 +710,42 @@ def test_notify_reject_still_sends_to_submitter_when_cc_lookup_fails(monkeypatch
     assert kwargs["cc"] is None
 
 
+def test_notify_reject_business_cc_only_no_shared_mailbox_by_default(monkeypatch):
+    """With the audit-cc switch OFF by default (config.py, 2026-09-17), the
+    final Graph payload carries exactly the frozen approver1's cc — never
+    the shared mailbox too."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    posts = _capture(monkeypatch)
+
+    notify_reject(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="bad", approver1_empcode="200", dry_run=False, settings=_settings(),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    cc = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
+    assert cc == ["vp@chememan.com"]
+
+
+def test_notify_reject_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_reject(
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        reason="numbers look wrong", approver1_empcode=None, dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้ส่งงบประมาณ",
+        outcome="งบประมาณของท่านถูกตีกลับ รายละเอียดดังนี้:",
+        link=(link, "คลิกที่นี่เพื่อแก้ไขและส่งใหม่"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # notify_approved — final-APPROVED confirmation, uses the frozen
 # submitter_email directly, no DB lookup (same pattern as notify_reject)
@@ -640,7 +770,9 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
     assert kwargs["cc"] is None
 
 
-def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
+def test_notify_approved_body_shows_single_planning_year(monkeypatch):
+    """Body (jakkaritw, 2026-09-17): the on-screen-label parenthetical is
+    REMOVED — the planning year alone is stated."""
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
@@ -650,8 +782,9 @@ def test_notify_approved_body_shows_both_planning_and_label_year(monkeypatch):
     )
 
     (to_email, subject, body), kwargs = calls[0]
-    assert "2027" in body
-    assert "Year 2026" in body
+    assert "ปีงบประมาณ 2027" in body
+    assert "หน้าจอ" not in body
+    assert "Year 2026" not in body
 
 
 def test_notify_approved_no_submitter_email_skips(monkeypatch):
@@ -724,6 +857,42 @@ def test_notify_approved_still_sends_to_submitter_when_cc_lookup_fails(monkeypat
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
     assert kwargs["cc"] is None
+
+
+def test_notify_approved_business_cc_only_no_shared_mailbox_by_default(monkeypatch):
+    """With the audit-cc switch OFF by default (config.py, 2026-09-17), the
+    final Graph payload carries exactly the frozen approver1's cc — never
+    the shared mailbox too."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    posts = _capture(monkeypatch)
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=False, settings=_settings(),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    cc = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
+    assert cc == ["vp@chememan.com"]
+
+
+def test_notify_approved_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode=None, dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้ส่งงบประมาณ",
+        outcome="งบประมาณของท่านได้รับการอนุมัติครบทุกขั้นแล้ว รายละเอียดดังนี้:",
+        link=(link, "คลิกที่นี่เพื่อดูรายละเอียด"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -819,7 +988,7 @@ def test_notify_step_overridden_body_carries_department_year_both_names_and_link
 
     (_, _, body), _ = calls[0]
     assert "Accounting" in body
-    assert "2027" in body and "Year 2026" in body  # planning + on-screen label year
+    assert "ปีงบประมาณ 2027" in body and "หน้าจอ" not in body  # single planning year, 2026-09-17
     assert "vp@chememan.com" in body  # ผู้อนุมัติที่ถูกข้าม
     assert "jakkaritw@chememan.com" in body  # ผู้ดำเนินการแทน
     assert build_deep_link("Accounting", 2027, settings=_settings()) in body
@@ -910,6 +1079,27 @@ def test_notify_step_overridden_no_submitter_email_skips(monkeypatch):
     assert result is None
 
 
+def test_notify_step_overridden_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_step_overridden(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        skipped_approver_empcode="200", admin_email="jakkaritw@chememan.com",
+        dry_run=True, settings=_settings(), new_current_approver_empcode="101032",
+    )
+
+    (_, _, body), _ = calls[0]
+    link = build_deep_link("Accounting", 2027, settings=_settings())
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้ส่งงบประมาณ",
+        outcome="ผู้ดูแลระบบได้ดำเนินการอนุมัติแทนผู้อนุมัติขั้นที่ 1 ให้งบประมาณของท่านแล้ว รายละเอียดดังนี้:",
+        link=(link, "คลิกที่นี่เพื่อดูรายละเอียด"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # notify_deadline_reminder — §7 rework: ONE grouped email per FILLER, table
 # of every still-not-submitted department with its own deep link per row
@@ -954,7 +1144,7 @@ def test_notify_deadline_reminder_single_department_same_template(monkeypatch):
     assert kwargs["cc"] == ["vp@chememan.com"]
     assert "Accounting" in body
     assert build_deep_link("Accounting", 2027, settings=_settings()) in body
-    assert "2027" in body and "Year 2026" in body
+    assert "ปีงบประมาณ 2027" in body and "หน้าจอ" not in body  # single planning year, 2026-09-17
     assert "2026" in body  # closing date rendered
 
 
@@ -972,6 +1162,26 @@ def test_notify_deadline_reminder_empty_department_list_skips(monkeypatch):
         "filler@chememan.com", [], 2027, date(2026, 8, 31), cc_emails=[], dry_run=True, settings=_settings(),
     )
     assert result is None
+
+
+def test_notify_deadline_reminder_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    """This mail type has no "คลิกที่นี่..." action-link paragraph (its links
+    are per-department table cells instead) — `link=None` documents that,
+    it does not silently skip checking the greeting/outcome pair."""
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_deadline_reminder(
+        "filler@chememan.com", ["Accounting"], 2027, date(2026, 8, 31),
+        cc_emails=["vp@chememan.com"], dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้กรอกงบประมาณ",
+        outcome="ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:",
+        link=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1002,6 +1212,7 @@ def test_notify_turn_reminder_groups_departments_with_days_pending(monkeypatch):
     assert "IT" in body and "3 วัน" in body
     assert build_deep_link("Accounting", 2027, settings=_settings()) in body
     assert build_deep_link("IT", 2027, settings=_settings()) in body
+    assert "ปีงบประมาณ 2027" in body and "หน้าจอ" not in body  # single planning year, 2026-09-17
 
 
 def test_notify_turn_reminder_no_email_found_skips_without_error(monkeypatch):
@@ -1014,6 +1225,27 @@ def test_notify_turn_reminder_no_email_found_skips_without_error(monkeypatch):
         dry_run=True, settings=_settings(),
     )
     assert result is None
+
+
+def test_notify_turn_reminder_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    """This mail type has no "คลิกที่นี่..." action-link paragraph (its links
+    are per-department table cells instead) — `link=None` documents that."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = ("manager@chememan.com",)
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_turn_reminder(
+        conn, approver_empcode="200", items=[("Accounting", 2027, 9)],
+        dry_run=True, settings=_settings(),
+    )
+
+    (_, _, body), _ = calls[0]
+    _assert_lead_paragraphs(
+        body, greeting="เรียน ผู้อนุมัติ",
+        outcome="มีงบประมาณค้างรอการอนุมัติจากท่าน รายละเอียดดังนี้:",
+        link=None,
+    )
 
 
 # ---------------------------------------------------------------------------

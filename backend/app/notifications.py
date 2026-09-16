@@ -83,15 +83,21 @@ def build_deep_link(department: str, fiscal_year: int, settings: Settings | None
 
 
 def _year_phrase(fiscal_year: int) -> str:
-    """Human-readable year mention for subject/body text (gate residual,
-    2026-07-23): always shows the planning year AND the on-screen label
-    year (`fiscal_year - 1`, `frontend/src/grid/YearPicker.tsx`) side by
-    side so a recipient reading the email never sees a different year than
-    the YearPicker they land on. Used by the BODY of every notify_* builder
-    (subjects carry the planning year only, 2026-07-28 user-requested
-    format) so the wording can't drift between mail types. Does NOT touch
+    """Human-readable year mention for the BODY of every notify_* builder
+    (subjects have always carried the planning year only, 2026-07-28
+    user-requested format — unrelated to this function and unaffected by
+    this change). One shared function so the wording can't drift between
+    mail types.
+
+    Used to show the on-screen label year (`fiscal_year - 1`,
+    `frontend/src/grid/YearPicker.tsx`) alongside the planning year (added
+    2026-07-23, gate residual) so a recipient would not be surprised that
+    the YearPicker they land on shows a different number. jakkaritw removed
+    that parenthetical on 2026-09-17: reading a real approval mail, it came
+    across as two contradictory years in one sentence ("so which year is
+    it?"), so the body now states the planning year alone. Does NOT touch
     `build_deep_link` / the URL — text only."""
-    return f"ปีงบประมาณ {fiscal_year} (หน้าจอ: Year {fiscal_year - 1})"
+    return f"ปีงบประมาณ {fiscal_year}"
 
 
 # --- HTML template (2026-07-28, styled after the Contract Management sample) ---
@@ -110,6 +116,26 @@ def _hl(text: str) -> str:
 def _hl_red(text: str) -> str:
     """Red-orange bold highlight — deadlines / things needing action (sample's red date)."""
     return f'<span style="{_HL_RED}">{text}</span>'
+
+
+# Lead-paragraph size (PRD email-alert-copy #12, jakkaritw 2026-09-17): the
+# greeting, the outcome sentence, and the action-link paragraph render larger
+# than the 14px _FONT_WRAP base so the eye lands on them first; the
+# label/value table and the signature stay at the base size. Inline only
+# (clients strip <style>/<head>) — the font stack itself is inherited from
+# _FONT_WRAP, not restated here.
+_LEAD = "font-size:17px;"
+
+
+def _lead_p(inner_html: str) -> str:
+    """Greeting / outcome-sentence paragraph at the shared lead size."""
+    return f'<p style="{_LEAD}">{inner_html}</p>'
+
+
+def _lead_link_p(link: str, text: str) -> str:
+    """Action-link paragraph at the lead size, anchor ALSO bold — the click
+    target itself must stand out, not just the surrounding sentence."""
+    return f'<p style="{_LEAD}"><a href="{link}" style="font-weight:bold;">{text}</a></p>'
 
 
 def _wrap(content_html: str) -> str:
@@ -465,8 +491,8 @@ def notify_turn(
         if days_pending is not None:
             pending_line = f"<p>งบประมาณนี้{_hl_red(f'ค้างการอนุมัติมาแล้ว {days_pending} วัน')} กรุณาดำเนินการ</p>"
     body = _wrap(
-        "<p>เรียน ผู้อนุมัติ</p>"
-        "<p>มีงบประมาณรอการอนุมัติจากท่าน รายละเอียดดังนี้:</p>"
+        _lead_p("เรียน ผู้อนุมัติ")
+        + _lead_p("มีงบประมาณรอการอนุมัติจากท่าน รายละเอียดดังนี้:")
         + _label_value_table([
             ("ฝ่าย", _hl(department), None),
             ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
@@ -474,7 +500,7 @@ def notify_turn(
             ("สถานะ", "รอการอนุมัติจากท่าน", "red"),
         ])
         + pending_line
-        + f'<p><a href="{link}">คลิกที่นี่เพื่อตรวจสอบและอนุมัติ</a></p>'
+        + _lead_link_p(link, "คลิกที่นี่เพื่อตรวจสอบและอนุมัติ")
     )
     return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)
 
@@ -496,15 +522,15 @@ def notify_reject(
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ถูกตีกลับ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(
-        "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        "<p>งบประมาณของท่านถูกตีกลับ รายละเอียดดังนี้:</p>"
+        _lead_p("เรียน ผู้ส่งงบประมาณ")
+        + _lead_p("งบประมาณของท่านถูกตีกลับ รายละเอียดดังนี้:")
         + _label_value_table([
             ("ฝ่าย", _hl(department), None),
             ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
             ("สถานะ", "ถูกตีกลับ", "red"),
             ("เหตุผล", reason, None),
         ])
-        + f'<p><a href="{link}">คลิกที่นี่เพื่อแก้ไขและส่งใหม่</a></p>'
+        + _lead_link_p(link, "คลิกที่นี่เพื่อแก้ไขและส่งใหม่")
     )
     return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
 
@@ -528,14 +554,14 @@ def notify_approved(
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ได้รับการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(
-        "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        "<p>งบประมาณของท่านได้รับการอนุมัติครบทุกขั้นแล้ว รายละเอียดดังนี้:</p>"
+        _lead_p("เรียน ผู้ส่งงบประมาณ")
+        + _lead_p("งบประมาณของท่านได้รับการอนุมัติครบทุกขั้นแล้ว รายละเอียดดังนี้:")
         + _label_value_table([
             ("ฝ่าย", _hl(department), None),
             ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
             ("สถานะ", "อนุมัติครบทุกขั้นแล้ว", "green"),
         ])
-        + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
+        + _lead_link_p(link, "คลิกที่นี่เพื่อดูรายละเอียด")
     )
     return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
 
@@ -580,8 +606,8 @@ def notify_step_overridden(
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ดำเนินการแทนผู้อนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(
-        "<p>เรียน ผู้ส่งงบประมาณ</p>"
-        "<p>ผู้ดูแลระบบได้ดำเนินการอนุมัติแทนผู้อนุมัติขั้นที่ 1 ให้งบประมาณของท่านแล้ว รายละเอียดดังนี้:</p>"
+        _lead_p("เรียน ผู้ส่งงบประมาณ")
+        + _lead_p("ผู้ดูแลระบบได้ดำเนินการอนุมัติแทนผู้อนุมัติขั้นที่ 1 ให้งบประมาณของท่านแล้ว รายละเอียดดังนี้:")
         + _label_value_table([
             ("ฝ่าย", _hl(department), None),
             ("ปีงบประมาณ", _year_phrase(fiscal_year), None),
@@ -590,7 +616,7 @@ def notify_step_overridden(
             ("วันเวลา", now_str, None),
             ("สถานะปัจจุบัน", waiting_display, None),
         ])
-        + f'<p><a href="{link}">คลิกที่นี่เพื่อดูรายละเอียด</a></p>'
+        + _lead_link_p(link, "คลิกที่นี่เพื่อดูรายละเอียด")
     )
     return send_mail(submitter_email, subject, body, cc=cc, dry_run=dry_run, settings=settings)
 
@@ -639,9 +665,9 @@ def notify_deadline_reminder(
         closing_line = "<p>กรุณาดำเนินการก่อนถึงกำหนดปิดรับ</p>"
     subject = f"แจ้งเตือน: ยังไม่ได้ส่งงบประมาณ {len(departments)} ฝ่าย ปีงบประมาณ {fiscal_year}"
     body = _wrap(
-        "<p>เรียน ผู้กรอกงบประมาณ</p>"
-        "<p>ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:</p>"
-        f"{table}{closing_line}"
+        _lead_p("เรียน ผู้กรอกงบประมาณ")
+        + _lead_p("ฝ่ายที่ท่านรับผิดชอบยังไม่ได้ส่งงบประมาณ ดังนี้:")
+        + f"{table}{closing_line}"
     )
     return send_mail(filler_email, subject, body, cc=cc_emails or None, dry_run=dry_run, settings=settings)
 
@@ -691,9 +717,9 @@ def notify_turn_reminder(
     )
     subject = f"[เตือน] มีงบประมาณ {len(items)} ฝ่ายรอการอนุมัติจากท่าน"
     body = _wrap(
-        "<p>เรียน ผู้อนุมัติ</p>"
-        "<p>มีงบประมาณค้างรอการอนุมัติจากท่าน รายละเอียดดังนี้:</p>"
-        f"{table}"
-        "<p>กรุณาดำเนินการอนุมัติหรือตีกลับ เพื่อให้การจัดทำงบประมาณเป็นไปตามกำหนด</p>"
+        _lead_p("เรียน ผู้อนุมัติ")
+        + _lead_p("มีงบประมาณค้างรอการอนุมัติจากท่าน รายละเอียดดังนี้:")
+        + f"{table}"
+        + "<p>กรุณาดำเนินการอนุมัติหรือตีกลับ เพื่อให้การจัดทำงบประมาณเป็นไปตามกำหนด</p>"
     )
     return send_mail(to_email, subject, body, dry_run=dry_run, settings=settings)
