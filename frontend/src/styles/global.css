@@ -1957,6 +1957,24 @@ th.total-year-col {
   z-index: 600;
 }
 
+/* App-wide confirm dialog (platform/ConfirmDialog.tsx, 2026-09-16) — must
+   outrank an already-open subform/trip/attachments modal (z500) AND the
+   toast stack (z550), since Submit/delete/cancel-unsaved confirms are
+   triggered from inside those. Stays BELOW session-expiry (z600) on
+   purpose: if the session dies while a confirm is open, the un-dismissable
+   session dialog is the terminal state and must win. */
+.confirm-dialog-backdrop {
+  z-index: 590;
+}
+.confirm-dialog-modal {
+  max-width: 440px;
+}
+.confirm-dialog-message {
+  margin: 0;
+  white-space: pre-line;
+  color: var(--ink);
+}
+
 /* ─── Special-GL detail table (DetailSubform) ─── */
 .detail-table {
   width: 100%;
@@ -2566,7 +2584,8 @@ th.total-year-col {
 }
 .btn-submit,
 .btn-approve,
-.btn-reject {
+.btn-reject,
+.btn-danger {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2585,9 +2604,24 @@ th.total-year-col {
 }
 .btn-submit:disabled,
 .btn-approve:disabled,
-.btn-reject:disabled {
+.btn-reject:disabled,
+.btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+/* ConfirmDialog's destructive confirm button (delete file/row/trip/detail
+   line, discard-unsaved-edits) — same solid-fill idiom as .btn-approve
+   above, using the existing --status-rejected token so it never drifts from
+   the rejected-chip red. Only call site today: ConfirmDialog.tsx, always
+   inside .modal (a light card) — no shell-direct context to scope for, so
+   (unlike .btn-submit/.btn-approve above) it needs no ancestor-scoped
+   border-color override. */
+.btn-danger {
+  color: #fff;
+  background: var(--status-rejected);
+}
+.btn-danger:hover {
+  background: color-mix(in oklab, var(--status-rejected) 78%, black);
 }
 /* GATE HIGH-2: these 3 render straight on --paper inside .approval-bar (no
    card). Scoped to the .approval-bar ancestor, not the button classes

@@ -1161,7 +1161,10 @@ describe('TripManager', () => {
 
     confirmSpy.mockReturnValue(true)
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
-    expect(onClose).toHaveBeenCalledTimes(1)
+    // confirmDialog() always returns a Promise (even on the window.confirm
+    // fallback path, 2026-09-16) — onCancel is now async, so onClose() lands
+    // a microtask after the click, not synchronously within it.
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
 
     confirmSpy.mockRestore()
   })

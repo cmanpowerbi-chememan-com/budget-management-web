@@ -10,6 +10,7 @@ import { ApprovalActionBar } from '../approval/ApprovalActionBar'
 import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
 import type { DeepLinkFilter } from '../filters/deepLink'
+import { confirmDialog } from '../platform/confirm'
 import { DetailSubform } from '../subform/DetailSubform'
 import { deriveTravelSideFromGl, type TripSide } from '../subform/model'
 import { TripManager } from '../subform/TripManager'
@@ -458,7 +459,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * refetches the grid (the row was changed/removed elsewhere) instead of
    * assuming this client's view is still correct. */
   async function handleDeleteRow(row: BudgetRow) {
-    if (!window.confirm(`ลบรายการนี้? (${row.cost_center} · ${row.gl_account})\nลบแล้วเรียกคืนไม่ได้`)) return
+    if (!(await confirmDialog(`ลบรายการนี้? (${row.cost_center} · ${row.gl_account})\nลบแล้วเรียกคืนไม่ได้`, { danger: true, confirmLabel: 'ลบ' }))) return
     const key = rowKey(row.cost_center, row.gl_account)
     try {
       await deleteRow({

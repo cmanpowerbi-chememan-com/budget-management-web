@@ -142,8 +142,10 @@ test.describe('approver journey', () => {
     await installMocks(page, world)
 
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
-    page.once('dialog', (dialog) => void dialog.accept())
     await page.getByTestId('approval-approve-btn').click()
+    // In-app confirm dialog (2026-09-16), not a native window.confirm.
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    await page.getByTestId('confirm-ok').click()
 
     await expect(page.getByTestId('approval-action-message')).toContainText('Someone else changed this status')
     // load() ran again after the 409 — the chip reflects the FRESH (position 2) truth.

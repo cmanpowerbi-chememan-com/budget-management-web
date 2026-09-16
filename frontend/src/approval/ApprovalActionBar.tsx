@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { approveDepartment, fetchApprovalStatus, overrideStep, rejectDepartment, submitDepartment } from '../api/approval'
 import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
+import { confirmDialog } from '../platform/confirm'
 import {
   approverLabel,
   buildOverrideConfirmText,
@@ -115,18 +116,18 @@ export function ApprovalActionBar({
     }
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!department) return
-    const confirmed = window.confirm(buildSubmitConfirmText(department, fiscalYear, rowCount, costCenterCount))
+    const confirmed = await confirmDialog(buildSubmitConfirmText(department, fiscalYear, rowCount, costCenterCount))
     if (!confirmed) return
     runAction(() => submitDepartment(department, fiscalYear), 'Submit failed')
   }
 
-  function handleApprove() {
+  async function handleApprove() {
     if (!department || !status) return
     if (status.can_act) {
       // Normal approve — the caller IS the frozen current approver.
-      if (!window.confirm(`Approve the whole department "${department}" for FY ${fiscalYear}?`)) return
+      if (!(await confirmDialog(`Approve the whole department "${department}" for FY ${fiscalYear}?`))) return
       runAction(() => approveDepartment(department, fiscalYear), 'Approve failed')
       return
     }
@@ -135,7 +136,7 @@ export function ApprovalActionBar({
     // against an accidental override (no stale-gate, no reason field).
     const skippedName =
       status.current_approver_name ?? approverLabel(status.current_position, status.current_approver_empcode)
-    if (!window.confirm(buildOverrideConfirmText(department, fiscalYear, skippedName))) return
+    if (!(await confirmDialog(buildOverrideConfirmText(department, fiscalYear, skippedName)))) return
     runAction(() => overrideStep(department, fiscalYear), 'Override approve failed', describeOverrideError)
   }
 

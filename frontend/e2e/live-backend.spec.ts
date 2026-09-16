@@ -199,21 +199,21 @@ test.describe('live stack (real backend + real Fabric SQL DB)', () => {
       await expect(chip).toContainText('Draft') // never-submitted DRAFT
       await expect(page.getByTestId('approval-submit-btn')).toBeVisible()
 
-      let dialogMessage = ''
-      page.once('dialog', (dialog) => {
-        dialogMessage = dialog.message()
-        void dialog.accept()
-      })
       const submitRespPromise = page.waitForResponse(
         (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/approval/submit',
         { timeout: 120_000 },
       )
       await page.getByTestId('approval-submit-btn').click()
 
-      const submitResp = await submitRespPromise
-      expect(submitResp.ok()).toBeTruthy()
+      // In-app confirm dialog (2026-09-16), not a native window.confirm.
+      await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+      const dialogMessage = await page.getByTestId('confirm-message').innerText()
       expect(dialogMessage).toContain(dept)
       expect(dialogMessage).toContain(`ปี ${SENTINEL_YEAR}`)
+      await page.getByTestId('confirm-ok').click()
+
+      const submitResp = await submitRespPromise
+      expect(submitResp.ok()).toBeTruthy()
 
       const submitBody = (await submitResp.json()) as { status: string }
       expect(submitBody.status).toBe('PENDING_APPROVER1')

@@ -250,14 +250,14 @@ test.describe('filler journey', () => {
     await page.getByTestId(`open-subform-${CC}-${GL_ENTERTAIN_EXT}`).click()
     await expect(page.getByTestId('detail-row-existing-42')).toBeVisible()
 
-    let dialogMessage = ''
-    page.once('dialog', (dialog) => {
-      dialogMessage = dialog.message()
-      void dialog.accept()
-    })
     await page.getByTestId('detail-row-existing-42').getByRole('button', { name: 'ลบ' }).click()
 
-    expect(dialogMessage).toBe('ลบรายการนี้?')
+    // In-app confirm dialog (2026-09-16), not a native window.confirm —
+    // replaces the browser's own hostname-prefixed dialog.
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    await expect(page.getByTestId('confirm-message')).toHaveText('ลบรายการนี้?')
+    await page.getByTestId('confirm-ok').click()
+
     await expect.poll(() => world.captured.deleteDetailParams.length).toBeGreaterThan(0)
     expect(world.captured.deleteDetailParams.at(-1)).toMatchObject({ detail_id: '42', expected_updated_at: 'DETAIL-TOKEN-1' })
 
@@ -357,16 +357,15 @@ test.describe('filler journey', () => {
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
     await expect(page.getByTestId('approval-submit-btn')).toBeVisible()
 
-    let dialogMessage = ''
-    page.once('dialog', (dialog) => {
-      dialogMessage = dialog.message()
-      void dialog.accept()
-    })
     await page.getByTestId('approval-submit-btn').click()
 
+    // In-app confirm dialog (2026-09-16), not a native window.confirm.
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    const dialogMessage = await page.getByTestId('confirm-message').innerText()
     expect(dialogMessage).toContain(DEPT)
     expect(dialogMessage).toContain(`ปี ${PLANNING_YEAR}`)
     expect(dialogMessage).toContain('จำนวน 1 รายการ')
+    await page.getByTestId('confirm-ok').click()
 
     await expect.poll(() => world.captured.submitBodies.length).toBeGreaterThan(0)
     expect(world.captured.submitBodies.at(-1)).toEqual({ department: DEPT, fiscal_year: PLANNING_YEAR })

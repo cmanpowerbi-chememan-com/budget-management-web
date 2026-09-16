@@ -6,6 +6,7 @@ import { parseDeepLink } from './filters/deepLink'
 import { BudgetGrid } from './grid/BudgetGrid'
 import { UserBar } from './userbar/UserBar'
 import { currentSearch } from './platform/location'
+import { ConfirmDialog } from './platform/ConfirmDialog'
 import { NoticeToasts } from './platform/NoticeToasts'
 
 function App() {
@@ -30,6 +31,13 @@ function App() {
           outside `main`, because the amount inputs that publish notices live
           both in the page and inside a fullscreen/modal layer. */}
       <NoticeToasts />
+
+      {/* App-wide confirm dialog (replaces window.confirm everywhere,
+          2026-09-16) — mounted once here so every caller (approval submit/
+          approve/override, attachments/row/detail/trip delete, cancel-
+          unsaved) can just `await confirmDialog(...)` from anywhere,
+          including from inside an already-open modal. */}
+      <ConfirmDialog />
 
       <nav className="nav">
         <div className="nav-inner">

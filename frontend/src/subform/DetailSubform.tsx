@@ -3,6 +3,7 @@ import { ApiError } from '../api/client'
 import { deleteDetailLine, fetchDetailLines, saveDetailLine } from '../api/subform'
 import type { DetailLineState } from '../api/types'
 import { formatThb, MONTH_KEYS, MONTH_LABELS } from '../grid/model'
+import { confirmDialog } from '../platform/confirm'
 import { MonthAmountInput } from './MonthAmountInput'
 import {
   blankDetailDraft,
@@ -188,7 +189,7 @@ export function DetailSubform({
       return
     }
 
-    if (!window.confirm(DELETE_CONFIRM_TEXT)) return
+    if (!(await confirmDialog(DELETE_CONFIRM_TEXT, { danger: true, confirmLabel: 'ลบ' }))) return
 
     setConflictMessage(null)
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: 'deleting', errorText: undefined } : r)))

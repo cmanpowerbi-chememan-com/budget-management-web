@@ -11,6 +11,7 @@ import {
   type TravelExpenseType,
 } from './glDropdownConstants'
 import { MonthAmountInput } from './MonthAmountInput'
+import { confirmDialog } from '../platform/confirm'
 import {
   blankManualLineDraft,
   blankTripDraft,
@@ -691,7 +692,7 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
       return
     }
 
-    if (!window.confirm(DELETE_TRIP_CONFIRM_TEXT)) return
+    if (!(await confirmDialog(DELETE_TRIP_CONFIRM_TEXT, { danger: true, confirmLabel: 'ลบ' }))) return
 
     setConflictMessage(null)
     setCards((prev) => prev.map((c) => (c.localId === localId ? { ...c, status: 'deleting', errorText: undefined } : c)))
@@ -737,10 +738,10 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
     (c) => c.status === 'error' || MANUAL_TRAVEL_TYPES.some((type) => c.manualStatus[type] === 'error'),
   )
 
-  function onCancel() {
+  async function onCancel() {
     if (saving) return
     const anyDirty = cards.some((c) => c.dirty || MANUAL_TRAVEL_TYPES.some((type) => c.manualDirty?.[type]))
-    if (anyDirty && !window.confirm(CANCEL_UNSAVED_CONFIRM_TEXT)) return
+    if (anyDirty && !(await confirmDialog(CANCEL_UNSAVED_CONFIRM_TEXT, { danger: true, confirmLabel: 'ยกเลิกการแก้ไข' }))) return
     onClose()
   }
 

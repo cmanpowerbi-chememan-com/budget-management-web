@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { deleteAttachment, fetchAttachments, fetchDownloadUrl, uploadAttachment } from '../api/attachments'
 import { ApiError } from '../api/client'
 import type { AttachmentInfo } from '../api/types'
+import { confirmDialog } from '../platform/confirm'
 
 export interface AttachmentsModalProps {
   department: string
@@ -90,7 +91,7 @@ export function AttachmentsModal({ department, fiscalYear, canUpload, onClose }:
    * recycle bin, which a filler cannot reach), so it always asks first and
    * names the file in the question. */
   async function handleDelete(item: AttachmentInfo) {
-    if (!window.confirm(`ลบไฟล์ "${item.name}" ออกจากโฟลเดอร์นี้?`)) return
+    if (!(await confirmDialog(`ลบไฟล์ "${item.name}" ออกจากโฟลเดอร์นี้?`, { danger: true, confirmLabel: 'ลบ' }))) return
     setDeletingId(item.item_id)
     setActionError(null)
     try {
