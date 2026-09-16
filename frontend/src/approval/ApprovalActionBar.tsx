@@ -22,8 +22,6 @@ export interface ApprovalActionBarProps {
    * step-override visibility: an admin sees the Approve button on
    * PENDING_APPROVER1 even when they are not the frozen approver. */
   isAdmin: boolean
-  rowCount: number
-  costCenterCount: number
   /** Called after ANY successful submit/approve/reject — the parent
    * refetches the รออนุมัติ badge list (A10 §4) since this action may have
    * changed which departments are waiting on someone. */
@@ -44,7 +42,7 @@ function statusToneClass(status: string): string {
  * the server — this component only shows/hides controls and surfaces the
  * server's own error messages. */
 export function ApprovalActionBar({
-  department, fiscalYear, isFillerOfDept, adminViewEnabled, isAdmin, rowCount, costCenterCount, onChanged,
+  department, fiscalYear, isFillerOfDept, adminViewEnabled, isAdmin, onChanged,
 }: ApprovalActionBarProps) {
   const [status, setStatus] = useState<ApprovalStatusState | null>(null)
   const [loading, setLoading] = useState(false)
@@ -118,7 +116,7 @@ export function ApprovalActionBar({
 
   async function handleSubmit() {
     if (!department) return
-    const confirmed = await confirmDialog(buildSubmitConfirmText(department, fiscalYear, rowCount, costCenterCount))
+    const confirmed = await confirmDialog(buildSubmitConfirmText(department, fiscalYear))
     if (!confirmed) return
     runAction(() => submitDepartment(department, fiscalYear), 'Submit failed')
   }

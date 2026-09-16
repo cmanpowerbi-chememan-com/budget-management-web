@@ -195,11 +195,14 @@ describe('submitBlockedReasonLabel', () => {
 })
 
 describe('buildSubmitConfirmText', () => {
-  it('mentions the department, year, row count, and cost center count', () => {
-    const text = buildSubmitConfirmText('Accounting', 2027, 12, 3)
-    expect(text).toContain('Accounting')
-    expect(text).toContain('2027')
-    expect(text).toContain('12')
-    expect(text).toContain('3')
+  // 2026-09-16 (jakkaritw): the row/cost-centre counts were dropped from
+  // this dialog — assert the exact remaining string, not a substring.
+  it('asks to confirm the whole-department submit, with no row/cost-center counts', () => {
+    const text = buildSubmitConfirmText('Accounting', 2027)
+    expect(text).toBe(
+      'Submit the budget of department "Accounting" for FY 2027?\n' +
+        'This submits the WHOLE department. You cannot edit it until it is rejected.',
+    )
+    expect(text).not.toContain('rows in')
   })
 })

@@ -156,12 +156,13 @@ export function submitBlockedReasonLabel(reason: string | null): string | null {
   return SUBMIT_BLOCKED_REASON[reason] ?? null
 }
 
-/** Confirm-dialog text for Submit — summarizes what is being sent so
- * the click is a deliberate act, not an accidental one. */
-export function buildSubmitConfirmText(department: string, fiscalYear: number, rowCount: number, costCenterCount: number): string {
+/** Confirm-dialog text for Submit — a deliberate-act guard, not a data
+ * summary. 2026-09-16 (jakkaritw): the row/cost-centre counts were dropped
+ * from this dialog. */
+export function buildSubmitConfirmText(department: string, fiscalYear: number): string {
   return (
     `Submit the budget of department "${department}" for FY ${fiscalYear}?\n` +
-    `${rowCount} rows in ${costCenterCount} cost center(s) — this submits the WHOLE department. You cannot edit it until it is rejected.`
+    `This submits the WHOLE department. You cannot edit it until it is rejected.`
   )
 }
 

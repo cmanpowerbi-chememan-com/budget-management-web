@@ -5,7 +5,7 @@ import { fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount, SapCoverage } from '../api/types'
-import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
+import { isFillerOfDepartment } from '../approval/model'
 import { ApprovalActionBar } from '../approval/ApprovalActionBar'
 import { AttachmentsModal } from '../attachments/AttachmentsModal'
 import type { ScopeState } from '../auth/useScope'
@@ -305,7 +305,6 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   )
 
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
-  const selectedDeptCostCenterCount = department !== null ? costCentersOfDepartment(departments, department).length : 0
   const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
 
   /** Shared save path for any Pending-layer edit (month cell or remark) —
@@ -652,8 +651,6 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           isFillerOfDept={isFillerOfSelectedDept}
           adminViewEnabled={adminViewEnabled}
           isAdmin={scope.isAdmin}
-          rowCount={rows.length}
-          costCenterCount={selectedDeptCostCenterCount}
           onChanged={handleApprovalChanged}
         />
       )}

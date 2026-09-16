@@ -40,8 +40,6 @@ const BASE_PROPS = {
   isFillerOfDept: true,
   adminViewEnabled: false,
   isAdmin: false,
-  rowCount: 5,
-  costCenterCount: 2,
   onChanged: vi.fn(),
 }
 
@@ -179,7 +177,7 @@ describe('ApprovalActionBar', () => {
     )
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    render(<ApprovalActionBar {...BASE_PROPS} rowCount={0} />)
+    render(<ApprovalActionBar {...BASE_PROPS} />)
     fireEvent.click(await screen.findByTestId('approval-submit-btn'))
 
     await waitFor(() =>
