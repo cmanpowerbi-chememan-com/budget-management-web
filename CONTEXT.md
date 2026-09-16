@@ -183,6 +183,18 @@ transport, lodging, other) are separate GLs whose detail lines all reference the
 trip; per-diem is auto-calculated from the trip. A trip is a detail-layer concept only —
 never shown on the main page.
 
+### Project (โครงการ)
+Free-text name of the project a Trip belongs to (Excel template col F), entered on the
+Trip Manager card (`budget.budget_trip.project`, max 200 chars). **Required on every
+save** since 2026-09-16 (issue #11, jakkaritw) — blank/whitespace-only is refused by
+both the form and the API; not a picker or master-data list.
+
+### Purpose (วัตถุประสงค์)
+Free-text reason for a Trip's travel, entered on the Trip Manager card
+(`budget.budget_trip.purpose`, max 500 chars) — separate from the "รายละเอียด" remark
+note. **Required on every save** since 2026-09-16 (issue #11, jakkaritw), same rule and
+enforcement as Project above.
+
 ### Schema namespaces (Fabric SQL DB)
 - `dbo` — read-only sync data; written by scripts/pipelines, app only reads
   (e.g. `mas_employee_data` synced daily from C-POP, `gold_*`).

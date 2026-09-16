@@ -35,6 +35,10 @@ _DETAIL_BODY = {
 _TRIP_BODY = {
     "cost_center": "CC1", "fiscal_year": 2027, "traveler_empcode": "E1",
     "country_group": 1, "days": 5, "travel_months": ["03"], "side": "COST",
+    # 2026-09-16 (issue #11): required on every CREATE (this body is only
+    # ever POSTed below) — see write_model.py
+    # TripInput._validate_project_and_purpose_required.
+    "project": "PRJ-1", "purpose": "site visit",
 }
 _SUBMIT_BODY = {"department": "ฝ่ายทดสอบ", "fiscal_year": 2027}
 

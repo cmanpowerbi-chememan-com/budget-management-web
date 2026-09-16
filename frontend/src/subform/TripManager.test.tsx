@@ -54,9 +54,12 @@ function tripItem(overrides: Partial<TripListItem> = {}): TripListItem {
     country_group: 2,
     days: 5,
     travel_months: ['02', '03'],
-    project: null,
+    // 2026-09-16 (issue #11): non-blank by default — a persisted-and-dirty
+    // card now needs both fields to pass validateTripDraft on save. Tests
+    // that specifically exercise a blank/whitespace value override it.
+    project: 'Legacy Project',
     remark: null,
-    purpose: null,
+    purpose: 'ทริปเดิม',
     side: 'COST',
     updated_at: '2026-01-01T00:00:00',
     per_diem_months: { ...blankMonths(), m02: 500, m03: 500 },
@@ -102,6 +105,9 @@ function fillNewTripBasics(localId = 'new-0', monthButtonIndex = 0) {
   fireEvent.change(screen.getByLabelText(`days ${localId}`), { target: { value: '3' } })
   fireEvent.click(screen.getAllByRole('button', { name: 'May' })[monthButtonIndex])
   pickDestination(localId, 'ประเทศไทย')
+  // 2026-09-16 (issue #11): Project + Purpose required on every save.
+  fireEvent.change(screen.getByLabelText(`project ${localId}`), { target: { value: 'PRJ-DEFAULT' } })
+  fireEvent.change(screen.getByLabelText(`purpose ${localId}`), { target: { value: 'เหตุผลเริ่มต้น' } })
 }
 
 function detailLine(overrides: Partial<DetailLineState> = {}): DetailLineState {
@@ -137,9 +143,9 @@ function tripState(overrides: Partial<Awaited<ReturnType<typeof subformApi.creat
     country_group: 1 as const,
     days: 3,
     travel_months: ['05'],
-    project: null,
+    project: 'Legacy Project',
     remark: null,
-    purpose: null,
+    purpose: 'ทริปเดิม',
     side: 'SGA' as const,
     updated_at: '2026-01-02T00:00:00',
     per_diem_months: { ...blankMonths(), m05: 900 },
@@ -299,6 +305,8 @@ describe('TripManager', () => {
     fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '4' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
     pickDestination('new-1', 'ญี่ปุ่น')
+    fireEvent.change(screen.getByLabelText('project new-1'), { target: { value: 'PRJ-DEFAULT' } })
+    fireEvent.change(screen.getByLabelText('purpose new-1'), { target: { value: 'เหตุผลเริ่มต้น' } })
     fireEvent.click(saveAllButton())
     await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalledTimes(2))
 
@@ -343,6 +351,46 @@ describe('TripManager', () => {
     expect(subformApi.createTrip).not.toHaveBeenCalled()
   })
 
+  // 2026-09-16 (issue #11): Project and Purpose required on every save —
+  // same wiring proof as the traveler/days/months case above, one card each.
+  it('rejects saving a new trip that is complete except for Project', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fillNewTripBasics()
+    fireEvent.change(screen.getByLabelText('project new-0'), { target: { value: '' } })
+    fireEvent.click(saveAllButton())
+    await waitFor(() => expect(screen.getByTestId('trip-card-error-new-0')).toHaveTextContent('กรุณาระบุโครงการ'))
+    expect(subformApi.createTrip).not.toHaveBeenCalled()
+  })
+
+  it('rejects saving a new trip that is complete except for Purpose', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fillNewTripBasics()
+    fireEvent.change(screen.getByLabelText('purpose new-0'), { target: { value: '' } })
+    fireEvent.click(saveAllButton())
+    await waitFor(() => expect(screen.getByTestId('trip-card-error-new-0')).toHaveTextContent('กรุณาระบุวัตถุประสงค์'))
+    expect(subformApi.createTrip).not.toHaveBeenCalled()
+  })
+
+  it('a fully filled new trip (incl. Project and Purpose) still saves', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+    mockNoManualLines()
+    vi.mocked(subformApi.createTrip).mockResolvedValue(tripState())
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+    fillNewTripBasics()
+    fireEvent.click(saveAllButton())
+    await waitFor(() => expect(subformApi.createTrip).toHaveBeenCalled())
+  })
+
   // REMOVED 2026-08-04 (jakkaritw, final): "flipping side on an existing
   // trip calls updateTrip via PUT" used to fireEvent.change the ฝั่งบัญชี
   // select — that select is now unconditionally `disabled`, so a real user
@@ -354,10 +402,15 @@ describe('TripManager', () => {
   // re-homes it to the locked side" in the "accounting side lock" describe
   // block below, which proves the side survives a save unchanged instead.
 
-  it('clearing the project input on an EXISTING trip sends "" (not null) — null would tell the backend to leave the old value untouched', async () => {
+  // 2026-09-16 (issue #11): Project is now required on every save — a
+  // blank Project is refused client-side, the same as a blank traveler,
+  // BEFORE updateTrip is ever called. This retargets the pre-#11 test
+  // "clearing the project input on an EXISTING trip sends '' (not null)",
+  // whose whole premise (an empty Project reaching the server) the new
+  // rule makes impossible from the form.
+  it('clearing the project input on an EXISTING trip is refused client-side — updateTrip is never called', async () => {
     vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ project: 'Alpha' })])
     mockNoManualLines()
-    vi.mocked(subformApi.updateTrip).mockResolvedValue({ ...tripItem(), project: '' } as never)
     render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
     expect(screen.getByLabelText('project existing-10')).toHaveValue('Alpha')
@@ -365,10 +418,8 @@ describe('TripManager', () => {
     fireEvent.change(screen.getByLabelText('project existing-10'), { target: { value: '' } })
     fireEvent.click(saveAllButton())
 
-    await waitFor(() => expect(subformApi.updateTrip).toHaveBeenCalled())
-    const payload = vi.mocked(subformApi.updateTrip).mock.calls[0][0]
-    expect(payload.project).toBe('')
-    expect(payload.project).not.toBeNull()
+    await waitFor(() => expect(screen.getByTestId('trip-card-error-existing-10')).toHaveTextContent('กรุณาระบุโครงการ'))
+    expect(subformApi.updateTrip).not.toHaveBeenCalled()
   })
 
   it('shows a 500-class error as a clear "ไม่สามารถคำนวณเบี้ยเลี้ยงได้" message, never a silent fallback', async () => {
@@ -1167,6 +1218,8 @@ describe('TripManager', () => {
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '2' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
       pickDestination('new-1', 'ประเทศไทย')
+      fireEvent.change(screen.getByLabelText('project new-1'), { target: { value: 'PRJ-DEFAULT' } })
+      fireEvent.change(screen.getByLabelText('purpose new-1'), { target: { value: 'เหตุผลเริ่มต้น' } })
       const manualInput1 = screen.getByLabelText('transport m05 new-1')
       fireEvent.change(manualInput1, { target: { value: '300' } })
       fireEvent.blur(manualInput1) // commits the draft, same shape as grid/MonthCell
@@ -1201,6 +1254,8 @@ describe('TripManager', () => {
       fireEvent.change(screen.getByLabelText('days new-1'), { target: { value: '3' } })
       fireEvent.click(screen.getAllByRole('button', { name: 'May' })[1])
       pickDestination('new-1', 'ประเทศไทย')
+      fireEvent.change(screen.getByLabelText('project new-1'), { target: { value: 'PRJ-DEFAULT' } })
+      fireEvent.change(screen.getByLabelText('purpose new-1'), { target: { value: 'เหตุผลเริ่มต้น' } })
 
       fireEvent.click(saveAllButton())
 

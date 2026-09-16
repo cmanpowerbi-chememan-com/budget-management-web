@@ -1215,6 +1215,9 @@ def test_post_trip_endpoint_succeeds_end_to_end_after_the_job_level_column_fix(
                     "travel_months": ["05"],
                     "side": "COST",
                     "remark": remark_value,
+                    # 2026-09-16 (issue #11): required on every CREATE.
+                    "project": "Integration Test Project",
+                    "purpose": "integration test",
                 },
             )
         assert response.status_code == 200, response.text
@@ -2168,6 +2171,8 @@ def test_delete_trip_removes_all_lines_and_recomputes_all_parents_live(discovere
                 [TripInput(
                     cost_center=cost_center, fiscal_year=DELETE_FISCAL_YEAR, traveler_empcode=traveler_empcode,
                     country_group=1, days=3, travel_months=["01"], side="COST",
+                    # 2026-09-16 (issue #11): required on every CREATE.
+                    project="Integration Test Project", purpose="integration test",
                 )],
                 user_email=filler_email, scope=scope,
             )

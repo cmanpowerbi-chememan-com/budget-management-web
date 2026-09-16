@@ -18,6 +18,9 @@ _ROW_BODY = {
 _TRIP_BODY = {
     "cost_center": "CC1", "fiscal_year": 2027, "traveler_empcode": "E1",
     "country_group": 1, "days": 5, "travel_months": ["03"], "side": "COST",
+    # 2026-09-16 (issue #11): required on every CREATE — see write_model.py
+    # TripInput._validate_project_and_purpose_required.
+    "project": "PRJ-1", "purpose": "site visit",
 }
 
 
@@ -130,6 +133,17 @@ def test_put_trip_requires_trip_id_in_body(client):
     _override_auth("filler@chememan.com")
     response = client.put("/budget/trip", json=_TRIP_BODY)  # no trip_id
     assert response.status_code == 422
+
+
+def test_post_trip_blank_purpose_returns_422(client):
+    """2026-09-16 (issue #11): the API guard holds even for a caller that
+    bypasses the form — save_trip must never be reached (Pydantic rejects
+    the body before the router handler runs)."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.budget_write.save_trip") as mock_save:
+        response = client.post("/budget/trip", json={**_TRIP_BODY, "purpose": "   "})
+    assert response.status_code == 422
+    mock_save.assert_not_called()
 
 
 def test_post_trip_passes_client_token_through_to_save_trip(client):

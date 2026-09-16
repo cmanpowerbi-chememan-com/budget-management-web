@@ -909,6 +909,8 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                       PROJECT · โครงการ
                       <input
                         aria-label={`project ${card.localId}`}
+                        placeholder="ระบุโครงการ"
+                        maxLength={200}
                         value={card.draft.project ?? ''}
                         onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, project: e.target.value }))}
                       />
@@ -917,6 +919,8 @@ export function TripManager({ costCenter, fiscalYear, lockedSide, readOnly = fal
                       PURPOSE · วัตถุประสงค์
                       <input
                         aria-label={`purpose ${card.localId}`}
+                        placeholder="ระบุวัตถุประสงค์"
+                        maxLength={500}
                         value={card.draft.purpose ?? ''}
                         onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, purpose: e.target.value || null }))}
                       />

@@ -1095,9 +1095,13 @@ def test_moved_other_travel_gls_are_no_longer_in_any_travel_gl_map():
 # ---------------------------------------------------------------------------
 
 def _trip(**overrides) -> TripInput:
+    # 2026-09-16 (issue #11): project defaults non-blank alongside purpose —
+    # both are required on CREATE (trip_id=None, this factory's default
+    # shape). Tests exercising the "missing"/"blank" rule itself override
+    # with project=None / project="" (or the purpose equivalent).
     defaults = dict(trip_id=None, cost_center="CC1", fiscal_year=2027, traveler_empcode="E1",
                      destination="Bangkok", country_group=1, days=5, travel_months=["03"],
-                     purpose="site visit", side="COST", expected_updated_at=None)
+                     purpose="site visit", project="Test Project", side="COST", expected_updated_at=None)
     defaults.update(overrides)
     return TripInput(**defaults)
 
@@ -2356,8 +2360,14 @@ def test_trip_update_ignores_client_token_never_dedups_an_edit():
 # (deploy-safe before setup/migrate_budget_trip_project.py runs).
 # ---------------------------------------------------------------------------
 
-def test_trip_input_accepts_project_defaulting_to_none():
-    assert _trip().project is None
+def test_trip_input_requires_project_on_create_but_not_on_update():
+    """2026-09-16 (issue #11): rewritten from the pre-#11 truth ("project
+    defaults to None"). CREATE (trip_id=None) now requires a non-blank
+    project; UPDATE (trip_id set) may still omit it (None = leave the
+    stored value untouched)."""
+    with pytest.raises(ValidationError):
+        _trip(project=None)  # create-shaped, no project -> rejected
+    assert _trip(trip_id=42, project=None, expected_updated_at=STALE).project is None  # update omits it -> OK
     assert _trip(project="ERP rollout").project == "ERP rollout"
 
 
@@ -2392,19 +2402,16 @@ def test_trip_create_with_project_includes_project_column():
     assert results[0].trip.project == "ERP rollout"
 
 
-def test_trip_create_without_project_keeps_the_legacy_insert_shape():
-    """No project -> NO 'project' referenced in ANY SQL (works against the
-    un-migrated live table)."""
-    conn = MagicMock()
-    cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_create_fetchone_sequence()
-    cursor.fetchval.return_value = 46
-    scope = _scope()
-    results = save_trip(conn, [_trip()], "filler@chememan.com", scope)
-    assert results[0].ok is True
-    assert results[0].trip.project is None
-    executed_sql = [c.args[0] for c in cursor.execute.call_args_list]
-    assert not any("project" in s for s in executed_sql)
+def test_trip_create_without_project_is_rejected():
+    """2026-09-16 (issue #11): superseded the pre-#11
+    "keeps the legacy insert shape" test — a project-less CREATE used to be
+    legal (INSERT never referenced the unmigrated column); now project is
+    required on every CREATE, so this scenario is rejected at the Pydantic
+    layer before save_trip ever runs. The legacy no-project INSERT shape is
+    still reachable — but only via the UPDATE path, which may still omit
+    project (see test_trip_update_without_project_keeps_the_legacy_update_shape)."""
+    with pytest.raises(ValidationError):
+        _trip(project=None)
 
 
 def _trip_update_fetchone_sequence():
@@ -2445,26 +2452,13 @@ def test_trip_update_with_project_sets_project_column():
     assert results[0].trip.project == "ERP rollout"
 
 
-def test_trip_update_with_empty_project_clears_the_column():
-    """Explicit "" (NOT None) means "clear the field" — distinct from
-    omitting the field (None = leave untouched). The frontend now always
-    sends a concrete string when the user edits the project input, never
-    null (see TripManager.tsx), so this is the normal "user cleared it"
-    request shape."""
-    conn = MagicMock()
-    cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [(None, None)]
-    cursor.rowcount = 1
-    scope = _scope()
-    results = save_trip(
-        conn, [_trip(trip_id=42, project="", expected_updated_at=STALE)], "filler@chememan.com", scope
-    )
-    assert results[0].ok is True
-    update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
-    assert len(update_calls) == 1
-    assert "project = ?" in update_calls[0].args[0]
-    assert "" in update_calls[0].args[1:]
-    assert results[0].trip.project == ""
+def test_trip_update_with_empty_project_is_rejected():
+    """2026-09-16 (issue #11): superseded the pre-#11 "empty project clears
+    the column" test. Project is now required on every save — a SENT value
+    must be non-blank, so "" (clear it) is no longer a legal request; only
+    omitting the field (None = leave the stored, non-blank value alone) is."""
+    with pytest.raises(ValidationError):
+        _trip(trip_id=42, project="", expected_updated_at=STALE)
 
 
 def test_trip_update_without_project_keeps_the_legacy_update_shape():
@@ -2478,8 +2472,11 @@ def test_trip_update_without_project_keeps_the_legacy_update_shape():
     cursor.fetchone.side_effect = _trip_update_fetchone_sequence() + [("Legacy Project", "Legacy Remark")]
     cursor.rowcount = 1
     scope = _scope()
+    # project=None (omitted) is explicit here: _trip()'s own default is now
+    # a non-blank string (2026-09-16, issue #11 — required on CREATE), so an
+    # "omitted on UPDATE" scenario must override it back to None.
     results = save_trip(
-        conn, [_trip(trip_id=42, expected_updated_at=STALE)], "filler@chememan.com", scope
+        conn, [_trip(trip_id=42, project=None, expected_updated_at=STALE)], "filler@chememan.com", scope
     )
     assert results[0].ok is True
     update_calls = [c for c in cursor.execute.call_args_list if "UPDATE budget.budget_trip" in c.args[0]]
@@ -2487,6 +2484,48 @@ def test_trip_update_without_project_keeps_the_legacy_update_shape():
     assert "project" not in update_calls[0].args[0]
     assert results[0].trip.project == "Legacy Project"
     assert results[0].trip.remark == "Legacy Remark"
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-16 (issue #11): Project and Purpose required on every save —
+# TripInput._validate_project_and_purpose_required. Mirrors the frontend's
+# validateTripDraft blank check (null/empty/whitespace-only = blank).
+# ---------------------------------------------------------------------------
+
+def test_trip_input_rejects_blank_or_whitespace_project_on_create():
+    with pytest.raises(ValidationError):
+        _trip(project="")
+    with pytest.raises(ValidationError):
+        _trip(project="   ")
+
+
+def test_trip_input_rejects_blank_or_whitespace_purpose_on_create():
+    with pytest.raises(ValidationError):
+        _trip(purpose="")
+    with pytest.raises(ValidationError):
+        _trip(purpose="   ")
+
+
+def test_trip_input_rejects_missing_purpose_on_create():
+    with pytest.raises(ValidationError):
+        _trip(purpose=None)
+
+
+def test_trip_input_accepts_omitted_purpose_on_update_but_rejects_a_sent_blank_one():
+    """Symmetric to project: UPDATE (trip_id set) may omit purpose entirely
+    (None = leave the stored value untouched); a SENT blank/whitespace
+    purpose is still rejected."""
+    assert _trip(trip_id=42, purpose=None, expected_updated_at=STALE).purpose is None
+    with pytest.raises(ValidationError):
+        _trip(trip_id=42, purpose="", expected_updated_at=STALE)
+    with pytest.raises(ValidationError):
+        _trip(trip_id=42, purpose="   ", expected_updated_at=STALE)
+
+
+def test_trip_input_accepts_a_fully_filled_create():
+    trip = _trip(project="โครงการ A", purpose="เยี่ยมลูกค้า")
+    assert trip.project == "โครงการ A"
+    assert trip.purpose == "เยี่ยมลูกค้า"
 
 
 def test_trip_create_replay_returns_stored_project():

@@ -426,12 +426,77 @@ describe('validateTripDraft', () => {
     expect(result.errorTh).toBe('กรุณาเลือกปลายทาง')
   })
 
+  // 2026-09-16 (issue #11): Project and Purpose are required on every save,
+  // same rule shape as traveler/days/months/side/destination above.
+  it('rejects a blank project (null)', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    draft.destination = 'ประเทศไทย'
+    draft.purpose = 'เยี่ยมลูกค้า'
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาระบุโครงการ')
+  })
+
+  it('rejects a whitespace-only project', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    draft.destination = 'ประเทศไทย'
+    draft.project = '   '
+    draft.purpose = 'เยี่ยมลูกค้า'
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาระบุโครงการ')
+  })
+
+  it('rejects a blank purpose (null)', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    draft.destination = 'ประเทศไทย'
+    draft.project = 'โครงการ A'
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาระบุวัตถุประสงค์')
+  })
+
+  it('rejects a whitespace-only purpose', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    draft.destination = 'ประเทศไทย'
+    draft.project = 'โครงการ A'
+    draft.purpose = '   '
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาระบุวัตถุประสงค์')
+  })
+
+  it('the destination rule still fires before the project rule when both are blank', () => {
+    const draft = blankTripDraft('CC1', 2027, 'SGA')
+    draft.traveler_empcode = 'E1'
+    draft.days = 5
+    draft.travel_months = ['03']
+    // destination, project, purpose all blank — destination's message must win
+    const result = validateTripDraft(draft)
+    expect(result.ok).toBe(false)
+    expect(result.errorTh).toBe('กรุณาเลือกปลายทาง')
+  })
+
   it('accepts a fully filled draft', () => {
     const draft = blankTripDraft('CC1', 2027, 'SGA')
     draft.traveler_empcode = 'E1'
     draft.days = 5
     draft.travel_months = ['03']
     draft.destination = 'ประเทศไทย'
+    draft.project = 'โครงการ A'
+    draft.purpose = 'เยี่ยมลูกค้า'
     expect(validateTripDraft(draft).ok).toBe(true)
   })
 })

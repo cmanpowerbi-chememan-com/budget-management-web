@@ -412,6 +412,10 @@ export function validateTripDraft(draft: TripDraft): TripValidationResult {
   // select is gone) — a blank destination would silently book the domestic
   // per-diem rate, the exact wrong-group bug this dropdown exists to prevent.
   if (!draft.destination) return { ok: false, errorTh: 'กรุณาเลือกปลายทาง' }
+  // 2026-09-16 (issue #11): Project and Purpose required on every save —
+  // blank = null/empty/whitespace-only, same "blank" definition as above.
+  if (!(draft.project ?? '').trim()) return { ok: false, errorTh: 'กรุณาระบุโครงการ' }
+  if (!(draft.purpose ?? '').trim()) return { ok: false, errorTh: 'กรุณาระบุวัตถุประสงค์' }
   return { ok: true }
 }
 

@@ -37,7 +37,10 @@ Travelling Expense additionally gets a **shared trip entity**:
 
 - `budget.budget_trip` — trip header entered once: `trip_id` (PK),
   `cost_center, fiscal_year, traveler, position, destination, country_group, days,
-  travel_months, purpose`.
+  travel_months, purpose, project`.
+  Project and Purpose are **required on every save** since 2026-09-16 (issue #11,
+  jakkaritw ruling) — enforced at the app validator and the API input model, columns
+  stay nullable (no DDL).
 - Each Travelling detail line references `trip_id` **and** its own `gl_account`. The
   เบี้ยเลี้ยง line is auto-calculated (`days × rate(position, country_group) × FX`,
   split evenly across `travel_months`); the other three types' lines are typed

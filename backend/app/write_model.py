@@ -65,7 +65,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 import pyodbc
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.approval import LOCKED_APPROVAL_STATUSES
 from app.config import Settings, get_settings
@@ -1153,14 +1153,19 @@ class TripInput(BaseModel):
     country_group: int = Field(ge=1, le=3)  # 1 domestic / 2 asian / 3 other
     days: int = Field(ge=0)
     travel_months: list[str]
+    # 2026-09-16 (issue #11): required (non-blank) — see
+    # `_validate_project_and_purpose_required` below. Kept `| None` because
+    # an UPDATE may still omit it entirely (None = leave stored value).
     purpose: str | None = Field(default=None, max_length=_MAX_LEN_REMARK)
     # Free-text project name (Excel template col F). Persisted with the same
     # conditional-column trick as client_token below: the SQL references the
     # column ONLY when a non-null value is supplied, so a project-less
     # request stays byte-identical to the pre-migration statement (deploy-
     # safe before setup/migrate_budget_trip_project.py runs). Consequence:
-    # None on an UPDATE means "leave the stored value untouched" — a client
-    # that wants to CLEAR a project sends "" (stored as '').
+    # None on an UPDATE means "leave the stored value untouched". 2026-09-16
+    # (issue #11): project is now required (non-blank) on every save — a
+    # SENT value must be non-blank, so "" (clear it) is no longer accepted;
+    # see `_validate_project_and_purpose_required` below.
     project: str | None = Field(default=None, max_length=_MAX_LEN_PROJECT)
     # Free-text "รายละเอียด" note at the bottom of the trip card (distinct
     # from `purpose`/`project` above) — same conditional-column trick: the
@@ -1207,6 +1212,31 @@ class TripInput(BaseModel):
         if len(csv) > _MAX_LEN_TRAVEL_MONTHS_CSV:
             raise ValueError(f"travel_months has too many distinct months for its storage column: {csv!r}")
         return deduped
+
+    @model_validator(mode="after")
+    def _validate_project_and_purpose_required(self) -> "TripInput":
+        """2026-09-16 (issue #11), jakkaritw ruling: Project (โครงการ) and
+        Purpose (วัตถุประสงค์) are required on every save. Mirrors the
+        frontend's `validateTripDraft` blank check (null/empty/whitespace-
+        only all count as blank) so the app and the API agree.
+
+        CREATE (`trip_id is None`) must send both, non-blank. UPDATE
+        (`trip_id` set) may still omit either field entirely — `None` keeps
+        meaning "leave the stored value untouched" (the same conditional-
+        column trick as `project`/`remark` above), so replay and partial-
+        update callers keep working. Only a value that IS sent must be
+        non-blank after stripping whitespace — this adds a lower bound
+        only, the max_length limits above are unchanged."""
+        if self.project is not None and not self.project.strip():
+            raise ValueError("project must not be blank")
+        if self.purpose is not None and not self.purpose.strip():
+            raise ValueError("purpose must not be blank")
+        if self.trip_id is None:
+            if self.project is None:
+                raise ValueError("project is required")
+            if self.purpose is None:
+                raise ValueError("purpose is required")
+        return self
 
 
 class TripState(BaseModel):
@@ -1537,9 +1567,16 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
             if trip.expected_updated_at is None:
                 raise InvalidRequestError("editing an existing trip requires expected_updated_at")
             # `project = ?` / `remark = ?` only when a value was sent (None =
-            # leave the stored value untouched; send "" to clear) — a
-            # project-less/remark-less UPDATE stays byte-identical to the
-            # pre-migration statement.
+            # leave the stored value untouched) — a project-less/remark-less
+            # UPDATE stays byte-identical to the pre-migration statement.
+            # `remark` may still be cleared with "" (untouched by issue #11 —
+            # it is not a required field). `project` can no longer arrive as
+            # "" here: 2026-09-16 (issue #11) TripInput._validate_project_
+            # and_purpose_required rejects a SENT-but-blank project with a
+            # 422 before save_trip ever runs, so `project == ""` is
+            # unreachable through the public API — Project is required on
+            # every save, so "clear it" is no longer a legal request; only
+            # "leave it as the (non-blank) stored value" (omit the field) is.
             project_set = "project = ?, " if trip.project is not None else ""
             project_params = (trip.project,) if trip.project is not None else ()
             remark_set = "remark = ?, " if trip.remark is not None else ""
