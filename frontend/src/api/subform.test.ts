@@ -131,7 +131,8 @@ describe('createTrip', () => {
       country_group: 2,
       days: 5,
       travel_months: ['02', '03'],
-      purpose: null,
+      project: 'PRJ-100',
+      purpose: 'ประชุมลูกค้าประจำปี',
       side: 'COST',
     })
 
@@ -161,7 +162,8 @@ describe('updateTrip', () => {
       country_group: 2 as const,
       days: 5,
       travel_months: ['02', '03'],
-      purpose: null,
+      project: 'PRJ-100',
+      purpose: 'ประชุมลูกค้าประจำปี',
       side: 'COST' as const,
       expected_updated_at: '2026-01-01T00:00:00Z',
     }

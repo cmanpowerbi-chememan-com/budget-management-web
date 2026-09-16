@@ -463,6 +463,54 @@ describe('TripManager', () => {
     expect(onSaved).toHaveBeenCalled()
   })
 
+  // 2026-09-16 (issue #11): pins PRD user story 11 for the exact production
+  // case (1 of 2 FY2027 trips on file has a blank Project) — a persisted
+  // card with a legacy blank Project/Purpose must still allow a
+  // manual-line-only edit, because `needsTripWrite` (persisted + not
+  // `card.dirty`) never calls `validateTripDraft` on that card at all. This
+  // is the same "no trip write, no trip validation" behaviour the
+  // manual-line test above proves for a FILLED card — proven here for the
+  // legacy BLANK card specifically, so a future change to that gate can't
+  // silently start blocking legacy rows on an untouched trip header.
+  it('legacy blank project card — manual-line-only edit saves via saveDetailLine, never calls updateTrip, no card error', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ project: null, purpose: null })])
+    mockNoManualLines()
+    vi.mocked(subformApi.saveDetailLine).mockResolvedValue(detailLine({ m02: 1000, total_year: 1000 }))
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+    expect(screen.queryByTestId('trip-card-error-existing-10')).not.toBeInTheDocument()
+
+    const input = screen.getByLabelText('transport m02 existing-10')
+    fireEvent.change(input, { target: { value: '1000' } })
+    fireEvent.blur(input)
+
+    fireEvent.click(saveAllButton())
+
+    await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalled())
+    expect(subformApi.updateTrip).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('trip-card-error-existing-10')).not.toBeInTheDocument()
+  })
+
+  // 2026-09-16 (issue #11): sibling of the case above — the SAME legacy
+  // blank-Project card, but the user edits a trip field (`days`), which
+  // sets `card.dirty` and flips `needsTripWrite` true. `validateTripDraft`
+  // now runs, sees the blank Project, and the card is refused BEFORE
+  // `updateTrip` is ever called — same client-side gate proven for a
+  // freshly-blanked field elsewhere in this file, proven here starting from
+  // an already-blank legacy value.
+  it('legacy blank project card — editing a trip field blocks save with กรุณาระบุโครงการ, updateTrip not called', async () => {
+    vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem({ project: null, purpose: null })])
+    mockNoManualLines()
+    render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '7' } })
+    fireEvent.click(saveAllButton())
+
+    await waitFor(() => expect(screen.getByTestId('trip-card-error-existing-10')).toHaveTextContent('กรุณาระบุโครงการ'))
+    expect(subformApi.updateTrip).not.toHaveBeenCalled()
+  })
+
   describe('traveler + destination dropdowns (2026-07-17; traveler → searchable combobox 2026-08-04)', () => {
     function mockCreateOk() {
       vi.mocked(subformApi.createTrip).mockResolvedValue(tripState())
