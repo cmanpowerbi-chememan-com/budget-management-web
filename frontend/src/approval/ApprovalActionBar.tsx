@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { approveDepartment, fetchApprovalStatus, overrideStep, rejectDepartment, submitDepartment } from '../api/approval'
 import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
@@ -16,6 +16,15 @@ import {
 export interface ApprovalActionBarProps {
   department: string | null
   fiscalYear: number
+  /** Bumped by the parent after any successful budget write that could
+   * change what the server would allow for THIS (department, fiscalYear) --
+   * e.g. a department's first saved row flips the `can_submit`/
+   * `department_empty` verdict (bug fixed 2026-09-16: Submit stayed hidden
+   * until a manual reload because saving a row never changed `department`/
+   * `fiscalYear`, the only deps the status fetch used to key on). Refetches
+   * the status IN PLACE -- unlike a department/fiscalYear change, it must
+   * NOT reset actionMessage/rejecting/reason (see the effect below). */
+  dataVersion: number
   isFillerOfDept: boolean
   adminViewEnabled: boolean
   /** Raw `scope.isAdmin` (NOT the admin-view toggle) — gates the ADR-0027
@@ -42,7 +51,7 @@ function statusToneClass(status: string): string {
  * the server — this component only shows/hides controls and surfaces the
  * server's own error messages. */
 export function ApprovalActionBar({
-  department, fiscalYear, isFillerOfDept, adminViewEnabled, isAdmin, onChanged,
+  department, fiscalYear, dataVersion, isFillerOfDept, adminViewEnabled, isAdmin, onChanged,
 }: ApprovalActionBarProps) {
   const [status, setStatus] = useState<ApprovalStatusState | null>(null)
   const [loading, setLoading] = useState(false)
@@ -74,6 +83,27 @@ export function ApprovalActionBar({
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [department, fiscalYear])
+
+  // A successful budget write elsewhere on the page (month cell, remark, or
+  // a special-GL detail/trip line -- BudgetGrid bumps dataVersion after any
+  // of those) can flip THIS department's can_submit/department_empty
+  // verdict -- refetch in place. Unlike the department/fiscalYear effect
+  // above, this must NOT reset actionMessage/rejecting/reason: those belong
+  // to an action the user is still reading or mid-typing, not to "switched
+  // to a different department". Skips its own first (mount) run -- the
+  // effect above already loads once on mount and on every remount (this
+  // component unmounts/remounts whenever BudgetGrid's admin-hat toggle
+  // clears `department`), so without the guard every one of those would
+  // fire a second, redundant GET /approval/status back-to-back.
+  const skippedFirstDataVersionRun = useRef(true)
+  useEffect(() => {
+    if (skippedFirstDataVersionRun.current) {
+      skippedFirstDataVersionRun.current = false
+      return
+    }
+    if (department) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataVersion])
 
   function describeApiError(err: unknown, fallback: string): string {
     if (err instanceof ApiError) {

@@ -37,6 +37,7 @@ function state(overrides: Partial<ApprovalStatusState> = {}): ApprovalStatusStat
 const BASE_PROPS = {
   department: 'Accounting',
   fiscalYear: 2027,
+  dataVersion: 0,
   isFillerOfDept: true,
   adminViewEnabled: false,
   isAdmin: false,
@@ -344,5 +345,84 @@ describe('ApprovalActionBar', () => {
         'ไม่สามารถอนุมัติแทนได้ — ขั้นตอนนี้เป็นการพิจารณาของฝ่ายงบประมาณ',
       ),
     )
+  })
+
+  // Bug fix (2026-09-16): a Filler's first successful save on an empty
+  // department flipped the server's can_submit/department_empty verdict,
+  // but this component's status fetch used to key ONLY on
+  // [department, fiscalYear] -- neither changes on a save, so Submit stayed
+  // hidden until a manual reload. `dataVersion` is the parent's signal that
+  // a write just succeeded.
+  describe('dataVersion refetch (bug fix: Submit stuck hidden after the first save on an empty department)', () => {
+    it('refetches the status when dataVersion changes, and shows Submit once the server answer flips to can_submit true', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: 'department_empty' }))
+        .mockResolvedValueOnce(state({ status: 'DRAFT', can_submit: true, submit_blocked_reason: null }))
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
+      await screen.findByTestId('approval-submit-blocked-hint')
+      expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} dataVersion={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+    })
+
+    it('does not refetch a second time on mount (dataVersion starts unchanged) -- exactly one GET per mount', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT' }))
+      render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
+      await screen.findByTestId('approval-status-chip')
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+    })
+
+    it('a dataVersion refetch does not clear an action message the user is reading', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+      vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(502, 'Submit failed', 'เซิร์ฟเวอร์ขัดข้อง'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
+      const submitBtn = await screen.findByTestId('approval-submit-btn')
+      fireEvent.click(submitBtn)
+      await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} dataVersion={1} />)
+
+      // The message must survive a dataVersion-triggered refetch -- only a
+      // department/fiscalYear change (the OTHER effect) is allowed to clear it.
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง')
+    })
+
+    it('a dataVersion refetch does not reset an in-progress reject panel', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+        state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true }),
+      )
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} dataVersion={0} />)
+      fireEvent.click(await screen.findByTestId('approval-reject-btn'))
+      const reasonInput = screen.getByTestId('approval-reject-reason-input')
+      fireEvent.change(reasonInput, { target: { value: 'กำลังพิมพ์เหตุผล' } })
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} dataVersion={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      expect(screen.getByTestId('approval-reject-reason-input')).toHaveValue('กำลังพิมพ์เหตุผล')
+    })
+
+    it('changing department still performs the full reset (clears an action message), unlike a dataVersion bump', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+      vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(502, 'Submit failed', 'เซิร์ฟเวอร์ขัดข้อง'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} department="Accounting" dataVersion={0} />)
+      const submitBtn = await screen.findByTestId('approval-submit-btn')
+      fireEvent.click(submitBtn)
+      await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} department="Finance" dataVersion={0} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Finance', 2027))
+      expect(screen.queryByTestId('approval-action-message')).not.toBeInTheDocument()
+    })
   })
 })

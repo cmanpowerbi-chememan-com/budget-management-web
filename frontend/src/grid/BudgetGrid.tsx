@@ -62,6 +62,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   const [glRef, setGlRef] = useState<GlAccount[]>([])
   const [rows, setRows] = useState<BudgetRow[]>([])
   const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
+  // Bug fix (2026-09-16): a Filler's FIRST successful save on an empty
+  // department flips the server's can_submit/department_empty verdict, but
+  // ApprovalActionBar's own status fetch is keyed only on
+  // [department, fiscalYear] -- neither changes on a save, so it kept
+  // showing "Draft — not submitted" until a manual reload. Bumped after
+  // every successful write that could create the department's first
+  // pending_budget row (a month-cell/remark save via persistRow, or any
+  // DetailSubform/TripManager save via handleSpecialSaved below) so the bar
+  // can refetch its status in place. Never bumped on a failed save.
+  const [dataVersion, setDataVersion] = useState(0)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -274,6 +284,18 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  /** `onSaved` for DetailSubform / TripManager — a special-GL detail line or
+   * a trip's manual line lazily creates the (CC, GL)'s `pending_budget`
+   * parent row on ITS OWN first successful write (see `handleAddTransaction`
+   * doc comment above), so this can ALSO be a department's first-ever row —
+   * same reason `persistRow` bumps `dataVersion`, applied to this save path
+   * too. Both children already only call `onSaved` after a genuinely
+   * successful write (never on a failed save or a plain close). */
+  function handleSpecialSaved() {
+    setDataVersion((v) => v + 1)
+    loadGrid()
+  }
+
   useEffect(() => {
     // Gated on deptResolved so mount fetches the grid exactly ONCE, with
     // the ฝ่าย already decided (auto-selected single ฝ่าย, or null for
@@ -324,6 +346,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         delete next[key]
         return next
       })
+      setDataVersion((v) => v + 1)
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setRowMessages((prev) => ({
@@ -445,6 +468,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         editable: !isCostCenterLocked(costCenter, lockedCostCenters),
       }
       setRows((prev) => [...prev, newRow])
+      // Same reason persistRow / handleSpecialSaved bump dataVersion: a
+      // non-special GL picked here can ALSO be the department's first-ever
+      // row, so the Submit button must not stay stuck on a stale department_empty.
+      setDataVersion((v) => v + 1)
       return { ok: true }
     } catch (err) {
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'สร้างรายการไม่สำเร็จ'
@@ -648,6 +675,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         <ApprovalActionBar
           department={department}
           fiscalYear={year}
+          dataVersion={dataVersion}
           isFillerOfDept={isFillerOfSelectedDept}
           adminViewEnabled={adminViewEnabled}
           isAdmin={scope.isAdmin}
@@ -664,7 +692,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           fiscalYear={year}
           readOnly={detailTarget.readOnly}
           onClose={() => setDetailTarget(null)}
-          onSaved={loadGrid}
+          onSaved={handleSpecialSaved}
         />
       )}
 
@@ -675,7 +703,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           lockedSide={tripManagerOpenFor.lockedSide}
           readOnly={tripManagerOpenFor.readOnly}
           onClose={() => setTripManagerOpenFor(null)}
-          onSaved={loadGrid}
+          onSaved={handleSpecialSaved}
         />
       )}
 

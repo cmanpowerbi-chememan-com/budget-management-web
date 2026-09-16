@@ -269,6 +269,169 @@ describe('BudgetGrid', () => {
     vi.restoreAllMocks()
   })
 
+  it('a successful month-cell save on an empty department refreshes the Submit button without a page reload (bug fixed 2026-09-16)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    // The department has no pending_budget rows yet -- the grid still shows
+    // the GL master's template row (all-zero Pending), which is exactly how
+    // a Filler reaches "type into a month cell" on an otherwise-empty ฝ่าย.
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+    vi.mocked(budgetApi.saveRow).mockResolvedValue({
+      cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+      m01: 900, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+      total_year: 900, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+      updated_at: '2026-01-02T00:00:00Z',
+    })
+    vi.mocked(approvalApi.fetchApprovalStatus)
+      // 1st call: initial mount -- the department is genuinely empty.
+      .mockResolvedValueOnce({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+        submitter_empcode: null, submitter_email: null, submitted_at: null,
+        approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+        reject_reason: null, rejected_by_empcode: null, updated_at: null,
+        current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+        can_submit: false, submit_blocked_reason: 'department_empty',
+      })
+      // 2nd call: the refetch the month-cell save must trigger -- the
+      // department now has a row, so the server allows Submit.
+      .mockResolvedValueOnce({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+        submitter_empcode: null, submitter_email: null, submitted_at: null,
+        approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+        reject_reason: null, rejected_by_empcode: null, updated_at: null,
+        current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+        can_submit: true, submit_blocked_reason: null,
+      })
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await screen.findByTestId('approval-submit-blocked-hint')
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+
+    const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    fireEvent.change(input, { target: { value: '900' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(budgetApi.saveRow).toHaveBeenCalled())
+    await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+  })
+
+  it('a FAILED month-cell save (409) does not refresh the approval status', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'changed by someone else'),
+    )
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+      submitter_empcode: null, submitter_email: null, submitted_at: null,
+      approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+      reject_reason: null, rejected_by_empcode: null, updated_at: null,
+      current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+      can_submit: false, submit_blocked_reason: 'department_empty',
+    })
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await screen.findByTestId('approval-submit-blocked-hint')
+    const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    fireEvent.change(input, { target: { value: '900' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(screen.getByText(/ถูกแก้ไขโดยผู้อื่น/)).toBeInTheDocument())
+    // The failed save still refetches the GRID (409 contract, unrelated to
+    // this fix) but must NOT touch the approval status -- only one GET
+    // /approval/status ever happens (the initial mount).
+    expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument()
+  })
+
+  it('a successful "+ เพิ่ม Transaction" with a NORMAL (non-special) GL on an empty department refreshes the Submit button without a page reload (gap closed 2026-09-16)', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(budgetApi.saveRow).mockResolvedValue({
+      cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+      m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+      total_year: 0, remark: null, template: 'USER', gl_name: 'Office COST', gl_group: 'Office expenses', c_level: null, division: null, department: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+    vi.mocked(approvalApi.fetchApprovalStatus)
+      // 1st call: initial mount -- the department is genuinely empty.
+      .mockResolvedValueOnce({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+        submitter_empcode: null, submitter_email: null, submitted_at: null,
+        approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+        reject_reason: null, rejected_by_empcode: null, updated_at: null,
+        current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+        can_submit: false, submit_blocked_reason: 'department_empty',
+      })
+      // 2nd call: the refetch the new-transaction save must trigger -- the
+      // department now has a row, so the server allows Submit.
+      .mockResolvedValueOnce({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+        submitter_empcode: null, submitter_email: null, submitted_at: null,
+        approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+        reject_reason: null, rejected_by_empcode: null, updated_at: null,
+        current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+        can_submit: true, submit_blocked_reason: null,
+      })
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+    await screen.findByTestId('approval-submit-blocked-hint')
+    expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    await waitFor(() => expect(budgetApi.saveRow).toHaveBeenCalled())
+    await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
+  })
+
+  it('a FAILED "+ เพิ่ม Transaction" save (409) does not refresh the approval status', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'duplicate row'),
+    )
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT',
+      submitter_empcode: null, submitter_email: null, submitted_at: null,
+      approver1_empcode: null, approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+      reject_reason: null, rejected_by_empcode: null, updated_at: null,
+      current_position: null, current_approver_empcode: null, can_act: false, notification_warning: null,
+      can_submit: false, submit_blocked_reason: 'department_empty',
+    })
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+    await screen.findByTestId('approval-submit-blocked-hint')
+
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    await waitFor(() => expect(budgetApi.saveRow).toHaveBeenCalled())
+    // A failed create must not touch approval status at all -- only the
+    // initial mount's GET /approval/status ever happens.
+    expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument()
+  })
+
   describe('grid trailing "ลบ" column — deleting a manually-added row', () => {
     beforeEach(() => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
