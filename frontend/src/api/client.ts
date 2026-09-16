@@ -86,6 +86,9 @@ function messageForStatus(status: number, detail?: string): string {
   }
   if (status === 409) return 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง'
   if (status === 400) return 'คำขอไม่ถูกต้อง'
+  // 413 (2026-09-16, jakkaritw): the backend detail is already the
+  // user-facing Thai copy — show it alone, no "(HTTP 413)" prefix.
+  if (status === 413) return detail?.trim() || 'ไฟล์ใหญ่เกินกำหนด'
   if (status >= 500) return 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'
   return `คำขอไม่สำเร็จ (HTTP ${status})`
 }

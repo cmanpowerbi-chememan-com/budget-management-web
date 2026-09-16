@@ -349,4 +349,33 @@ describe('apiFetch', () => {
       })
     })
   })
+
+  // 413 (2026-09-16, jakkaritw): the attachments upload's "file too large"
+  // detail (`attachments.too_large_message`) is already a complete Thai
+  // sentence — show it alone, not wrapped in the generic
+  // "คำขอไม่สำเร็จ (HTTP 413)" fallback every other unmapped status gets.
+  describe('413 payload-too-large mapping', () => {
+    it('shows the backend Thai detail alone for a 413 with detail', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(413, { detail: 'ไฟล์ใหญ่เกินกำหนด (15 MB) — อัปโหลดได้ไม่เกิน 10 MB' }),
+        ),
+      )
+
+      await expect(apiFetch('/attachments/upload')).rejects.toMatchObject({
+        status: 413,
+        message: 'ไฟล์ใหญ่เกินกำหนด (15 MB) — อัปโหลดได้ไม่เกิน 10 MB',
+      })
+    })
+
+    it('falls back to a generic Thai message for a 413 with no detail', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(413, {})))
+
+      await expect(apiFetch('/attachments/upload')).rejects.toMatchObject({
+        status: 413,
+        message: 'ไฟล์ใหญ่เกินกำหนด',
+      })
+    })
+  })
 })

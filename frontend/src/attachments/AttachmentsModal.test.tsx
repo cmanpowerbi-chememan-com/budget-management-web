@@ -74,6 +74,21 @@ describe('AttachmentsModal', () => {
     await waitFor(() => expect(screen.getByTestId('attachments-action-error')).toHaveTextContent('.exe'))
   })
 
+  it('shows the backend Thai message alone for a 413 (file too large), no "(HTTP 413)" prefix', async () => {
+    const tooLarge = 'ไฟล์ใหญ่เกินกำหนด (15 MB) — อัปโหลดได้ไม่เกิน 10 MB'
+    vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([])
+    vi.mocked(attachmentsApi.uploadAttachment).mockRejectedValue(new ApiError(413, tooLarge, tooLarge))
+    render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีไฟล์/)).toBeInTheDocument())
+
+    const file = new File(['a'.repeat(20)], 'big.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByTestId('attachments-upload-input'), { target: { files: [file] } })
+
+    await waitFor(() => expect(screen.getByTestId('attachments-action-error')).toHaveTextContent(tooLarge))
+    expect(screen.getByTestId('attachments-action-error').textContent).toBe(tooLarge)
+    expect(screen.getByTestId('attachments-action-error').textContent).not.toContain('HTTP 413')
+  })
+
   it('downloads a file by opening the resolved Graph URL', async () => {
     vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([ITEM])
     vi.mocked(attachmentsApi.fetchDownloadUrl).mockResolvedValue('https://download.example/x')

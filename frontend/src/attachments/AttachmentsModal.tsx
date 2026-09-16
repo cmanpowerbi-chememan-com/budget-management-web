@@ -15,7 +15,14 @@ export interface AttachmentsModalProps {
 const ACCEPT = '.pdf,.xlsx,.xls,.png,.jpg,.jpeg'
 
 function describeError(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) return `${err.message}${err.detail ? ` (${err.detail})` : ''}`
+  if (err instanceof ApiError) {
+    // 413 (2026-09-16, jakkaritw): messageForStatus already folds the
+    // backend detail into `message` for a 413 — appending `(detail)` again
+    // would double it ("ไฟล์ใหญ่เกินกำหนด… (ไฟล์ใหญ่เกินกำหนด…)"). Skip the
+    // parenthetical whenever the detail is already part of the message.
+    if (err.detail && err.message.includes(err.detail)) return err.message
+    return `${err.message}${err.detail ? ` (${err.detail})` : ''}`
+  }
   return fallback
 }
 
