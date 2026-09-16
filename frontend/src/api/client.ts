@@ -104,15 +104,19 @@ function messageForStatus(status: number, detail?: string): string {
   return `คำขอไม่สำเร็จ (HTTP ${status})`
 }
 
-/** True for the ONE 403 shape callers must react to differently from a
- * plain access-denied: `write_model.DepartmentLockedError` (a row save
- * refused because the department is now mid-approval/approved). A row-save
- * caller (`BudgetGrid.persistRow`) uses this to revert the optimistic edit
- * and refetch, the same way it already does for a 409 conflict — the
- * `err.message` from `messageForStatus` above is already the Thai reason to
- * show alongside it. */
+/** True for the two 403 shapes every write call site must react to
+ * differently from a plain access-denied, both with IDENTICAL refusal
+ * handling (flip read-only, call `onDepartmentLocked`/`refreshAfterLockChange`
+ * — only the Thai `message` text differs, and that already comes from
+ * `messageForStatus` above): `write_model.DepartmentLockedError` (mid-
+ * approval/approved) and `write_model.DepartmentUnknownError` (no department
+ * mapping, so the lock status can't even be checked — S2 gate follow-up,
+ * issue #13). A row-save caller (`BudgetGrid.persistRow`) uses this to
+ * revert the optimistic edit and refetch, the same way it already does for a
+ * 409 conflict. */
 export function isDepartmentLockedError(err: unknown): boolean {
-  return err instanceof ApiError && err.status === 403 && (err.detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER) ?? false)
+  if (!(err instanceof ApiError) || err.status !== 403 || !err.detail) return false
+  return err.detail.includes(DEPARTMENT_LOCKED_DETAIL_MARKER) || err.detail.includes(DEPARTMENT_UNKNOWN_DETAIL_MARKER)
 }
 
 /** How many Pydantic validation entries to spell out before collapsing the

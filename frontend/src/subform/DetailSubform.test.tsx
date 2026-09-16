@@ -435,6 +435,40 @@ describe('DetailSubform', () => {
     expect(screen.queryByText(/mid-approval or approved/)).not.toBeInTheDocument()
   })
 
+  // S2 gate follow-up (issue #13): department_unknown must go through the
+  // SAME refusal handling as department_locked (mirrors the test above).
+  it('a department_unknown save shows the Thai message only (no raw English detail appended) and calls onDepartmentLocked', async () => {
+    vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+    vi.mocked(subformApi.saveDetailLine).mockRejectedValue(
+      new ApiError(
+        403,
+        'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin',
+        'CC1 has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status',
+      ),
+    )
+    const onDepartmentLocked = vi.fn()
+    render(
+      <DetailSubform
+        costCenter="CC1"
+        glAccount="5211900030"
+        glGroup="Entertainment"
+        glName={null}
+        fiscalYear={2027}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        onDepartmentLocked={onDepartmentLocked}
+      />,
+    )
+    await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+    fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
+    fireEvent.click(screen.getByTestId('save-all'))
+
+    await waitFor(() => expect(onDepartmentLocked).toHaveBeenCalled())
+    expect(screen.getByText('cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin')).toBeInTheDocument()
+    expect(screen.queryByText(/cannot verify approval-lock status/)).not.toBeInTheDocument()
+  })
+
   // jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100
   // (half-up) and has no decimals — SUPERSEDES bug-subform-no-decimals
   // (7ba8f49, shipped one day earlier), which had allowed a typed decimal

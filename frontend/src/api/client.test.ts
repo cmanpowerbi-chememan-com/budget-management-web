@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isSessionExpired, SESSION_EXPIRED_MESSAGE, subscribeSessionExpired } from './sessionExpiry'
-import { ApiError, apiFetch, buildLoginRedirectUrl } from './client'
+import { ApiError, apiFetch, buildLoginRedirectUrl, isDepartmentLockedError } from './client'
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -216,6 +216,28 @@ describe('apiFetch', () => {
       status: 403,
       message: 'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin',
     })
+  })
+
+  // S2 gate follow-up (issue #13): a department_unknown 403 must go through
+  // the SAME shared refusal handling as department_locked — every write call
+  // site branches on this one predicate, not on the marker string directly.
+  it('isDepartmentLockedError also matches a department_unknown 403 (S2 gate follow-up)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, {
+          detail: 'CC1 has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status',
+        }),
+      ),
+    )
+
+    let caught: unknown
+    try {
+      await apiFetch('/budget/rows')
+    } catch (err) {
+      caught = err
+    }
+    expect(isDepartmentLockedError(caught)).toBe(true)
   })
 
   it('keeps the generic forbidden Thai message for a plain (non-department-locked) 403', async () => {

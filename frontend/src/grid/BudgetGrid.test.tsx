@@ -233,6 +233,43 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument()
   })
 
+  // S2 gate follow-up (issue #13): department_unknown must go through the
+  // SAME refusal handling as department_locked — mirrors the test above,
+  // only the Thai message and raw ApiError.detail differ.
+  it('a save rejected as department_unknown (403) shows the Thai reason and reverts the cell', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    const freshRow = makeRow('CC1', '5211800030', {
+      pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+      editable: false,
+    })
+    vi.mocked(budgetApi.fetchBudgetGrid)
+      .mockResolvedValueOnce([
+        makeRow('CC1', '5211800030', {
+          pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+        }),
+      ])
+      .mockResolvedValueOnce([freshRow])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(
+        403,
+        'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin',
+        'CC1 has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status',
+      ),
+    )
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+    fireEvent.change(input, { target: { value: '777' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(screen.getByText('cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin')).toBeInTheDocument())
+    expect(screen.queryByText(/cannot verify approval-lock status/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toHaveTextContent('100'))
+    expect(screen.queryByTestId('pending-input-CC1-5211800030-m01')).not.toBeInTheDocument()
+  })
+
   it('a successful Submit flips the grid to read-only immediately, without a page reload', async () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
@@ -961,6 +998,60 @@ describe('BudgetGrid', () => {
 
       await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
       expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1) // status agrees with lockedDepartments -> no reload
+    })
+
+    // Gate follow-up item 2 (issue #13): `openSpecialForm`'s `readOnly` arg on
+    // the Add-form path (`handleAddTransaction` -> `openSpecialForm(..,
+    // selectedDepartmentLocked)`) had zero coverage. The button that reaches
+    // it disables the instant the ฝ่าย is known-locked (see the button test
+    // above) — but `AddTransactionForm`'s `open` state is local to that
+    // component and does NOT reset when the ฝ่าย locks while the form is
+    // already open (no `key` prop forces a remount here). Decision I's
+    // focus-revalidation is exactly the route that can flip
+    // `selectedDepartmentLocked` under an already-open form: read the code,
+    // and this IS reachable, so it gets the honest assertion (read-only
+    // subform), not a "button disabled" assertion.
+    it('a special-GL pick from the Add form, submitted after the ฝ่าย locks WHILE the form was already open, opens its subform read-only', async () => {
+      const SPECIAL_GL_REF = [
+        { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+      ]
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(SPECIAL_GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments)
+        .mockResolvedValueOnce({ departments: [], year_not_open: false }) // mount: unlocked, Add button enabled
+        .mockResolvedValueOnce({ departments: ['Solution Delivery'], year_not_open: false }) // after the lock is discovered
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'PENDING_APPROVER1', submitter_empcode: null,
+        submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+        approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+        updated_at: null, current_position: 1, current_approver_empcode: null, current_approver_name: null,
+        can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
+        submit_blocked_reason: null, locked: true,
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      // Opens the form and picks the special GL WHILE the ฝ่าย is still
+      // unlocked (the trigger button is enabled at this point).
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      fireEvent.click(screen.getByRole('option', { name: /5211900030/ }))
+
+      // The ฝ่าย locks while the form is still open (decision I's focus revalidation).
+      fireEvent(window, new Event('focus'))
+      await waitFor(() => expect(approvalApi.fetchLockedDepartments).toHaveBeenCalledTimes(2))
+
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      expect(await screen.findByTestId('detail-subform')).toBeInTheDocument()
+      expect(screen.getByText(/อ่านอย่างเดียว \(แก้ไม่ได้\)/)).toBeInTheDocument()
+      expect(screen.queryByTestId('save-all')).not.toBeInTheDocument()
+      expect(budgetApi.saveRow).not.toHaveBeenCalled()
     })
   })
 
