@@ -18,9 +18,15 @@ that no pre-round row is caught by the cost-center filter.
 
     python -X utf8 reset_human_round_fy2027.py            # dry-run, no write
     python -X utf8 reset_human_round_fy2027.py --apply    # delete, one transaction
+
+Every expectation is a CLI flag so a re-run on a later day states its own verified
+target instead of editing constants (defaults = the 2026-09-15 round):
+    --expect-budget N --expect-detail N --expect-trip N --expect-status N
+    --expect-total 101812250.00 --expect-other 14 --since 2026-09-13T00:00:00
 """
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import os
@@ -35,12 +41,8 @@ load_dotenv(r"C:\04.budget_management_web\.env")
 SERVER = "v5o4qez3u4cupase7cogkwvyke-bby6xlm3ncqexly4ozejod2vqe.database.fabric.microsoft.com,1433"
 DB = "fabric_sql_database-a42ef9f3-f190-464a-8d5e-c0d41ef9ce42"
 FY = 2027
-CCS = ("10IT011300", "10IT012000", "10IT013000")   # D&A x2 + Solution Delivery
+BASE_CCS = ("10IT011300", "10IT012000", "10IT013000")   # D&A x2 + Solution Delivery
 DEPTS = ("Data & Analytic", "Solution Delivery")
-EXPECTED = {"pending_budget": 24, "pending_budget_detail": 15, "budget_trip": 3, "approval_status": 2}
-EXPECTED_TOTAL = Decimal("101812250.00")      # 1,039,200 + 100,171,120 + 601,930
-EXPECTED_OTHER = 14                            # pre-round real rows on 5 other departments
-ROUND_START = dt.datetime(2026, 9, 13, 0, 0, 0)  # UTC; DB stores UTC (write_model.py:300)
 OUT_DIR = Path(r"C:\04.budget_management_web\.scratch\uat-prep\reset\out")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -59,8 +61,36 @@ def rows(cur, sql, *p):
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--apply", action="store_true", help="delete (default is dry-run)")
+    ap.add_argument("--extra-cc", action="append", default=[],
+                    help="additional cost center to include in scope (repeatable), e.g. KKCA01")
+    ap.add_argument("--expect-budget", type=int, default=24)
+    ap.add_argument("--expect-detail", type=int, default=15)
+    ap.add_argument("--expect-trip", type=int, default=3)
+    ap.add_argument("--expect-status", type=int, default=2)
+    ap.add_argument("--expect-total", type=Decimal, default=Decimal("101812250.00"),
+                    help="exact SUM(total_year) of the in-scope pending_budget rows")
+    ap.add_argument("--expect-other", type=int, default=14,
+                    help="FY2027 pending_budget rows OUTSIDE the scope - must not move")
+    ap.add_argument("--since", type=dt.datetime.fromisoformat, default=dt.datetime(2026, 9, 13),
+                    help="UTC; every in-scope row must be _updated_at >= this (DB stores UTC, write_model.py:300)")
+    return ap.parse_args()
+
+
 def main() -> int:
-    apply = "--apply" in sys.argv
+    args = parse_args()
+    apply = args.apply
+    EXPECTED = {"pending_budget": args.expect_budget, "pending_budget_detail": args.expect_detail,
+                "budget_trip": args.expect_trip, "approval_status": args.expect_status}
+    EXPECTED_TOTAL = args.expect_total
+    EXPECTED_OTHER = args.expect_other
+    ROUND_START = args.since
+    CCS = tuple(BASE_CCS) + tuple(args.extra_cc)
+    IN = "(" + ",".join("?" * len(CCS)) + ")"
+    print("scope cost centers:", CCS)
+    print("expectations:", EXPECTED, "total", EXPECTED_TOTAL, "other", EXPECTED_OTHER, "since", ROUND_START)
     conn = pyodbc.connect(
         f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER};DATABASE={DB};"
         "Authentication=ActiveDirectoryServicePrincipal;"
@@ -71,15 +101,15 @@ def main() -> int:
     baseline = {
         "captured_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "database": DB,
         "scope": {"cost_centers": CCS, "departments": DEPTS, "fiscal_year": FY},
-        "pending_budget": rows(cur, "SELECT * FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS),
-        "pending_budget_detail": rows(cur, "SELECT * FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS),
-        "budget_trip": rows(cur, "SELECT * FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS),
+        "pending_budget": rows(cur, "SELECT * FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
+        "pending_budget_detail": rows(cur, "SELECT * FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
+        "budget_trip": rows(cur, "SELECT * FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
         "approval_status": rows(cur, "SELECT * FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS),
     }
     found = {k: len(baseline[k]) for k in EXPECTED}
     total = sum(Decimal(str(r["total_year"])) for r in baseline["pending_budget"])
     other = cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? "
-                        "AND cost_center NOT IN (?,?,?)", FY, *CCS).fetchone()[0]
+                        "AND cost_center NOT IN " + IN + "", FY, *CCS).fetchone()[0]
     print("found (live):", found)
     print("pending_budget total_year:", total, "| other-dept FY2027 rows (KEEP):", other)
     for r in baseline["approval_status"]:
@@ -110,12 +140,12 @@ def main() -> int:
     print("baseline written:", out)
 
     try:
-        d_detail = cur.execute("DELETE FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).rowcount
-        d_trip = cur.execute("DELETE FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).rowcount
-        d_budget = cur.execute("DELETE FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).rowcount
+        d_detail = cur.execute("DELETE FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
+        d_trip = cur.execute("DELETE FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
+        d_budget = cur.execute("DELETE FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
         d_status = cur.execute("DELETE FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).rowcount
         deleted = {"pending_budget": d_budget, "pending_budget_detail": d_detail, "budget_trip": d_trip, "approval_status": d_status}
-        other_after = cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN (?,?,?)", FY, *CCS).fetchone()[0]
+        other_after = cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN " + IN + "", FY, *CCS).fetchone()[0]
         print("deleted (uncommitted):", deleted, "| other-dept rows now:", other_after)
         if deleted != EXPECTED or other_after != EXPECTED_OTHER:
             conn.rollback()
@@ -129,12 +159,12 @@ def main() -> int:
         return 1
 
     after = {
-        "pending_budget": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).fetchone()[0],
-        "pending_budget_detail": cur.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).fetchone()[0],
-        "budget_trip": cur.execute("SELECT COUNT(*) FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN (?,?,?)", FY, *CCS).fetchone()[0],
+        "pending_budget": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
+        "pending_budget_detail": cur.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
+        "budget_trip": cur.execute("SELECT COUNT(*) FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
         "approval_status": cur.execute("SELECT COUNT(*) FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).fetchone()[0],
         "approval_log_kept": cur.execute("SELECT COUNT(*) FROM budget.approval_log WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).fetchone()[0],
-        "other_depts_fy2027_rows": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN (?,?,?)", FY, *CCS).fetchone()[0],
+        "other_depts_fy2027_rows": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN " + IN + "", FY, *CCS).fetchone()[0],
     }
     print("after (first four must be 0, other-dept must be 14):", after)
     return 0

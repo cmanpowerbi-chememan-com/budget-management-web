@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-14T09:43:29+0700",
+  "updated": "2026-09-16T17:03:19+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -2746,6 +2746,222 @@
       "created": "2026-08-15T00:48:14+0700",
       "updated": "2026-08-15T08:42:09+0700",
       "ai": "PUSHED + VERIFIED LANDED: 74b532c on github cmanpowerbi-chememan-com/cman-design-system main (3a01b43..74b532c, origin/main == local HEAD confirmed via fetch), 19 files +3124/-1248. Theme extracted from LIVE Chememan Supply Chain app sc-qas.chememan.com (NOT SAP; ASP.NET MVC + Bootstrap 5.3.2 + FontAwesome 6.5.0 + jQuery 3.7.1 + select2 + flatpickr), 6 dumps / 4 unique pages + /Content/site.css. Values: brand #1a472a green + #2d6a4f teal; 14-step --cman-surface-* scale (--cman-neutral-* kept as aliases); 10 status colors; radius 4/6/8/16; navbar 44px + sidebar 240/64px; type .65-1.5rem; NO font-family declared anywhere => Bootstrap system stack (recorded as fact, no webfont added). Old CI palette preserved byte-for-byte in tokens/brand-ci-legacy.css (148/148 declarations, re-diffed vs HEAD~1). New: reference/sc-qas-extracted/ (raw auditable CSS, site.css byte-identical to server), examples/app-shell.html, tools/check-tokens.py (key-based 3-file drift guard, 12/12 mutation catch after rewrite; v1 was 5/12), .gitignore. GATES: round-1 NOT-SAFE-TO-PUSH (HIGH = live customer data 1120001/AFRISERVE AGENCIES LTD + PO 4210000405 + id 1264 + 'of 1039' + employee name in docs) -> scrubbed; round-2 SAFE-TO-PUSH (06 APPROVE-WITH-SUGGESTIONS, 07 PASS, 08 GAPS) -> 4 MED + 2 LOW doc fixes applied at jakkaritw's choice -> final verify all green (check-tokens exit 0, verify_ds 10/10, verify_shell 13/13, leak grep 0 hits, no new file gitignored). jakkaritw approved push via AskUserQuestion 'fix 4 first then push'. STILL OPEN (needs jakkaritw): delete the 7 stale nested dirs tokens/tokens, typography/typography, components/components, patterns/patterns, adapters/adapters, assets/assets, examples/examples -- they still hold the OLD #00522C system at colliding paths; README documents them as do-not-read + gives the command. NOT DONE / OUT OF SCOPE: the sc-qas app itself was never modified -- its source is not on this machine (grepped all 24 C:\\\\NN.* + inetpub, 0 .csproj/.cshtml), so the original 'adjust web theme' ask is unfulfilled; only the design system was built. SECURITY: jakkaritw pasted plaintext password for user zladdawank in chat -> ROTATE; scratchpad creds.json deleted; 0 tokens/PII/cookies in the pushed repo (verified).",
+      "agent": "claude"
+    },
+    {
+      "id": "ux-submit-button-shown-midchain",
+      "state": "done",
+      "created": "2026-08-15T00:18:57+0700",
+      "updated": "2026-08-15T14:02:39+0700",
+      "ai": "[SHIPPED TO BOTH ENVS 2026-08-15] commit 77308d7 live on stg rev 0000045 (Healthy) AND prd rev 0000024 (Healthy/RunningAtMaxScale/100, image budget-web:77308d7). prd verify-deploy-landed done live, not from cache: anonymous GET /me -> 401, /.auth/login/aad -> 302 to login.windows.net tenant 13c85daf with prd app 61d5d556 = Easy Auth still enforcing after the swap. PRD GUARDS RE-CONFIRMED post-deploy: APP_ENV=production, and SIT_IMPERSONATE / NOTIFICATIONS_ENVIRONMENT_LABEL / NOTIFICATIONS_REDIRECT_ALL_TO are all ABSENT -> the SIT impersonation alias is inert on prd (all three conditions fail) and prd mail behaviour is unchanged (no test label, no redirect). Defect closed: admin Admin-mode no longer shows a ส่งอนุมัติ button that the server would refuse; the post-deadline escape hatch still renders (ADR-0012). STILL OPEN, separate task: 3 commits unpushed to origin/main; and the LOW sibling case (admin + DRAFT/REJECTED on a non-orphan non-Template-2 dept in an open cycle still shows a doomed button — durable fix = server-computed can_submit)."
+    },
+    {
+      "id": "push-77308d7",
+      "state": "done",
+      "created": "2026-08-15T14:05:48+0700",
+      "updated": "2026-08-15T14:05:48+0700",
+      "ai": "Pushed origin/main fdc6f6e..77308d7 (3 commits) 2026-08-15 after jakkaritw's 'push': 74a4f97 docs(adr-0021), 8a40cb3 chore(tracker), 77308d7 fix(approval) the SIT submit-button defect. 0 unpushed remaining; origin/main head = 77308d7 = exactly the image live on BOTH stg rev 0000045 and prd rev 0000024, so deployed code and git are now in sync. No CI deploy triggered by this push: master-tables-deploy.yml is paths-filtered to 03-edit-master-table/** which none of these touch."
+    },
+    {
+      "id": "db1-retire-step2-repoint-orgcode",
+      "state": "done",
+      "created": "2026-08-15T15:37:09+0700",
+      "updated": "2026-08-15T15:37:09+0700",
+      "ai": "STEP 2+3/5 DONE (jakkaritw-approved DB1 retirement). Repointed the master-tables orgcode_costcenter module off the dead DB1 table onto the consolidated DB: list_handler.py + reference_handler.py now read dbo.employee_master (org_code/org_name_th) instead of dbo.mas_employee_data (orgcode/orgnameth). BEFORE/AFTER PARITY PROVEN against BOTH live databases, not just tests: list screen 725 rows before = 725 after, 0 rows added, 0 removed, same ORDER BY; 5 rows IMPROVED (blank Thai name in the stale old source now resolves, e.g. org 1155403 '' -> 'แผนกดูแลพื้นที่'). jakkaritw chose to keep the dropdown identical rather than accept the raw mirror's extra codes, so reference_handler re-applies the OLD sync filter (lifted from setup/sync_employees.py:90-101): record_status='active' AND employee_code NOT LIKE '4%' (Gritsman) AND org_code NOT LIKE '117%' (Vietnam AND Australia — both share the 117 prefix) AND job_level_name_en NOT IN (Operator 1/2/3, Driver, Maid). VERIFIED with that clause the dropdown returns 191 codes = the old 191 EXACTLY: 0 added / 0 removed / 0 renamed, and the list still returns 725. Join fan-out risk checked and clear: 0 org_codes carry more than one distinct org_name_th. GATE: 07 PASS (static SQL only, no interpolation, no creds, env/infra untouched), 06 Approve-with-suggestions, 08 PASS 22/22 handler suite unchanged = output contract byte-identical (JSON keys orgcode_name/code/name preserved). Pin tests now assert the table, the new columns, DISTINCT, the NULL guard, all FOUR filter conditions, AND the SQL aliases (aliases ARE the JSON keys via db.py fetchall/cursor.description). test_orgcode_cc_local.py's 1 failure + 5 errors are PRE-EXISTING (gate re-ran the HEAD version and got the identical failure set: live-DB pyodbc 08001 + 'fixture conn not found'). .claude/project-context.md lines 89/104-106 corrected. NOT committed, NOT deployed. TWO GATE WARNINGS BINDING ON STEP 4: (1) this code queries cfg_master + dbo.employee_master in ONE connection, and only the consolidated DB has both — deploying it while the Functions env still points at DB1 = instant 500s, so code and env MUST cut over together; (2) admins editing through the live editor still write to DB1's cfg_master copy, so RE-RECONCILE/re-copy cfg_master immediately before the flip."
+    },
+    {
+      "id": "db1-retire-step1-cfgmaster-copy",
+      "state": "done",
+      "created": "2026-08-15T14:49:48+0700",
+      "updated": "2026-08-15T14:49:48+0700",
+      "ai": "STEP 1/5 of the DB1 retirement DONE (jakkaritw-approved 5-step plan, 2026-08-15). Copied all 4 cfg_master tables DB1 -> consolidated DB (fabric_sql_database-a42ef9f3), ADDITIVE ONLY: new cfg_master schema + 4 new tables; nothing in DB1 touched, nothing pre-existing in the consolidated DB touched, so the deployed master-tables Functions app (still pointed at DB1) keeps running unaffected. RECONCILE all MATCH: orgcode_costcenter_map 725=725, gl_group_mapping 136=136, gl_group_dim 21=21, hide_document_number 3=3. Two Fabric-SQL-DB DDL gotchas hit and fixed: (1) plain 'CREATE SCHEMA x' fails with error 33134 'Principal ... could not be resolved / Server identity is not configured' when the connecting principal is a service principal -> must write CREATE SCHEMA cfg_master AUTHORIZATION dbo; (2) 'PRIMARY KEY NONCLUSTERED ... NOT ENFORCED' (Fabric WAREHOUSE syntax) is rejected with error 40514 in Fabric SQL DATABASE -> use plain enforced PRIMARY KEY. IDENTITY preserved on orgcode_costcenter_map.id via SET IDENTITY_INSERT. COVERAGE PRE-CHECK (gate for step 2): consolidated dbo.employee_master has org_code + org_name_th and covers 183/184 of the orgcodes the map actually uses; the single miss is the placeholder '9999999', which has NO Thai name in the old source either -> zero regression. Old source had 191 orgcodes, new has 209 (broader). All 655 employee_master rows carry a Thai org name. FLAGGED FOR LATER, not resolved here: cfg_master.gl_group_dim+gl_group_mapping (gl_code->group_id GUID->group_name) DUPLICATE the concept in dbo.gl_group (146 rows, gl_code->gl_group name, DW-synced from SharePoint and treated as authoritative elsewhere). Copied as-is to preserve editor behaviour; consolidating the two GL-group stores is a separate decision. NEXT: step 2 = repoint orgcode_costcenter list_handler.py:28 + reference_handler.py:17 from dbo.mas_employee_data (orgcode/orgnameth) to dbo.employee_master (org_code/org_name_th)."
+    },
+    {
+      "id": "theme-supplychain-preview",
+      "state": "done",
+      "created": "2026-08-15T14:18:10+0700",
+      "updated": "2026-08-15T14:28:40+0700",
+      "ai": "Repointed accent tier to Supply Chain green (#1a472a/#2d6a4f), --sans to Bootstrap 5.3.2 system stack, --serif=var(--sans), --mono=Bootstrap default; dark-mode accent lightened to #3fa06e/#5cbf8c (light-mode greens fail contrast ~1.6:1/2.4:1 vs dark paper). Removed Google Fonts link from layout.tsx. body font-size 14px -> .875rem. Files: frontend/src/styles/tokens.css, frontend/src/styles/global.css:16, frontend/src/app/layout.tsx. next build PASS, vitest 633/633 PASS. Local only, NOT committed/pushed/deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "master-tables-retired",
+      "state": "done",
+      "created": "2026-08-15T17:04:25+0700",
+      "updated": "2026-08-15T17:04:25+0700",
+      "ai": "MASTER-TABLES RETIREMENT — 5 of 6 items DONE 2026-08-15 (jakkaritw: 'ยืนยันลบทั้ง 6', after asking me to verify nothing else depends on them). Driver: Spec C V2.0 (signed) says the 6 admin masters are Excel on SharePoint synced into Fabric and 'There is no web UI'. PRE-DELETION AUDIT all clean: DB1 held ONLY cfg_master's 4 tables + dbo.mas_employee_data + 3 views (v_app_login_user 302, v_app_user_orgcode 336, v_mas_employee_data 336) with ZERO repo references; 0 stored procedures; schema untouched since May 2026. Proof the editor was a stale island: SharePoint cc orgcode.xlsx (Spec C-3) holds 1,434 orgcode-CC pairs vs the editor's 725 — 721 shared, 713 the editor NEVER had, only 4 unique to it (1188100/10OS011400, 1188100/10OS012400, 1410000/10AC010000, placeholder 9999999/10BS000000) for the master owner to confirm. DONE: (1) deleted 03-edit-master-table/ + setup/sync_employees.py + both workflows + 3 sign-off screenshot generators — commit 9f0ad40, 62 files / 12,791 deletions; (2) SWA cman-budget-master-0003 DELETED from Azure, verified gone; (6) cfg_master schema + 4 tables DROPPED from the consolidated DB — schemas now budget/dbo/sys only, and budget.approval_status + dbo.gl_group 146 + cc_filler_map 489 + employee_master 655 all intact. DB1 fully exported first to bin/db1-final-backup.json (2.9 MB, 8 objects). Also deleted local .playwright_auth.json (live session cookies; gitignored, never committed, but surfaced in a grep). BLOCKED NEEDS JAKKARITW: (5) deleting the DB1 Fabric item (workspace 8fbc17b7-c67d-4c55-94cd-7364e33d1de9, item 036a3270-82dd-40f4-aea4-6c27f55cff07, SQLDatabase 'fabric sql db') — the safety classifier refused delete_item and I did not work around it. It is fully orphaned: nothing reads it, its only consumer app is deleted, data backed up. Delete via the Fabric portal or re-authorise."
+    },
+    {
+      "id": "theme-seagreen-logo-badges",
+      "state": "done",
+      "created": "2026-08-15T22:34:36+0700",
+      "updated": "2026-08-15T23:17:24+0700",
+      "ai": "Logo: App.tsx repointed to chememan-full-logo-white.png (App.tsx:30); height 36px->44px in global.css:86 (measured w/ Playwright+Pillow: 36px/1x DPI only ~21% crisp near-white of drawn pixels vs ~38% at 2x DPI; 44px/1x now matches ~39%). Badges: new --accent-2-text token (tokens.css:79, #1f6b42, pine-green companion to --accent-2, mirrors --accent-text pattern but stays green) applied to .user-avatar (global.css:200-215), .role-badge.user (247-250), .v3-count (330-339), .dept-picker-badge (749-757), plus .v3-gl-pill (394-398, found via sweep, same raw-fill bug missed by earlier audit since text lives in nested .n/.t children). Contrast set-diff (before/after via temp-revert-then-restore of just these 6 edits, keyed kind+selector+sample): FIXED 7, NEW 0; pre-existing BORDER hairlines + .user-avatar.admin 4.25 shell-ceiling entry correctly unchanged/out of scope. next build clean, vitest 633/633. Re-shot design/mockups/theme-final-*.png (12 files). Temp specs copied into frontend/e2e/ then removed after each run. Not committed/deployed."
+    },
+    {
+      "id": "dsn-drop-dark-mode",
+      "state": "done",
+      "created": "2026-08-15T21:47:05+0700",
+      "updated": "2026-08-15T23:59:14+0700",
+      "ai": "[CROSS-SESSION UPDATE 4ddbf57] PUSHED + VERIFIED LANDED: origin/main == local HEAD == 4ddbf5773e778deef22d4ddc736c95ab2c9c10fc on github cmanpowerbi-chememan-com/cman-design-system (554802b..4ddbf57), 9 files -110/+194. jakkaritw approved the push via AskUserQuestion 2026-08-15. CORRECTION to my earlier note: the repo was only ONE commit ahead of origin, not three -- 3b72d59 (Sea Green rebuild) and 554802b (scrub real GL codes + SAP figures from the demo page) had ALREADY been pushed by the parallel session; only the dark-mode removal was local. Design-system repo is now fully in sync with GitHub; nothing pending there."
+    },
+    {
+      "id": "theme-seagreen-nodark-logo",
+      "state": "done",
+      "created": "2026-08-15T21:32:57+0700",
+      "updated": "2026-08-15T22:22:27+0700",
+      "ai": "[FIX] Prior entry lost a backtick-quoted clause to shell substitution: the .btn-reject selector was changed to the direct-child form '.approval-bar-greater-than-btn-reject' (CSS combinator, not a literal arrow) so only the shell-direct trigger button gets the shell-context focus ring, not the nested reject-panel confirm button. See frontend/src/styles/global.css around line 2439 for the exact rule. No other content in the prior entry was affected."
+    },
+    {
+      "id": "ds-push-and-dark-mode-prompt",
+      "state": "done",
+      "created": "2026-08-15T21:21:46+0700",
+      "updated": "2026-08-15T21:29:31+0700",
+      "ai": "[COMMITTED c65d351 on main, NOT pushed] design/mockups/theme-delete-dark-mode-prompt.md + tracker ledger. Staged by explicit path again - parallel session still has uncommitted edits in frontend/src/{app/layout.tsx,styles/global.css,styles/tokens.css,subform/DetailSubform.tsx,next-env.d.ts} plus setup/phase2_harness_dkl.py, the deleted laddawan Spec B docx and monthly_update/* ; all deliberately left out. Budget repo now has 2 unpushed commits: 11df776 (shade comparison set) + c65d351 (dark-mode brief). DS repo 554802b already pushed+verified.",
+      "agent": "claude"
+    },
+    {
+      "id": "ds-repo-adopt-app-theme",
+      "state": "done",
+      "created": "2026-08-15T20:41:08+0700",
+      "updated": "2026-08-15T21:13:23+0700",
+      "ai": "DONE, COMMITTED 3b72d59 in c:/10.cman-design-system (main), NOT PUSHED - awaiting jakkaritw. Repo 111 tracked files -> 18 (93 deleted, +examples/app-shell.png). Deleted: 7 stale nested dirs (50), brand-ci-legacy.css, typography/fonts.css + FC Minimal fonts, reference/sc-qas-extracted (5), examples/hero.html. Kept: assets/logo + assets/characters only. Rewritten: tokens.css/json/tailwind.preset.js/tokens.pptx.json + README + CLAUDE.md + COMPONENTS/PATTERNS/TYPOGRAPHY + 3 adapters + examples/app-shell.html + tools/check-tokens.py (now dark-theme aware). Agent deviation ACCEPTED: tailwind.preset.js now references var(--cman-*) instead of duplicating hexes (one less drift surface). INDEPENDENTLY RE-VERIFIED by main session (not taken on trust): git tree clean, HEAD 3b72d59; check-tokens.py exit 0 VERDICT PASS (21 colors + 51 font/radius/spacing, plus preset + 7 doc files resolve); grep old hexes -> only #d4ac52 survives and every hit is labelled RETIRED/1.99:1-FAIL; grep deleted-artifact names -> prose-only 'retired' notes, zero live paths; examples/app-shell.html links ONLY ../tokens/tokens.css; screenshot examples/app-shell.png 39,634 bytes exists (NOT read into context - jakkaritw reviews). OPEN CROSS-SESSION CONFLICT: the DS uses handoff dark-accents #3fa06e/#5cbf8c, but the live budget app tokens.css (parallel session, mid-edit) shows #2f7f55/#227d66 - dark-mode accents must be reconciled before the app adopts the DS. NEXT: jakkaritw opens app-shell.png, then approves/denies push to github cmanpowerbi-chememan-com/cman-design-system.",
+      "agent": "claude"
+    },
+    {
+      "id": "theme-shade-compare",
+      "state": "done",
+      "created": "2026-08-15T17:50:24+0700",
+      "updated": "2026-08-15T20:37:26+0700",
+      "ai": "[COMMITTED 11df776 on main, NOT pushed] 7 design artifacts + tracker ledger committed: design/mockups/theme-shell-green-{sea-2E8B57,sea-2E8B57-white-ink,sea-deep-1A4E31,emerald-50C878}.png + theme-shell-green-contrast.py + theme-shell-green-shot.spec.ts + theme-shell-green-handoff-prompt.md. Staged by explicit path only - a PARALLEL session is live-editing frontend/src/styles/{tokens,global}.css, layout.tsx, subform/DetailSubform.tsx and those were deliberately LEFT OUT of this commit (still #1a472a in HEAD). DECISION recorded above stands: shell #2E8B57 + white on-shell ink + gold retired, 4.25 accepted. Nothing pushed, nothing deployed.",
+      "agent": "claude"
+    },
+    {
+      "id": "master-tables-superseded-by-specc",
+      "state": "done",
+      "created": "2026-08-15T16:32:14+0700",
+      "updated": "2026-08-15T20:38:08+0700",
+      "ai": "[EXECUTED 2026-08-15] The recommendation in this task was approved and carried out — see task master-tables-retired for the full outcome: module + workflows + sync script deleted (commit 9f0ad40), SWA deleted from Azure, cfg_master schema dropped from the consolidated DB, DB1 exported to bin/db1-final-backup.json. Only the DB1 Fabric item deletion remains, blocked on jakkaritw (safety classifier refused it)."
+    },
+    {
+      "id": "db1-retire-step4-cutover",
+      "state": "done",
+      "created": "2026-08-15T16:11:30+0700",
+      "updated": "2026-08-15T20:38:07+0700",
+      "ai": "[SUPERSEDED by the retirement, 2026-08-15] The cutover itself completed (code deployed, SWA env repointed to the consolidated DB, cfg_master reconciled). Its pending eye-check is now MOOT: jakkaritw pointed at Spec C V2.0 ('There is no web UI'), the whole master-tables module was retired instead of migrated, and the SWA cman-budget-master-0003 has been DELETED — so there are no 5 screens left to eye-check and the witty-meadow URL is dead. Superseded by task master-tables-retired."
+    },
+    {
+      "id": "push-9f2cd14-main",
+      "state": "done",
+      "created": "2026-08-16T01:18:22+0700",
+      "updated": "2026-08-16T01:18:22+0700",
+      "ai": "PUSHED + VERIFIED LANDED: origin/main == local HEAD == 9f2cd14e6786494c9b1848278c68a811c3c8099d on github cmanpowerbi-chememan-com/budget-management-web (0419ce2..9f2cd14), 0 commits ahead after fetch. jakkaritw approved via AskUserQuestion after being shown that FOUR commits ride along, not just the theme: 9f2cd14 (Sea Green theme, mine), c65d351 + 11df776 (design handoff briefs, parallel session), and 9f0ad40 'chore: retire the master-tables web UI -- Spec C says the masters live on SharePoint' which alone deletes 95 files / 13,026 lines. Total vs the old origin: 1133 insertions, 13026 deletions. Flagged the master-tables retirement explicitly BEFORE pushing because it is another session's decision and far larger than the theme work; jakkaritw chose to push all 4. Staging already runs 9f2cd14 (revision cman-budget-web-stg--0000046, Healthy, traffic 100). Production NOT touched and NOT approved."
+    },
+    {
+      "id": "stg-theme-supplychain",
+      "state": "done",
+      "created": "2026-08-15T13:58:01+0700",
+      "updated": "2026-08-16T01:12:17+0700",
+      "ai": "DEPLOYED TO STAGING + VERIFIED LANDED. commit 9f2cd14 (25 files, +496/-206) -> ACR run cm1b Succeeded, image cmanbudgetacr.azurecr.io/budget-web:9f2cd14 -> az containerapp update cman-budget-web-stg in CMAN-BUDGET-MNGT-WEB-RG -> revision cman-budget-web-stg--0000046 active=true state=Running health=Healthy traffic=100 image confirmed = the 9f2cd14 tag; anonymous GET on the FQDN returns HTTP 200 at login.microsoftonline.com serving the Easy Auth challenge = app UP and still protected. jakkaritw approved the deploy explicitly via AskUserQuestion (staging only, production NOT touched). Built from a clean detached worktree at 9f2cd14 (now removed + pruned) so the main tree's parallel-session leftovers could not enter the image. az acr build exited 1 as always on this box (UnicodeEncodeError on the warn glyph, cp1252 console) -- judged by az acr task list-runs per the recorded recipe, NOT by exit code. SHIPPED: Sea Green #2E8B57 shell with light cards, white on-shell ink, terracotta #b24222 accent text on cards, dark mode deleted entirely, zero webfonts (system stack, no external requests at all), reverse-white Chememan logo at 44px in the nav, --accent-2-text split for 5 badges, --focus-ring token, --status-rejected token, --error-on-shell + weight + plate + role=alert for the approval-bar error state, ADR-0025 amended. Gate before deploy: 06 APPROVE-WITH-SUGGESTIONS, 07 PASS, 08 GAPS, OVERALL SAFE-TO-DEPLOY-STG, then all 4 remaining findings fixed. NOT pushed to GitHub yet -- 9f2cd14 is local only. NOT deployed to production. LEFT UNSTAGED for other sessions: frontend/next-env.d.ts, setup/phase2_harness_dkl.py, the deleted signoff docx, monthly_update/*. OPEN follow-ups (jakkaritw's call, none blocking): promote the contrast auditor to a permanent baselined ratchet asserting new==0 AND worsened==0 with the ratio in the key (it has 2 known blind spots: borders compared only to the element's own background, and only elements with direct text nodes are inspected); triage the ~751 pre-existing violations (--ink-3 #86806f 3.74:1 and the --line-2 hairlines); Thai-glyph eye-check now that IBM Plex Sans Thai is dropped in favour of the OS fallback; the retained original logo PNG still ships in the static export unreferenced.",
+      "agent": "claude"
+    },
+    {
+      "id": "deploy-f2e2ccd-stg",
+      "state": "done",
+      "created": "2026-08-16T03:22:06+0700",
+      "updated": "2026-08-16T03:22:06+0700",
+      "ai": "DEPLOYED TO STAGING + PUSHED + BOTH VERIFIED LANDED. commit f2e2ccda3a6fcfbf6f4a0e66891df73b0a77f641 'fix(approval): let the server decide who may submit' (14 files, +1212/-199) -> ACR run cm1c Succeeded, image budget-web:f2e2ccd -> containerapp update cman-budget-web-stg in CMAN-BUDGET-MNGT-WEB-RG -> revision cman-budget-web-stg--0000047 active=true Running Healthy traffic=100 image confirmed; anonymous GET on the FQDN = HTTP 200 at login.microsoftonline.com serving the Easy Auth challenge (app UP + still protected). git push 9f2cd14..f2e2ccd, origin/main == local HEAD, in sync. jakkaritw approved commit+deploy-stg+push AND 'fix the 2 red tests too' via AskUserQuestion. Built from a clean detached worktree at f2e2ccd (0 dirty files, removed + pruned after). az acr build exited 1 again on the cp1252 warn-glyph UnicodeEncodeError as always -- judged by az acr task list-runs per the recorded recipe. PRE-EXISTING RED TESTS FIXED IN THE SAME COMMIT (jakkaritw said เก็บด้วยเลย): filler-journey 1.2 toHaveText('100')->'100.00' and 1.6 ('5,000')->'5,000.00', stale since committed 9110837 shipped the two-decimal formatter; added a comment noting the editable Pending INPUT still holds the raw '200' so nobody 'fixes' that one too. Full mocked e2e suite now 26/26 (was 24/26). FINAL VERIFY in main session: backend 1019 passed / 48 deselected, next build clean, vitest 638, e2e 26/26. PRODUCTION NOT TOUCHED, NOT APPROVED. Staging now runs BOTH the Sea Green theme (9f2cd14) and this fix (f2e2ccd)."
+    },
+    {
+      "id": "filler-blocked-hint",
+      "state": "done",
+      "created": "2026-08-16T02:25:12+0700",
+      "updated": "2026-08-16T03:07:04+0700",
+      "ai": "Extended SUBMIT_BLOCKED_REASON_TH (frontend/src/approval/model.ts) with the 3 filler-reachable reasons confirmed vs evaluate_submit_eligibility (backend/app/approval.py): year_not_open, past_deadline, invalid_approval_state (department_empty already shared). Fixed not_filler_of_department copy (said admin, but that branch only fires when scope.is_admin=False -- audience was backwards). Dropped ApprovalActionBar.tsx's adminViewEnabled&&!isFillerOfDept gate -> now !showSubmit && !locked (avoids duplicate w/ the pending-lock hint; invalid_approval_state still shows for filler on APPROVED). No CSS/placement change (hint already inside always-rendered status block). TDD: 9 new tests (model.test.ts +4, ApprovalActionBar.test.tsx +5), RED confirmed then GREEN. vitest 629->638 (+9). next build clean. Playwright: admin-journey 5/5, filler-journey 8/10 (new 1.10 passes; 2 pre-existing decimal failures 1.2/1.6 untouched, separate task). checks.sh clean. NOT committed/pushed/deployed per instructions. plan.md updated."
+    },
+    {
+      "id": "submit-btn-server-can-submit",
+      "state": "done",
+      "created": "2026-08-16T01:26:03+0700",
+      "updated": "2026-08-16T03:11:48+0700",
+      "ai": "DONE, VERIFIED, NOT COMMITTED. Server is now the single source of truth for submit eligibility: new SubmitEligibility + evaluate_submit_eligibility in backend/app/approval.py, submit_department delegates to it (_ensure_admin_overwrite_allowed DELETED, _submit_normal_chain's two guards DELETED -- no parallel copy survives), can_submit + submit_blocked_reason on ApprovalStatusState, wired at all 5 endpoints (submit/approve/reject/override-step/status) via _set_can_submit AFTER the mutation so the verdict is never stale. Frontend model.ts canSubmit collapsed to 'canSubmitServer === true' (fail-closed on a missing field), ApprovalActionBar renders a Thai blocked-reason hint instead of hiding silently. GATE: 06 APPROVE-WITH-SUGGESTIONS, 07 PASS, 08 GAPS, OVERALL SAFE-TO-DEPLOY-STG. Gate PROVED authorization behaviour is unchanged door-for-door -- strongest evidence was NOT the new tests but that ~100 pre-existing submit_department tests with finite mocked fetchone/fetchall side_effect lists still pass untouched (any added/dropped/reordered query would raise StopIteration). ADR-0012 post-deadline override semantics preserved exactly, still the LAST door and still the only one bypassing the B2 mid-chain guard. FOLLOW-UP FIXES ALL APPLIED: (perf, the important one) _set_can_submit was resolving a SECOND full resolve_scope on GET /approval/status -- the hottest endpoint and the same one the 2026-08-02 first-load fix took from 10-11s to 2-3s -- now takes an optional scope and reuses the one already in the closure for submit/override-step/status; MEASURED 12-13 -> 9-10 round-trips per request, pinned by a durable test asserting resolve_scope.call_count==1 plus scope identity; (security test gap) 5-endpoint parametrized test now asserts the verdict is computed for the CALLER's own email (call_args.args[3] == caller_email, distinct from a _NOT_THE_CALLER fixture value) -- that property is what makes this auth-safe and nothing pinned it before; (fail-open fixture) e2e fixtures approvalState() default flipped can_submit true -> FALSE so a fail-closed regression can actually be caught, specs needing the button set it explicitly; (dead code) SubmitEligibility.is_post_deadline dropped, submitter_email kept with a comment; bare AssertionError fallthrough -> InvalidApprovalStateError (mapped, 409, was an uncaught 500). _set_is_post_deadline deliberately NOT folded into _set_can_submit -- reusing SubmitEligibility.is_post_deadline would be a silent semantic regression (only true in one narrow admin branch) and breaks 5 tests; do NOT 'simplify' this later. VERIFY (re-run by me in main session): backend 1019 passed / 48 deselected; next build clean; vitest 638 passed / 33 files; playwright admin-journey 5/5 incl new 3.4/3.5, filler-journey 8/10. THE 2 RED FILLER TESTS ARE PRE-EXISTING AND RED ON MAIN, NOT MINE: filler-journey 1.2/1.6 assert toHaveText('100') and ('5,000') against the two-decimal formatter shipped in committed 9110837 -- separate task, jakkaritw asked whether to fix, no answer yet."
+    },
+    {
+      "id": "daily-employee-sync-broken",
+      "state": "done",
+      "created": "2026-08-15T14:18:56+0700",
+      "updated": "2026-08-16T04:38:57+0700",
+      "ai": "CLOSED AS OBSOLETE 2026-08-16 (verified against the live remote, not assumed). The nightly job cannot fail anymore because it no longer exists: 'gh workflow list' on cmanpowerbi-chememan-com/budget-management-web now returns ONLY 3 active workflows (Budget Automations 313737320, CI-Tests 316165193, FX Re-persist Per-Diem 321956432) -- 'Daily Employee Sync' AND 'Master Tables - Test & Deploy' are both gone from the remote, removed by 9f0ad40 which landed on origin/main via push 9f2cd14. setup/sync_employees.py is deleted from the tree. LAST FAILURE EVER = run 31849355519 at 2026-08-14T23:09:41Z; zero runs since (streak of 8 nightly failures 2026-08-07..08-14 ended by deletion, not by repair). Option (a)/(b) from the earlier note are both MOOT: jakkaritw chose 'delete legacy' per Spec C V2.0 -- dbo.mas_employee_data (336 rows, DB1-only) had no reader, and the app's employee source is dbo.employee_master in the consolidated DB (re-apply the 4 exclusion filters in-query, see memory project_mas_employee_filter). Only DB1 loose end left = the orphaned Fabric item 036a3270-82dd-40f4-aea4-6c27f55cff07, still BLOCKED on jakkaritw deleting it in the portal."
+    },
+    {
+      "id": "sit-doc-pass4-wording-trim",
+      "state": "done",
+      "created": "2026-08-17T16:55:06+0700",
+      "updated": "2026-08-17T16:55:06+0700",
+      "ai": "[UPLOADED + VERIFIED 2026-08-17, pass 4 — jakkaritw's own wording] 2 cells, both purple, max_row still 58. TC-017 Expected: dropped the parenthetical '(ระบบไม่มีหน้า inbox แยกสำหรับผู้อนุมัติ)' — he wants the cell to state only what the tester must SEE (badge in-app + the mail subject/link in Outlook), not the design rationale. TC-020 Expected: replaced with his shortened text verbatim — dropped 'ไม่ใช่ \"อนุมัติแล้ว\" เพราะสายอนุมัติมี 3 ขั้น' and trimmed the note to 'ชื่อผู้อนุมัติและเวลาที่กดถูกบันทึกในฐานข้อมูล' (no longer says the screen does not show it). TC-017's Test Steps from pass 3 verified byte-identical and still purple — not re-touched. STYLE SIGNAL for future doc edits: he prefers the Expected cell to carry the observable outcome only, without explanatory why-clauses or negative comparisons.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-doc-pass3-tc014-020",
+      "state": "done",
+      "created": "2026-08-17T16:46:43+0700",
+      "updated": "2026-08-17T16:46:43+0700",
+      "ai": "[UPLOADED + VERIFIED 2026-08-17, pass 3] LIVE on SharePoint (max_row still 58, 7 cells written, all purple 7030A0): TC-014 Steps+Expected (no Save button — autosave on blur, wait for 'กำลังบันทึก…' to clear, status stays แบบร่าง), TC-015 Expected (real chip 'รออนุมัติ · ขั้น 1 (ผู้บังคับบัญชาสายตรง)' replacing the nonexistent 'Waiting for Approval' string + email fires immediately), TC-017 Steps+Expected (the word 'inbox' now explicitly means the OUTLOOK mailbox — the app has no approver inbox, only the รออนุมัติ badge on the dept picker; 'และอีเมลถ้ามี' removed because the mail is unconditional), TC-018 Expected (both sides must show the identical chip string), TC-020 Expected (THE HIGH ONE: approver1's approve moves to 'รออนุมัติ · ขั้น 2 (นิภาพร ทองกิ่ง (ฝ่ายงบประมาณ))' NOT 'อนุมัติแล้ว' — 3-step chain; the who/when-recorded clause dropped from the UI check because no screen renders actioned_at). Earlier passes' purple + Laddawan's TC-040/041/042 verified untouched. Post-upload re-download verified. My cell arithmetic said 9, the agent recounted and reported the true 7 — worth noting the agent correctly pushed back. RUNNING TOTAL of doc fixes now live: TC-002,003,005,006,007,009,010,014,015,017,018,020 fixed + TC-055 added. NOT ORDERED: TC-011/012/021 (wording could be tightened but the system passes as written).",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-doc-pass2-tc005-009-010",
+      "state": "done",
+      "created": "2026-08-17T16:34:16+0700",
+      "updated": "2026-08-17T16:34:16+0700",
+      "ai": "[UPLOADED + VERIFIED 2026-08-17, pass 2 of the SIT doc fixes] LIVE on SharePoint (max_row stays 58, no new row): TC-005 rewritten for the 20-minute SIT session (dev shortens the cookie, tester must log in FRESH after the change because the lifetime is stamped at login and does not slide, type a value without blurring, wait 20 min, blur -> หมดเวลาการเข้าใช้งาน dialog, typed value still on screen, unsaved value NOT persisted, revert after) replacing the fictional '10 mins'; TC-009 re-pointed at the row TOTAL column + SAP/Approved layers and now states that the editable cell showing raw digits is BY DESIGN; TC-010 re-pointed at '+ เพิ่ม Transaction' (กรุณาเลือก Cost Center / GL Code) with an explicit note that monthly cells are NOT required and blank = 0. 12 cells written, all purple 7030A0, other font attrs preserved; pass-1 purple cells and Laddawan's TC-040/041/042 verified untouched (still theme color, byte-identical). Post-upload re-download verified. Script: setup/fill_sit_test_case_gaps.py EXTENDED for multi-pass (EDITS dict + NEW_CASE_FIELDS=None guard) rather than forked into a second script; backup requirement_spec/4_sit/*_before_tc005_tc009_tc010_20260817_163339.xlsx. NOTE for future passes: the agent cannot run --upload (Claude Code permission classifier blocks it) — the coordinator session runs File    : Budget_SIT_Test_Cases_10.08.2026.xlsx\r\nModified: 2026-08-17T09:33:43Z by SharePoint App\r\nBackup  : C:\\04.budget_management_web\\requirement_spec\\4_sit\\Budget_SIT_Test_Cases_10.08.2026_before_tc005_tc009_tc010_20260817_163412.xlsx\r\n[Edit] TC-005 (row 8): set ['Test Scenario', 'Preconditions / เงื่อนไขก่อนทดสอบ', 'Test Steps', 'Test Data', 'Expected Result'] (font -> purple).\r\n[Edit] TC-009 (row 12): set ['Test Steps', 'Expected Result'] (font -> purple).\r\n[Edit] TC-010 (row 13): set ['Test Scenario', 'Preconditions / เงื่อนไขก่อนทดสอบ', 'Test Steps', 'Test Data', 'Expected Result'] (font -> purple).\r\n[Edit] no new row this pass — max_row stays unchanged.\r\n[Verify] purple font present on exactly 12 written cells (name/size/bold/italic/underline/strike/vertAlign preserved on each); every other cell's value AND font are byte-identical to the fresh download (an earlier pass's own purple cells, and Laddawan's TC-040/041/042, included).\r\n[Verify] TC-005, TC-009, TC-010 all field edits confirmed present; Test Steps numbering matches the '1. '/'2. ' sheet convention where applicable.\r\nLocal   : C:\\04.budget_management_web\\requirement_spec\\4_sit\\Budget_SIT_Test_Cases_10.08.2026.xlsx\r\nUploaded: https://chememan.sharepoint.com/teams/CMANDigitalTechnology/_layouts/15/Doc.aspx?sourcedoc=%7B18FAC9B7-41FF-4231-8FDF-077783EAB3A8%7D&file=Budget_SIT_Test_Cases_10.08.2026.xlsx&action=default&mobileredirect=true\r\n[Post-upload verify] TC-005, TC-009, TC-010 edits + purple font confirmed. Final row count: max_row=58 (unchanged, no new row this pass).. STILL OPEN: TC-001 + TC-004 (waits on the logout-button feature, recorded not built), TC-040 cc-to-filler error + TC-041=TC-042 duplication (Laddawan's rows, needs her agreement), 24 never-tested-feature gaps unadded.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-workbook-full-coverage-review",
+      "state": "done",
+      "created": "2026-08-17T14:53:19+0700",
+      "updated": "2026-08-17T16:19:25+0700",
+      "ai": "[UPLOADED + VERIFIED 2026-08-17] 5 doc edits are LIVE on the SharePoint SIT workbook (max_row 57->58): TC-002 (Preconditions/Steps/Expected — no approver inbox exists, read-only view + รออนุมัติ badge, precondition now requires a submitted dept waiting at her step), TC-003 (Preconditions/Expected — InPrivate mandatory, error text is Microsoft's not the app's), TC-006 (Scenario/TestData/Expected — 'Data Analytic'->'Data & Analytic', 12-month cells), TC-007 (Steps/Expected — no Save button, autosave on blur, real chip 'แบบร่าง (ยังไม่ส่งอนุมัติ)'), and NEW TC-055 at row 58 (turn mail reaches approver2 then approver3 in order, never early, never skipping). ALL 20 written cells carry purple font 7030A0 per jakkaritw so he and Laddawan can see the AI-edited cells at a glance; every other cell's value AND font byte-identical incl. Laddawan's TC-040/041/042; autofilter + 3 dropdown ranges + Summary formulas extended 7->8. Post-upload re-download verified all of it. Script setup/fill_sit_test_case_gaps.py; backup requirement_spec/4_sit/*_before_tc002_003_006_007_plus_new_20260817_161855.xlsx. NOT DONE by explicit instruction: TC-009/010 skipped by jakkaritw; TC-001/004/005 not authorized in this pass (004 waits on the logout-button feature, 005 waits on the 20-min session doc pass queued next); TC-040/041 remain Laddawan's (the cc-to-filler error in TC-040 and the TC-041=TC-042 duplication are STILL UNFIXED and need her agreement); the 24 never-tested-feature gaps from the sweep are recorded but no cases were added for them. gotcha learned: openpyxl cell.font is a StyleProxy — comparing two proxies is always False, unwrap before diffing.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-reminder-interval-configurable",
+      "state": "done",
+      "created": "2026-08-17T12:44:51+0700",
+      "updated": "2026-08-17T13:15:38+0700",
+      "ai": "[CROSS-SESSION UPDATE da84db7-deploy] DEPLOYED TO STAGING 2026-08-17 (approved by jakkaritw): image budget-web:da84db7 (ACR run cm1e Succeeded), stg rev cman-budget-web-stg--0000050 active/Healthy/Running/100%. verify-deploy-landed done LIVE via ARM: image da84db7, SIT_IMPERSONATE 2-target intact, LABEL still absent, REMINDER_INTERVAL_MINUTES deliberately NOT set (will be set to 2 only during the TC-041 run then removed). prd re-confirmed untouched (77308d7 / rev 0000024 / production shape). Smoke: all endpoints 401 = Easy Auth on, app serving. Worktree removed. Original done-entry stands; task now fully closed incl. deploy.",
+      "agent": "claude"
+    },
+    {
+      "id": "push-1fb5d05",
+      "state": "done",
+      "created": "2026-08-17T11:24:33+0700",
+      "updated": "2026-08-17T11:24:33+0700",
+      "ai": "PUSHED + VERIFIED LANDED: origin/main == local HEAD == 1fb5d05e5e18ebc78ae3c7d041c614d4e0815a43 on github cmanpowerbi-chememan-com/budget-management-web (f2e2ccd..1fb5d05), 0 ahead after fetch, was not behind. Single commit 'test(e2e): ratchet contrast so a token change cannot regress silently', 5 files +2238/-29: NEW frontend/e2e/contrast.spec.ts (824 lines) + frontend/e2e/contrast-baseline.json (193 accepted pre-existing entries), plus .claude/plan.md and the two tracker files. jakkaritw approved the push explicitly. No source under frontend/src touched. Verified by me before pushing: full playwright suite 35/35 in 1.7m. NOT deployed -- this is test-only, nothing to ship; staging still runs f2e2ccd and is still blocked by the Fabric capacity burndown (separate task fabric-sp-read-item-denied). LEFT UNSTAGED on purpose (other sessions' work): frontend/next-env.d.ts, setup/phase2_harness_dkl.py, the deleted signoff docx, monthly_update/*, .next/. STILL UNCOMMITTED + TEMP: frontend/e2e/_demo-browser.spec.ts -- the headed mock-data demo browser for jakkaritw; delete it once he stops needing it."
+    },
+    {
+      "id": "sit-mail-prd-lookalike",
+      "state": "done",
+      "created": "2026-08-17T11:15:59+0700",
+      "updated": "2026-08-17T12:33:54+0700",
+      "ai": "[LEFTOVER 1 CLOSED 2026-08-17] jakkaritw exercised the picker on stg rev 0000049 and pasted the POST response: {\"impersonating\":\"nipapornt@chememan.com\"} -> page renders, same-origin POST accepted (the app_base_url fix works against the real Container Apps https-edge topology, not just in tests), sit_as cookie set, he is now acting as Nipaporn = step-2 approver. Remaining leftovers unchanged: warn Nipaporn/Waraporn about the test window; SIT workbook 36-42 edits still unapproved. UX nit noted, NOT changed: POST returns raw JSON so the browser sits on an API response and the user must navigate back to / manually; a 303 back to the picker would be nicer but needs another code+gate+deploy cycle.",
+      "agent": "claude"
+    },
+    {
+      "id": "sit-tc036-042-expected-review",
+      "state": "done",
+      "created": "2026-08-17T11:07:34+0700",
+      "updated": "2026-08-17T12:52:49+0700",
+      "ai": "[WORKBOOK EDIT APPROVED + DISPATCHED 2026-08-17] jakkaritw approved writing all 3 pending fixes to the SharePoint SIT workbook in one pass (chose 'รวมทั้ง 3 จุด'): (1) TC-040 scenario reworded to queue-aging ('งานค้างในคิวครบตามรอบ (ค่าจริง = 7 วัน)') + its dangling 'สำเนา (cc) ?' answered = no cc, audit copy to CMAN_PowerBI only; (2) TC-041 filled as the REPEAT case per his instruction: SIT runs with the cadence set to 2 MINUTES, run the job 3 times, approver must receive exactly 3 mails, 'ค้างมา 0 วัน' declared acceptable, revert to 7d after; (3) NEW row 55/TC-055 per his wording: after step-1 approve, approver2 (Nipaporn) gets the 'รอการอนุมัติ' mail, after step-2 approve approver3 (Waraporn) gets it, in order, never early, never skipping. Auto-submit-path case and deadline-window case NOT ordered — only these 3. Dispatched to a subagent reusing setup/update_sit_test_cases.py helpers (backup to requirement_spec/4_sit/, local verify rows 1-39+42-54 untouched, upload with lastModifiedDateTime guard, re-download verify). Current live file: rows through TC-054, lastModified 2026-08-17T03:49:39Z.",
+      "agent": "claude"
+    },
+    {
+      "id": "contrast-ratchet-permanent",
+      "state": "done",
+      "created": "2026-08-17T08:29:25+0700",
+      "updated": "2026-08-17T09:28:02+0700",
+      "ai": "Promoted the throwaway contrast auditor into frontend/e2e/contrast.spec.ts (permanent, wired into default 'npx playwright test' run) + frontend/e2e/contrast-baseline.json (193 accepted pre-existing violations, ratio-included keys). Ratchet asserts new==0 AND worsened==0 (0.05 tolerance), never total==0. 4 required fixes applied: (1) border checked against BOTH own-bg and behind-bg, flag only if both fail; (2) text check widened to leaf-based (children.length===0) in addition to direct-text-node, still per-element so nested spans (.v3-gl-pill .n/.t) get their own ancestor-walked bg; (3) new focus pass — Locator.focus() + a page.keyboard.press('Shift') nudge is REQUIRED (empirically found: :focus-visible tracks last input modality page-wide, not just the current focus() call, so a nudge-less focus() still read false/outline:none after any prior click in the same test — undocumented in the original task brief, discovered + fixed here); (4) baseline keyed kind+selector+sample with ratio stored separately for worsened-detection. Also fixed a real flake: admin-mode-toggle triggers an async refetch (admin_view_enabled=true) that the checkbox's own checked-state didn't wait for, causing 07a's violation count to vary 28/79/81 across identical runs -- fixed via expect.poll on the captured query + networkidle, now deterministic (193 across 3 repeat runs). Mutation-tested all 3 required cases then fully reverted (git diff --stat clean on src/): (a) lightened --accent-text (task said darken but --surface is near-white so darkening only INCREASES contrast -- used lighten instead, noted in report) -> 38 NEW + 1 WORSENED, caught on test 01; (b) lightened --ink-3 slightly -> 14 WORSENED (3.74->3.00 etc), caught on test 01; (c) deleted .approval-bar .btn-submit/.btn-approve/>.btn-reject focus-ring override -> 1 NEW focus violation (button.btn-approve, 1.34:1), caught on test 05. Full suite 35/35 (26 journeys + 9 contrast) in 2.3min; contrast.spec.ts alone ~1.0-1.3min. next build clean, vitest 638/638 untouched. oxlint clean. No app source (frontend/src/**) changed -- all mutations reverted. No real NEW bugs found in current tree (baseline is 100% pre-existing violations, same class as the ~751 previously documented: --ink-3 body text + --line/--line-2 hairlines); nothing flagged as a new follow-up task.",
       "agent": "claude"
     }
   ]
