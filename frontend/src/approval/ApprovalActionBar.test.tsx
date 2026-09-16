@@ -369,6 +369,22 @@ describe('ApprovalActionBar', () => {
       await waitFor(() => expect(screen.getByTestId('approval-submit-btn')).toBeInTheDocument())
     })
 
+    // Gate finding (R1, 2026-09-16): once can_submit is already true, the
+    // server's answer cannot change further this session (department_empty
+    // is monotonic -- saving only ever adds rows), so re-asking on every
+    // save was measured at ~a dozen DB round-trips per call, wasted.
+    it('does not refetch when can_submit is already true -- the answer cannot change further (R1)', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
+      await screen.findByTestId('approval-submit-btn')
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} dataVersion={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+    })
+
     it('does not refetch a second time on mount (dataVersion starts unchanged) -- exactly one GET per mount', async () => {
       vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT' }))
       render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
@@ -376,17 +392,23 @@ describe('ApprovalActionBar', () => {
       expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
     })
 
+    // can_submit: false (an approver's own view, not the filler) so R1's skip
+    // does not apply here -- this pins the ORIGINAL guarantee (a genuine
+    // in-place refetch must not clear actionMessage) on a fixture that still
+    // reaches a real second fetchApprovalStatus call post-R1.
     it('a dataVersion refetch does not clear an action message the user is reading', async () => {
-      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
-      vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(502, 'Submit failed', 'เซิร์ฟเวอร์ขัดข้อง'))
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+        state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true, can_submit: false }),
+      )
+      vi.mocked(approvalApi.approveDepartment).mockRejectedValue(new ApiError(502, 'Approve failed', 'เซิร์ฟเวอร์ขัดข้อง'))
       vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
-      const submitBtn = await screen.findByTestId('approval-submit-btn')
-      fireEvent.click(submitBtn)
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} dataVersion={0} />)
+      const approveBtn = await screen.findByTestId('approval-approve-btn')
+      fireEvent.click(approveBtn)
       await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
 
-      rerender(<ApprovalActionBar {...BASE_PROPS} dataVersion={1} />)
+      rerender(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} dataVersion={1} />)
 
       // The message must survive a dataVersion-triggered refetch -- only a
       // department/fiscalYear change (the OTHER effect) is allowed to clear it.
@@ -394,9 +416,34 @@ describe('ApprovalActionBar', () => {
       expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง')
     })
 
+    // R2 (gate finding, 2026-09-16): a dataVersion-triggered refetch is a
+    // background check, not a user-initiated load -- a transient failure
+    // (502/offline) must leave the bar showing whatever it already had, not
+    // blow it away into the full load-error panel.
+    it('a dataVersion refetch that fails leaves the previous status on screen, not the load-error panel (R2)', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(state({ status: 'DRAFT', can_submit: false, submit_blocked_reason: 'department_empty' }))
+        .mockRejectedValueOnce(new ApiError(502, 'Server error'))
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} dataVersion={0} />)
+      await screen.findByTestId('approval-submit-blocked-hint')
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} dataVersion={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      // Still the PREVIOUS status (blocked hint + chip) -- not the full-bar
+      // load-error panel a plain load() failure would otherwise show.
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toBeInTheDocument()
+      expect(screen.getByTestId('approval-status-chip')).toBeInTheDocument()
+      expect(screen.queryByText('Server error')).not.toBeInTheDocument()
+    })
+
+    // can_submit: false (default would be true via the state() factory) so
+    // R1's skip does not apply -- a genuine refetch must still not reset an
+    // in-progress reject panel.
     it('a dataVersion refetch does not reset an in-progress reject panel', async () => {
       vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
-        state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true }),
+        state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true, can_submit: false }),
       )
       const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} dataVersion={0} />)
       fireEvent.click(await screen.findByTestId('approval-reject-btn'))
@@ -423,6 +470,23 @@ describe('ApprovalActionBar', () => {
 
       await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Finance', 2027))
       expect(screen.queryByTestId('approval-action-message')).not.toBeInTheDocument()
+    })
+
+    // R2 counterpart: the department/fiscalYear effect always calls plain
+    // load() (no keepStatusOnError) -- a failure there must still show the
+    // full load-error panel exactly as before, unaffected by R2.
+    it('a department-change load failure still shows the load-error panel (existing behavior, unaffected by R2)', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(state({ status: 'DRAFT', can_submit: true }))
+        .mockRejectedValueOnce(new ApiError(502, 'Server error'))
+
+      const { rerender } = render(<ApprovalActionBar {...BASE_PROPS} department="Accounting" dataVersion={0} />)
+      await screen.findByTestId('approval-submit-btn')
+
+      rerender(<ApprovalActionBar {...BASE_PROPS} department="Finance" dataVersion={0} />)
+
+      await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument())
+      expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
     })
   })
 })

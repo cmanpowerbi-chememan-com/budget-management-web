@@ -61,15 +61,26 @@ export function ApprovalActionBar({
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
 
-  async function load() {
+  async function load(options: { keepStatusOnError?: boolean } = {}) {
     if (!department) return
     setLoading(true)
-    setLoadError(null)
+    if (!options.keepStatusOnError) setLoadError(null)
     try {
       const state = await fetchApprovalStatus(department, fiscalYear)
       setStatus(state)
     } catch (err) {
-      setLoadError(err instanceof ApiError ? err.message : 'Could not load the approval status')
+      // R2 (gate finding, 2026-09-16): a dataVersion-triggered refetch is a
+      // background "did anything change" check, not a user-initiated load --
+      // a transient failure (502, offline) must leave the currently-shown
+      // status/loadError exactly as they are, so an in-progress action
+      // message or reject panel is not blown away by an unrelated network
+      // blip. Only the department/fiscalYear effect's plain load() (no
+      // options) still surfaces the full load-error panel on failure.
+      if (options.keepStatusOnError) {
+        console.error('approval status refetch failed, keeping the previous status on screen', err)
+      } else {
+        setLoadError(err instanceof ApiError ? err.message : 'Could not load the approval status')
+      }
     } finally {
       setLoading(false)
     }
@@ -101,7 +112,18 @@ export function ApprovalActionBar({
       skippedFirstDataVersionRun.current = false
       return
     }
-    if (department) load()
+    // R1 (gate finding, 2026-09-16): a plain row save can only ever flip
+    // can_submit false->true -- the server's department_empty predicate is
+    // monotonic within a session (saving never removes the department's
+    // rows), so once Submit is already showing, re-asking cannot change the
+    // answer. Skipping here matters: measured at ~a dozen DB round-trips per
+    // GET /approval/status server-side, so 20 rows x 12 months of edits was
+    // costing 240 wasted calls. Deleting the department's LAST row could
+    // flip can_submit back to false, but that gap is accepted as
+    // out-of-scope (documented) -- the server still refuses a stale Submit
+    // with a clean 400, it just would not auto-hide the button on its own.
+    if (status?.can_submit === true) return
+    if (department) load({ keepStatusOnError: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataVersion])
 
@@ -189,7 +211,7 @@ export function ApprovalActionBar({
     return (
       <div className="approval-bar" data-testid="approval-bar">
         <span className="act-status act-status-error" role="alert">{loadError}</span>
-        <button type="button" className="btn" onClick={load}>
+        <button type="button" className="btn" onClick={() => load()}>
           Retry
         </button>
       </div>
