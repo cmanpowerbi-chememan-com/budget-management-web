@@ -1822,7 +1822,12 @@ th.total-year-col {
   padding: 6px 10px !important;
 }
 .row-message-error {
-  color: var(--accent-text);
+  /* 2026-09-16 (jakkaritw): validation/error text must read as RED — the
+     Trip Manager footer literally says "ดูข้อความสีแดงในการ์ดที่มีปัญหา", but this
+     rule painted it in the navy accent. --status-rejected (tokens.css) is the
+     app's one red token, already used by .status-chip-rejected / .btn-danger. */
+  color: var(--status-rejected);
+  font-weight: 600;
 }
 .row-message-saving {
   color: var(--ink-3);
