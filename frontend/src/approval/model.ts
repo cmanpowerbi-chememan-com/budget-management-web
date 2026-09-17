@@ -9,12 +9,6 @@ import type { ApprovalStatusState, DepartmentRow } from '../api/types'
 // value, since the two sides do not share a build step.
 export const REJECT_REASON_MAX_LEN = 100
 
-// Position 2/3 are FIXED constants (ADR-0006: always Nipaporn/Waraporn) —
-// safe to name here, this is public information already in
-// docs/reference/approval-workflow.md, not sensitive employee data.
-const NIPAPORN_EMPCODE = '101032'
-const WARAPORN_EMPCODE = '100427'
-
 // Issue #13 (2026-09-17): mirrors `app.approval.LOCKED_APPROVAL_STATUSES`
 // exactly (PENDING_* + APPROVED) — was `PENDING_STATUSES` (PENDING_* only,
 // used by the now-removed `isPendingLocked`), which drifted from the
@@ -28,36 +22,31 @@ const BASE_STATUS_LABEL: Record<string, string> = {
   REJECTED: 'Rejected',
 }
 
-/** Friendly name for the CURRENT approver step. Positions 2/3 always
- * resolve to the two fixed budget-dept approvers (their empcode never
- * varies); position 1 varies per submission and the state only ever
- * carries an empcode for it, so it falls back to a role label rather than
- * showing a raw employee code to the user.
- *
- * The parenthesised job title is the ENGLISH title from the HR master
- * (`dbo.employee_master.position_name_en`, role part only — the trailing
- * "- Budgeting and Management Accounting" is dropped, it is redundant in a
- * budget-approval chip). Verified against the live master 2026-08-24:
- * 101032 = "Senior Associate - Budgeting and Management Accounting",
- * 100427 = "Assistant Department Head - Budgeting and Management Accounting".
- * These replace an earlier hand-written Thai gloss ("ผู้จัดการฝ่ายงบประมาณ")
- * that overstated Waraporn's grade. Titles are still hardcoded, not read from
- * the DB: `dbo.v_employee_budget_01` exposes only `job_level_name_en`, so a
- * DB-driven label would need that view widened first. */
-export function approverLabel(position: 1 | 2 | 3 | null, approverEmpcode: string | null): string {
-  if (position === 2 || approverEmpcode === NIPAPORN_EMPCODE) return 'นิภาพร ทองกิ่ง (Senior Associate)'
-  if (position === 3 || approverEmpcode === WARAPORN_EMPCODE) return 'วราพร ติรสิทธิ์ (Assistant Department Head)'
-  if (position === 1) return 'Direct manager'
-  return ''
+/** The current approver's name, exactly as the server sent it (jakkaritw,
+ * 2026-09-17: "Pending on <English full name>" instead of a role label or a
+ * typed-in name/title) — the page reads only what the server knows about
+ * WHO is holding the budget right now, never a client-side guess, so an HR
+ * change never needs a code change here. `null` outside a PENDING step, or
+ * when the server could not resolve a name for this empcode (its own
+ * fallback: employee_master's English name, then the Thai view). */
+export function pendingApproverDisplayName(
+  state: Pick<ApprovalStatusState, 'current_position' | 'current_approver_name'>,
+): string | null {
+  return state.current_position ? state.current_approver_name : null
 }
 
-/** The status chip's full label, e.g. "Pending · Step 2 (นิภาพร ทองกิ่ง (Senior Associate))". */
-export function statusChipLabel(state: Pick<ApprovalStatusState, 'status' | 'current_position' | 'current_approver_empcode'>): string {
+/** The status chip's full label, e.g. "Pending on Nipaporn Tongking". Falls
+ * back to the step number (`Pending · Step 2`) when the server could not
+ * resolve a name — the chip must never show an empty name. */
+export function statusChipLabel(
+  state: Pick<ApprovalStatusState, 'status' | 'current_position' | 'current_approver_name'>,
+): string {
   if (state.status in BASE_STATUS_LABEL && state.current_position === null) {
     return BASE_STATUS_LABEL[state.status]
   }
   if (state.current_position) {
-    return `Pending · Step ${state.current_position} (${approverLabel(state.current_position, state.current_approver_empcode)})`
+    const name = pendingApproverDisplayName(state)
+    return name ? `Pending on ${name}` : `Pending · Step ${state.current_position}`
   }
   return BASE_STATUS_LABEL[state.status] ?? state.status
 }

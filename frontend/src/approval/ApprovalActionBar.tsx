@@ -4,7 +4,6 @@ import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
 import { confirmDialog } from '../platform/confirm'
 import {
-  approverLabel,
   buildOverrideConfirmText,
   buildSubmitConfirmText,
   canSubmit,
@@ -185,8 +184,9 @@ export function ApprovalActionBar({
     // Admin step-override (ADR-0027): SAME Approve button, but the confirm
     // dialog must NAME the approver being skipped — it is the only guard
     // against an accidental override (no stale-gate, no reason field).
-    const skippedName =
-      status.current_approver_name ?? approverLabel(status.current_position, status.current_approver_empcode)
+    // Falls back to a step-number wording (jakkaritw, 2026-09-17 — was a
+    // typed-in name/title) when the server could not resolve a name.
+    const skippedName = status.current_approver_name ?? `Step ${status.current_position} approver`
     if (!(await confirmDialog(buildOverrideConfirmText(department, fiscalYear, skippedName)))) return
     runAction(() => overrideStep(department, fiscalYear), 'Override approve failed', describeOverrideError)
   }

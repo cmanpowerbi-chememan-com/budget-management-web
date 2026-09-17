@@ -310,11 +310,18 @@ class ApprovalStatusState(BaseModel):
     updated_at: datetime | None = None
     current_position: int | None = None  # 1/2/3 while PENDING_*, else None
     current_approver_empcode: str | None = None  # who may act right now, if PENDING_*
-    # Thai display name of the current approver, resolved server-side from
-    # dbo.v_employee_budget_01 (the same source the mail cc lookup reads) —
-    # the admin step-override confirm dialog must NAME who is being skipped
-    # (ADR-0027) without a second client fetch. Populated by the router's
-    # GET /approval/status only (never by this module's state builders).
+    # English display name of the current approver (jakkaritw, 2026-09-17 —
+    # was the Thai name; see `lookup_employee_name`'s docstring for the
+    # employee_master/v_employee_budget_01 fallback rule). Names who is
+    # holding the budget right now on the status chip, and NAMES who is
+    # being skipped in the admin step-override confirm dialog (ADR-0027).
+    # Populated by the router's `_set_current_approver_name` helper on EVERY
+    # endpoint that returns this shape (GET /status + all four actions), so
+    # the chip is right the moment an action completes, not only after a
+    # refetch — never by this module's state builders (see
+    # `_notify_after_transition`'s docstring for why: an unconditional extra
+    # DB lookup in a pure state-machine function would break test_approval
+    # .py's finite mocked side_effect sequences).
     current_approver_name: str | None = None
     can_act: bool = False  # True when the caller's own empcode IS current_approver_empcode
     # A12: set by the router (never by this module) ONLY when the post-commit
@@ -411,21 +418,39 @@ def resolve_submitter(conn: pyodbc.Connection, email: str) -> tuple[str | None, 
 
 
 def lookup_employee_name(conn: pyodbc.Connection, empcode: str | None) -> str | None:
-    """Thai display name for an empcode, from the same
-    `dbo.v_employee_budget_01` the mail cc resolution
-    (`app.notifications.lookup_email_by_empcode`) reads — lets the status
-    payload NAME the current approver (the admin step-override confirm
-    dialog must name who is being skipped, ADR-0027) without a second
-    client fetch. None when the empcode is blank or unknown."""
+    """English display name for an empcode, from `dbo.employee_master`
+    (jakkaritw, 2026-09-17 — the status chip must name the current approver
+    in English, not the Thai name the old `dbo.v_employee_budget_01` query
+    returned). A person may have several HR rows (an acting position on top
+    of a primary one) — the active record wins over inactive, and the
+    Primary position wins over Acting, so the name never flickers between
+    rows (verified live: 670 rows / 627 distinct codes, zero blank English
+    names). Falls back to `dbo.v_employee_budget_01`'s Thai name (the same
+    source the mail cc lookup reads) when the master has no row or a blank
+    name for this empcode — None only when NEITHER source has one.
+
+    Used by the router's `_set_current_approver_name` (every response that
+    carries a pending status — GET /status and the four actions), and
+    directly by `admin_override_step` above to NAME the approver being
+    skipped in its refusal message (ADR-0027)."""
     if not empcode:
         return None
     cursor = conn.cursor()
     try:
+        cursor.execute(
+            "SELECT TOP 1 full_name_en FROM dbo.employee_master WHERE employee_code = ? "
+            "ORDER BY CASE WHEN record_status = 'active' THEN 0 ELSE 1 END, "
+            "CASE WHEN position_status = 'Primary' THEN 0 ELSE 1 END",
+            empcode,
+        )
+        row = cursor.fetchone()
+        if row and row[0]:
+            return row[0]
         cursor.execute("SELECT full_name_th FROM dbo.v_employee_budget_01 WHERE employee_code = ?", empcode)
         row = cursor.fetchone()
+        return row[0] if row else None
     finally:
         cursor.close()
-    return row[0] if row else None
 
 
 def _department_cost_centers(conn: pyodbc.Connection, department: str) -> set[str]:

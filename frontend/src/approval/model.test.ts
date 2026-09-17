@@ -1,60 +1,51 @@
 import { describe, expect, it } from 'vitest'
 import type { DepartmentRow } from '../api/types'
 import {
-  approverLabel,
   buildSubmitConfirmText,
   canSubmit,
   costCentersOfDepartment,
   isEditLocked,
   isFillerOfDepartment,
+  pendingApproverDisplayName,
   statusChipLabel,
   submitBlockedReasonLabel,
 } from './model'
 
-describe('approverLabel', () => {
-  it('names Nipaporn at position 2', () => {
-    expect(approverLabel(2, '101032')).toContain('นิภาพร')
+describe('pendingApproverDisplayName', () => {
+  it('returns the server name while pending', () => {
+    expect(
+      pendingApproverDisplayName({ current_position: 2, current_approver_name: 'Nipaporn Tongking' }),
+    ).toBe('Nipaporn Tongking')
   })
 
-  it('names Waraporn at position 3', () => {
-    expect(approverLabel(3, '100427')).toContain('วราพร')
-  })
-
-  // The job title must stay the ENGLISH master title (position_name_en, role
-  // part) — an invented Thai gloss overstated Waraporn's grade once already.
-  it('titles both fixed approvers from the HR master, in English', () => {
-    expect(approverLabel(2, '101032')).toBe('นิภาพร ทองกิ่ง (Senior Associate)')
-    expect(approverLabel(3, '100427')).toBe('วราพร ติรสิทธิ์ (Assistant Department Head)')
-  })
-
-  it('falls back to a generic role label at position 1 (no name available)', () => {
-    const label = approverLabel(1, '200')
-    expect(label).not.toContain('200')
-    expect(label).toContain('Direct manager')
-  })
-
-  it('names Nipaporn even at position 1 when approver1 collapsed onto her empcode (invalid-approver1 fallback)', () => {
-    expect(approverLabel(1, '101032')).toContain('นิภาพร')
+  it('returns null when not on a pending step, even if a name is present', () => {
+    expect(pendingApproverDisplayName({ current_position: null, current_approver_name: 'Nipaporn Tongking' })).toBeNull()
   })
 })
 
 describe('statusChipLabel', () => {
   it('labels DRAFT plainly', () => {
-    expect(statusChipLabel({ status: 'DRAFT', current_position: null, current_approver_empcode: null })).toContain('Draft')
+    expect(statusChipLabel({ status: 'DRAFT', current_position: null, current_approver_name: null })).toContain('Draft')
   })
 
-  it('labels a PENDING step with the position number and approver name', () => {
-    const label = statusChipLabel({ status: 'PENDING_APPROVER2', current_position: 2, current_approver_empcode: '101032' })
-    expect(label).toContain('Step 2')
-    expect(label).toContain('นิภาพร')
+  // jakkaritw, 2026-09-17: the chip names the real person, in English, not a
+  // role/typed-in title -- e.g. "Pending on Nipaporn Tongking".
+  it('names the current approver in English when pending with a name', () => {
+    const label = statusChipLabel({ status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: 'Nipaporn Tongking' })
+    expect(label).toBe('Pending on Nipaporn Tongking')
+  })
+
+  it('falls back to the step number when pending without a name', () => {
+    const label = statusChipLabel({ status: 'PENDING_APPROVER1', current_position: 1, current_approver_name: null })
+    expect(label).toBe('Pending · Step 1')
   })
 
   it('labels APPROVED plainly', () => {
-    expect(statusChipLabel({ status: 'APPROVED', current_position: null, current_approver_empcode: null })).toContain('Approved')
+    expect(statusChipLabel({ status: 'APPROVED', current_position: null, current_approver_name: null })).toContain('Approved')
   })
 
   it('labels REJECTED plainly', () => {
-    expect(statusChipLabel({ status: 'REJECTED', current_position: null, current_approver_empcode: null })).toContain('Rejected')
+    expect(statusChipLabel({ status: 'REJECTED', current_position: null, current_approver_name: null })).toContain('Rejected')
   })
 })
 

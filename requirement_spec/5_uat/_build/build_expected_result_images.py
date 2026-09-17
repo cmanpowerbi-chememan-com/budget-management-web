@@ -459,7 +459,7 @@ SPECS = {
         "legend": [
             "กล่องยืนยันภาษาอังกฤษ บรรทัดแรก 'Submit the budget of department \"Data & Analytic\" for FY 2027?' บรรทัดสอง '<แถว> rows in <CC> cost center(s) — this submits the WHOLE department. You cannot edit it until it is rejected.'",
             "จำนวนแถว/CC ในกล่องตรงกับที่จดไว้ · ปีในกล่อง = FY 2027 ขณะที่จอ Year 2026 (ถูกต้องตามออกแบบ)",
-            "ยืนยันแล้ว chip สถานะเปลี่ยนเป็น “Pending · Step 1 (Direct manager)” (ภาษาอังกฤษ ไม่ใช่ไทย)",
+            "ยืนยันแล้ว chip สถานะเปลี่ยนเป็น “Pending on Laddawan Kearnoi” (ภาษาอังกฤษ ไม่ใช่ไทย)",
         ],
     },
     "UAT-33": {
@@ -497,7 +497,7 @@ SPECS = {
         "legend": [
             "ปุ่ม “Submit” ไม่ปรากฏให้กดอีก · ข้าง chip มีข้อความ “Submitted — locked for editing until it is rejected” บอกเหตุผลที่ปุ่มหาย",
             "ข้อความมีบรรทัดเดียว — ระบบตั้งใจไม่โชว์ “This department is already in approval or approved…” ซ้ำในสถานะรออนุมัติ (จะโผล่เมื่อ Approved ครบทุกขั้น)",
-            "ไม่มีวิธีส่งซ้ำสำหรับฝ่าย+ปีเดิมได้อีก · หลัง refresh สถานะยังเป็น “Pending · Step 1 (Direct manager)” ไม่เกิดรายการซ้ำ",
+            "ไม่มีวิธีส่งซ้ำสำหรับฝ่าย+ปีเดิมได้อีก · หลัง refresh สถานะยังเป็น “Pending on Laddawan Kearnoi” ไม่เกิดรายการซ้ำ",
         ],
     },
     "UAT-36": {
@@ -509,9 +509,9 @@ SPECS = {
         ],
         "legend": [
             "ตัวเลือกฝ่ายแสดงทั้ง 2 ฝ่าย + จำนวน CC · ไม่มีป้าย “Pending” ที่ฝ่ายใดบนจอผู้กรอก (ป้ายนี้ขึ้นเฉพาะคนที่ต้องอนุมัติ ผู้กรอกไม่เห็น ถือว่าถูก)",
-            "Data & Analytic chip = “Pending · Step 1 (Direct manager)” ตารางแก้ไขไม่ได้ (จากเคสก่อน)",
+            "Data & Analytic chip = “Pending on Laddawan Kearnoi” ตารางแก้ไขไม่ได้ (จากเคสก่อน)",
             "ก่อนกรอก Solution Delivery chip = “Draft — not submitted” ตารางว่าง 0 แถว (ฝ่ายนี้ไม่เคยมีข้อมูลมาก่อนในปีนี้)",
-            "หลังกรอก 2 แถวแล้วส่ง → SD chip = “Pending · Step 1 (Direct manager)” · ยอดรวมตรงกับที่กรอก · ตารางถูกล็อก (“Cost Center …ถูกล็อกไว้…”)",
+            "หลังกรอก 2 แถวแล้วส่ง → SD chip = “Pending on <ชื่ออังกฤษของหัวหน้าฝ่าย Solution Delivery>” · ยอดรวมตรงกับที่กรอก · ตารางถูกล็อก (“Cost Center …ถูกล็อกไว้…”)",
             "อีเมล “รอการอนุมัติ” ออกถึงผู้อนุมัติขั้นที่ 1 ของ Solution Delivery (ตรวจในเคสเมล)",
         ],
     },
@@ -526,7 +526,7 @@ SPECS = {
         "legend": [
             "เห็นรายละเอียดงบครบตรงกับที่ผู้กรอกส่งมา · ตัวเลขทุกช่องอ่านอย่างเดียว พิมพ์แก้ไม่ได้",
             "ปุ่มบนแถบอนุมัติเป็นภาษาอังกฤษ “Reject” และ “Approve” (ไม่ใช่ “ตีกลับ” / “อนุมัติ”)",
-            "chip สถานะ = “Pending · Step 1 (Direct manager)”",
+            "chip สถานะ = “Pending on Laddawan Kearnoi”",
             "ป้ายที่ติดกับฝ่ายในตัวเลือกฝ่าย = “Pending” (ไม่ใช่ “รออนุมัติ”)",
         ],
     },
@@ -539,7 +539,7 @@ SPECS = {
         "legend": [
             "กล่องเหตุผลมีป้ายอังกฤษ “Reject reason (required)”",
             "ช่องเหตุผลยังว่าง → ปุ่ม “Confirm Reject” ปิดใช้งาน กดไม่ได้ ระบบไม่ตีกลับ",
-            "มีปุ่ม “Cancel” · กดแล้วกล่องปิด ไม่ตีกลับ สถานะยังเป็น “Pending · Step 1 (Direct manager)”",
+            "มีปุ่ม “Cancel” · กดแล้วกล่องปิด ไม่ตีกลับ สถานะยังเป็น “Pending on Laddawan Kearnoi”",
             "พิมพ์เหตุผลแล้ว → ปุ่ม “Confirm Reject” กดได้",
             "ยืนยันแล้ว chip เปลี่ยนเป็น “Rejected” (อังกฤษ) · งบถูกส่งกลับให้ผู้กรอกแก้ไข",
             "ใต้ chip มีบรรทัดสีแดง “Reject reason:” ตามด้วยเหตุผลที่พิมพ์ ตรงกันทุกตัวอักษร",
@@ -556,7 +556,7 @@ SPECS = {
             "เหตุผลนี้แสดงตลอดช่วงที่สถานะยังเป็น “Rejected”",
             "ตารางกลับมาแก้ไขได้ — ช่องเดือนพิมพ์ได้ ปุ่มย่อยเป็น “แก้ไขผ่านฟอร์มย่อย ↗” (ไม่ถูกล็อก)",
             "แก้แล้วบันทึกอัตโนมัติได้ตามปกติ และส่งขออนุมัติใหม่ได้สำเร็จ",
-            "หลังส่งใหม่ chip กลับเป็น “Pending · Step 1 (Direct manager)”",
+            "หลังส่งใหม่ chip กลับเป็น “Pending on Laddawan Kearnoi”",
         ],
     },
     "UAT-40": {
@@ -565,8 +565,8 @@ SPECS = {
             {"n": 1, "box": (665, 908, 1018, 942), "badge": "above"},
         ],
         "legend": [
-            "หลังขั้น 1 กด Approve → chip “Pending · Step 2 (นิภาพร ทองกิ่ง (Senior Associate))” ตรงทุกตัวอักษร · ต้องไม่มีคำ “ผู้จัดการฝ่ายงบประมาณ”",
-            "ขั้น 2 เห็นรายละเอียดครบ กด Approve ได้ → chip “Pending · Step 3 (วราพร ติรสิทธิ์ (Assistant Department Head))”",
+            "หลังขั้น 1 กด Approve → chip “Pending on Nipaporn Tongking” ตรงทุกตัวอักษร · ต้องไม่มีคำ “ผู้จัดการฝ่ายงบประมาณ”",
+            "ขั้น 2 เห็นรายละเอียดครบ กด Approve ได้ → chip “Pending on Waraporn Tirasit”",
             "ขั้น 3 กด Approve → สถานะเป็น “Approved” ไม่มีขั้นถัดไปให้รอ (ย้อนกลับไม่ได้)",
             "ผู้กรอก (พรทิพย์) เห็นสถานะตรงกัน และได้รับอีเมล “ได้รับการอนุมัติ” ครบทุกขั้น",
         ],

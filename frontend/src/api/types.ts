@@ -343,8 +343,13 @@ export interface ApprovalStatusState {
   updated_at: string | null
   current_position: 1 | 2 | 3 | null
   current_approver_empcode: string | null
-  /** Thai display name of the current approver (server-side lookup, ADR-0027)
-   * — the override confirm dialog must NAME the approver being skipped. */
+  /** English display name of the current approver (jakkaritw, 2026-09-17 —
+   * was the Thai name from the employee view). Read by `statusChipLabel`
+   * ("Pending on <name>") and by the override confirm dialog, which must
+   * NAME the approver being skipped (ADR-0027). Set on EVERY response that
+   * carries a pending status (status read + all four actions), not just
+   * GET /status, so the chip is right immediately after an action. `null`
+   * outside a PENDING step, or when the server could not resolve a name. */
   current_approver_name: string | null
   can_act: boolean
   notification_warning: string | null

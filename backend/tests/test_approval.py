@@ -52,6 +52,7 @@ from app.approval import (
     fetch_pending_rows,
     get_approval_status,
     list_departments_pending_my_approval,
+    lookup_employee_name,
     reject_department,
     resolve_chain,
     submit_department,
@@ -1684,3 +1685,67 @@ def test_cost_centers_for_departments_queries_live_cc_filler_map():
     query = cursor.execute.call_args.args[0]
     assert "cc_filler_map" in query
     assert "IN (?, ?)" in query
+
+
+# ---------------------------------------------------------------------------
+# lookup_employee_name (jakkaritw, 2026-09-17): English name from
+# dbo.employee_master, active+Primary row wins, dbo.v_employee_budget_01
+# Thai name is the fallback (spec: employee_master has no English column
+# widening owed to this project -- the resolver reads the master directly).
+# ---------------------------------------------------------------------------
+
+def test_lookup_employee_name_returns_none_without_querying_for_a_blank_empcode():
+    conn = MagicMock()
+    assert lookup_employee_name(conn, None) is None
+    conn.cursor.assert_not_called()
+
+
+def test_lookup_employee_name_query_shape_and_active_primary_ordering():
+    """One query, employee_master's English name, active-record and
+    Primary-position rows ordered first -- the deterministic row-choice rule
+    for a person with several HR rows (acting position on top of primary)."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = ("Laddawan Kearnoi",)
+
+    result = lookup_employee_name(conn, "101431")
+
+    assert result == "Laddawan Kearnoi"
+    assert cursor.execute.call_count == 1  # master resolved it -- no fallback query
+    sql_text = cursor.execute.call_args.args[0]
+    assert "dbo.employee_master" in sql_text
+    assert "full_name_en" in sql_text
+    assert "record_status" in sql_text and "'active'" in sql_text
+    assert "position_status" in sql_text and "'Primary'" in sql_text
+    assert cursor.execute.call_args.args[1] == "101431"
+
+
+def test_lookup_employee_name_falls_back_to_thai_view_when_master_has_no_row():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, ("นิภาพร ทองกิ่ง",)]
+
+    result = lookup_employee_name(conn, "101032")
+
+    assert result == "นิภาพร ทองกิ่ง"
+    assert cursor.execute.call_count == 2
+    fallback_sql = cursor.execute.call_args_list[1].args[0]
+    assert "dbo.v_employee_budget_01" in fallback_sql
+    assert "full_name_th" in fallback_sql
+
+
+def test_lookup_employee_name_falls_back_to_thai_view_when_master_name_is_blank():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [("",), ("วราพร ติรสิทธิ์",)]
+
+    assert lookup_employee_name(conn, "100427") == "วราพร ติรสิทธิ์"
+    assert cursor.execute.call_count == 2
+
+
+def test_lookup_employee_name_returns_none_when_neither_source_has_a_row():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [None, None]
+
+    assert lookup_employee_name(conn, "999999") is None

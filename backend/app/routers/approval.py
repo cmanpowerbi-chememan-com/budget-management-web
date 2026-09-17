@@ -246,6 +246,38 @@ def _set_is_post_deadline(conn: pyodbc.Connection, state: ApprovalStatusState) -
         )
 
 
+def _set_current_approver_name(conn: pyodbc.Connection, state: ApprovalStatusState) -> None:
+    """Populates `state.current_approver_name` — wired HERE (the router), not
+    inside `app.approval`'s pure state-machine functions, same placement/
+    never-cut reasoning as `_set_is_post_deadline` directly above (an
+    unconditional extra DB lookup inside those functions would break
+    test_approval.py's finite mocked `side_effect` sequences). Called
+    identically at every endpoint that returns `ApprovalStatusState`
+    (jakkaritw, 2026-09-17) so the chip is right the moment an action
+    completes — a Filler who just submitted, or an approver who just
+    approved, sees the NEW current approver's name immediately, not only
+    after a refetch.
+
+    No-op when `state.current_approver_empcode` is None (DRAFT/APPROVED/
+    REJECTED, or a record with no employee-view manager row) — nothing to
+    resolve, and skips a wasted query on the most common non-pending shapes.
+
+    Never-cut (same fail-soft policy as `_set_is_post_deadline`/
+    `_set_can_submit`): a broken lookup must never fail an already-committed
+    action. On failure `state.current_approver_name` simply stays at its
+    fail-safe `None` default — the chip falls back to the step-number label
+    — and a WARNING is logged."""
+    if state.current_approver_empcode is None:
+        return
+    try:
+        state.current_approver_name = lookup_employee_name(conn, state.current_approver_empcode)
+    except Exception:  # noqa: BLE001 -- must never fail an already-committed action
+        logger.warning(
+            "lookup_employee_name failed for empcode=%s — chip falls back to the step-number label",
+            state.current_approver_empcode, exc_info=True,
+        )
+
+
 def _set_can_submit(
     conn: pyodbc.Connection, state: ApprovalStatusState, email: str, scope: Scope | None = None,
 ) -> None:
@@ -312,6 +344,7 @@ def submit(body: DepartmentYearBody, email: str = Depends(get_current_user_email
             scope = resolve_scope(email, conn)
             state = submit_department(conn, body.department, body.fiscal_year, email, scope)
             _notify_after_transition(conn, "submit", state)
+            _set_current_approver_name(conn, state)
             _set_is_post_deadline(conn, state)
             _set_can_submit(conn, state, email, scope)
             return state
@@ -325,6 +358,7 @@ def approve(body: ApproveBody, email: str = Depends(get_current_user_email)):
         with get_fabric_conn() as conn:
             state = approve_department(conn, body.department, body.fiscal_year, email, body.comment)
             _notify_after_transition(conn, "approve", state)
+            _set_current_approver_name(conn, state)
             _set_is_post_deadline(conn, state)
             _set_can_submit(conn, state, email)
             return state
@@ -338,6 +372,7 @@ def reject(body: RejectBody, email: str = Depends(get_current_user_email)):
         with get_fabric_conn() as conn:
             state = reject_department(conn, body.department, body.fiscal_year, email, body.reason)
             _notify_after_transition(conn, "reject", state)
+            _set_current_approver_name(conn, state)
             _set_is_post_deadline(conn, state)
             _set_can_submit(conn, state, email)
             return state
@@ -364,6 +399,7 @@ def override_step(body: DepartmentYearBody, email: str = Depends(get_current_use
                 )
             state = admin_override_step(conn, body.department, body.fiscal_year, email)
             _notify_after_transition(conn, "override_step", state, admin_email=email)
+            _set_current_approver_name(conn, state)
             _set_is_post_deadline(conn, state)
             _set_can_submit(conn, state, email, scope)
             return state
@@ -429,10 +465,7 @@ def status(
             authorize_status_view(conn, department, scope)  # B1 gate fix — was unauthorized-by-department
             caller_empcode, _ = resolve_submitter(conn, email)
             state = get_approval_status(conn, department, fiscal_year, caller_empcode=caller_empcode)
-            # ADR-0027: the override confirm dialog must NAME the approver
-            # being skipped — resolved here from the same source as the mail
-            # cc lookup, so the UI needs no second fetch.
-            state.current_approver_name = lookup_employee_name(conn, state.current_approver_empcode)
+            _set_current_approver_name(conn, state)
             _set_is_post_deadline(conn, state)
             _set_can_submit(conn, state, email, scope)
             return state

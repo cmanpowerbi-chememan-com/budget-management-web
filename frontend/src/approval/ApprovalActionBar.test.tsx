@@ -68,6 +68,26 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Draft'))
   })
 
+  // jakkaritw, 2026-09-17: the chip names the real approver in English
+  // rather than a role/step label.
+  it('names the current approver in English when the status carries a name', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, current_approver_name: 'Laddawan Kearnoi' }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} />)
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Pending on Laddawan Kearnoi'),
+    )
+  })
+
+  it('falls back to the step-number wording when the status carries no name', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: null }),
+    )
+    render(<ApprovalActionBar {...BASE_PROPS} />)
+    await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Pending · Step 2'))
+  })
+
   it('shows a loud error when the status fetch fails', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus).mockRejectedValue(new ApiError(502, 'Server error'))
     render(<ApprovalActionBar {...BASE_PROPS} />)
@@ -128,6 +148,26 @@ describe('ApprovalActionBar', () => {
 
     await waitFor(() => expect(approvalApi.approveDepartment).toHaveBeenCalledWith('Accounting', 2027))
     await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Approved'))
+  })
+
+  it('switches the chip to the next approver name immediately from the Approve response, with no extra status fetch', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true, current_approver_name: 'Laddawan Kearnoi' }),
+    )
+    vi.mocked(approvalApi.approveDepartment).mockResolvedValue(
+      state({ status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: 'Nipaporn Tongking' }),
+    )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} />)
+    fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Pending on Nipaporn Tongking'),
+    )
+    // The chip switched from the mocked action RESPONSE, not a refetch --
+    // fetchApprovalStatus was only ever called once, on mount.
+    expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
   })
 
   it('rejects with a required reason via the inline panel', async () => {
@@ -342,6 +382,22 @@ describe('ApprovalActionBar', () => {
     expect(approvalApi.approveDepartment).not.toHaveBeenCalled()
     expect(BASE_PROPS.onChanged).toHaveBeenCalled()
     await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step 2'))
+  })
+
+  it('override confirm dialog falls back to a step-number wording when the server sends no approver name', async () => {
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+      state({
+        status: 'PENDING_APPROVER1', current_position: 1, can_act: false,
+        current_approver_empcode: '200', current_approver_name: null,
+      }),
+    )
+    vi.mocked(approvalApi.overrideStep).mockResolvedValue(state({ status: 'PENDING_APPROVER2', current_position: 2 }))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
+    fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Step 1 approver'))
   })
 
   it('hides Approve for an admin on PENDING_APPROVER2 (positions 2/3 are never overridable, D4)', async () => {

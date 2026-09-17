@@ -4,7 +4,7 @@ unit-tested in test_approval.py — these tests only prove the router wiring:
 auth, error-code -> HTTP-status mapping, and the 502 DB-unavailable path.
 """
 from contextlib import ExitStack
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,7 @@ from app.approval import (
     APPROVED,
     PENDING_APPROVER1,
     PENDING_APPROVER2,
+    PENDING_APPROVER3,
     ApprovalRecordNotFoundError,
     ApprovalStatusState,
     DepartmentEmptyError,
@@ -493,6 +494,7 @@ def test_can_submit_travels_on_every_endpoint_for_the_callers_own_identity(
     with ExitStack() as stack, patch("app.routers.approval.get_fabric_conn") as mock_conn:
         mock_conn.return_value.__enter__.return_value = MagicMock()
         stack.enter_context(patch("app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)))
+        stack.enter_context(patch("app.routers.approval.lookup_employee_name", return_value=None))
         for target, kwargs in extra_patches.items():
             stack.enter_context(patch(target, **kwargs))
         mock_eligibility = stack.enter_context(
@@ -580,6 +582,7 @@ def test_can_submit_reuses_the_scope_already_resolved_this_request(
         mock_resolve_scope = stack.enter_context(
             patch("app.routers.approval.resolve_scope", return_value=scope_sentinel)
         )
+        stack.enter_context(patch("app.routers.approval.lookup_employee_name", return_value=None))
         for target, kwargs in extra_patches.items():
             stack.enter_context(patch(target, **kwargs))
         mock_eligibility = stack.enter_context(
@@ -622,7 +625,9 @@ def test_submit_success_notifies_the_new_current_approver(client):
         "app.routers.approval.resolve_scope", return_value=MagicMock()
     ), patch("app.routers.approval.submit_department", return_value=state), patch(
         "app.routers.approval.notifications.notify_turn"
-    ) as mock_notify, patch("app.routers.approval.is_post_deadline", return_value=False):
+    ) as mock_notify, patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.lookup_employee_name", return_value=None
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
 
@@ -642,7 +647,9 @@ def test_submit_notification_failure_never_fails_the_request(client):
         "app.routers.approval.resolve_scope", return_value=MagicMock()
     ), patch("app.routers.approval.submit_department", return_value=state), patch(
         "app.routers.approval.notifications.notify_turn", side_effect=RuntimeError("graph down")
-    ), patch("app.routers.approval.is_post_deadline", return_value=False):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.lookup_employee_name", return_value=None
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
 
@@ -657,7 +664,7 @@ def test_approve_notifies_next_approver_when_still_pending(client):
         "app.routers.approval.approve_department", return_value=state
     ), patch("app.routers.approval.notifications.notify_turn") as mock_notify, patch(
         "app.routers.approval.is_post_deadline", return_value=False
-    ):
+    ), patch("app.routers.approval.lookup_employee_name", return_value=None):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -704,7 +711,9 @@ def test_approve_mid_chain_still_notifies_turn_not_approved(client):
         "app.routers.approval.approve_department", return_value=state
     ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
         "app.routers.approval.notifications.notify_approved"
-    ) as mock_approved, patch("app.routers.approval.is_post_deadline", return_value=False):
+    ) as mock_approved, patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.lookup_employee_name", return_value=None
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
@@ -906,7 +915,9 @@ def test_override_step_admin_success_notifies_submitter_and_next_approver(client
         "app.routers.approval.notifications.notify_step_overridden"
     ) as mock_overridden, patch(
         "app.routers.approval.notifications.notify_turn"
-    ) as mock_turn, patch("app.routers.approval.is_post_deadline", return_value=False):
+    ) as mock_turn, patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.lookup_employee_name", return_value=None
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
@@ -935,7 +946,7 @@ def test_override_step_response_includes_is_post_deadline(client):
         "app.routers.approval.notifications.notify_step_overridden"
     ), patch("app.routers.approval.notifications.notify_turn"), patch(
         "app.routers.approval.is_post_deadline", return_value=False
-    ):
+    ), patch("app.routers.approval.lookup_employee_name", return_value=None):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 200
@@ -960,7 +971,7 @@ def test_override_step_notification_failure_never_fails_the_request(client):
         "app.routers.approval.notifications.notify_step_overridden", side_effect=RuntimeError("graph down")
     ), patch("app.routers.approval.notifications.notify_turn") as mock_turn, patch(
         "app.routers.approval.is_post_deadline", return_value=False
-    ):
+    ), patch("app.routers.approval.lookup_employee_name", return_value=None):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
@@ -985,7 +996,9 @@ def test_override_step_notify_turn_failure_still_sends_override_notice(client):
         "app.routers.approval.notifications.notify_step_overridden"
     ) as mock_overridden, patch(
         "app.routers.approval.notifications.notify_turn", side_effect=RuntimeError("graph down")
-    ), patch("app.routers.approval.is_post_deadline", return_value=False):
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.lookup_employee_name", return_value=None
+    ):
         mock_conn.return_value.__enter__.return_value = MagicMock()
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
@@ -1131,3 +1144,140 @@ def test_override_step_not_overridable_maps_to_409(client):
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
     assert response.status_code == 409
     assert "Cannot approve on their behalf" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# current_approver_name (jakkaritw, 2026-09-17): the status chip now names
+# the CURRENT approver in English -- `_set_current_approver_name` (same
+# placement/never-cut reasoning as `_set_is_post_deadline` above) must run on
+# EVERY endpoint that returns `ApprovalStatusState`, not just GET /status, so
+# the chip is right the moment an action completes (PRD user stories 5-7),
+# never only after a refetch.
+# ---------------------------------------------------------------------------
+
+_NAME_BY_EMPCODE = {"200": "Laddawan Kearnoi", "101032": "Nipaporn Tongking", "100427": "Waraporn Tirasit"}
+
+
+def _current_approver_name_endpoint_cases():
+    """One case per endpoint returning `ApprovalStatusState`, each landing on
+    a step with a real `current_approver_empcode` so the resolver actually
+    fires -- mirrors `_can_submit_endpoint_cases`' shape above."""
+    return [
+        pytest.param(
+            "post", "/approval/submit", {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.submit_department": {
+                    "return_value": _fake_state(status=PENDING_APPROVER1, current_position=1, current_approver_empcode="200")
+                },
+            },
+            id="submit",
+        ),
+        pytest.param(
+            "post", "/approval/approve", {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.approve_department": {
+                    "return_value": _fake_state(status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032")
+                },
+            },
+            id="approve",
+        ),
+        pytest.param(
+            "post", "/approval/override-step", {"json": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.admin_override_step": {
+                    "return_value": _fake_state(
+                        status=PENDING_APPROVER2, current_position=2, current_approver_empcode="101032",
+                        approver1_empcode="200",
+                    )
+                },
+                "app.routers.approval.notifications.notify_step_overridden": {},
+                "app.routers.approval.notifications.notify_turn": {},
+            },
+            id="override-step",
+        ),
+        pytest.param(
+            "get", "/approval/status", {"params": {"department": DEPT, "fiscal_year": FY}},
+            {
+                "app.routers.approval.authorize_status_view": {},
+                "app.routers.approval.resolve_submitter": {"return_value": (None, None)},
+                "app.routers.approval.get_approval_status": {
+                    "return_value": _fake_state(status=PENDING_APPROVER3, current_position=3, current_approver_empcode="100427")
+                },
+            },
+            id="status",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("http_method, path, request_kwargs, extra_patches", _current_approver_name_endpoint_cases())
+def test_current_approver_name_travels_on_every_endpoint_for_the_new_position(
+    client, http_method, path, request_kwargs, extra_patches,
+):
+    """Each response carries the English name of the approver at the NEW
+    position -- proven by mapping empcode -> name through the resolver mock,
+    so a response that forgot to call it (or called it with the wrong
+    empcode) fails immediately, not just a response missing the field."""
+    _override_auth("caller@chememan.com")
+    with ExitStack() as stack, patch("app.routers.approval.get_fabric_conn") as mock_conn:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        stack.enter_context(patch("app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)))
+        stack.enter_context(patch("app.routers.approval.is_post_deadline", return_value=False))
+        stack.enter_context(
+            patch("app.routers.approval.evaluate_submit_eligibility", return_value=SubmitEligibility(can_submit=True))
+        )
+        for target, kwargs in extra_patches.items():
+            stack.enter_context(patch(target, **kwargs))
+        mock_lookup = stack.enter_context(
+            patch("app.routers.approval.lookup_employee_name", side_effect=lambda conn, empcode: _NAME_BY_EMPCODE.get(empcode))
+        )
+        response = getattr(client, http_method)(path, **request_kwargs)
+
+    assert response.status_code == 200
+    empcode = response.json()["current_approver_empcode"]
+    assert response.json()["current_approver_name"] == _NAME_BY_EMPCODE[empcode]
+    mock_lookup.assert_called_once_with(ANY, empcode)
+
+
+def test_reject_response_current_approver_name_is_null_and_lookup_not_called(client):
+    """REJECTED has no current approver by definition (`current_position` and
+    `current_approver_empcode` both None) -- `_set_current_approver_name`
+    must skip the lookup entirely rather than resolve a blank empcode into a
+    name (the `lookup_employee_name` fallback query would otherwise run for
+    nothing on every reject)."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.reject_department",
+        return_value=_fake_state(status="REJECTED", current_position=None, reject_reason="bad numbers"),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility", return_value=SubmitEligibility(can_submit=False)
+    ), patch("app.routers.approval.lookup_employee_name") as mock_lookup:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post(
+            "/approval/reject", json={"department": DEPT, "fiscal_year": FY, "reason": "bad numbers"}
+        )
+    assert response.status_code == 200
+    assert response.json()["current_approver_name"] is None
+    mock_lookup.assert_not_called()
+
+
+def test_current_approver_name_lookup_failure_never_fails_an_already_committed_action(client):
+    """Never-cut (same fail-soft policy as `_set_is_post_deadline`/
+    `_set_can_submit` above): a broken name lookup must not turn an
+    already-committed submit into a 500 -- `current_approver_name` simply
+    stays at its fail-safe `None` default (the chip falls back to the
+    step-number label) and a warning is logged."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock()
+    ), patch(
+        "app.routers.approval.submit_department",
+        return_value=_fake_state(status=PENDING_APPROVER1, current_position=1, current_approver_empcode="200"),
+    ), patch("app.routers.approval.is_post_deadline", return_value=False), patch(
+        "app.routers.approval.evaluate_submit_eligibility", return_value=SubmitEligibility(can_submit=True)
+    ), patch("app.routers.approval.lookup_employee_name", side_effect=RuntimeError("db down")):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
+    assert response.status_code == 200
+    assert response.json()["current_approver_name"] is None
