@@ -858,12 +858,17 @@ describe('BudgetGrid', () => {
     // screen — disabled while looking at the locked one, and only offers
     // (and only succeeds for) the OPEN ฝ่าย's own Cost Center once the
     // picker switches there.
+    //
+    // Hoisted out of this test (2026-09-17, HIGH-1/MED-1 gate fixes) so the
+    // focus/visibility-revalidation tests below can reuse the same 2-ฝ่าย
+    // Fill scope instead of redeclaring it.
+    const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
+    const twoDepartments = [
+      ...DEPARTMENTS,
+      { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+    ]
+
     it('picker on the locked ฝ่าย disables Add; switching to the open ฝ่าย re-enables it and only offers that ฝ่าย\'s own Cost Center', async () => {
-      const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
-      const twoDepartments = [
-        ...DEPARTMENTS,
-        { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
-      ]
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
       vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
       vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
@@ -947,13 +952,50 @@ describe('BudgetGrid', () => {
       expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
     })
 
+    // Gate LOW-1 (2026-09-17): `departmentUnknown` used to be a bare
+    // `department === null`, true on EVERY mount (department starts `null`
+    // until `GET /scope/departments` resolves) — so the "ยังไม่ทราบฝ่าย" reason
+    // flashed on first paint even for a Filler with exactly one ฝ่าย. It must
+    // only mean "we resolved, and there is genuinely no ฝ่าย" (a load
+    // failure, covered by the test above).
+    it('does not show the "ยังไม่ทราบฝ่าย" reason on first paint, before departments have resolved', async () => {
+      let resolveDepartments!: (value: typeof DEPARTMENTS) => void
+      const pending = new Promise<typeof DEPARTMENTS>((resolve) => {
+        resolveDepartments = resolve
+      })
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockReturnValue(pending)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      // First paint — the departments promise has not resolved yet.
+      expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeInTheDocument()
+      expect(screen.queryByText(/ยังไม่ทราบฝ่าย/)).not.toBeInTheDocument()
+
+      resolveDepartments(DEPARTMENTS)
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalled())
+    })
+
     // Issue #13, decision I (2026-09-17): a tab left open before a submit
     // (by another tab/device/co-Filler) must lock itself within one focus
     // change, not never.
-    it('a focus event that reveals the ฝ่าย just became locked reloads the grid', async () => {
+    // Shared by both revalidation-trigger variants below (focus + visibility)
+    // — 2 ฝ่าย so `department` resolves to a non-null value AFTER mount
+    // (never the initial-render `null`), and `fetchBudgetGrid` responds
+    // differently depending on whether a department filter was actually
+    // sent, so a stale mount-time closure (HIGH-1) is observable: it would
+    // call the endpoint with NO filter and admit the other ฝ่าย's row too.
+    function mockTwoDeptGridForRevalidation() {
       vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
-      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
-      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementation(({ department }) =>
+        Promise.resolve(
+          department === undefined
+            ? [makeRow('CC1', '5211800030'), makeRow('CC2', '5211800030', { department: 'Warehouse' })]
+            : [makeRow('CC1', '5211800030')],
+        ),
+      )
       vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
       vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
         department: 'Solution Delivery', fiscal_year: 2027, status: 'PENDING_APPROVER1', submitter_empcode: null,
@@ -963,16 +1005,43 @@ describe('BudgetGrid', () => {
         can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
         submit_blocked_reason: null, locked: true,
       })
+    }
 
-      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+    it('a focus event that reveals the ฝ่าย just became locked reloads the grid using the CURRENT ฝ่าย, not the one from mount', async () => {
+      mockTwoDeptGridForRevalidation()
 
-      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: null }} />)
+
+      // Auto-selects "Solution Delivery" (alphabetically first) — resolved
+      // AFTER mount, once `GET /scope/departments` returns.
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
       expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
 
       fireEvent(window, new Event('focus'))
 
       await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
       await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenLastCalledWith(expect.objectContaining({ department: 'Solution Delivery' }))
+      // HIGH-1: a stale mount-time closure would have refetched with NO
+      // department filter and admitted Warehouse's row too.
+      expect(screen.queryByTestId('txn-CC2-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('a visibilitychange event (tab becomes visible) that reveals the ฝ่าย just became locked reloads the grid using the CURRENT ฝ่าย', async () => {
+      mockTwoDeptGridForRevalidation()
+
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: null }} />)
+
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenLastCalledWith(expect.objectContaining({ department: 'Solution Delivery' }))
+      expect(screen.queryByTestId('txn-CC2-5211800030')).not.toBeInTheDocument()
     })
 
     it('a focus event with no status change does NOT reload the grid', async () => {
@@ -998,6 +1067,45 @@ describe('BudgetGrid', () => {
 
       await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Solution Delivery', 2027))
       expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1) // status agrees with lockedDepartments -> no reload
+    })
+
+    // Gate MED-1 (2026-09-17): admin-wide never locks (ADR-0012), but
+    // `GET /approval/status` is caller-agnostic — without an early return, an
+    // admin viewing any mid-approval/APPROVED ฝ่าย got a spurious mismatch
+    // (nothing is ever in `lockedDepartments`, since that fetch short-
+    // circuits empty for admin-wide) and a full reload on every single
+    // focus/visibility event.
+    it('an admin-wide view never revalidates lock status on focus (admin never locks)', async () => {
+      const pureAdminScope: ScopeState = {
+        ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: [], seeCostCenters: [],
+      }
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+        department: 'Solution Delivery', fiscal_year: 2027, status: 'APPROVED', submitter_empcode: null,
+        submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+        approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+        updated_at: null, current_position: null, current_approver_empcode: null, current_approver_name: null,
+        can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
+        submit_blocked_reason: null, locked: true,
+      })
+
+      render(<BudgetGrid scope={pureAdminScope} initialFilter={{ dept: null, year: null }} />)
+
+      await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+      // ApprovalActionBar (a sibling, unrelated to focus-revalidation) fetches
+      // its own status once on mount -- settle on that baseline first so the
+      // assertions below isolate what the FOCUS event itself triggers.
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+
+      fireEvent(window, new Event('focus'))
+      await Promise.resolve()
+
+      // Admin-wide: the focus-revalidation path must add NO further call.
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+      expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
     })
 
     // Gate follow-up item 2 (issue #13): `openSpecialForm`'s `readOnly` arg on

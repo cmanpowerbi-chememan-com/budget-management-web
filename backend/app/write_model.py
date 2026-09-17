@@ -569,7 +569,7 @@ def _ensure_department_not_locked(
         department = _lookup_cc_dims(conn, cost_center)["department"]
     if department is None:
         raise DepartmentUnknownError(
-            f"{cost_center} has no department mapping in dbo.cc_filler_map — cannot verify approval-lock status"
+            f"{cost_center} has no department mapping — cannot verify approval-lock status"
         )
     status = _lookup_department_approval_status(conn, department, fiscal_year)
     if status in LOCKED_APPROVAL_STATUSES:

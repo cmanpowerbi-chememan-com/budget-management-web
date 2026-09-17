@@ -2047,6 +2047,24 @@ def test_pending_row_unknown_department_mapping_is_refused():
     )
 
 
+def test_pending_row_unknown_department_error_detail_omits_table_name():
+    """Gate LOW-4 (2026-09-17): the department_unknown detail must not leak
+    the internal table name `dbo.cc_filler_map` to the caller, but the
+    'cannot verify approval-lock status' suffix must stay byte-identical --
+    frontend/src/api/client.ts's DEPARTMENT_UNKNOWN_DETAIL_MARKER keys on it
+    to recognize this error family."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("Bank Charge", "Bank Charge Fee"), None,  # dims: cc_dims lookup -> no row, department unresolved
+    ]
+    scope = _scope()
+    results = save_pending_rows(conn, [_row(m01=100, expected_updated_at=None)], "filler@chememan.com", scope)
+    assert results[0].error == "department_unknown"
+    assert "cc_filler_map" not in results[0].detail
+    assert "cannot verify approval-lock status" in results[0].detail
+
+
 @pytest.mark.parametrize("locked_status", LOCKED_STATUSES)
 def test_detail_line_rejected_when_department_is_locked(locked_status):
     conn = MagicMock()

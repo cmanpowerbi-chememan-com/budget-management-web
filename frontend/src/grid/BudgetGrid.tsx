@@ -615,6 +615,23 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // accident; this must never repeat that).
   const departmentRef = useRef(department)
   const lockedDepartmentsRef = useRef(lockedDepartments)
+  // Gate 06/07/08 HIGH-1 (2026-09-17): `refreshAfterLockChange` (and the
+  // `loadGrid`/`loadLockedDepartments` it calls) is a plain function
+  // redefined every render, but this effect only re-attaches on
+  // `[hasNoScope, year]` — so calling it directly used to run whichever
+  // `refreshAfterLockChange` existed at MOUNT, when `department` was still
+  // `null` (resolved later, via the departments fetch's `.then`). That stale
+  // closure's `loadGrid()` fetched with no department filter and
+  // `admitRows(data, null)` admitted every See-scope row into the ฝ่าย on
+  // screen. Same "latest ref" fix as `departmentRef` above, except synced on
+  // every render — a plain function has no single value to key an effect's
+  // deps on, so the sync effect below intentionally has no deps array.
+  const refreshAfterLockChangeRef = useRef(refreshAfterLockChange)
+  // Gate MED-1: admin-wide never locks (ADR-0012), but `GET /approval/status`
+  // is caller-agnostic — without this, an admin viewing any mid-approval/
+  // APPROVED ฝ่าย got a spurious mismatch (nothing is ever in
+  // `lockedDepartments` for admin-wide) and a reload on every focus.
+  const adminViewEnabledRef = useRef(adminViewEnabled)
   useEffect(() => {
     departmentRef.current = department
   }, [department])
@@ -622,16 +639,23 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     lockedDepartmentsRef.current = lockedDepartments
   }, [lockedDepartments])
   useEffect(() => {
+    refreshAfterLockChangeRef.current = refreshAfterLockChange
+  })
+  useEffect(() => {
+    adminViewEnabledRef.current = adminViewEnabled
+  }, [adminViewEnabled])
+  useEffect(() => {
     if (hasNoScope) return
     let inFlight = false
     async function revalidate() {
+      if (adminViewEnabledRef.current) return
       const dept = departmentRef.current
       if (!dept || inFlight) return
       inFlight = true
       try {
         const status = await fetchApprovalStatus(dept, year)
         if (status.locked !== lockedDepartmentsRef.current.has(dept)) {
-          refreshAfterLockChange()
+          refreshAfterLockChangeRef.current()
         }
       } catch {
         // Best-effort background check — a failed revalidation just tries
@@ -698,7 +722,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           yearNotOpen={yearNotOpen}
           selectedDepartment={department}
           departmentLocked={selectedDepartmentLocked}
-          departmentUnknown={department === null}
+          departmentUnknown={deptResolved && department === null}
           lockStatusUnavailable={lockedDepartmentsFailed}
           departments={departments}
           isAdmin={scope.isAdmin}
