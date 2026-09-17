@@ -77,8 +77,11 @@ test.describe('approver journey', () => {
 
     const confirmBtn = page.getByTestId('approval-reject-confirm-btn')
     await expect(confirmBtn).toBeDisabled() // blocked: reason is empty
+    // 100-char cap counter (jakkaritw, 2026-09-17): opens at 0/100.
+    await expect(page.getByTestId('approval-reject-reason-counter')).toHaveText('0/100')
 
     await page.getByTestId('approval-reject-reason-input').fill('ข้อมูลไม่ครบ')
+    await expect(page.getByTestId('approval-reject-reason-counter')).toHaveText('12/100')
     await expect(confirmBtn).toBeEnabled()
     await confirmBtn.click()
 

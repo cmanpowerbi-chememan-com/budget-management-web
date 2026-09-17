@@ -332,6 +332,33 @@ describe('apiFetch', () => {
       })
     })
 
+    // Reject-reason 100-char cap (jakkaritw, 2026-09-17): pins the exact
+    // Thai sentence the `string_too_long` branch already produces (no new
+    // client code needed — RejectBody's Field(max_length=100) 422 lands
+    // here the same way every other Pydantic max_length violation does).
+    it('maps a string_too_long violation to ยาวเกินกำหนด with the bound', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse(422, {
+            detail: [
+              {
+                loc: ['body', 'reason'],
+                msg: 'String should have at most 100 characters',
+                type: 'string_too_long',
+                ctx: { max_length: 100 },
+              },
+            ],
+          }),
+        ),
+      )
+
+      await expect(apiFetch('/approval/reject')).rejects.toMatchObject({
+        status: 422,
+        message: 'ข้อมูลไม่ถูกต้อง: reason — ยาวเกินกำหนด (ไม่เกิน 100 ตัวอักษร)',
+      })
+    })
+
     it('falls back to the entry\'s own msg for an unmapped validation type (still names the field)', async () => {
       vi.stubGlobal(
         'fetch',

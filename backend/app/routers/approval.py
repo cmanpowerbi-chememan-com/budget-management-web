@@ -11,7 +11,7 @@ from typing import Callable, TypeVar
 
 import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import notifications
 from app.approval import (
@@ -158,8 +158,16 @@ class ApproveBody(DepartmentYearBody):
     comment: str | None = None
 
 
+# Reject reason cap (jakkaritw, 2026-09-17, from UAT): a short, one-line
+# reason keeps the approval bar and the rejection e-mail readable. The page
+# mirrors this with its own REJECT_REASON_MAX_LEN constant (frontend/src/
+# approval/model.ts) -- both sides read 100, kept as two constants (not one
+# shared value) because the two sides do not share a build step.
+MAX_LEN_REJECT_REASON = 100
+
+
 class RejectBody(DepartmentYearBody):
-    reason: str
+    reason: str = Field(max_length=MAX_LEN_REJECT_REASON)
 
 
 class PendingForMeResponse(BaseModel):

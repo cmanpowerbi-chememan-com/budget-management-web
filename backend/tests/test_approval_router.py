@@ -208,6 +208,40 @@ def test_reject_requires_reason_field_422(client):
     assert response.status_code == 422
 
 
+# Reject-reason 100-char cap (jakkaritw, 2026-09-17, from UAT): RejectBody.reason
+# gets Field(max_length=100) so the framework's own validation refuses a reason
+# over the cap before reject_department ever runs -- same guard shape as
+# test_post_trip_blank_purpose_returns_422 (backend/tests/test_budget_write.py:138).
+def test_reject_reason_over_100_chars_returns_422_with_max_length_context(client):
+    _override_auth("manager@chememan.com")
+    with patch("app.routers.approval.reject_department") as mock_reject:
+        response = client.post(
+            "/approval/reject",
+            json={"department": DEPT, "fiscal_year": FY, "reason": "x" * 101},
+        )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert any(entry.get("ctx", {}).get("max_length") == 100 for entry in detail)
+    mock_reject.assert_not_called()
+
+
+def test_reject_reason_at_100_chars_passes_through_unchanged(client):
+    _override_auth("manager@chememan.com")
+    reason_100 = "y" * 100
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.reject_department",
+        return_value=_fake_state(status="REJECTED", reject_reason=reason_100),
+    ) as mock_reject, patch("app.routers.approval.is_post_deadline", return_value=False):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.post(
+            "/approval/reject",
+            json={"department": DEPT, "fiscal_year": FY, "reason": reason_100},
+        )
+    assert response.status_code == 200
+    mock_reject.assert_called_once()
+    assert mock_reject.call_args.args[-1] == reason_100
+
+
 def test_status_returns_draft_when_never_submitted(client):
     _override_auth("filler@chememan.com")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(

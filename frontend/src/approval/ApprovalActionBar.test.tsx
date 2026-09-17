@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as approvalApi from '../api/approval'
 import { ApiError } from '../api/client'
 import type { ApprovalStatusState } from '../api/types'
 import { ApprovalActionBar } from './ApprovalActionBar'
+import { REJECT_REASON_MAX_LEN } from './model'
 
 vi.mock('../api/approval')
 
@@ -148,6 +150,73 @@ describe('ApprovalActionBar', () => {
 
     await waitFor(() => expect(approvalApi.rejectDepartment).toHaveBeenCalledWith('Accounting', 2027, 'ตัวเลขผิด'))
     await waitFor(() => expect(screen.queryByTestId('approval-reject-panel')).not.toBeInTheDocument())
+  })
+
+  // 100-char reject-reason cap (jakkaritw, 2026-09-17, from UAT): the box
+  // stops at 100 (browser's own maxLength) and a live counter shows the
+  // room left. These 5 tests cover the user stories in prd.md at
+  // .scratch/reject-reason-limit/ -- opens at 0/100, hard stop while typing,
+  // hard stop on paste (same maxLength mechanism), and reset on cancel.
+  describe('reject reason 100-character cap', () => {
+    async function openRejectPanel() {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(
+        state({ status: 'PENDING_APPROVER1', current_position: 1, can_act: true }),
+      )
+      render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept={false} />)
+      fireEvent.click(await screen.findByTestId('approval-reject-btn'))
+      return screen.getByTestId('approval-reject-reason-input') as HTMLTextAreaElement
+    }
+
+    it('opens with the counter at 0/100', async () => {
+      await openRejectPanel()
+      expect(screen.getByTestId('approval-reject-reason-counter')).toHaveTextContent(`0/${REJECT_REASON_MAX_LEN}`)
+    })
+
+    it('typing past the limit stops the box at 100 characters and the counter reads 100/100', async () => {
+      const textarea = await openRejectPanel()
+      const user = userEvent.setup()
+      await user.type(textarea, 'a'.repeat(REJECT_REASON_MAX_LEN + 20))
+      expect(textarea.value).toHaveLength(REJECT_REASON_MAX_LEN)
+      expect(screen.getByTestId('approval-reject-reason-counter')).toHaveTextContent(`${REJECT_REASON_MAX_LEN}/${REJECT_REASON_MAX_LEN}`)
+    })
+
+    it('pasting past the limit keeps only the first 100 characters', async () => {
+      const textarea = await openRejectPanel()
+      const user = userEvent.setup()
+      textarea.focus()
+      await user.paste('b'.repeat(REJECT_REASON_MAX_LEN + 50))
+      expect(textarea.value).toHaveLength(REJECT_REASON_MAX_LEN)
+      expect(screen.getByTestId('approval-reject-reason-counter')).toHaveTextContent(`${REJECT_REASON_MAX_LEN}/${REJECT_REASON_MAX_LEN}`)
+    })
+
+    it('resets the counter to 0/100 on cancel then reopen', async () => {
+      const textarea = await openRejectPanel()
+      fireEvent.change(textarea, { target: { value: 'some reason' } })
+      expect(screen.getByTestId('approval-reject-reason-counter')).toHaveTextContent('11/100')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      fireEvent.click(screen.getByTestId('approval-reject-btn'))
+
+      expect(screen.getByTestId('approval-reject-reason-input')).toHaveValue('')
+      expect(screen.getByTestId('approval-reject-reason-counter')).toHaveTextContent(`0/${REJECT_REASON_MAX_LEN}`)
+    })
+
+    it('shows the Thai over-length sentence when the server 422s for a too-long reason', async () => {
+      const textarea = await openRejectPanel()
+      fireEvent.change(textarea, { target: { value: 'a valid reason' } })
+      // Mirrors what apiFetch actually throws for a 422 (client.ts:281-284):
+      // the translated Thai sentence lands on `.message`, `.detail` stays
+      // undefined (the raw `detail` is an array, not a string).
+      vi.mocked(approvalApi.rejectDepartment).mockRejectedValue(
+        new ApiError(422, 'ข้อมูลไม่ถูกต้อง: reason — ยาวเกินกำหนด (ไม่เกิน 100 ตัวอักษร)'),
+      )
+
+      fireEvent.click(screen.getByTestId('approval-reject-confirm-btn'))
+
+      await waitFor(() =>
+        expect(screen.getByTestId('approval-action-message')).toHaveTextContent('ยาวเกินกำหนด (ไม่เกิน 100 ตัวอักษร)'),
+      )
+    })
   })
 
   it('shows the reject reason once the department is REJECTED', async () => {

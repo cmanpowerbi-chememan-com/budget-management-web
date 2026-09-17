@@ -2,6 +2,13 @@
  * `ApprovalActionBar` a thin renderer over these decisions. */
 import type { ApprovalStatusState, DepartmentRow } from '../api/types'
 
+// Reject reason cap (jakkaritw, 2026-09-17, from UAT): the box's `maxLength`
+// and its counter both read this ONE constant so they can never drift. The
+// server mirrors the same value as its own constant (`MAX_LEN_REJECT_REASON`,
+// backend/app/routers/approval.py) -- kept as two constants, not one shared
+// value, since the two sides do not share a build step.
+export const REJECT_REASON_MAX_LEN = 100
+
 // Position 2/3 are FIXED constants (ADR-0006: always Nipaporn/Waraporn) —
 // safe to name here, this is public information already in
 // docs/reference/approval-workflow.md, not sensitive employee data.

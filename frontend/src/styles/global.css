@@ -2743,6 +2743,17 @@ th.total-year-col {
   font-size: 13px;
   resize: vertical;
 }
+/* Reject reason 100-char cap counter (jakkaritw, 2026-09-17) -- same small
+   mono label style as .reject-panel label, right-aligned under the box; no
+   colour change at the limit, the textarea's own maxLength hard stop is the
+   signal (see prd.md at .scratch/reject-reason-limit/). */
+.reject-panel-counter {
+  align-self: flex-end;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
 .reject-panel-actions {
   display: flex;
   justify-content: flex-end;

@@ -9,6 +9,7 @@ import {
   buildSubmitConfirmText,
   canSubmit,
   isEditLocked,
+  REJECT_REASON_MAX_LEN,
   statusChipLabel,
   submitBlockedReasonLabel,
 } from './model'
@@ -338,7 +339,14 @@ export function ApprovalActionBar({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={2}
+            maxLength={REJECT_REASON_MAX_LEN}
           />
+          {/* Live counter, not a colour/warning state (jakkaritw, 2026-09-17):
+           * the maxLength hard stop IS the limit signal; this just tells the
+           * approver how much room is left while they type. */}
+          <span className="reject-panel-counter" data-testid="approval-reject-reason-counter" aria-live="polite">
+            {reason.length}/{REJECT_REASON_MAX_LEN}
+          </span>
           <div className="reject-panel-actions">
             <button type="button" className="btn" onClick={() => { setRejecting(false); setReason('') }}>
               Cancel
