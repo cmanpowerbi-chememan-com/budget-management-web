@@ -371,6 +371,17 @@ def _occupant_for_position(position: int, approver1_empcode: str | None) -> str:
     return NIPAPORN_EMPCODE if position == 2 else WARAPORN_EMPCODE
 
 
+def approval_chain_empcodes(approver1_empcode: str | None) -> list[str | None]:
+    """Public since 2026-09-17 (jakkaritw, approved-mail-cc-all-approvers
+    PRD): the occupants of positions 1-3, in order, via the same rule
+    `_to_state` uses for `current_approver_empcode` -- so the loop-complete
+    mail's CC list (app.notifications) can never disagree with who the
+    approval engine considers the chain. Position 1 may be None (no
+    approver1_empcode resolved); positions 2/3 are always the two fixed
+    reviewers."""
+    return [_occupant_for_position(position, approver1_empcode) for position in (1, 2, 3)]
+
+
 def _to_state(row: dict, department: str, fiscal_year: int, caller_empcode: str | None) -> ApprovalStatusState:
     current_position = _STATUS_TO_POSITION.get(row["status"])
     current_approver = _occupant_for_position(current_position, row["approver1_empcode"]) if current_position else None

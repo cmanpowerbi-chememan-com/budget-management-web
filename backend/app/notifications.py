@@ -29,6 +29,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pyodbc
 
+from app.approval import approval_chain_empcodes
 from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -460,6 +461,39 @@ def _resolve_approver1_cc(conn: pyodbc.Connection, to_email: str, approver1_empc
     return [cc_email]
 
 
+def _resolve_chain_cc(conn: pyodbc.Connection, to_email: str, approver1_empcode: str | None) -> list[str] | None:
+    """2026-09-17 (jakkaritw, approved-mail-cc-all-approvers PRD): CC rule
+    for the loop-complete mail ONLY -- copies every occupant of the
+    approval chain (`app.approval.approval_chain_empcodes`, the one place
+    that defines positions 1-3), not just approver1. `notify_reject` and
+    `notify_step_overridden` keep `_resolve_approver1_cc` unchanged.
+
+    Same fail-soft posture as `_resolve_approver1_cc`: a blank occupant, an
+    unresolved email, or a per-occupant lookup failure is skipped (logged,
+    never fatal) so one bad record can never block the send. Order is
+    preserved (approver1, approver2, approver3); the To address and any
+    repeated occupant/email are dropped case-insensitively. Returns None
+    (not []) when nothing resolves, so `send_mail` omits `ccRecipients`."""
+    seen = {to_email.lower()}
+    cc_emails: list[str] = []
+    for empcode in approval_chain_empcodes(approver1_empcode):
+        if not empcode:
+            continue
+        try:
+            email = lookup_email_by_empcode(conn, empcode)
+        except Exception:
+            logger.warning(
+                "notifications: chain cc lookup failed for empcode=%r — skipping this address, to=%s",
+                empcode, to_email,
+            )
+            continue
+        if not email or email.lower() in seen:
+            continue
+        seen.add(email.lower())
+        cc_emails.append(email)
+    return cc_emails or None
+
+
 def notify_turn(
     conn: pyodbc.Connection, *, department: str, fiscal_year: int, approver_empcode: str | None,
     submitter_email: str | None, dry_run: bool, settings: Settings | None = None,
@@ -543,15 +577,17 @@ def notify_approved(
     """Approved-notify: fires once, when the LAST step of the normal
     approval chain lands the department on APPROVED (there is no next
     approver left to `notify_turn`). Recipient is `submitter_email`, the
-    same frozen value `notify_reject` uses — no DB lookup needed. 2026-07-31
-    revamp: cc the frozen `approver1_empcode` so the first approver sees the
-    chain completed. Never fired for the admin-direct-approve branches
-    (ADMIN_SUBMIT/ADMIN_OVERRIDE_*) — those go through `submit_department`,
-    not the `approve` action this is gated on (router decision)."""
+    same frozen value `notify_reject` uses — no DB lookup needed. 2026-09-17
+    (jakkaritw, approved-mail-cc-all-approvers PRD): cc EVERY approver in
+    the chain (`_resolve_chain_cc`) — positions 1, 2 and 3 — not just
+    approver1, so everyone who closed the loop sees the confirmation. Never
+    fired for the admin-direct-approve branches (ADMIN_SUBMIT/ADMIN_OVERRIDE_*)
+    — those go through `submit_department`, not the `approve` action this is
+    gated on (router decision)."""
     if not submitter_email:
         logger.warning("notify_approved: no submitter_email for department=%r/%s — skipped", department, fiscal_year)
         return None
-    cc = _resolve_approver1_cc(conn, submitter_email, approver1_empcode)
+    cc = _resolve_chain_cc(conn, submitter_email, approver1_empcode)
     link = build_deep_link(department, fiscal_year, settings)
     subject = f"ได้รับการอนุมัติ งบประมาณของฝ่าย {department} ปีงบประมาณ {fiscal_year}"
     body = _wrap(

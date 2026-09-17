@@ -43,6 +43,7 @@ from app.approval import (
     _department_has_pending_rows,
     _is_post_deadline,
     admin_override_step,
+    approval_chain_empcodes,
     approve_department,
     authorize_status_view,
     auto_submit_department,
@@ -166,6 +167,20 @@ def test_resolve_chain_manager_is_null_falls_back_to_nipaporn():
     submitter_empcode, approver1_empcode, active = resolve_chain(conn, "orphan-manager@chememan.com")
     assert submitter_empcode == "999"
     assert approver1_empcode == NIPAPORN_EMPCODE
+
+
+def test_approval_chain_empcodes_returns_positions_one_to_three_in_order():
+    """Public since 2026-09-17 (approved-mail-cc-all-approvers PRD): the
+    loop-complete mail's CC resolver (app.notifications) asks this for who
+    sits at positions 1-3 -- approver1 first, then the two fixed reviewers,
+    same order `_occupant_for_position` defines."""
+    assert approval_chain_empcodes("200") == ["200", NIPAPORN_EMPCODE, WARAPORN_EMPCODE]
+
+
+def test_approval_chain_empcodes_position_one_may_be_none():
+    """No approver1_empcode resolved yet -- position 1 is None, positions
+    2/3 are still the two fixed reviewers (unconditional, ADR-0006)."""
+    assert approval_chain_empcodes(None) == [None, NIPAPORN_EMPCODE, WARAPORN_EMPCODE]
 
 
 # ---------------------------------------------------------------------------

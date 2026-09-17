@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.approval import NIPAPORN_EMPCODE, WARAPORN_EMPCODE
 from app.config import SHARED_ADMIN_MAILBOX, Settings
 from app.notifications import (
     NotificationError,
@@ -752,11 +753,21 @@ def test_notify_reject_lead_paragraphs_use_the_enlarged_style(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_notify_approved_sends_to_submitter(monkeypatch):
+    """approver1_empcode=None here -- position 1 is empty, and positions 2/3
+    (Nipaporn/Waraporn) resolve to nothing on this bare conn. Adjusted
+    2026-09-17: the chain resolver now queries positions 2/3
+    UNCONDITIONALLY (they are fixed, independent of approver1_empcode),
+    unlike the old single-approver resolver, which never touched `conn` at
+    all when `approver1_empcode` was falsy -- an unconfigured MagicMock's
+    auto-generated `fetchone()` result would otherwise leak into `cc` as a
+    non-address object instead of the intended empty cc."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # nobody resolves
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     result = notify_approved(
-        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
         approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
@@ -893,6 +904,177 @@ def test_notify_approved_lead_paragraphs_use_the_enlarged_style(monkeypatch):
         outcome="งบประมาณของท่านได้รับการอนุมัติครบทุกขั้นแล้ว รายละเอียดดังนี้:",
         link=(link, "คลิกที่นี่เพื่อดูรายละเอียด"),
     )
+
+
+# ---------------------------------------------------------------------------
+# notify_approved cc chain (2026-09-17, approved-mail-cc-all-approvers PRD):
+# the loop-complete mail now copies every approver in the chain -- position
+# 1 (frozen approver1), 2 (Nipaporn), 3 (Waraporn) -- not only approver1.
+# ---------------------------------------------------------------------------
+
+def _conn_resolving_by_empcode(email_by_empcode: dict[str, str], *, raise_for: str | None = None) -> MagicMock:
+    """Test double that resolves a DIFFERENT email per queried empcode --
+    unlike this file's usual `cursor.fetchone.return_value = (...)` pattern
+    (one fixed row for every call), which cannot tell positions 1/2/3 apart.
+    A queried empcode absent from the map behaves like "no row found";
+    `raise_for` (optional) makes that ONE empcode's lookup raise instead,
+    for the "one bad record never blocks the others" case."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    def _execute(sql, empcode=None):
+        cursor._queried_empcode = empcode
+        if empcode == raise_for:
+            raise RuntimeError("db down")
+
+    def _fetchone():
+        email = email_by_empcode.get(cursor._queried_empcode)
+        return (email,) if email else None
+
+    cursor.execute.side_effect = _execute
+    cursor.fetchone.side_effect = _fetchone
+    return conn
+
+
+def test_notify_approved_ccs_all_three_approvers_in_order(monkeypatch):
+    """CC carries approver1, approver2, approver3 -- in that order -- not
+    only the frozen approver1 (pre-2026-09-17 behaviour)."""
+    conn = _conn_resolving_by_empcode({
+        "200": "manager@chememan.com",
+        NIPAPORN_EMPCODE: "nipaporn@chememan.com",
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (to_email, _, _), kwargs = calls[0]
+    assert to_email == "filler@chememan.com"
+    assert kwargs["cc"] == ["manager@chememan.com", "nipaporn@chememan.com", "waraporn@chememan.com"]
+
+
+def test_notify_approved_drops_submitter_from_cc_when_submitter_occupies_a_position(monkeypatch):
+    """A Filler who is also one of the fixed reviewers (a self-skipped step)
+    is not copied on their own mail -- the To address is filtered out of
+    CC, matched case-insensitively."""
+    conn = _conn_resolving_by_empcode({
+        "200": "manager@chememan.com",
+        NIPAPORN_EMPCODE: "Filler@Chememan.com",  # same person as To, different case
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (_, _, _), kwargs = calls[0]
+    assert kwargs["cc"] == ["manager@chememan.com", "waraporn@chememan.com"]
+
+
+def test_notify_approved_dedups_when_approver1_is_also_nipaporn(monkeypatch):
+    """approver1_empcode resolves to the SAME person as position 2
+    (Nipaporn) -- their address appears once, not twice."""
+    conn = _conn_resolving_by_empcode({
+        NIPAPORN_EMPCODE: "nipaporn@chememan.com",
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode=NIPAPORN_EMPCODE, dry_run=True, settings=_settings(),
+    )
+
+    (_, _, _), kwargs = calls[0]
+    assert kwargs["cc"] == ["nipaporn@chememan.com", "waraporn@chememan.com"]
+
+
+def test_notify_approved_one_failing_lookup_drops_only_that_address(monkeypatch):
+    """The lookup for ONE occupant (position 2, Nipaporn) raises -- approver1
+    and approver3 still make it into CC as distinct addresses, and the mail
+    still sends (never-cut: one bad record never blocks the send)."""
+    conn = _conn_resolving_by_empcode(
+        {"200": "manager@chememan.com", WARAPORN_EMPCODE: "waraporn@chememan.com"},
+        raise_for=NIPAPORN_EMPCODE,
+    )
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    result = notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    assert result == "SENTINEL"
+    (_, _, _), kwargs = calls[0]
+    assert kwargs["cc"] == ["manager@chememan.com", "waraporn@chememan.com"]
+
+
+def test_notify_approved_no_email_resolvable_omits_cc_key(monkeypatch):
+    """None of the three occupants resolve to an email -- cc is entirely
+    absent (falsy, not an empty list) so `send_mail` omits ccRecipients,
+    same "no cc" contract as `_resolve_approver1_cc`."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # nobody resolves
+    calls = []
+    monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=True, settings=_settings(),
+    )
+
+    (_, _, _), kwargs = calls[0]
+    assert kwargs["cc"] is None
+
+
+def test_notify_approved_audit_cc_merges_on_top_of_three_business_ccs(monkeypatch):
+    """The shared-mailbox audit cc still appends on top of a three-address
+    business CC, de-duplicated the same way as the single-approver case."""
+    conn = _conn_resolving_by_empcode({
+        "200": "manager@chememan.com",
+        NIPAPORN_EMPCODE: "nipaporn@chememan.com",
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
+    posts = _capture(monkeypatch)
+
+    notify_approved(
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        approver1_empcode="200", dry_run=False,
+        settings=_settings(notifications_audit_cc_email=SHARED_ADMIN_MAILBOX),
+    )
+
+    message = posts[1][1]["json"]["message"]
+    cc = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
+    assert cc == ["manager@chememan.com", "nipaporn@chememan.com", "waraporn@chememan.com", SHARED_ADMIN_MAILBOX]
+
+
+def test_resolve_chain_cc_asks_approval_module_for_the_chain(monkeypatch):
+    """Chain rule (PRD Testing Decisions): the resolver must ask
+    `app.approval.approval_chain_empcodes` for who sits at positions 1-3 --
+    it never re-lists NIPAPORN_EMPCODE/WARAPORN_EMPCODE itself, so the mail
+    audience can never drift from the approval engine's own chain."""
+    import app.notifications as notifications_module
+
+    seen_args = []
+    monkeypatch.setattr(
+        notifications_module, "approval_chain_empcodes",
+        lambda approver1_empcode: seen_args.append(approver1_empcode) or ["E1", "E2", "E3"],
+    )
+    conn = _conn_resolving_by_empcode({"E1": "a@chememan.com", "E2": "b@chememan.com", "E3": "c@chememan.com"})
+
+    cc = notifications_module._resolve_chain_cc(conn, "filler@chememan.com", "200")
+
+    assert seen_args == ["200"]
+    assert cc == ["a@chememan.com", "b@chememan.com", "c@chememan.com"]
 
 
 # ---------------------------------------------------------------------------
