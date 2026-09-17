@@ -174,10 +174,15 @@ export function buildSubmitConfirmText(department: string, fiscalYear: number): 
 /** Confirm-dialog text for the admin step-override (ADR-0027). MUST
  * name the approver being skipped — this dialog is the ONLY guard against
  * an accidental override (D3 removed the stale-gate and the reason field),
- * so a generic "confirm approval" is never acceptable here. */
+ * so a generic "confirm approval" is never acceptable here.
+ *
+ * One line only (jakkaritw, 2026-09-17, from a UAT screenshot): the
+ * "(approver step 1)" parenthetical and the second sentence describing the
+ * log/email were both dropped — the override is only ever possible at step
+ * 1, so the step number added nothing, and the ตกลง/ยกเลิก buttons already
+ * ask the question. The log entry, the Filler e-mail and the copy to
+ * `skippedApproverName` still happen exactly as before; only this wording
+ * changed. */
 export function buildOverrideConfirmText(department: string, fiscalYear: number, skippedApproverName: string): string {
-  return (
-    `⚠️ You are approving on behalf of ${skippedApproverName} (approver step 1) for department "${department}", FY ${fiscalYear}\n` +
-    `The system will record that you approved on their behalf and will email the budget filler, with a copy to ${skippedApproverName}. Continue?`
-  )
+  return `⚠️ You are approving on behalf of ${skippedApproverName} for department "${department}", FY ${fiscalYear}`
 }

@@ -358,8 +358,8 @@ export interface ApprovalStatusState {
    * the router on every endpoint that returns this shape, not just GET
    * /status. Superseded as `canSubmit`'s main input by `can_submit` below
    * (SIT defect fix #2) — verified 2026-08-16 gate review that NO frontend
-   * production code reads this field any more (`statusChipLabel` only reads
-   * `status`/`current_position`/`current_approver_empcode`). Kept anyway
+   * production code reads this field any more (`statusChipLabel` now also
+   * reads `current_approver_name`, added 2026-09-17). Kept anyway
    * (not dropped) because it is a genuinely DIFFERENT signal than
    * `can_submit`, not just a redundant duplicate: a year-wide flag computed
    * the same way for every caller/branch, whereas `can_submit`'s backing

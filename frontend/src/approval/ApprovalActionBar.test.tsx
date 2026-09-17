@@ -377,7 +377,9 @@ describe('ApprovalActionBar', () => {
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     fireEvent.click(await screen.findByTestId('approval-approve-btn'))
 
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('สมชาย ใจดี'))
+    expect(confirmSpy).toHaveBeenCalledWith(
+      '⚠️ You are approving on behalf of สมชาย ใจดี for department "Accounting", FY 2027',
+    )
     await waitFor(() => expect(approvalApi.overrideStep).toHaveBeenCalledWith('Accounting', 2027))
     expect(approvalApi.approveDepartment).not.toHaveBeenCalled()
     expect(BASE_PROPS.onChanged).toHaveBeenCalled()
@@ -397,7 +399,9 @@ describe('ApprovalActionBar', () => {
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     fireEvent.click(await screen.findByTestId('approval-approve-btn'))
 
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Step 1 approver'))
+    expect(confirmSpy).toHaveBeenCalledWith(
+      '⚠️ You are approving on behalf of Step 1 approver for department "Accounting", FY 2027',
+    )
   })
 
   it('hides Approve for an admin on PENDING_APPROVER2 (positions 2/3 are never overridable, D4)', async () => {

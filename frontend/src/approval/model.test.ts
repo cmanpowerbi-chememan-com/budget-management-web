@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DepartmentRow } from '../api/types'
 import {
+  buildOverrideConfirmText,
   buildSubmitConfirmText,
   canSubmit,
   costCentersOfDepartment,
@@ -195,5 +196,18 @@ describe('buildSubmitConfirmText', () => {
         'This submits the WHOLE department. You cannot edit it until it is rejected.',
     )
     expect(text).not.toContain('rows in')
+  })
+})
+
+describe('buildOverrideConfirmText', () => {
+  // 2026-09-17 (jakkaritw, UAT): trimmed from two sentences to one -- assert
+  // the exact remaining string, not a substring, so the old wording cannot
+  // creep back in.
+  it('is one line naming who is approved on behalf of, the department and the fiscal year', () => {
+    const text = buildOverrideConfirmText('Data & Analytic', 2027, 'Laddawan Kearnoi')
+    expect(text).toBe('⚠️ You are approving on behalf of Laddawan Kearnoi for department "Data & Analytic", FY 2027')
+    expect(text).not.toContain('(approver step 1)')
+    expect(text).not.toContain('The system will record')
+    expect(text).not.toContain('Continue?')
   })
 })
