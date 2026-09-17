@@ -784,11 +784,13 @@ def test_notify_approved_sends_to_submitter(monkeypatch):
 def test_notify_approved_body_shows_single_planning_year(monkeypatch):
     """Body (jakkaritw, 2026-09-17): the on-screen-label parenthetical is
     REMOVED — the planning year alone is stated."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # pin: positions 2/3 are queried unconditionally now, an unpinned MagicMock would leak into cc
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     notify_approved(
-        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
         approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
@@ -808,11 +810,13 @@ def test_notify_approved_no_submitter_email_skips(monkeypatch):
 
 
 def test_notify_approved_dry_run_makes_zero_http_calls(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # pin: positions 2/3 are queried unconditionally now, an unpinned MagicMock would leak into cc
     calls = []
     monkeypatch.setattr("app.notifications.httpx.post", lambda *a, **k: calls.append((a, k)))
 
     notify_approved(
-        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
         approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 
@@ -820,10 +824,20 @@ def test_notify_approved_dry_run_makes_zero_http_calls(monkeypatch):
 
 
 def test_notify_approved_ccs_approver1_email(monkeypatch):
-    """2026-07-31 revamp: final approve goes To the submitter, cc the frozen
-    approver1's email (resolved via dbo.v_employee_budget_01)."""
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    """2026-09-17 (gate follow-up, approved-mail-cc-all-approvers PRD): the
+    frozen approver1's email still lands in cc -- alongside approver2
+    (Nipaporn) and approver3 (Waraporn), since the loop-complete mail now
+    copies the whole chain (`_resolve_chain_cc`), not only approver1
+    (pre-2026-09-17 behaviour). Uses `_conn_resolving_by_empcode` with three
+    DISTINCT addresses -- the old fixed `cursor.fetchone.return_value`
+    fixture returned the same address for every empcode, which could not
+    prove the three positions apart and no longer matched what this test's
+    name claims."""
+    conn = _conn_resolving_by_empcode({
+        "200": "vp@chememan.com",
+        NIPAPORN_EMPCODE: "nipaporn@chememan.com",
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
@@ -834,7 +848,7 @@ def test_notify_approved_ccs_approver1_email(monkeypatch):
 
     (to_email, subject, body), kwargs = calls[0]
     assert to_email == "filler@chememan.com"
-    assert kwargs["cc"] == ["vp@chememan.com"]
+    assert kwargs["cc"] == ["vp@chememan.com", "nipaporn@chememan.com", "waraporn@chememan.com"]
 
 
 def test_notify_approved_skips_cc_when_same_as_submitter(monkeypatch):
@@ -872,10 +886,18 @@ def test_notify_approved_still_sends_to_submitter_when_cc_lookup_fails(monkeypat
 
 def test_notify_approved_business_cc_only_no_shared_mailbox_by_default(monkeypatch):
     """With the audit-cc switch OFF by default (config.py, 2026-09-17), the
-    final Graph payload carries exactly the frozen approver1's cc — never
-    the shared mailbox too."""
-    conn = MagicMock()
-    conn.cursor.return_value.fetchone.return_value = ("vp@chememan.com",)
+    final Graph payload carries exactly the three-approver chain cc
+    (`_resolve_chain_cc` — approver1, approver2 Nipaporn, approver3
+    Waraporn) -- never the shared mailbox too. 2026-09-17 (gate follow-up):
+    switched to `_conn_resolving_by_empcode` with three DISTINCT addresses
+    so the assertion can tell the three positions apart in the real Graph
+    JSON payload, instead of one fixed `cursor.fetchone.return_value`
+    collapsing them into a single address."""
+    conn = _conn_resolving_by_empcode({
+        "200": "vp@chememan.com",
+        NIPAPORN_EMPCODE: "nipaporn@chememan.com",
+        WARAPORN_EMPCODE: "waraporn@chememan.com",
+    })
     posts = _capture(monkeypatch)
 
     notify_approved(
@@ -885,15 +907,17 @@ def test_notify_approved_business_cc_only_no_shared_mailbox_by_default(monkeypat
 
     message = posts[1][1]["json"]["message"]
     cc = [r["emailAddress"]["address"] for r in message["ccRecipients"]]
-    assert cc == ["vp@chememan.com"]
+    assert cc == ["vp@chememan.com", "nipaporn@chememan.com", "waraporn@chememan.com"]
 
 
 def test_notify_approved_lead_paragraphs_use_the_enlarged_style(monkeypatch):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchone.return_value = None  # pin: positions 2/3 are queried unconditionally now, an unpinned MagicMock would leak into cc
     calls = []
     monkeypatch.setattr("app.notifications.send_mail", lambda *a, **k: calls.append((a, k)) or "SENTINEL")
 
     notify_approved(
-        MagicMock(), department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
+        conn, department="Accounting", fiscal_year=2027, submitter_email="filler@chememan.com",
         approver1_empcode=None, dry_run=True, settings=_settings(),
     )
 

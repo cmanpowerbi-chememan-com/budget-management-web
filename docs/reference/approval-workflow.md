@@ -127,7 +127,7 @@ Repeat reminders are sent by `jobs/send_reminders.py` and tracked in `budget.rem
 |-------|----|----|--------|
 | User submits | approver1 (managerempcode of last submitter — trace up to VP/AVP) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน — เมลเตือน**รวม 1 ฉบับ/คน** ลิสต์ทุกฝ่ายที่รออยู่ (§7) |
 | approver อนุมัติ (chain ยังไม่ครบ) | approver ถัดไป (นิภาพร → วราพร) | — | ถ้าไม่กดอนุมัติ เตือนซ้ำทุก 7 วัน — เมลเตือน**รวม 1 ฉบับ/คน** (§7) |
-| วราพร approves (final) | User (submitter) ✅ | approver1 | ครั้งเดียว |
+| วราพร approves (final) | User (submitter) ✅ | ทุก approver ใน chain (approver1 + approver2 นิภาพร + approver3 วราพร) — dedup, minus To (2026-09-17, jakkaritw) | ครั้งเดียว |
 | reject (ทุก layer) | User (submitter) | approver1 | ครั้งเดียว |
 | deadline reminder (ฝ่ายยังไม่ submit / REJECTED) | filler — **เมลรวม 1 ฉบับ/คน** ลิสต์ทุกฝ่ายที่ค้าง แต่ละแถวมี deep link ของฝ่ายนั้น (§7) | approver1 ที่ derive จาก manager ของ filler (fallback นิภาพร) | ทุก 7 วัน ตั้งแต่ `reminder_date` ถึง `closing_date` |
 
