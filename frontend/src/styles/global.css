@@ -2752,7 +2752,9 @@ th.total-year-col {
   font-family: var(--mono);
   font-size: 10.5px;
   letter-spacing: 0.05em;
-  color: var(--ink-3);
+  /* --ink-3 measured 3.84:1 on --paper-2, below WCAG AA 4.5:1 (gate finding
+     S2, 2026-09-17). --ink-2 clears it at 7.83:1 -- lightest token that does. */
+  color: var(--ink-2);
 }
 .reject-panel-actions {
   display: flex;
