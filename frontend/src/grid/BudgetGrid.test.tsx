@@ -1731,7 +1731,7 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('ข้อมูลคีย์ถึง 11 Sep 26')
+      expect(suffix).toHaveTextContent('ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
       expect(suffix).not.toHaveTextContent('⚠')
       expect(suffix.className).not.toContain('sap-freshness-warn')
     })
@@ -1744,7 +1744,7 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('⚠ ข้อมูลคีย์ถึง 11 Sep 26')
+      expect(suffix).toHaveTextContent('⚠ ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
       expect(suffix.className).toContain('sap-freshness-warn')
     })
 
@@ -1777,7 +1777,7 @@ describe('BudgetGrid', () => {
       resolveFetch({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('ข้อมูลคีย์ถึง 11 Sep 26')
+      expect(suffix).toHaveTextContent('ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
     })
 
     it('H1: a failed freshness fetch must WARN, never silently vanish (ADR-0030 §3.2 release-blocking chip)', async () => {

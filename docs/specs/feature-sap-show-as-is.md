@@ -21,8 +21,8 @@ freshness date on the legend chip and an admin alert when the feed goes stale.
 | # | Change |
 |---|---|
 | 2.1 | Remove the month mask: `visible_sap_months`, `SAP_MONTH_VISIBLE_LAG_DAYS`, and the mask application in `_sap_layer` |
-| 2.2 | Keep the watermark as a freshness signal and expose it: `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 Sep 26` |
-| 2.3 | Stale state on that chip: `⚠ ข้อมูลคีย์ถึง <date>` when the newest entry date is ≥ 3 days behind today |
+| 2.2 | Keep the watermark as a freshness signal and expose it: `● SAP · ใช้จริง (2026) · ข้อมูลบันทึกถึงวันที่ 11 Sep 26` |
+| 2.3 | Stale state on that chip: `⚠ ข้อมูลบันทึกถึงวันที่ <date>` when the newest entry date is ≥ 3 days behind today |
 | 2.4 | Admin alert mail on the stale condition, throttled to one per day |
 | 2.5 | `total_year` becomes the plain Jan–Dec sum; the "รวมเฉพาะเดือนที่ข้อมูลครบ" label is removed |
 | 2.6 | Turn `test_sap_actuals_parity.py` into the executable form of "db and web sync 100%" |
@@ -47,12 +47,12 @@ postings behaves exactly as it did before ADR-0026 — see §6 open item (a).
 
 Source: `resolve_sap_coverage(...).watermark_date` — the newest SAP **entry date**
 (`MAX(LEFT(utc_timestamp,8))`) at the end of the contiguous loaded run. Not a load date, not a
-posting date. Wording is `ข้อมูลคีย์ถึง` ("keyed through"), matching the string already drafted in
-`backend/app/routers/budget.py:61`.
+posting date. Wording is `ข้อมูลบันทึกถึงวันที่` ("data recorded up to the date"), matching the string
+already drafted in `backend/app/routers/budget.py:61`.
 
 ```
-healthy : ● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 13 Sep 26
-stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลคีย์ถึง 11 Sep 26
+healthy : ● SAP · ใช้จริง (2026) · ข้อมูลบันทึกถึงวันที่ 13 Sep 26
+stale   : ● SAP · ใช้จริง (2026) · ⚠ ข้อมูลบันทึกถึงวันที่ 11 Sep 26
 ```
 
 The frontend wiring exists and is unused: `sapFreshnessLine` (`frontend/src/grid/model.ts:946`)
@@ -269,3 +269,10 @@ Freshness now surfaces ONLY via the §3.2/§3.3 chip. `notify_sap_feed_stale`,
 exist in the codebase. `GET /budget/sap-coverage` is unchanged otherwise — same response, no mail
 side-effect. Accepted trade-off, carried over unchanged: if nobody opens the web page, nobody
 learns the feed stopped.
+
+## Amendment 2026-09-17 — chip wording made formal
+
+Wording changed 2026-09-17 (jakkaritw): `ข้อมูลคีย์ถึง` → `ข้อมูลบันทึกถึงวันที่`. §3.2's chip strings
+above are updated to match: healthy `ข้อมูลบันทึกถึงวันที่ <date>`, stale
+`⚠ ข้อมูลบันทึกถึงวันที่ <date>`. Date format, the stale threshold and the unknown-state wording are
+unchanged. Implemented in `frontend/src/grid/model.ts` (`sapFreshnessLine`).

@@ -79,7 +79,7 @@ Alternatives considered and rejected:
    `SAP_ENTRY_DAY_MAX_GAP_DAYS = 4`, `SAP_ENTRY_DAYS_SQL`, `SapCoverage` and
    `GET /budget/sap-coverage` all stay and finally get a consumer.
 4. **The grid states its freshness in one string**, appended to the existing legend chip:
-   `● SAP · ใช้จริง (2026) · ข้อมูลคีย์ถึง 11 Sep 26`. The date is the newest SAP **entry date**
+   `● SAP · ใช้จริง (2026) · ข้อมูลบันทึกถึงวันที่ 11 Sep 26`. The date is the newest SAP **entry date**
    of the contiguous run — not a load date, not a posting date. No per-month marker.
 
    **Date format, set 2026-09-14 by jakkaritw:** `11 Sep 26` — day, English 3-letter month,
@@ -87,7 +87,7 @@ Alternatives considered and rejected:
    uses: this is an operational timestamp about a data feed, and the unambiguous Gregorian form is
    what an operator reconciles against a DW run log.
 5. **Stale feed warns, and mails ONE person.** ⚠ **The mail half of this item is WITHDRAWN 2026-09-14 — see "Amendment 2026-09-14 — stale alert mail removed" at the end of this ADR. The chip half still stands.** When the newest entry date is **3 or more days
-   behind today**, the chip becomes `⚠ ข้อมูลคีย์ถึง <date>` and an alert goes to
+   behind today**, the chip becomes `⚠ ข้อมูลบันทึกถึงวันที่ <date>` and an alert goes to
    `jakkaritw@chememan.com`. A healthy lag is 1 day.
 
    **Recipient, revised 2026-09-14 after jakkaritw saw FOUR identical copies on staging
@@ -105,7 +105,7 @@ Alternatives considered and rejected:
    env var still alerts someone rather than going silent.
 
    **Wording, revised 2026-09-14 after seeing it on staging (jakkaritw):** the stale chip drops the
-   `(ช้ากว่าปกติ)` suffix and reads `⚠ ข้อมูลคีย์ถึง <date>`. Stale and healthy now differ only by
+   `(ช้ากว่าปกติ)` suffix and reads `⚠ ข้อมูลบันทึกถึงวันที่ <date>`. Stale and healthy now differ only by
    the `⚠` prefix and the warning colour, which is the intent — the date itself is the message. The threshold is an
    **operational freshness** constant — it says "the feed stopped", never "this month is finished".
 
@@ -116,7 +116,7 @@ Alternatives considered and rejected:
    extra write on a request path, because the alert only fires on days the feed is genuinely
    broken. If the volume ever becomes a nuisance, that is the fix — not a longer threshold.
    A data hole needs no separate rule: the watermark is the end of the contiguous run, so the
-   2026-06 outage would have read `⚠ ข้อมูลคีย์ถึง 30 May 26` right through September.
+   2026-06 outage would have read `⚠ ข้อมูลบันทึกถึงวันที่ 30 May 26` right through September.
 6. **Nothing blocks on staleness.** The loud 502 remains only for an actual gold read failure —
    revoked grant, dead connection, unparsable `utc_timestamp` — per ADR-0020.
 7. `total_year` becomes the plain Jan–Dec sum of the fiscal year, identical to
@@ -170,3 +170,12 @@ unchanged — only the mail side-effect is gone.
 
 Accepted trade-off (explicitly acknowledged): if nobody opens the web page, nobody learns the feed
 stopped. The §3.4 mail was the safety net for that gap; it is withdrawn along with the mail.
+
+## Amendment 2026-09-17 — chip wording made formal
+
+Wording changed 2026-09-17 (jakkaritw): `ข้อมูลคีย์ถึง` → `ข้อมูลบันทึกถึงวันที่`. Every chip string
+quoted above is updated to match: healthy `ข้อมูลบันทึกถึงวันที่ <date>`, stale
+`⚠ ข้อมูลบันทึกถึงวันที่ <date>`. The colloquial phrase read informally on a screen finance staff,
+department heads and executives all read; the new phrase keeps the same meaning in more formal
+office Thai. Date format, the unknown-state wording (`⚠ ไม่ทราบวันที่ข้อมูล`), the staleness rule and
+everything else this ADR decided are unchanged.

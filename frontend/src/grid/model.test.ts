@@ -980,12 +980,12 @@ describe('SAP actuals shown as-is (ADR-0030)', () => {
   describe('sapFreshnessLine — 3 states, all decided by the backend', () => {
     it('healthy: the plain keyed-through date, no warning', () => {
       const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
-      expect(line).toEqual({ text: 'ข้อมูลคีย์ถึง 11 Sep 26', isWarn: false })
+      expect(line).toEqual({ text: 'ข้อมูลบันทึกถึงวันที่ 11 Sep 26', isWarn: false })
     })
 
     it('stale: warns and marks the date stale, following the server verdict — never computed here', () => {
       const line = sapFreshnessLine({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 3, is_stale: true })
-      expect(line).toEqual({ text: '⚠ ข้อมูลคีย์ถึง 11 Sep 26', isWarn: true })
+      expect(line).toEqual({ text: '⚠ ข้อมูลบันทึกถึงวันที่ 11 Sep 26', isWarn: true })
     })
 
     it('unknown: no date at all warns with a different message, not a blank chip', () => {

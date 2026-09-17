@@ -277,11 +277,11 @@ class SapCoverage(BaseModel):
     """Freshness of the SAP · ใช้จริง layer for one fiscal year (ADR-0030,
     supersedes ADR-0026's `visible_months`/`hidden_months` mask — no month is
     ever withheld now). Returned by `GET /budget/sap-coverage` so the grid's
-    legend chip can show "ข้อมูลคีย์ถึง <date>", or a stale warning."""
+    legend chip can show "ข้อมูลบันทึกถึงวันที่ <date>", or a stale warning."""
 
     fiscal_year: int
     #: Newest entry-day of the contiguous loaded run (SAP keying date, not a
-    #: posting date) — "ข้อมูลคีย์ถึง <date>" in the UI. `None` when nothing is
+    #: posting date) — "ข้อมูลบันทึกถึงวันที่ <date>" in the UI. `None` when nothing is
     #: loaded at all — treated as an unknown-freshness state, never raised.
     watermark_date: date | None
     #: `today - watermark_date` in days. `None` exactly when `watermark_date`
