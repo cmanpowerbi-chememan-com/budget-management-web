@@ -25,7 +25,10 @@
 #     step ONLY. Each input sets BOTH that step's own `--execute` CLI flag
 #     AND that step's own `DRY_RUN` env (jobs/common.py's `is_dry_run()` is
 #     UNCHANGED — still requires both). A scheduled run supplies neither
-#     input, so both steps stay preview, exactly as before this change.
+#     input, so auto-submit (A11) ALWAYS stays preview on a schedule — only
+#     a human ticking `execute_auto_submit` changes that, exactly as before
+#     this change. The reminders (A12) step is a DIFFERENT story since
+#     2026-09-19 — see GATE 3 below: a scheduled run CAN go REAL on its own.
 #
 #   GATE 2 — mail only, repo VARIABLES (not secrets, not a commit),
 #   forwarded to the REMINDERS step ONLY:
@@ -55,21 +58,40 @@
 #     pattern the reminders step already uses below) — never the Container
 #     App.
 #
-#   Exact combinations:
+#   Exact combinations (updated 2026-09-19 for GATE 3 below — (a)/(b)/(c)
+#   are the original manual-only combinations and still work exactly as
+#   written; they are just no longer the ONLY way to reach REAL):
 #     (a) PREVIEW (today's default — nothing set, nothing checked):
-#         execute_auto_submit=false, execute_reminders=false. Zero writes,
-#         zero mail — unchanged from before this change.
+#         execute_auto_submit=false, execute_reminders=false, repo variable
+#         REMINDERS_LIVE unset/blank/false. Zero writes, zero mail —
+#         unchanged from before either change.
 #     (b) REHEARSAL — a real Graph send, to one test address only:
 #         execute_reminders=true (workflow_dispatch, checked) AND repo
 #         variable NOTIFICATIONS_DRY_RUN=false AND repo variable
 #         NOTIFICATIONS_REDIRECT_ALL_TO=<test address>. reminder_log is
 #         still written for real, but every mail lands on that one address.
-#     (c) REAL SEND — real recipients:
+#     (c) REAL SEND, manual, one run — real recipients:
 #         execute_reminders=true AND repo variable NOTIFICATIONS_DRY_RUN=false
 #         AND NOTIFICATIONS_REDIRECT_ALL_TO unset/blank.
-#     execute_auto_submit is entirely independent of (a)/(b)/(c) — set it on
-#     its own to make A11 write for real while reminders stays a preview,
-#     and vice versa.
+#     (d) REAL SEND, automatic, every 03:00 Bangkok run, no human needed
+#         [NEW, issue #29 prep]: repo variable REMINDERS_LIVE set to a
+#         string pydantic would read as boolean true (true/1/yes/on/y/t,
+#         case-insensitive — see GATE 3) AND repo variable
+#         NOTIFICATIONS_DRY_RUN=false AND NOTIFICATIONS_REDIRECT_ALL_TO
+#         unset/blank. Still bounded by business logic inside
+#         jobs.send_reminders, unchanged by this file: the
+#         reminder_date..deadline_date window in dbo.submission_deadline
+#         and the 7-day-per-person cadence in budget.reminder_log — nobody
+#         is mailed outside the window or more than once per cadence
+#         interval, schedule-driven or not.
+#     KILL SWITCH: set the repo variable REMINDERS_LIVE to 'false' (or
+#     delete it) — no commit, no redeploy, takes effect on the very next
+#     run. That turns off (d) only; a human can still reach (b)/(c)
+#     manually with the execute_reminders checkbox.
+#     execute_auto_submit is entirely independent of (a)/(b)/(c)/(d) — set
+#     it on its own to make A11 write for real while reminders stays a
+#     preview, and vice versa. Auto-submit has NO variable gate and NO
+#     automatic schedule path — it is, and stays, manual-input-only.
 #
 # PROBE (2026-09-19, issue #28 — "prove the CI runner can actually send mail
 # before the 2026-09-30 real send"): a workflow_dispatch-only, opt-in step
@@ -86,6 +108,57 @@
 # nothing else in this workflow has ever proven: every mail sent so far
 # (incl. the 2026-09-18 preview pair) went out from the developer's own
 # `backend/.env` credentials, never these repo secrets.
+#
+# CHANGED (2026-09-19, issue #29 prep — "let the nightly schedule send
+# reminders on its own"): jakkaritw expected the pre-deadline reminder mail
+# to ACTUALLY go out once the reminder window opens (FY2027:
+# 2026-09-30..2026-10-15), not stay a silent preview forever until someone
+# remembers to workflow_dispatch it by hand. This adds ONE new repo
+# variable and touches the REMINDERS step only. Auto-submit (A11) gains NO
+# automatic execution — it stays manual-input-only, no variable, no
+# schedule path, per explicit instruction.
+#
+#   GATE 3 — schedule-live switch (repo VARIABLE, not a secret, no commit
+#   needed to change it), REMINDERS step only:
+#     `REMINDERS_LIVE` unset/blank -> not live (today's behaviour — a
+#     scheduled run stays PREVIEW, same as before this variable existed).
+#     Set to a string pydantic-core's lax bool parser would read as `true`
+#     -> live: a scheduled run passes `--execute` and exports
+#     `DRY_RUN=false` for the reminders step, the same effect as a human
+#     ticking `execute_reminders` on a manual run. Accepted spellings,
+#     case-insensitive — empirically verified 2026-09-19 against this
+#     backend's installed pydantic==2.13.3 / pydantic_core==2.46.3 (the SAME
+#     versions d028bcc verified for NOTIFICATIONS_DRY_RUN's false side,
+#     mirrored here for REMINDERS_LIVE's true side, same `${VAR,,}` + `case`
+#     technique, not a second one): true, 1, yes, on, y, t. Anything else —
+#     unset, blank, "false", or an unrecognised spelling — is NOT live; this
+#     is plain bash rather than Settings(), so an invalid spelling falls
+#     through to the safe PREVIEW default instead of raising.
+#
+#     The manual `execute_reminders` input keeps working exactly as GATE 1
+#     describes and ORs with GATE 3 — either one alone is enough to go REAL,
+#     so a manual real run is still possible while REMINDERS_LIVE is off.
+#     Flip side, intentional: once REMINDERS_LIVE is on, an unchecked manual
+#     dispatch ALSO goes real (the MODE line always names which reason
+#     applied) — turn the variable off first if a manual PREVIEW is needed
+#     while live.
+#
+#     Does not change GATE 2. REMINDERS_LIVE=true with NOTIFICATIONS_DRY_RUN
+#     left at its default is still a safe no-op for real mail: the job runs
+#     its REAL code path, each send comes back not-actually-sent, and
+#     reminder_log is NOT updated — it shows as "failed" in that run's
+#     summary line, exactly like a premature manual `execute_reminders=true`
+#     run without also flipping NOTIFICATIONS_DRY_RUN already did before
+#     this change (why d028bcc added the MODE line's `mail:` field). Both
+#     GATE 2 variables still gate whether mail actually leaves the mailbox —
+#     see "Exact combinations" above, case (d).
+#
+#     Scope note: this prepares issue #29 ("Go live: pre-deadline reminders
+#     reach the real Fillers with production links"), itself blocked by #28
+#     (the send rehearsal) — it adds the kill-switch machinery #29 needs but
+#     does NOT flip it: REMINDERS_LIVE is left unset by this change, and
+#     APP_BASE_URL / NOTIFICATIONS_REDIRECT_ALL_TO (the other two things #29
+#     asks for) are untouched. jakkaritw sets REMINDERS_LIVE separately.
 name: Budget Automations (auto-submit / reminders)
 
 on:
@@ -103,7 +176,7 @@ on:
         type: boolean
         default: false
       execute_reminders:
-        description: "Actually send pre-deadline reminder mail (A12 step only). Unchecked = dry-run preview only. Independent of execute_auto_submit. A real send ALSO needs the NOTIFICATIONS_DRY_RUN repo variable set to 'false' — see the header comment above."
+        description: "Actually send pre-deadline reminder mail (A12 step only). Unchecked = dry-run preview only, UNLESS the REMINDERS_LIVE repo variable is on — then this step goes real either way (see the header comment, GATE 3). Independent of execute_auto_submit. A real send ALSO needs the NOTIFICATIONS_DRY_RUN repo variable set to 'false' — see the header comment above."
         required: false
         type: boolean
         default: false
@@ -211,15 +284,45 @@ jobs:
           # behaviour is unchanged until jakkaritw sets these.
           NOTIFICATIONS_DRY_RUN: ${{ vars.NOTIFICATIONS_DRY_RUN || 'true' }}
           NOTIFICATIONS_REDIRECT_ALL_TO: ${{ vars.NOTIFICATIONS_REDIRECT_ALL_TO }}
+          # A12-only schedule-live switch (repo variable, not a secret —
+          # issue #29 prep, GATE 3, see the header comment). Unset/blank ->
+          # not live: a scheduled run stays a preview exactly as before this
+          # variable existed.
+          REMINDERS_LIVE: ${{ vars.REMINDERS_LIVE }}
         run: |
           ARGS="--fiscal-year $FISCAL_YEAR"
-          if [ "${{ inputs.execute_reminders }}" = "true" ]; then
+          # GATE 3 (issue #29 prep): same case-insensitive spelling-match
+          # technique d028bcc used for NOTIFICATIONS_DRY_RUN's false side
+          # (${VAR,,} + case), mirrored for REMINDERS_LIVE's true side —
+          # empirically the exact set pydantic-core 2.46.3 (pydantic 2.13.3,
+          # pinned in backend/requirements.txt) accepts as a lax bool `true`
+          # for a string: true/1/yes/on/y/t, case-insensitive, no
+          # surrounding whitespace. Anything else (unset, blank, "false", or
+          # an unrecognised spelling) is NOT live — the safe default.
+          case "${REMINDERS_LIVE,,}" in
+            true|1|yes|on|y|t) REMINDERS_LIVE_ON=true ;;
+            *) REMINDERS_LIVE_ON=false ;;
+          esac
+          # GATE 1 (manual execute_reminders) OR GATE 3 (REMINDERS_LIVE) —
+          # either alone is enough to go REAL. This is what keeps a manual
+          # real run possible while REMINDERS_LIVE is off, and what lets the
+          # nightly schedule (which never carries a workflow_dispatch input)
+          # go real on its own once REMINDERS_LIVE is on.
+          if [ "${{ inputs.execute_reminders }}" = "true" ] || [ "$REMINDERS_LIVE_ON" = "true" ]; then
             export DRY_RUN=false
             ARGS="$ARGS --execute"
             MODE=REAL
+            if [ "${{ inputs.execute_reminders }}" = "true" ] && [ "$REMINDERS_LIVE_ON" = "true" ]; then
+              REASON="manual execute_reminders input AND schedule variable REMINDERS_LIVE=on"
+            elif [ "${{ inputs.execute_reminders }}" = "true" ]; then
+              REASON="manual execute_reminders input"
+            else
+              REASON="schedule variable REMINDERS_LIVE=on"
+            fi
           else
             export DRY_RUN=true
             MODE=PREVIEW
+            REASON="neither manual execute_reminders nor REMINDERS_LIVE is on"
           fi
           # This line must never claim "suppressed" while jobs.send_reminders
           # (which reads the SAME NOTIFICATIONS_DRY_RUN via pydantic-settings,
@@ -239,5 +342,5 @@ jobs:
             *) MAIL="suppressed" ;;
           esac
           if [ -n "$NOTIFICATIONS_REDIRECT_ALL_TO" ]; then REDIRECT="ALL mail -> $NOTIFICATIONS_REDIRECT_ALL_TO"; else REDIRECT="off (real recipients)"; fi
-          echo "MODE: $MODE reminders (A12) — execute_reminders=${{ inputs.execute_reminders }}, DRY_RUN=$DRY_RUN | mail: $MAIL | redirect: $REDIRECT"
+          echo "MODE: $MODE reminders (A12) — reason: $REASON | execute_reminders=${{ inputs.execute_reminders }}, REMINDERS_LIVE=$REMINDERS_LIVE (parsed=$REMINDERS_LIVE_ON), DRY_RUN=$DRY_RUN | mail: $MAIL | redirect: $REDIRECT"
           python -m jobs.send_reminders $ARGS
