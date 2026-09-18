@@ -1612,7 +1612,8 @@ describe('TripManager', () => {
 
       const detailInput = screen.getByLabelText('trip-detail-note existing-10')
       expect(detailInput).not.toBeDisabled()
-      expect(detailInput).toHaveAttribute('placeholder', expect.stringContaining('ค่าวีซ่า'))
+      expect(detailInput).toHaveAttribute('placeholder', 'ระบุรายละเอียด')
+      expect(detailInput.getAttribute('placeholder')).not.toContain('เช่น')
       expect(detailInput).toHaveValue('ค่าวีซ่า / ประกัน')
 
       fireEvent.change(detailInput, { target: { value: 'อัปเดตรายละเอียด' } })

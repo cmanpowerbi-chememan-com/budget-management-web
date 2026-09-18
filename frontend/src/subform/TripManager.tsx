@@ -1162,7 +1162,7 @@ export function TripManager({
                           id={`trip-detail-${card.localId}`}
                           className="detail-input"
                           type="text"
-                          placeholder="ระบุรายละเอียด เช่น ค่าวีซ่า / ประกัน"
+                          placeholder="ระบุรายละเอียด"
                           maxLength={500}
                           value={card.draft.remark ?? ''}
                           onChange={(e) => updateTripField(card.localId, (d) => ({ ...d, remark: e.target.value }))}
