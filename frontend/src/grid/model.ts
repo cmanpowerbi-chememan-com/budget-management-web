@@ -733,56 +733,43 @@ export function admitRows(rows: BudgetRow[], selectedDepartment: string | null):
   return rows.filter((r) => r.department === selectedDepartment)
 }
 
-/** GL groups only ONE department may budget for: gl_group -> owning department
- * (jakkaritw, 2026-08-29). Keyed by GROUP, never by gl_code, because
- * `dbo.gl_group` is an admin-edited master — a third Training & Seminar GL
- * added there inherits the restriction without a code change (same reason
- * `groupChipClass` above gates on the group name).
+/** GL codes only certain cost centers may budget for: gl_code -> allowed cost
+ * centers (jakkaritw, 2026-09-17/18 — supersedes the department-keyed
+ * `Training & Seminar` -> `Talent & Culture` rule shipped 2026-08-29). Keyed by
+ * GL CODE, not group: the FY2026 approved budget on `6210100150` sits on
+ * exactly these two cost centers, and a group-level rule would drag in every
+ * other GL the master ever files under that group. A future seminar GL added
+ * to `dbo.gl_group` is NOT automatically restricted — it needs its own line
+ * here.
  *
  * Scope is deliberately the PICKER only: existing rows, the grid and every
- * total stay exactly as they are. Cost centers outside Talent & Culture already
- * carry approved seminar money (FY2026 board_budget), so stripping rows or
- * refusing writes would move real numbers — hence a rule that decides what can
- * be ADDED from here on, and nothing else. */
-export const DEPT_RESTRICTED_GL_GROUPS: Record<string, string> = {
-  'Training & Seminar': 'Talent & Culture',
+ * total stay exactly as they are — same as the rule it replaces. */
+export const CC_RESTRICTED_GLS: Readonly<Record<string, readonly string[]>> = {
+  '6210100150': ['10OS010000', '10HR012000'],
 }
 
-/** Thai reason for a restricted GL picked on a cost center outside its owning
- * department. Only reachable from a stale selection — the picker never offers
- * the GL in the first place (see `AddTransactionForm`). Spelled out rather than
- * built from the map: one group, one message, and the wording names the GL the
- * way users say it ("ค่าอบรมและสัมมนา"), not the way the master spells it. */
-export const DEPT_RESTRICTED_GL_REASON_TH =
-  'GL ค่าอบรมและสัมมนา ใช้ได้เฉพาะ Cost Center ของฝ่าย Talent & Culture'
-
-/** Shown in the GL picker when a restricted GL is withheld because the
- * DEPARTMENT LIST could not be loaded, not because the Cost Center genuinely
- * belongs elsewhere (`BudgetGrid` swallows a `GET /scope/departments` failure
- * with `departments = []` and no banner). Deliberately NOT
- * `DEPT_RESTRICTED_GL_REASON_TH`: telling a Talent & Culture filler their own
- * GL belongs to Talent & Culture would send them hunting for a permission
- * problem that does not exist. The fail-closed behavior is unchanged — only
- * the silence is. */
-export const DEPT_DATA_UNAVAILABLE_REASON_TH =
-  'โหลดข้อมูลฝ่ายไม่สำเร็จ จึงยังไม่แสดง GL บางรายการ — กรุณารีเฟรชหน้าจอแล้วลองใหม่'
+/** Thai reason for a restricted GL picked on a cost center outside its
+ * allowed list. Only reachable from a stale selection — the picker never
+ * offers the GL in the first place (see `AddTransactionForm`). The cost
+ * center list is JOINED FROM `CC_RESTRICTED_GLS`, never typed out separately,
+ * so the message and the rule can never drift apart. */
+export const CC_RESTRICTED_GL_REASON_TH =
+  `GL ค่าอบรมและสัมมนา ใช้ได้เฉพาะ Cost Center ${CC_RESTRICTED_GLS['6210100150'].join(' และ ')}`
 
 /** True when `gl` may be picked for `costCenter`. Admins bypass the rule
- * entirely (jakkaritw, 2026-08-29); every GL outside `DEPT_RESTRICTED_GL_GROUPS`
- * is unaffected. Fails CLOSED for a restricted GL — no cost center picked yet,
- * or a cost center with no row in `departments`, hides it rather than offering
- * one that would vanish (or be rejected) on the next pick. */
+ * entirely; every GL code outside `CC_RESTRICTED_GLS` is unaffected. Fails
+ * CLOSED for a restricted GL — no cost center picked yet hides it rather than
+ * offering one that would be rejected on the next pick. */
 export function isGlPickableForCostCenter(
   gl: GlAccount,
   costCenter: string,
-  departments: DepartmentRow[],
   isAdmin = false,
 ): boolean {
   if (isAdmin) return true
-  const requiredDepartment = DEPT_RESTRICTED_GL_GROUPS[gl.gl_group ?? '']
-  if (!requiredDepartment) return true
+  const allowedCostCenters = CC_RESTRICTED_GLS[gl.gl_code]
+  if (!allowedCostCenters) return true
   if (!costCenter) return false
-  return departments.find((d) => d.cost_center === costCenter)?.department === requiredDepartment
+  return allowedCostCenters.includes(costCenter)
 }
 
 export interface NewTransactionInput {
@@ -804,11 +791,12 @@ export interface NewTransactionInput {
   yearNotOpen?: boolean
   /** cost_center -> department rows (`GET /scope/departments`, already fetched
    * by `BudgetGrid` for the ฝ่าย picker) — resolves the picked Cost Center's
-   * department for the `DEPT_RESTRICTED_GL_GROUPS` check. Optional; omitting it
-   * only ever matters for a restricted GL, which then fails closed. */
+   * department for the Issue #13 ฝ่าย-mismatch check below (`CC_RESTRICTED_GLS`
+   * no longer needs it — that rule is keyed on the Cost Center directly).
+   * Optional; omitting it only ever loosens that one check, never the GL rule. */
   departments?: DepartmentRow[]
-  /** Admins bypass the department restriction on GL groups entirely
-   * (jakkaritw, 2026-08-29). Optional/defaults to `false`. */
+  /** Admins bypass `CC_RESTRICTED_GLS` entirely (jakkaritw, 2026-09-17/18).
+   * Optional/defaults to `false`. */
   isAdmin?: boolean
 }
 
@@ -838,8 +826,7 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   // this only fires on a stale selection. Only rejects on a definite
   // mismatch, never on "unknown" (an empty/incomplete `departments` list) —
   // this check must never turn into a NEW way to fail-closed on missing
-  // department data, on top of the pre-existing `DEPT_RESTRICTED_GL_GROUPS`
-  // one above.
+  // department data, on top of the separate `CC_RESTRICTED_GLS` check below.
   if (input.selectedDepartment != null) {
     const ccDepartment = (input.departments ?? []).find((d) => d.cost_center === input.costCenter)?.department
     if (ccDepartment !== undefined && ccDepartment !== input.selectedDepartment) {
@@ -858,8 +845,8 @@ export function validateNewTransaction(input: NewTransactionInput): ValidationRe
   // Cost Center makes it ineligible, so this only fires if that state was
   // somehow bypassed. Checked ahead of the duplicate-row test — "this GL is not
   // yours" is the more useful message of the two.
-  if (!isGlPickableForCostCenter(pickedGl, input.costCenter, input.departments ?? [], input.isAdmin)) {
-    return { ok: false, errorTh: DEPT_RESTRICTED_GL_REASON_TH }
+  if (!isGlPickableForCostCenter(pickedGl, input.costCenter, input.isAdmin)) {
+    return { ok: false, errorTh: CC_RESTRICTED_GL_REASON_TH }
   }
   const exists = input.existingRows.some(
     (r) => r.cost_center === input.costCenter && r.gl_account === input.glAccount,

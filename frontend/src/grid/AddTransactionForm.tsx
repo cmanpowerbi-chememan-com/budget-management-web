@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
 import {
-  DEPARTMENT_UNKNOWN_ADD_REASON_TH, DEPT_DATA_UNAVAILABLE_REASON_TH, LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH,
+  DEPARTMENT_UNKNOWN_ADD_REASON_TH, LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH,
   YEAR_NOT_OPEN_ADD_REASON_TH, isGlPickableForCostCenter, lockedAddReasonTh, validateNewTransaction,
 } from './model'
 
@@ -54,20 +54,14 @@ export interface AddTransactionFormProps {
    * Optional/defaults to `false`. */
   lockStatusUnavailable?: boolean
   /** One row per Cost Center in the caller's scope (`GET /scope/departments`,
-   * already fetched by `BudgetGrid`) — resolves the picked Cost Center's
-   * department for `DEPT_RESTRICTED_GL_GROUPS` (jakkaritw 2026-08-29:
-   * Training & Seminar is pickable only on Talent & Culture cost centers).
-   * Optional/defaults to `[]`, which hides the restricted GLs — the safe
-   * side, since only they depend on it. */
+   * already fetched by `BudgetGrid`) — used only for the Issue #13 ฝ่าย-
+   * mismatch check inside `validateNewTransaction`. The GL rule
+   * (`CC_RESTRICTED_GLS`) is keyed on the Cost Center directly and does not
+   * read this list. Optional/defaults to `[]`. */
   departments?: DepartmentRow[]
-  /** Admins pick any GL on any Cost Center — they bypass the department
-   * restriction above. Optional/defaults to `false`. */
+  /** Admins pick any GL on any Cost Center — they bypass `CC_RESTRICTED_GLS`.
+   * Optional/defaults to `false`. */
   isAdmin?: boolean
-  /** `true` when `GET /scope/departments` failed — `BudgetGrid` catches that
-   * error and carries on with an empty list, so without this flag a withheld
-   * restricted GL would look identical to one an admin had deleted. Optional/
-   * defaults to `false`. */
-  departmentsLoadFailed?: boolean
 }
 
 /** "+ เพิ่ม transaction" — picks a Cost Center + a GL code (Fill scope
@@ -82,7 +76,7 @@ export interface AddTransactionFormProps {
 export function AddTransactionForm({
   fillCostCenters, glRef, existingRows, onAdd, yearNotOpen = false,
   selectedDepartment = null, departmentLocked = false, departmentUnknown = false, lockStatusUnavailable = false,
-  departments = [], isAdmin = false, departmentsLoadFailed = false,
+  departments = [], isAdmin = false,
 }: AddTransactionFormProps) {
   const [open, setOpen] = useState(false)
   const [costCenter, setCostCenter] = useState('')
@@ -108,7 +102,7 @@ export function AddTransactionForm({
    * center, and save the exact combination the rule forbids. */
   function changeCostCenter(cc: string) {
     setCostCenter(cc)
-    if (selectedGl && !isGlPickableForCostCenter(selectedGl, cc, departments, isAdmin)) {
+    if (selectedGl && !isGlPickableForCostCenter(selectedGl, cc, isAdmin)) {
       setGlAccount('')
       setGlSearch('')
     }
@@ -121,18 +115,14 @@ export function AddTransactionForm({
   }
 
   const query = glSearch.trim().toLowerCase()
-  // Eligibility BEFORE the search filter, so a GL this Cost Center's department
-  // may not budget for cannot be typed back into view either.
-  const pickableGls = glRef.filter((g) => isGlPickableForCostCenter(g, costCenter, departments, isAdmin))
+  // Eligibility BEFORE the search filter, so a GL this Cost Center may not
+  // budget for cannot be typed back into view either.
+  const pickableGls = glRef.filter((g) => isGlPickableForCostCenter(g, costCenter, isAdmin))
   // Match code, name AND group — the label shows only name, but users also
   // search by group (e.g. "office" for the Office Expenses GLs).
   const filteredGls = query
     ? pickableGls.filter((g) => `${g.gl_code} ${g.gl_name ?? ''} ${g.gl_group}`.toLowerCase().includes(query))
     : pickableGls
-  // Only when something is ACTUALLY being withheld: an admin (or a GL master
-  // with no restricted group in it) loses nothing to a failed department fetch,
-  // so they get no warning about it.
-  const withholdingOnStaleDeptData = departmentsLoadFailed && pickableGls.length < glRef.length
 
   function glLabel(g: GlAccount): string {
     return `${g.gl_code} — ${g.gl_name ?? g.gl_group}${g.edit_by === 'admin' ? ' (เฉพาะแอดมิน)' : ''}`
@@ -284,11 +274,7 @@ export function AddTransactionForm({
           />
           {glListOpen && (
             <div className="gl-combo-list" role="listbox" aria-label="ตัวเลือก GL Code">
-              {/* Replaces the "not found" line rather than stacking with it:
-                  "no such GL" is the wrong story when the GL exists and the
-                  department data is what failed. */}
-              {withholdingOnStaleDeptData && <div className="gl-combo-empty">{DEPT_DATA_UNAVAILABLE_REASON_TH}</div>}
-              {filteredGls.length === 0 && !withholdingOnStaleDeptData && (
+              {filteredGls.length === 0 && (
                 <div className="gl-combo-empty">ไม่พบ GL Code ที่ค้นหา</div>
               )}
               {filteredGls.map((g) => (

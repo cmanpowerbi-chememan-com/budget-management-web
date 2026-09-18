@@ -1163,14 +1163,15 @@ describe('BudgetGrid', () => {
     })
   })
 
-  // Department-restricted GL groups (jakkaritw 2026-08-29) — the rule itself is
-  // unit-tested in model.test.ts and AddTransactionForm.test.tsx; what only
-  // exists here is the wiring, i.e. that BudgetGrid actually hands the picker
-  // its `departments` (from GET /scope/departments) and the caller's isAdmin.
-  describe('department-restricted GL wiring (departments + isAdmin -> AddTransactionForm)', () => {
+  // Cost-center-restricted GL 6210100150 (jakkaritw 2026-09-17/18) — the rule
+  // itself is unit-tested in model.test.ts and AddTransactionForm.test.tsx;
+  // what only exists here is the wiring, i.e. that BudgetGrid actually hands
+  // the picker the caller's isAdmin and scopes the Cost Center list to the
+  // selected ฝ่าย.
+  describe('cost-center-restricted GL wiring (isAdmin -> AddTransactionForm)', () => {
     const SEMINAR_GL_REF = [
       ...GL_REF,
-      { gl_code: '5210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' as const },
+      { gl_code: '6210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' as const },
     ]
     const TWO_DEPARTMENTS = [
       { cost_center: '10AC012000', department: 'Accounting', division: 'Finance Division', c_level: 'CFO' },
@@ -1184,7 +1185,7 @@ describe('BudgetGrid', () => {
       vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
     }
 
-    it('a filler gets the seminar GL only on the Talent & Culture cost center', async () => {
+    it('a filler gets the GL only on the eligible cost center', async () => {
       const scope: ScopeState = {
         ...SCOPE, fillCostCenters: ['10AC012000', '10HR012000'], seeCostCenters: ['10AC012000', '10HR012000'],
       }
@@ -1193,22 +1194,22 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: null }} />)
 
       // Auto-selects "Talent & Culture" (its division, 'Corporate Affairs',
-      // sorts before 'Finance Division') — its own Cost Center gets the GL.
+      // sorts before 'Finance Division') — its own Cost Center is eligible.
       fireEvent.click(await screen.findByRole('button', { name: /เพิ่ม transaction/i }))
       fireEvent.focus(screen.getByLabelText('Cost Center'))
       fireEvent.click(screen.getByRole('option', { name: '10HR012000' }))
       fireEvent.focus(screen.getByLabelText('GL Code'))
-      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /6210100150/ })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
 
       // Issue #13, decision 1: switching to Accounting scopes the Add form
-      // to ITS Cost Center — the seminar GL is withheld there instead.
+      // to ITS Cost Center — the GL is withheld there instead.
       switchDepartment('Accounting')
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       fireEvent.focus(screen.getByLabelText('Cost Center'))
       fireEvent.click(screen.getByRole('option', { name: '10AC012000' }))
       fireEvent.focus(screen.getByLabelText('GL Code'))
-      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /6210100150/ })).not.toBeInTheDocument()
       expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
     })
 
@@ -1229,7 +1230,7 @@ describe('BudgetGrid', () => {
       expect(screen.getByText(/ยังไม่ทราบฝ่าย/)).toBeInTheDocument()
     })
 
-    it('an admin gets the seminar GL on a cost center outside Talent & Culture', async () => {
+    it('an admin gets the GL on a cost center outside the allowed list', async () => {
       const adminScope: ScopeState = {
         ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['10AC012000'], seeCostCenters: ['10AC012000'],
       }
@@ -1245,7 +1246,7 @@ describe('BudgetGrid', () => {
       fireEvent.focus(screen.getByLabelText('Cost Center'))
       fireEvent.click(screen.getByRole('option', { name: '10AC012000' }))
       fireEvent.focus(screen.getByLabelText('GL Code'))
-      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /6210100150/ })).toBeInTheDocument()
     })
   })
 

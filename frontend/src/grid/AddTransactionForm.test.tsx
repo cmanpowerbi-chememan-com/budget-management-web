@@ -348,20 +348,16 @@ describe('AddTransactionForm', () => {
     })
   })
 
-  // Training & Seminar is budgeted by Talent & Culture only (jakkaritw
-  // 2026-08-29). The rule lives in the PICKER: existing rows and every total
-  // stay untouched, so cost centers that already carry seminar money keep it.
-  describe('department-restricted GL groups', () => {
+  // GL 6210100150 is budgeted only by 10OS010000 and 10HR012000 (jakkaritw
+  // 2026-09-17/18 — supersedes the department-keyed rule shipped 2026-08-29).
+  // The rule lives in the PICKER: existing rows and every total stay
+  // untouched, so a cost center that already carries seminar money keeps it.
+  describe('cost-center-restricted GLs (GL 6210100150)', () => {
     const SEMINAR_GL_REF: GlAccount[] = [
       ...GL_REF,
-      { gl_code: '5210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' },
       { gl_code: '6210100150', gl_group: 'Training & Seminar', gl_name: 'ค่าอบรมและสัมมนา - ค่าธรรมเนียม', is_special: true, edit_by: 'user' },
     ]
-    const DEPARTMENTS: DepartmentRow[] = [
-      { cost_center: '10HR012000', department: 'Talent & Culture', division: 'Corporate Affairs', c_level: null },
-      { cost_center: '10AC012000', department: 'Accounting', division: 'Finance', c_level: null },
-    ]
-    const FILL_CCS = ['10HR012000', '10AC012000']
+    const FILL_CCS = ['10OS010000', '10HR012000', '10HR011000', '10AC012000']
 
     function renderForm(props: Partial<ComponentProps<typeof AddTransactionForm>> = {}) {
       return render(
@@ -370,73 +366,93 @@ describe('AddTransactionForm', () => {
           glRef={SEMINAR_GL_REF}
           existingRows={[]}
           onAdd={vi.fn().mockResolvedValue({ ok: true })}
-          departments={DEPARTMENTS}
           {...props}
         />,
       )
     }
 
-    it('a filler on a Talent & Culture cost center sees both seminar GLs', () => {
+    it('a filler on 10OS010000 sees the GL — the cost center that gained it', () => {
+      renderForm()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      pickCcOption('10OS010000')
+      openGlList()
+      expect(screen.getByRole('option', { name: /6210100150/ })).toBeInTheDocument()
+    })
+
+    it('a filler on 10HR012000 still sees the GL — unchanged from before', () => {
       renderForm()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       pickCcOption('10HR012000')
       openGlList()
-      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
       expect(screen.getByRole('option', { name: /6210100150/ })).toBeInTheDocument()
     })
 
-    it('a filler on any other cost center sees neither seminar GL, but every other GL is still there', () => {
+    it('a filler on 10HR011000 no longer sees the GL, but every other GL is still there', () => {
+      renderForm()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      pickCcOption('10HR011000')
+      openGlList()
+      expect(screen.queryByRole('option', { name: /6210100150/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
+    })
+
+    it('a filler on any other cost center does not see the GL', () => {
       renderForm()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       pickCcOption('10AC012000')
       openGlList()
-      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('option', { name: /6210100150/ })).not.toBeInTheDocument()
-      expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: /5211900030/ })).toBeInTheDocument()
     })
 
-    it('searching cannot type a hidden seminar GL back into view', () => {
+    it('searching cannot type the hidden GL back into view', () => {
       renderForm()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-      pickCcOption('10AC012000')
+      pickCcOption('10HR011000')
       openGlList()
       fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: 'seminar' } })
       expect(within(screen.getByRole('listbox')).queryByRole('option')).not.toBeInTheDocument()
       expect(screen.getByText('ไม่พบ GL Code ที่ค้นหา')).toBeInTheDocument()
     })
 
-    it('an admin sees the seminar GLs on a non–Talent & Culture cost center', () => {
+    it('an admin sees the GL on 10HR011000', () => {
       renderForm({ isAdmin: true })
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-      pickCcOption('10AC012000')
+      pickCcOption('10HR011000')
       openGlList()
-      expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
       expect(screen.getByRole('option', { name: /6210100150/ })).toBeInTheDocument()
     })
 
-    it('no cost center picked yet — the seminar GLs are hidden, so they can never appear and then vanish', () => {
+    it('no cost center picked yet — the GL is hidden, so it can never appear and then vanish', () => {
       renderForm()
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       openGlList()
-      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /6210100150/ })).not.toBeInTheDocument()
       expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
     })
 
-    it('switching the cost center away from Talent & Culture clears an already-picked seminar GL', () => {
+    it('switching the cost center from 10HR012000 to 10HR011000 clears an already-picked GL', () => {
       const onAdd = vi.fn().mockResolvedValue({ ok: true })
       renderForm({ onAdd })
       fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
       pickCcOption('10HR012000')
-      pickGlOption(/5210100150/)
-      expect((screen.getByLabelText('GL Code') as HTMLInputElement).value).toContain('5210100150')
+      pickGlOption(/6210100150/)
+      expect((screen.getByLabelText('GL Code') as HTMLInputElement).value).toContain('6210100150')
 
-      pickCcOption('10AC012000')
+      pickCcOption('10HR011000')
       expect((screen.getByLabelText('GL Code') as HTMLInputElement).value).toBe('')
 
       fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
       expect(screen.getByText('กรุณาเลือก GL Code')).toBeInTheDocument()
       expect(onAdd).not.toHaveBeenCalled()
+    })
+
+    it('switching between the two eligible cost centers keeps the picked GL', () => {
+      renderForm()
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      pickCcOption('10OS010000')
+      pickGlOption(/6210100150/)
+      pickCcOption('10HR012000')
+      expect((screen.getByLabelText('GL Code') as HTMLInputElement).value).toContain('6210100150')
     })
 
     it('switching between two cost centers keeps a picked non-restricted GL', () => {
@@ -446,65 +462,6 @@ describe('AddTransactionForm', () => {
       pickGlOption(/5211800030/)
       pickCcOption('10AC012000')
       expect((screen.getByLabelText('GL Code') as HTMLInputElement).value).toContain('5211800030')
-    })
-
-    // Gate finding MED-1: `GET /scope/departments` failing is a real, tested
-    // backend path, and BudgetGrid swallows it (departments = [], no banner).
-    // Fail-closed stays — the SILENCE is what gets fixed: the picker says why
-    // the GLs are missing instead of pretending nothing exists.
-    describe('departments failed to load', () => {
-      it('says the department data is missing, instead of the bare "not found" line', () => {
-        renderForm({ departmentsLoadFailed: true, departments: [] })
-        fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-        pickCcOption('10HR012000')
-        openGlList()
-        fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: 'อบรม' } })
-
-        expect(screen.getByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).toBeInTheDocument()
-        expect(screen.queryByText('ไม่พบ GL Code ที่ค้นหา')).not.toBeInTheDocument()
-      })
-
-      it('shows the same line without a search query, so nothing goes missing silently', () => {
-        renderForm({ departmentsLoadFailed: true, departments: [] })
-        fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-        pickCcOption('10HR012000')
-        openGlList()
-
-        expect(screen.getByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).toBeInTheDocument()
-        expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument() // the rest of the list still works
-      })
-
-      it('no line for an admin — nothing is being withheld from them in the first place', () => {
-        renderForm({ departmentsLoadFailed: true, departments: [], isAdmin: true })
-        fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-        pickCcOption('10AC012000')
-        openGlList()
-
-        expect(screen.queryByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).not.toBeInTheDocument()
-        expect(screen.getByRole('option', { name: /5210100150/ })).toBeInTheDocument()
-      })
-
-      it('no line when the department list loaded fine — a GL hidden by the RULE is not an error', () => {
-        renderForm()
-        fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-        pickCcOption('10AC012000')
-        openGlList()
-        fireEvent.change(screen.getByLabelText('GL Code'), { target: { value: 'อบรม' } })
-
-        expect(screen.queryByText(/โหลดข้อมูลฝ่ายไม่สำเร็จ/)).not.toBeInTheDocument()
-        expect(screen.getByText('ไม่พบ GL Code ที่ค้นหา')).toBeInTheDocument()
-      })
-    })
-
-    it('departments is optional — omitting it hides the restricted GLs and leaves every other GL untouched', () => {
-      render(
-        <AddTransactionForm fillCostCenters={FILL_CCS} glRef={SEMINAR_GL_REF} existingRows={[]} onAdd={vi.fn()} />,
-      )
-      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
-      pickCcOption('10HR012000')
-      openGlList()
-      expect(screen.queryByRole('option', { name: /5210100150/ })).not.toBeInTheDocument()
-      expect(screen.getByRole('option', { name: /5211800030/ })).toBeInTheDocument()
     })
   })
 })
