@@ -135,6 +135,29 @@ unchanged at `14:00:00`.
 - A tester must **log in fresh after the change** for 20 minutes to apply: cookies
   already minted keep the expiry they were issued with, per the Consequences below.
 
+## Amendment 2026-09-18 — production restored to 14 h after a UAT-period drop to 1 h; staging's 20-minute SIT value was reverted, not replaced
+
+Two live-config facts re-measured directly against both Container Apps auth configs on
+2026-09-18 (`az containerapp auth show`, read-only), after UAT for FY2027 finished. Both
+correct passages elsewhere in this ADR that had gone stale.
+
+**1. Production drifted to 1 h during UAT — never documented here.** At some point during
+the UAT round, `cman-budget-web-prd`'s `login.cookieExpiration.timeToExpiration` was set to
+`01:00:00`, while this ADR's Decision section continued to read `14:00:00` throughout as if
+unchanged. jakkaritw restored it to `14:00:00` on 2026-09-18; verified live against
+production the same day. The Decision section above is accurate again as of this date —
+but was NOT accurate for the UAT round's duration, and that excursion was never recorded
+until now.
+
+**2. Staging never got its 20-minute SIT value back after 2026-08-20 — it has no
+`cookieExpiration` block at all.** The 2026-08-18 amendment above set staging's
+`cookieExpiration.timeToExpiration` to `00:20:00` for the SIT window. That block was
+removed on 2026-08-20, and as measured on 2026-09-18 `cman-budget-web-stg` carries **no
+`cookieExpiration` block whatsoever** — i.e. the Azure default (documented elsewhere in
+this ADR as ~8 h for staging pre-2026-08-18, not independently re-measured on this date).
+The "Staging is now 20 minutes" line in the 2026-08-18 amendment above describes the
+2026-08-18 → 2026-08-20 window only; it is not live and must not be read as current.
+
 ## Consequences
 
 - The window in which a lost or borrowed laptop holds a live session grows from 8 h to
