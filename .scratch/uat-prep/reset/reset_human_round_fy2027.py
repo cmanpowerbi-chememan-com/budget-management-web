@@ -42,7 +42,7 @@ SERVER = "v5o4qez3u4cupase7cogkwvyke-bby6xlm3ncqexly4ozejod2vqe.database.fabric.
 DB = "fabric_sql_database-a42ef9f3-f190-464a-8d5e-c0d41ef9ce42"
 FY = 2027
 BASE_CCS = ("10IT011300", "10IT012000", "10IT013000")   # D&A x2 + Solution Delivery
-DEPTS = ("Data & Analytic", "Solution Delivery")
+BASE_DEPTS = ("Data & Analytic", "Solution Delivery")
 OUT_DIR = Path(r"C:\04.budget_management_web\.scratch\uat-prep\reset\out")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,6 +66,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--apply", action="store_true", help="delete (default is dry-run)")
     ap.add_argument("--extra-cc", action="append", default=[],
                     help="additional cost center to include in scope (repeatable), e.g. KKCA01")
+    ap.add_argument("--extra-dept", action="append", default=[],
+                    help="additional approval_status department to include in scope (repeatable)")
     ap.add_argument("--expect-budget", type=int, default=24)
     ap.add_argument("--expect-detail", type=int, default=15)
     ap.add_argument("--expect-trip", type=int, default=3)
@@ -89,7 +91,9 @@ def main() -> int:
     ROUND_START = args.since
     CCS = tuple(BASE_CCS) + tuple(args.extra_cc)
     IN = "(" + ",".join("?" * len(CCS)) + ")"
-    print("scope cost centers:", CCS)
+    DEPTS = tuple(BASE_DEPTS) + tuple(args.extra_dept)
+    DIN = "(" + ",".join("?" * len(DEPTS)) + ")"
+    print("scope cost centers:", CCS, "| departments:", DEPTS)
     print("expectations:", EXPECTED, "total", EXPECTED_TOTAL, "other", EXPECTED_OTHER, "since", ROUND_START)
     conn = pyodbc.connect(
         f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER};DATABASE={DB};"
@@ -104,7 +108,7 @@ def main() -> int:
         "pending_budget": rows(cur, "SELECT * FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
         "pending_budget_detail": rows(cur, "SELECT * FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
         "budget_trip": rows(cur, "SELECT * FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN, FY, *CCS),
-        "approval_status": rows(cur, "SELECT * FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS),
+        "approval_status": rows(cur, "SELECT * FROM budget.approval_status WHERE fiscal_year=? AND department IN " + DIN, FY, *DEPTS),
     }
     found = {k: len(baseline[k]) for k in EXPECTED}
     total = sum(Decimal(str(r["total_year"])) for r in baseline["pending_budget"])
@@ -143,7 +147,7 @@ def main() -> int:
         d_detail = cur.execute("DELETE FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
         d_trip = cur.execute("DELETE FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
         d_budget = cur.execute("DELETE FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).rowcount
-        d_status = cur.execute("DELETE FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).rowcount
+        d_status = cur.execute("DELETE FROM budget.approval_status WHERE fiscal_year=? AND department IN " + DIN, FY, *DEPTS).rowcount
         deleted = {"pending_budget": d_budget, "pending_budget_detail": d_detail, "budget_trip": d_trip, "approval_status": d_status}
         other_after = cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN " + IN + "", FY, *CCS).fetchone()[0]
         print("deleted (uncommitted):", deleted, "| other-dept rows now:", other_after)
@@ -162,8 +166,8 @@ def main() -> int:
         "pending_budget": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
         "pending_budget_detail": cur.execute("SELECT COUNT(*) FROM budget.pending_budget_detail WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
         "budget_trip": cur.execute("SELECT COUNT(*) FROM budget.budget_trip WHERE fiscal_year=? AND cost_center IN " + IN + "", FY, *CCS).fetchone()[0],
-        "approval_status": cur.execute("SELECT COUNT(*) FROM budget.approval_status WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).fetchone()[0],
-        "approval_log_kept": cur.execute("SELECT COUNT(*) FROM budget.approval_log WHERE fiscal_year=? AND department IN (?,?)", FY, *DEPTS).fetchone()[0],
+        "approval_status": cur.execute("SELECT COUNT(*) FROM budget.approval_status WHERE fiscal_year=? AND department IN " + DIN, FY, *DEPTS).fetchone()[0],
+        "approval_log_kept": cur.execute("SELECT COUNT(*) FROM budget.approval_log WHERE fiscal_year=? AND department IN " + DIN, FY, *DEPTS).fetchone()[0],
         "other_depts_fy2027_rows": cur.execute("SELECT COUNT(*) FROM budget.pending_budget WHERE fiscal_year=? AND cost_center NOT IN " + IN + "", FY, *CCS).fetchone()[0],
     }
     print("after (first four must be 0, other-dept must be 14):", after)
