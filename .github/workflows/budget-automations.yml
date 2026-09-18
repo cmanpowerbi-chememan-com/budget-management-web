@@ -70,6 +70,22 @@
 #     execute_auto_submit is entirely independent of (a)/(b)/(c) — set it on
 #     its own to make A11 write for real while reminders stays a preview,
 #     and vice versa.
+#
+# PROBE (2026-09-19, issue #28 — "prove the CI runner can actually send mail
+# before the 2026-09-30 real send"): a workflow_dispatch-only, opt-in step
+# "Probe: can this runner send mail?" runs BEFORE the two automation steps
+# below, gated on its own boolean input (`probe_graph`, default false) — a
+# scheduled run and an ordinary manual run never execute it, so it changes
+# nothing about today's behaviour. When jakkaritw checks the box, it fetches
+# a Graph token with THIS RUNNER'S OWN `secrets.FABRIC_AAD_*` credentials
+# (same env block as the two steps below — one source of truth, no separate
+# copy to drift), decodes the token's `roles` claim locally (no signature
+# check, no other Graph call), and prints PASS/FAIL on whether Mail.Send is
+# present. Deliberately no `continue-on-error` — the result IS the point, it
+# must show as a visible red X, not get swallowed. Answers the one link
+# nothing else in this workflow has ever proven: every mail sent so far
+# (incl. the 2026-09-18 preview pair) went out from the developer's own
+# `backend/.env` credentials, never these repo secrets.
 name: Budget Automations (auto-submit / reminders)
 
 on:
@@ -88,6 +104,11 @@ on:
         default: false
       execute_reminders:
         description: "Actually send pre-deadline reminder mail (A12 step only). Unchecked = dry-run preview only. Independent of execute_auto_submit. A real send ALSO needs the NOTIFICATIONS_DRY_RUN repo variable set to 'false' — see the header comment above."
+        required: false
+        type: boolean
+        default: false
+      probe_graph:
+        description: "Run the read-only 'can this runner send mail?' probe before the two automation steps (issue #28). Fetches a Graph token with this runner's own credentials and checks for the Mail.Send app role — sends no mail, writes nothing. Unchecked (default) = step does not run at all, incl. on the nightly schedule."
         required: false
         type: boolean
         default: false
@@ -140,6 +161,20 @@ jobs:
       - name: Install Python dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+
+      - name: "Probe: can this runner send mail?"
+        if: inputs.probe_graph == true
+        working-directory: backend
+        env:
+          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
+          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
+          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
+        # Deliberately no continue-on-error — a FAIL here must land as a red
+        # X on the run, never get swallowed (issue #28: the whole point is a
+        # visible answer to "can this runner send mail today?").
+        run: python -m jobs.probe_graph_permissions
 
       - name: Auto-submit true-DRAFT departments at deadline (A11)
         working-directory: backend
