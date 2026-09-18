@@ -2,14 +2,23 @@ import { useMemo, useState } from 'react'
 import type { DepartmentRow } from '../api/types'
 import { buildDeptHierarchy, matchesQuery } from './model'
 
+const EMPTY_PENDING_SET: ReadonlySet<string> = new Set()
+
 export interface DeptPickerProps {
   rows: DepartmentRow[]
   selected: string | null
   onSelect: (department: string) => void
   /** A10 รออนุมัติ badge (ADR-0016) — departments where the CALLER is the
    * current approver, from `GET /approval/pending-for-me`. Optional: absent
-   * (or empty) simply shows no badges, never an error. */
+   * (or empty) simply shows no badges, never an error. Also drives the
+   * pending-first ordering (jakkaritw, 2026-09-18) via `buildDeptHierarchy`. */
   pendingApprovalDepartments?: Set<string>
+  /** Admin-mode pill text override (jakkaritw, 2026-09-18): department ->
+   * "Pending · <English approver name>". Never changes WHICH departments
+   * show a pill (`pendingApprovalDepartments` alone decides that) — only
+   * departments present here get the named text; everything else (or
+   * outside admin mode, where this prop is omitted) shows plain "Pending". */
+  pendingLabels?: ReadonlyMap<string, string>
 }
 
 /** ฝ่าย picker — สายงาน › ฝ่าย (count) › Cost Center (count) hierarchy,
@@ -20,12 +29,13 @@ export interface DeptPickerProps {
  * gets a "รออนุมัติ" pill (A10). Search keyboard: when the query narrows
  * the list to exactly ONE department, Enter selects it (row highlighted as
  * the default); Escape closes the panel. */
-export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartments }: DeptPickerProps) {
-  const pending = pendingApprovalDepartments ?? new Set<string>()
+export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartments, pendingLabels }: DeptPickerProps) {
+  const pending = pendingApprovalDepartments ?? EMPTY_PENDING_SET
   const selectedIsPending = selected !== null && pending.has(selected)
+  const selectedPendingLabel = (selected !== null && pendingLabels?.get(selected)) || 'Pending'
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const divisions = useMemo(() => buildDeptHierarchy(rows), [rows])
+  const divisions = useMemo(() => buildDeptHierarchy(rows, pending), [rows, pending])
   const visibleDepts = useMemo(
     () => divisions.flatMap((d) => d.departments).filter((d) => matchesQuery(d, query)),
     [divisions, query],
@@ -49,7 +59,7 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
         {selected ?? '— เลือกฝ่าย —'}
         {selectedIsPending && (
           <span className="pp wait" data-testid="dept-picker-pending-badge">
-            Pending
+            {selectedPendingLabel}
           </span>
         )}
       </button>
@@ -84,7 +94,9 @@ export function DeptPicker({ rows, selected, onSelect, pendingApprovalDepartment
                       onClick={() => pick(dept.department)}
                     >
                       <span className="dept-picker-name">{dept.department}</span>
-                      {pending.has(dept.department) && <span className="pp wait">Pending</span>}
+                      {pending.has(dept.department) && (
+                        <span className="pp wait">{pendingLabels?.get(dept.department) || 'Pending'}</span>
+                      )}
                       <span className="dept-picker-cc-count">{dept.costCenters.length} CC</span>
                     </button>
                   ))}

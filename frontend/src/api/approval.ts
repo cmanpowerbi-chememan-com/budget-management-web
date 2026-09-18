@@ -3,7 +3,7 @@
  * endpoint, no caching/state here — that lives in `ApprovalActionBar`
  * (approval status/actions) and `BudgetGrid` (the รออนุมัติ badge list). */
 import { apiFetch } from './client'
-import type { ApprovalStatusState, LockedDepartmentsResponse, PendingForMeResponse } from './types'
+import type { ApprovalStatusState, LockedDepartmentsResponse, PendingDepartmentsResponse, PendingForMeResponse } from './types'
 
 /** `GET /approval/status` — current state for one (department, fiscal_year). */
 export function fetchApprovalStatus(department: string, fiscalYear: number): Promise<ApprovalStatusState> {
@@ -60,6 +60,15 @@ export function overrideStep(department: string, fiscalYear: number): Promise<Ap
  * approval step, for the รออนุมัติ ฝ่าย-picker badge. */
 export function fetchPendingForMe(fiscalYear: number): Promise<PendingForMeResponse> {
   return apiFetch<PendingForMeResponse>(`/approval/pending-for-me?fiscal_year=${fiscalYear}`)
+}
+
+/** `GET /approval/pending-departments` — admin-only (jakkaritw, 2026-09-18):
+ * every department mid-approval for `fiscalYear`, company-wide, with the
+ * current approver's English name, for the admin-mode ฝ่าย-picker queue. A
+ * 403 here means the caller is not an admin — the grid only calls this in
+ * admin mode (`fetchPendingForMe` otherwise). */
+export function fetchPendingDepartments(fiscalYear: number): Promise<PendingDepartmentsResponse> {
+  return apiFetch<PendingDepartmentsResponse>(`/approval/pending-departments?fiscal_year=${fiscalYear}`)
 }
 
 /** `GET /approval/locked-departments` — "+ เพิ่ม Transaction" lock-awareness

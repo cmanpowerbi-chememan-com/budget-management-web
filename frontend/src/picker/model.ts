@@ -18,11 +18,33 @@ export interface DivisionNode {
   departments: DepartmentNode[]
 }
 
+type DeptEntry = [department: string, costCenters: Set<string>]
+
+const byThaiName = (a: [string, unknown], b: [string, unknown]) => a[0].localeCompare(b[0], 'th')
+
+/** Splits entries into "in `pending`" (alphabetical) then "the rest"
+ * (alphabetical) — the ONE partition rule behind both the division-level
+ * and department-level ordering below (jakkaritw, 2026-09-18: pending
+ * items surface first so an admin/approver's queue is always on top,
+ * without breaking alphabetical order inside either half). */
+function pendingFirst<T extends [string, unknown]>(entries: T[], isPending: (name: string) => boolean): T[] {
+  const pending = entries.filter(([name]) => isPending(name)).sort(byThaiName)
+  const rest = entries.filter(([name]) => !isPending(name)).sort(byThaiName)
+  return [...pending, ...rest]
+}
+
 /** Groups rows into สายงาน (division) -> ฝ่าย (department) -> unique Cost
- * Centers, sorted alphabetically (Thai-aware) at every level. A row with a
- * blank division/department is bucketed under a visible placeholder
- * rather than silently dropped or crashing. */
-export function buildDeptHierarchy(rows: DepartmentRow[]): DivisionNode[] {
+ * Centers. A row with a blank division/department is bucketed under a
+ * visible placeholder rather than silently dropped or crashing.
+ *
+ * `pending` (jakkaritw, 2026-09-18 — admin-mode queue + approver's own
+ * queue) reorders BOTH levels: departments in `pending` come first within
+ * their division (alphabetical within each half), and divisions that
+ * contain at least one pending department come before those that do not
+ * (alphabetical within each half too). No pending set (or an empty one)
+ * leaves the plain alphabetical order from before this feature. */
+export function buildDeptHierarchy(rows: DepartmentRow[], pending?: ReadonlySet<string>): DivisionNode[] {
+  const pendingSet = pending ?? new Set<string>()
   const byDivision = new Map<string, Map<string, Set<string>>>()
 
   rows.forEach((r) => {
@@ -35,18 +57,17 @@ export function buildDeptHierarchy(rows: DepartmentRow[]): DivisionNode[] {
     byDivision.set(division, depts)
   })
 
-  return [...byDivision.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, 'th'))
-    .map(([division, depts]) => ({
-      division,
-      departments: [...depts.entries()]
-        .sort(([a], [b]) => a.localeCompare(b, 'th'))
-        .map(([department, ccs]) => ({
-          department,
-          division,
-          costCenters: [...ccs].sort(),
-        })),
-    }))
+  const divisionEntries = pendingFirst(
+    [...byDivision.entries()],
+    (division) => [...(byDivision.get(division) as Map<string, Set<string>>).keys()].some((d) => pendingSet.has(d)),
+  )
+
+  return divisionEntries.map(([division, depts]) => ({
+    division,
+    departments: pendingFirst<DeptEntry>([...depts.entries()], (department) => pendingSet.has(department)).map(
+      ([department, ccs]) => ({ department, division, costCenters: [...ccs].sort() }),
+    ),
+  }))
 }
 
 /** Flat list of every department across all divisions, for a simple

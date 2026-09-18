@@ -118,4 +118,65 @@ describe('DeptPicker', () => {
     expect(row).not.toBeNull()
     expect(row!.textContent).toContain('Pending')
   })
+
+  it('lists pending departments first within the panel (jakkaritw, 2026-09-18)', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected={null}
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const rowNames = screen.getAllByRole('button', { name: /Delivery|Accounting/ }).map((el) => el.textContent)
+    // Two different สายงาน — 'Digital Technology Division' (Solution
+    // Delivery's own) must now come before 'Budgeting and Cost Accounting
+    // Division' because it holds the pending department.
+    expect(rowNames[0]).toContain('Solution Delivery')
+  })
+
+  it('shows the admin-mode label (approver name) on the row when pendingLabels has an entry', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected={null}
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+        pendingLabels={new Map([['Solution Delivery', 'Pending · Laddawan Kearnoi']])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const row = screen.getByText('Solution Delivery').closest('button')
+    expect(row!.textContent).toContain('Pending · Laddawan Kearnoi')
+  })
+
+  it('falls back to a plain Pending row label when pendingLabels has no entry for that department', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected={null}
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+        pendingLabels={new Map()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เลือกฝ่าย/ }))
+    const row = screen.getByText('Solution Delivery').closest('button')
+    expect(row!.textContent).toContain('Pending')
+    expect(row!.textContent).not.toContain('·')
+  })
+
+  it('shows the admin-mode label on the trigger badge when the selected department is pending', () => {
+    render(
+      <DeptPicker
+        rows={ROWS}
+        selected="Solution Delivery"
+        onSelect={vi.fn()}
+        pendingApprovalDepartments={new Set(['Solution Delivery'])}
+        pendingLabels={new Map([['Solution Delivery', 'Pending · Laddawan Kearnoi']])}
+      />,
+    )
+    expect(screen.getByTestId('dept-picker-pending-badge')).toHaveTextContent('Pending · Laddawan Kearnoi')
+  })
 })

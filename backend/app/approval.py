@@ -1331,6 +1331,29 @@ def departments_pending_for_empcode(
     ]
 
 
+def list_pending_departments(conn: pyodbc.Connection, fiscal_year: int) -> list[dict]:
+    """Admin-mode ฝ่าย-picker queue (jakkaritw, 2026-09-18): every department
+    currently in a PENDING_* step for `fiscal_year`, with its status and
+    current step -- built from `fetch_pending_rows` + `_to_state` (the SAME
+    "pending" definition the approver badge and the turn-reminder job use,
+    so this list can never drift from either). `caller_empcode=None` --
+    `can_act` is meaningless here and dropped by the caller; no name lookup
+    in this module (kept lookup-free like the rest of it) -- the router
+    resolves `current_approver_name` per item. Sorted by department name so
+    the response order is stable regardless of the DB's row order."""
+    rows = fetch_pending_rows(conn, fiscal_year)
+    items = []
+    for row in rows:
+        state = _to_state(row, row["department"], row["fiscal_year"], None)
+        items.append({
+            "department": row["department"],
+            "status": state.status,
+            "current_position": state.current_position,
+            "current_approver_empcode": state.current_approver_empcode,
+        })
+    return sorted(items, key=lambda item: item["department"])
+
+
 def list_departments_pending_my_approval(
     conn: pyodbc.Connection, fiscal_year: int, caller_email: str
 ) -> list[str]:

@@ -39,6 +39,69 @@ describe('buildDeptHierarchy', () => {
   })
 })
 
+describe('buildDeptHierarchy — pending-first ordering (jakkaritw, 2026-09-18)', () => {
+  // 2 divisions, 2 departments each, so both partitions (division-level and
+  // department-level) are exercised at once.
+  const FOUR_DEPT_ROWS: DepartmentRow[] = [
+    { cost_center: 'CC-SD', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
+    { cost_center: 'CC-IN', department: 'Infrastructure', division: 'Digital Technology Division', c_level: 'CTO' },
+    { cost_center: 'CC-AC', department: 'Budgeting and Management Accounting', division: 'Budgeting and Cost Accounting Division', c_level: 'CFO' },
+    { cost_center: 'CC-TX', department: 'Tax', division: 'Budgeting and Cost Accounting Division', c_level: 'CFO' },
+  ]
+
+  it('with no pending set, ordering is unchanged (alphabetical throughout)', () => {
+    const withPendingArg = buildDeptHierarchy(FOUR_DEPT_ROWS, undefined)
+    const withoutPendingArg = buildDeptHierarchy(FOUR_DEPT_ROWS)
+    expect(withPendingArg).toEqual(withoutPendingArg)
+    expect(withPendingArg.map((d) => d.division)).toEqual([
+      'Budgeting and Cost Accounting Division', 'Digital Technology Division',
+    ])
+  })
+
+  it('with an empty pending set, ordering is unchanged (alphabetical throughout)', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set())
+    expect(tree.map((d) => d.division)).toEqual([
+      'Budgeting and Cost Accounting Division', 'Digital Technology Division',
+    ])
+  })
+
+  it('puts pending departments first within their division, alphabetical within each partition', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set(['Solution Delivery']))
+    const dt = tree.find((d) => d.division === 'Digital Technology Division')!
+    expect(dt.departments.map((d) => d.department)).toEqual(['Solution Delivery', 'Infrastructure'])
+  })
+
+  it('puts divisions that contain a pending department before those that do not, alphabetical within each partition', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set(['Solution Delivery']))
+    // 'Digital Technology Division' would normally sort AFTER 'Budgeting...'
+    // — pending-first ordering must override that.
+    expect(tree.map((d) => d.division)).toEqual([
+      'Digital Technology Division', 'Budgeting and Cost Accounting Division',
+    ])
+  })
+
+  it('keeps alphabetical order among multiple pending departments in the same division', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set(['Solution Delivery', 'Infrastructure']))
+    const dt = tree.find((d) => d.division === 'Digital Technology Division')!
+    expect(dt.departments.map((d) => d.department)).toEqual(['Infrastructure', 'Solution Delivery'])
+  })
+
+  it('keeps alphabetical order among multiple pending divisions', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set(['Solution Delivery', 'Tax']))
+    expect(tree.map((d) => d.division)).toEqual([
+      'Budgeting and Cost Accounting Division', 'Digital Technology Division',
+    ])
+  })
+
+  it('never duplicates a department and keeps the group structure otherwise unchanged', () => {
+    const tree = buildDeptHierarchy(FOUR_DEPT_ROWS, new Set(['Solution Delivery']))
+    expect(tree).toHaveLength(2)
+    expect(flattenDepartments(tree).map((d) => d.department).sort()).toEqual(
+      flattenDepartments(buildDeptHierarchy(FOUR_DEPT_ROWS)).map((d) => d.department).sort(),
+    )
+  })
+})
+
 describe('flattenDepartments', () => {
   it('gives a CC count via costCenters.length for the ฝ่าย picker badge', () => {
     const tree = buildDeptHierarchy(ROWS)

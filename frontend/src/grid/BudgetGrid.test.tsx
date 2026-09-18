@@ -1480,6 +1480,95 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(screen.getByTestId('dept-picker-pending-badge')).toBeInTheDocument())
   })
 
+  // Admin-mode pending queue (jakkaritw, 2026-09-18): admin mode asks a
+  // DIFFERENT endpoint (company-wide queue, not "pending for me") and gets
+  // a named pill instead of the plain "Pending" an approver sees.
+  it('in admin mode, fetches the admin pending-departments endpoint (not pending-for-me) and shows the named pill', async () => {
+    const pureAdminScope: ScopeState = {
+      ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: [], seeCostCenters: [],
+    }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(approvalApi.fetchPendingDepartments).mockResolvedValue({
+      departments: [
+        { department: 'Solution Delivery', status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: 'Laddawan Kearnoi' },
+      ],
+    })
+
+    render(<BudgetGrid scope={pureAdminScope} initialFilter={{ dept: 'Solution Delivery', year: null }} />)
+
+    await waitFor(() => expect(screen.getByTestId('dept-picker-pending-badge')).toHaveTextContent('Pending · Laddawan Kearnoi'))
+    expect(approvalApi.fetchPendingForMe).not.toHaveBeenCalled()
+  })
+
+  it('a dual-role admin toggling admin mode switches the pending-queue source between the admin endpoint and pending-for-me', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(approvalApi.fetchPendingDepartments).mockResolvedValue({ departments: [] })
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: null, year: null }} />)
+
+    const toggle = await screen.findByTestId('admin-mode-checkbox')
+    // Admin mode starts OFF (A10 default) -- the personal "pending for me" badge is used.
+    await waitFor(() => expect(approvalApi.fetchPendingForMe).toHaveBeenCalled())
+    expect(approvalApi.fetchPendingDepartments).not.toHaveBeenCalled()
+
+    fireEvent.click(toggle) // admin mode ON
+    await waitFor(() => expect(approvalApi.fetchPendingDepartments).toHaveBeenCalled())
+
+    const pendingForMeCallsWhileOn = vi.mocked(approvalApi.fetchPendingForMe).mock.calls.length
+    fireEvent.click(toggle) // admin mode OFF again
+    await waitFor(() =>
+      expect(vi.mocked(approvalApi.fetchPendingForMe).mock.calls.length).toBeGreaterThan(pendingForMeCallsWhileOn),
+    )
+  })
+
+  it('refetches the admin pending-departments queue after an approval action (shared onChanged callback)', async () => {
+    const pureAdminScope: ScopeState = {
+      ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: [], seeCostCenters: [],
+    }
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([
+      makeRow('CC1', '5211800030', {
+        pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: '2026-01-01T00:00:00Z' },
+      }),
+    ])
+    vi.mocked(approvalApi.fetchPendingDepartments).mockResolvedValue({ departments: [] })
+    vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'DRAFT', submitter_empcode: null,
+      submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+      approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+      updated_at: null, current_position: null, current_approver_empcode: null, current_approver_name: null,
+      can_act: false, notification_warning: null, is_post_deadline: false, can_submit: true,
+      submit_blocked_reason: null, locked: false,
+    })
+    vi.mocked(approvalApi.submitDepartment).mockResolvedValue({
+      department: 'Solution Delivery', fiscal_year: 2027, status: 'PENDING_APPROVER1', submitter_empcode: null,
+      submitter_email: null, submitted_at: null, approver1_empcode: null, approver1_actioned_at: null,
+      approver2_actioned_at: null, approver3_actioned_at: null, reject_reason: null, rejected_by_empcode: null,
+      updated_at: null, current_position: null, current_approver_empcode: null, current_approver_name: null,
+      can_act: false, notification_warning: null, is_post_deadline: false, can_submit: false,
+      submit_blocked_reason: 'invalid_approval_state', locked: false,
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<BudgetGrid scope={pureAdminScope} initialFilter={{ dept: null, year: 2027 }} />)
+
+    await waitFor(() => expect(approvalApi.fetchPendingDepartments).toHaveBeenCalledTimes(1))
+    const submitBtn = await screen.findByTestId('approval-submit-btn')
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => expect(approvalApi.submitDepartment).toHaveBeenCalled())
+    await waitFor(() => expect(approvalApi.fetchPendingDepartments).toHaveBeenCalledTimes(2))
+    expect(approvalApi.fetchPendingForMe).not.toHaveBeenCalled()
+
+    vi.restoreAllMocks()
+  })
+
   it('a dual-role admin gets an admin-mode toggle that switches admin_view_enabled', async () => {
     const DUAL_ROLE_ADMIN: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)

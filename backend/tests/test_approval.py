@@ -53,6 +53,7 @@ from app.approval import (
     fetch_pending_rows,
     get_approval_status,
     list_departments_pending_my_approval,
+    list_pending_departments,
     lookup_employee_name,
     reject_department,
     resolve_chain,
@@ -1680,6 +1681,73 @@ def test_departments_pending_for_empcode_excludes_someone_elses_turn():
     ]
 
     assert departments_pending_for_empcode(conn, "200") == []
+
+
+# ---------------------------------------------------------------------------
+# list_pending_departments — admin-mode ฝ่าย-picker queue (jakkaritw,
+# 2026-09-18): every department mid-approval for a fiscal_year, built from
+# the SAME fetch_pending_rows + _to_state pieces as the approver badge and
+# the turn-reminder job, so "pending" can never drift between screens.
+# ---------------------------------------------------------------------------
+
+def test_list_pending_departments_returns_status_and_current_step_per_department():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER1, approver1_empcode="200"),
+    ]
+
+    result = list_pending_departments(conn, FY)
+
+    assert result == [
+        {
+            "department": DEPT,
+            "status": PENDING_APPROVER1,
+            "current_position": 1,
+            "current_approver_empcode": "200",
+        }
+    ]
+
+
+def test_list_pending_departments_resolves_position_2_and_3_occupants():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [
+        _status_row(status=PENDING_APPROVER2, approver1_empcode="200"),
+    ]
+
+    result = list_pending_departments(conn, FY)
+
+    assert result[0]["current_position"] == 2
+    assert result[0]["current_approver_empcode"] == NIPAPORN_EMPCODE
+
+
+def test_list_pending_departments_sorted_by_department_name():
+    conn = MagicMock()
+    row_z = list(_status_row(status=PENDING_APPROVER1, approver1_empcode="200"))
+    row_z[0] = "Zeta Dept"
+    row_a = list(_status_row(status=PENDING_APPROVER1, approver1_empcode="200"))
+    row_a[0] = "Alpha Dept"
+    conn.cursor.return_value.fetchall.return_value = [tuple(row_z), tuple(row_a)]
+
+    result = list_pending_departments(conn, FY)
+
+    assert [item["department"] for item in result] == ["Alpha Dept", "Zeta Dept"]
+
+
+def test_list_pending_departments_empty_when_nothing_pending():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+
+    assert list_pending_departments(conn, FY) == []
+
+
+def test_list_pending_departments_scoped_to_the_given_fiscal_year():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = []
+
+    list_pending_departments(conn, FY)
+
+    query = conn.cursor.return_value.execute.call_args.args[0]
+    assert "fiscal_year = ?" in query
 
 
 def test_cost_centers_for_departments_empty_input_makes_no_query():

@@ -850,6 +850,92 @@ def test_pending_for_me_db_failure_maps_to_502(client):
     assert response.status_code == 502
 
 
+def test_pending_departments_401_without_auth(client):
+    response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+    assert response.status_code == 401
+
+
+def test_pending_departments_non_admin_maps_to_403(client):
+    """Admin-only (jakkaritw, 2026-09-18): enumerates every mid-approval
+    department company-wide, not just the caller's own turn — same gate
+    shape as override-step."""
+    _override_auth("filler@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=False)
+    ), patch("app.routers.approval.list_pending_departments") as mock_list:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+    assert response.status_code == 403
+    mock_list.assert_not_called()
+
+
+def test_pending_departments_admin_returns_department_status_and_approver_name(client):
+    _override_auth("jakkaritw@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
+    ), patch(
+        "app.routers.approval.list_pending_departments",
+        return_value=[
+            {"department": DEPT, "status": PENDING_APPROVER2, "current_position": 2, "current_approver_empcode": "101032"},
+        ],
+    ), patch("app.routers.approval.lookup_employee_name", return_value="Laddawan Kearnoi") as mock_name:
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "departments": [
+            {"department": DEPT, "status": PENDING_APPROVER2, "current_position": 2, "current_approver_name": "Laddawan Kearnoi"},
+        ]
+    }
+    mock_name.assert_called_once_with(ANY, "101032")
+
+
+def test_pending_departments_empty_when_nothing_pending(client):
+    _override_auth("jakkaritw@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
+    ), patch("app.routers.approval.list_pending_departments", return_value=[]):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json() == {"departments": []}
+
+
+def test_pending_departments_name_lookup_failure_falls_back_to_none_not_500(client):
+    """Fail-soft per item (jakkaritw, 2026-09-18): a broken/unresolvable
+    empcode must never turn an already-fetched queue into a 500 — the
+    picker just shows a plain 'Pending' pill for that one department."""
+    _override_auth("jakkaritw@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", return_value=MagicMock(is_admin=True)
+    ), patch(
+        "app.routers.approval.list_pending_departments",
+        return_value=[
+            {"department": DEPT, "status": PENDING_APPROVER1, "current_position": 1, "current_approver_empcode": "999999"},
+        ],
+    ), patch("app.routers.approval.lookup_employee_name", side_effect=RuntimeError("boom")):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+
+    assert response.status_code == 200
+    assert response.json()["departments"][0]["current_approver_name"] is None
+
+
+def test_pending_departments_db_failure_maps_to_502(client):
+    import pyodbc
+
+    _override_auth("jakkaritw@chememan.com")
+    with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
+        "app.routers.approval.resolve_scope", side_effect=pyodbc.Error("boom")
+    ):
+        mock_conn.return_value.__enter__.return_value = MagicMock()
+        response = client.get("/approval/pending-departments", params={"fiscal_year": FY})
+
+    assert response.status_code == 502
+
+
 def test_submit_mid_chain_admin_overwrite_maps_to_409(client):
     """B2 gate fix: the new fail-closed guard's error must map to 409, same
     as the other approval-conflict cases."""

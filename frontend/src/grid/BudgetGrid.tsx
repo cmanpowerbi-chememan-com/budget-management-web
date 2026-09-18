@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
-import { fetchApprovalStatus, fetchLockedDepartments, fetchPendingForMe } from '../api/approval'
+import { fetchApprovalStatus, fetchLockedDepartments, fetchPendingDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount, SapCoverage } from '../api/types'
@@ -101,6 +101,12 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // compact mode: always starts normal on load.
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [pendingApprovalDepartments, setPendingApprovalDepartments] = useState<Set<string>>(new Set())
+  // Admin-mode pill text (jakkaritw, 2026-09-18): department -> "Pending ·
+  // <English approver name>". Only ever populated in admin mode (see
+  // `loadPendingApprovals` below) -- an approver's own pill stays plain
+  // "Pending" (it already means "your turn"; naming the reader to
+  // themselves adds nothing), so this stays empty outside admin mode.
+  const [pendingApprovalLabels, setPendingApprovalLabels] = useState<Map<string, string>>(new Map())
   // "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix, ADR-0013 UI
   // parity): every one of the CALLER's OWN Fill-scope departments that is
   // currently mid-approval/APPROVED for `year` (`GET
@@ -188,8 +194,29 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // A10 รออนุมัติ badge (ADR-0016): departments where the caller is the
   // current approver, refetched whenever the planning year changes and
   // after any submit/approve/reject action (ApprovalActionBar's onChanged).
+  // Admin mode (jakkaritw, 2026-09-18): switches the DATA SOURCE to the
+  // admin-only company-wide queue (`GET /approval/pending-departments`) so
+  // an admin — who is rarely the current approver — still sees every
+  // department mid-approval, with the current approver's name; also
+  // refetched when `adminViewEnabled` itself toggles (see the effect below).
   async function loadPendingApprovals() {
     if (hasNoScope) return
+    if (adminViewEnabled) {
+      try {
+        const result = await fetchPendingDepartments(year)
+        setPendingApprovalDepartments(new Set(result.departments.map((d) => d.department)))
+        const labels = new Map<string, string>()
+        result.departments.forEach((d) => {
+          if (d.current_approver_name) labels.set(d.department, `Pending · ${d.current_approver_name}`)
+        })
+        setPendingApprovalLabels(labels)
+      } catch {
+        setPendingApprovalDepartments(new Set()) // never blocks the page — badge just stays empty
+        setPendingApprovalLabels(new Map())
+      }
+      return
+    }
+    setPendingApprovalLabels(new Map()) // outside admin mode the pill is always plain "Pending"
     try {
       const result = await fetchPendingForMe(year)
       setPendingApprovalDepartments(new Set(result.departments))
@@ -201,7 +228,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   useEffect(() => {
     loadPendingApprovals()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, hasNoScope])
+  }, [year, hasNoScope, adminViewEnabled])
 
   /** "+ เพิ่ม Transaction" lock-awareness data fetch. Admin-wide bypasses the
    * lock everywhere else in this component (`row.editable`, subform
@@ -707,7 +734,13 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     <div className={`budget-grid${isFullscreen ? ' is-fullscreen' : ''}`} data-testid="budget-grid">
       <div className="grid-toolbar">
         <YearPicker year={year} onChange={setYear} />
-        <DeptPicker rows={departments} selected={department} onSelect={setDepartment} pendingApprovalDepartments={pendingApprovalDepartments} />
+        <DeptPicker
+          rows={departments}
+          selected={department}
+          onSelect={setDepartment}
+          pendingApprovalDepartments={pendingApprovalDepartments}
+          pendingLabels={pendingApprovalLabels}
+        />
         <AddTransactionForm
           fillCostCenters={fillCostCentersOfSelectedDept}
           glRef={glRef}

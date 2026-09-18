@@ -402,6 +402,24 @@ export interface PendingForMeResponse {
   departments: string[]
 }
 
+/** `GET /approval/pending-departments` (`routers/approval.PendingDepartmentsResponse`)
+ * — admin-mode ฝ่าย-picker queue (jakkaritw, 2026-09-18): every department
+ * mid-approval for one fiscal_year, company-wide (unlike `pending-for-me`,
+ * which is scoped to the caller). `current_approver_name` is the English
+ * display name of whoever holds the current step, `null` when it cannot be
+ * resolved — the picker falls back to a plain "Pending" pill in that case.
+ * Admin-only; a non-admin caller gets 403. */
+export interface PendingDepartmentItem {
+  department: string
+  status: 'PENDING_APPROVER1' | 'PENDING_APPROVER2' | 'PENDING_APPROVER3'
+  current_position: 1 | 2 | 3 | null
+  current_approver_name: string | null
+}
+
+export interface PendingDepartmentsResponse {
+  departments: PendingDepartmentItem[]
+}
+
 /** `GET /approval/locked-departments` (`routers/approval.LockedDepartmentsResponse`)
  * — "+ เพิ่ม Transaction" lock-awareness (2026-08-08 bug fix): every
  * department, among the CALLER's OWN Fill-scope departments, whose approval

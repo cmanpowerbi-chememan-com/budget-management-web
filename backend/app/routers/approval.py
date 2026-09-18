@@ -25,6 +25,7 @@ from app.approval import (
     evaluate_submit_eligibility,
     get_approval_status,
     list_departments_pending_my_approval,
+    list_pending_departments,
     lookup_employee_name,
     reject_department,
     resolve_submitter,
@@ -176,6 +177,23 @@ class PendingForMeResponse(BaseModel):
     anything they should not already know)."""
 
     departments: list[str]
+
+
+class PendingDepartmentItem(BaseModel):
+    """One department queue entry for the admin-mode picker (jakkaritw,
+    2026-09-18) — status, current step, and the current approver's English
+    display name (`None` when it cannot be resolved; the picker falls back
+    to a plain "Pending" pill in that case). Names only, no submitter or
+    approver identities beyond the current approver's own display name."""
+
+    department: str
+    status: str
+    current_position: int | None = None
+    current_approver_name: str | None = None
+
+
+class PendingDepartmentsResponse(BaseModel):
+    departments: list[PendingDepartmentItem]
 
 
 class LockedDepartmentsResponse(BaseModel):
@@ -419,6 +437,42 @@ def pending_for_me(fiscal_year: int = Query(...), email: str = Depends(get_curre
         with get_fabric_conn() as conn:
             departments = list_departments_pending_my_approval(conn, fiscal_year, email)
             return PendingForMeResponse(departments=departments)
+
+    return _run(_action)
+
+
+@router.get("/pending-departments", response_model=PendingDepartmentsResponse)
+def pending_departments(fiscal_year: int = Query(...), email: str = Depends(get_current_user_email)):
+    """Admin-mode ฝ่าย-picker queue (jakkaritw, 2026-09-18): every department
+    currently in a PENDING_* step for `fiscal_year`, with the current
+    approver's English display name, so an admin can see who is holding
+    each one without opening it. Admin-only (`scope.is_admin`, same gate
+    shape as `override-step`) — this enumerates every mid-approval
+    department company-wide, not just the caller's own turn, unlike
+    `pending-for-me` above."""
+
+    def _action():
+        with get_fabric_conn() as conn:
+            scope = resolve_scope(email, conn)
+            if not scope.is_admin:
+                raise HTTPException(
+                    status_code=403, detail="Only an administrator can view all pending departments."
+                )
+            items = []
+            for item in list_pending_departments(conn, fiscal_year):
+                name = None
+                try:
+                    name = lookup_employee_name(conn, item["current_approver_empcode"])
+                except Exception:  # noqa: BLE001 -- fail-soft per item, must never break the whole queue
+                    logger.warning(
+                        "lookup_employee_name failed for empcode=%s — pill falls back to plain Pending",
+                        item["current_approver_empcode"], exc_info=True,
+                    )
+                items.append(PendingDepartmentItem(
+                    department=item["department"], status=item["status"],
+                    current_position=item["current_position"], current_approver_name=name,
+                ))
+            return PendingDepartmentsResponse(departments=items)
 
     return _run(_action)
 

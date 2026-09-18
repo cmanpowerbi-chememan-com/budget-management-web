@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approveDepartment, fetchApprovalStatus, fetchPendingForMe, overrideStep, rejectDepartment, submitDepartment } from './approval'
+import {
+  approveDepartment,
+  fetchApprovalStatus,
+  fetchPendingDepartments,
+  fetchPendingForMe,
+  overrideStep,
+  rejectDepartment,
+  submitDepartment,
+} from './approval'
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -113,5 +121,25 @@ describe('fetchPendingForMe', () => {
 
     expect(String(fetchSpy.mock.calls[0][0])).toContain('/approval/pending-for-me?fiscal_year=2027')
     expect(result.departments).toEqual(['Accounting'])
+  })
+})
+
+describe('fetchPendingDepartments', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('calls GET /approval/pending-departments with fiscal_year', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        departments: [{ department: 'Accounting', status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: 'Laddawan Kearnoi' }],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await fetchPendingDepartments(2027)
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('/approval/pending-departments?fiscal_year=2027')
+    expect(result.departments).toEqual([
+      { department: 'Accounting', status: 'PENDING_APPROVER2', current_position: 2, current_approver_name: 'Laddawan Kearnoi' },
+    ])
   })
 })
