@@ -640,11 +640,18 @@ input:focus-visible {
    14/6->20/8px) at jakkaritw's request 2026-08-04 — the strip was too small
    to read on the floor; deliberate divergence from 0002.3, not drift. */
 /* Legend + the rounding note stack as one right-hand block so the note sits
-   under the chips instead of taking a toolbar slot of its own. */
+   under the chips instead of taking a toolbar slot of its own. The block's
+   own position (right-hand side of the toolbar) is unchanged; only the
+   cross-axis alignment of its two children changes below. */
 .legend-block {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  /* stretch (jakkaritw 2026-09-18): both children span the block's full
+     width so .legend-note can left-align under the first chip; .legend
+     keeps its old flush-right look via justify-content below (chips do
+     not move — verified via bounding-box measurement, chip row is the
+     wider child so stretching it to block width is a no-op). */
+  align-items: stretch;
   gap: 6px;
 }
 .legend-note {
@@ -653,7 +660,8 @@ input:focus-visible {
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--ink-3);
-  text-align: right;
+  /* left-aligned (jakkaritw 2026-09-18): was text-align: right */
+  text-align: left;
 }
 .legend-note strong {
   color: var(--ink);
@@ -662,6 +670,10 @@ input:focus-visible {
 .legend {
   display: flex;
   align-items: center;
+  /* flex-end (jakkaritw 2026-09-18): .legend-block now stretches this row
+     to the block's full width so .legend-note can left-align; this keeps
+     the chips themselves flush right at their old position, unmoved. */
+  justify-content: flex-end;
   gap: 20px;
   padding: 0 6px;
   font-size: 16px;
