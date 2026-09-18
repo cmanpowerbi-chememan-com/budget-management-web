@@ -40,11 +40,20 @@
 #     Both are read by THIS JOB'S OWN PROCESS only — independent of whatever
 #     NOTIFICATIONS_DRY_RUN is set to on the live Container App (which is a
 #     different process and governs real-time submit/approve/reject mail).
-#     Neither is forwarded to the auto-submit step: its own "it's your turn"
-#     courtesy mail (`notify_turn`) stays governed by the Container App's own
-#     NOTIFICATIONS_DRY_RUN — a real auto-submit run writes
-#     budget.approval_status rows for real, but that one courtesy mail is
-#     unaffected by the two variables above (out of this change's scope).
+#     Neither is forwarded to the auto-submit step's `env:` block. Its own
+#     "it's your turn" courtesy mail (`notify_turn`) is NOT governed by the
+#     Container App either — a GitHub Actions job cannot read an unrelated
+#     Azure Container App's environment. What actually governs it:
+#     `jobs/auto_submit.py` also calls `get_settings()`, in THIS SAME CI
+#     process, but that step's own `env:` never sets NOTIFICATIONS_DRY_RUN
+#     and CI never has backend/.env (gitignored, never in a checkout) — so
+#     Settings() falls back to the class default `notifications_dry_run =
+#     True`, meaning this courtesy mail is ALWAYS suppressed in CI today,
+#     even on a real `--execute` run that writes budget.approval_status
+#     rows for real. Making it fire for real would mean adding
+#     NOTIFICATIONS_DRY_RUN to the auto-submit step's own `env:` (the same
+#     pattern the reminders step already uses below) — never the Container
+#     App.
 #
 #   Exact combinations:
 #     (a) PREVIEW (today's default — nothing set, nothing checked):
@@ -177,7 +186,23 @@ jobs:
             export DRY_RUN=true
             MODE=PREVIEW
           fi
-          if [ "$NOTIFICATIONS_DRY_RUN" = "false" ]; then MAIL="NOT suppressed"; else MAIL="suppressed"; fi
+          # This line must never claim "suppressed" while jobs.send_reminders
+          # (which reads the SAME NOTIFICATIONS_DRY_RUN via pydantic-settings,
+          # backend/app/config.py Settings.notifications_dry_run) is about to
+          # send real mail. pydantic-core's lax bool parser is case-INsensitive
+          # and accepts more than the literal word "false" — verified
+          # empirically 2026-09-19 against this backend's installed
+          # pydantic==2.13.3 / pydantic_core==2.46.3 (pydantic-settings is
+          # pinned backend/requirements.txt): false/no/0/off/f/n all parse to
+          # False (real mail, NOT suppressed); anything else either parses to
+          # True (suppressed) or is invalid and crashes Settings() before any
+          # send (no mail either way). A single case-sensitive `= "false"`
+          # compare (the old bash here) disagreed with Python on "False"/
+          # "FALSE"/"no"/"0"/"off"/"f"/"n" — match the same token set instead.
+          case "${NOTIFICATIONS_DRY_RUN,,}" in
+            false|no|0|off|f|n) MAIL="NOT suppressed" ;;
+            *) MAIL="suppressed" ;;
+          esac
           if [ -n "$NOTIFICATIONS_REDIRECT_ALL_TO" ]; then REDIRECT="ALL mail -> $NOTIFICATIONS_REDIRECT_ALL_TO"; else REDIRECT="off (real recipients)"; fi
           echo "MODE: $MODE reminders (A12) — execute_reminders=${{ inputs.execute_reminders }}, DRY_RUN=$DRY_RUN | mail: $MAIL | redirect: $REDIRECT"
           python -m jobs.send_reminders $ARGS
