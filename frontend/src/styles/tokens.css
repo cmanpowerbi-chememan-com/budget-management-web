@@ -108,21 +108,24 @@
      locally in global.css. */
   --focus-ring: var(--accent);
 
-  /* CI font: FC Minimal (licensed, not available to self-host) with IBM
-     Plex Sans Thai / Noto Sans Thai as the CI-documented free fallback, and
-     IBM Plex Mono for --mono. None of the three are installed on a typical
-     Windows/Mac machine and this app deliberately loads NO webfonts (no
-     Google Fonts / CDN `<link>` — that "zero external requests" property is
-     intentional, see frontend/src/app/layout.tsx) — so in practice every
-     user still sees the SAME system font stack as before this change
-     (Segoe UI / San Francisco / Roboto / etc., appended below, unchanged).
-     The CI names are declared for correctness/documentation and in case a
-     machine happens to have them installed locally; they are not expected
-     to render for most users. */
+  /* CI font: FC Minimal is licensed and not available to self-host, so
+     jakkaritw chose Prompt (Cadson Demak, SIL Open Font License) as the free
+     stand-in (2026-09-18) — self-hosted under public/fonts/prompt/ and
+     declared via ../styles/fonts.css (weights 100/400/500/600/700/800,
+     Thai + Latin subsets). Prompt is now first in the stack, so it always
+     loads and renders for every user — no more per-machine system-font
+     fallback drift. Still NO Google Fonts / CDN `<link>` — the font FILES
+     ship in this repo, "zero external requests" holds (see
+     frontend/src/app/layout.tsx). The system stack below is the fallback
+     for the rare case the local font files fail to load, not the everyday
+     path. To swap in the real FC Minimal later: replace the files under
+     public/fonts/prompt/ + the @font-face family name in fonts.css, and
+     rename 'Prompt' here to the FC Minimal family name. --mono (IBM Plex
+     Mono) is unchanged by this pass. */
   --sans:
-    'FC Minimal', 'IBM Plex Sans Thai', 'Noto Sans Thai', system-ui, -apple-system, 'Segoe UI',
-    Roboto, 'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif,
-    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    'Prompt', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans',
+    'Liberation Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
   --serif: var(--sans); /* app has no distinct serif face — collapses to body sans, unchanged */
   --mono:
     'IBM Plex Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
