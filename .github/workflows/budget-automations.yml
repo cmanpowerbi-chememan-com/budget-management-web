@@ -1,12 +1,4 @@
 # Cron ENABLED 2026-08-01 (jakkaritw) — see docs/BUILD_PLAN.md A11/A12.
-# THREE INDEPENDENT GATES still stand between this schedule and a real write or
-# a real email, and the daily run currently trips the first two:
-#   1. `--execute` — a scheduled run carries no inputs, so the flag is never added.
-#   2. `DRY_RUN: 'true'` below — jobs/common.py forces preview mode unless this
-#      is explicitly 'false', so even a manual run with --execute stays dry.
-#   3. Settings.notifications_dry_run (backend/app/config.py, default True) —
-#      send_mail constructs and logs the payload but makes zero HTTP calls.
-# So: the schedule exercises the queries nightly and writes/sends NOTHING.
 # NOTE (2026-07-28): the FX re-persist job was split into fx-repersist.yml
 # (Appendix E decision 3, P0-28) — `execute=true` here can no longer re-price
 # per-diem by accident.
@@ -17,13 +9,58 @@
 #   1. [DONE 2026-08-01] budget.reminder_log created on the shared DB.
 #   2. [DONE 2026-08-01] staging on budget-web:80b0e1c; manual dry-run run
 #      30679138743 green on all three steps.
-#   3. [DONE 2026-08-01, jakkaritw] cron ENABLED below — but the daily run is a
-#      DRY-RUN PREVIEW ONLY. Nothing is written and no mail is sent, because
-#      the schedule passes no `--execute` AND `DRY_RUN` stays 'true' AND
-#      Settings.notifications_dry_run is still True on the Container App.
-#      Going truly live = a separate jakkaritw decision: set DRY_RUN below to
-#      'false' + add `--execute` for scheduled runs, and set
-#      NOTIFICATIONS_DRY_RUN=false on the Container App.
+#   3. [DONE 2026-08-01, jakkaritw] cron ENABLED below — the daily run was
+#      (and, with nothing configured below, still is) a DRY-RUN PREVIEW ONLY.
+#
+# CHANGED (2026-09-18, issue #27 — "split automations and parameterise", step
+# 2 of the 3-step reminder go-live): the two jobs used to share ONE `execute`
+# input (checking it to send a real reminder ALSO let auto-submit write for
+# real), and the notification layer's own dry-run flag + redirect override
+# never reached this job at all — so even a manual `execute` run sent zero
+# mail, silently, which looked like success. Both are fixed:
+#
+#   GATE 1 — per job, independent, operator-controlled (workflow_dispatch):
+#     `execute_auto_submit` drives the "Auto-submit..." (A11) step ONLY.
+#     `execute_reminders`   drives the "Send pre-deadline reminders..." (A12)
+#     step ONLY. Each input sets BOTH that step's own `--execute` CLI flag
+#     AND that step's own `DRY_RUN` env (jobs/common.py's `is_dry_run()` is
+#     UNCHANGED — still requires both). A scheduled run supplies neither
+#     input, so both steps stay preview, exactly as before this change.
+#
+#   GATE 2 — mail only, repo VARIABLES (not secrets, not a commit),
+#   forwarded to the REMINDERS step ONLY:
+#     `NOTIFICATIONS_DRY_RUN`         unset/blank -> 'true' (the same safe
+#                                     default Settings.notifications_dry_run
+#                                     already has) — Graph sendMail is never
+#                                     actually called.
+#     `NOTIFICATIONS_REDIRECT_ALL_TO` unset/blank -> normal delivery. When
+#                                     set, EVERY reminder in this run goes to
+#                                     that one address instead of the real
+#                                     recipient — the rehearsal aid.
+#     Both are read by THIS JOB'S OWN PROCESS only — independent of whatever
+#     NOTIFICATIONS_DRY_RUN is set to on the live Container App (which is a
+#     different process and governs real-time submit/approve/reject mail).
+#     Neither is forwarded to the auto-submit step: its own "it's your turn"
+#     courtesy mail (`notify_turn`) stays governed by the Container App's own
+#     NOTIFICATIONS_DRY_RUN — a real auto-submit run writes
+#     budget.approval_status rows for real, but that one courtesy mail is
+#     unaffected by the two variables above (out of this change's scope).
+#
+#   Exact combinations:
+#     (a) PREVIEW (today's default — nothing set, nothing checked):
+#         execute_auto_submit=false, execute_reminders=false. Zero writes,
+#         zero mail — unchanged from before this change.
+#     (b) REHEARSAL — a real Graph send, to one test address only:
+#         execute_reminders=true (workflow_dispatch, checked) AND repo
+#         variable NOTIFICATIONS_DRY_RUN=false AND repo variable
+#         NOTIFICATIONS_REDIRECT_ALL_TO=<test address>. reminder_log is
+#         still written for real, but every mail lands on that one address.
+#     (c) REAL SEND — real recipients:
+#         execute_reminders=true AND repo variable NOTIFICATIONS_DRY_RUN=false
+#         AND NOTIFICATIONS_REDIRECT_ALL_TO unset/blank.
+#     execute_auto_submit is entirely independent of (a)/(b)/(c) — set it on
+#     its own to make A11 write for real while reminders stays a preview,
+#     and vice versa.
 name: Budget Automations (auto-submit / reminders)
 
 on:
@@ -35,8 +72,13 @@ on:
         description: "Planning fiscal year to act on (blank on a scheduled run -> falls back to the AUTOMATION_FISCAL_YEAR repo variable; never auto-detected from the clock)"
         required: false
         type: string
-      execute:
-        description: "Actually write/send (unchecked = dry-run preview only)"
+      execute_auto_submit:
+        description: "Actually auto-submit true-DRAFT departments (A11 step only). Unchecked = dry-run preview only. Independent of execute_reminders."
+        required: false
+        type: boolean
+        default: false
+      execute_reminders:
+        description: "Actually send pre-deadline reminder mail (A12 step only). Unchecked = dry-run preview only. Independent of execute_auto_submit. A real send ALSO needs the NOTIFICATIONS_DRY_RUN repo variable set to 'false' — see the header comment above."
         required: false
         type: boolean
         default: false
@@ -45,7 +87,11 @@ jobs:
   automations:
     runs-on: ubuntu-22.04
     env:
-      DRY_RUN: 'true' # belt-and-braces default — jobs ALSO require --execute (jobs/common.py)
+      # DRY_RUN moved OUT of this shared job-level env (2026-09-18, issue #27)
+      # — it is now computed PER STEP, inside each step's own `run:` script,
+      # from that step's own execute_auto_submit / execute_reminders input.
+      # See the header comment above for the full gate list.
+      #
       # Deep links in every mail (ADR-0016). Without this the jobs fall back to
       # the placeholder https://budget.chememan.com, which does not resolve —
       # every link in a reminder would be dead. Held in the repo VARIABLE
@@ -69,7 +115,7 @@ jobs:
             echo "::error::No planning fiscal year. Pass the workflow_dispatch input, or set the AUTOMATION_FISCAL_YEAR repo variable for scheduled runs."
             exit 1
           fi
-          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=${{ inputs.execute }}, DRY_RUN=$DRY_RUN)"
+          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute_auto_submit=${{ inputs.execute_auto_submit }}, execute_reminders=${{ inputs.execute_reminders }})"
 
       - name: Install ODBC Driver 17 for SQL Server
         run: |
@@ -96,7 +142,15 @@ jobs:
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
         run: |
           ARGS="--fiscal-year $FISCAL_YEAR"
-          if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
+          if [ "${{ inputs.execute_auto_submit }}" = "true" ]; then
+            export DRY_RUN=false
+            ARGS="$ARGS --execute"
+            MODE=REAL
+          else
+            export DRY_RUN=true
+            MODE=PREVIEW
+          fi
+          echo "MODE: $MODE auto-submit (A11) — execute_auto_submit=${{ inputs.execute_auto_submit }}, DRY_RUN=$DRY_RUN"
           python -m jobs.auto_submit $ARGS
 
       - name: Send pre-deadline reminders to Fillers (A12 automation D)
@@ -107,7 +161,23 @@ jobs:
           ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
+          # A12-only mail switches (repo variables, not secrets — issue #27
+          # gate 2, see the header comment). Unset -> the same safe defaults
+          # Settings already has (dry-run true, no redirect): today's
+          # behaviour is unchanged until jakkaritw sets these.
+          NOTIFICATIONS_DRY_RUN: ${{ vars.NOTIFICATIONS_DRY_RUN || 'true' }}
+          NOTIFICATIONS_REDIRECT_ALL_TO: ${{ vars.NOTIFICATIONS_REDIRECT_ALL_TO }}
         run: |
           ARGS="--fiscal-year $FISCAL_YEAR"
-          if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --execute"; fi
+          if [ "${{ inputs.execute_reminders }}" = "true" ]; then
+            export DRY_RUN=false
+            ARGS="$ARGS --execute"
+            MODE=REAL
+          else
+            export DRY_RUN=true
+            MODE=PREVIEW
+          fi
+          if [ "$NOTIFICATIONS_DRY_RUN" = "false" ]; then MAIL="NOT suppressed"; else MAIL="suppressed"; fi
+          if [ -n "$NOTIFICATIONS_REDIRECT_ALL_TO" ]; then REDIRECT="ALL mail -> $NOTIFICATIONS_REDIRECT_ALL_TO"; else REDIRECT="off (real recipients)"; fi
+          echo "MODE: $MODE reminders (A12) — execute_reminders=${{ inputs.execute_reminders }}, DRY_RUN=$DRY_RUN | mail: $MAIL | redirect: $REDIRECT"
           python -m jobs.send_reminders $ARGS
