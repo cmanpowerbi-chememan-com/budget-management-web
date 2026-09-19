@@ -1,7 +1,17 @@
-/* ─── Design tokens — Chememan theme, CI Green shell (2026-08-21, jakkaritw
-   request: "adjust font color or size, other items color align to ref;
-   layout ยึดแบบเดิม [keep the existing layout]"). Source of truth for this
-   pass: design/mockups/0002claude design/0002.4budget-stg-snapshot.html,
+/* ─── Design tokens — Chememan theme.
+   UPDATED 2026-09-19 (issue #30, slices 2+3+4): the page SHELL flips from
+   the CI-green field this file originally introduced back to a LIGHT shell
+   (--paper #f5f7fa), per jakkaritw's sign-off on the theme prototype. Source
+   of truth for THIS pass: design/0002.6theme-white-prototype.html, captured
+   at sign-off in .scratch/theme-customizer/extracted-theme-signed-off.json
+   — read that file's own header comment before touching tokens below it.
+   The CI-green-shell pass (2026-08-21) that first introduced this file's
+   token set is kept below for history; only the values this later pass
+   names have moved.
+   Original (2026-08-21, jakkaritw request: "adjust font color or size,
+   other items color align to ref; layout ยึดแบบเดิม [keep the existing
+   layout]"). Source of truth for that pass:
+   design/mockups/0002claude design/0002.4budget-stg-snapshot.html,
    whose :root remaps every app token below onto the REAL CHEMEMAN CI palette
    (cman-ci-typography.css, www.chememan.com, 20 Aug 2026) — replacing the
    Sea Green preview (#2E8B57, 2026-08-15) that was never the brand color,
@@ -40,65 +50,98 @@
   --accent: var(--cman-green);
   --accent-2: color-mix(in oklab, var(--cman-green) 80%, white);
 
-  --ink: var(--cman-ink);
-  --ink-2: var(--cman-navy-80);
-  --ink-3: color-mix(in oklab, var(--cman-navy-ink) 58%, var(--cman-white));
-  /* --paper = the page SHELL (unchanged mechanism since 2026-08-15: light
-     cards float on a colored field) — now the real CI green, not the Sea
-     Green placeholder. --paper-2 moves from the old cream tint to the CI
-     blue tint (--cman-bg-blue-tint); --surface moves from off-white cream
-     to pure white (--cman-white). Both are still the light-card family most
-     of the app renders on, unaffected in mechanism by this swap. */
-  --paper: var(--cman-green);
-  --paper-2: var(--cman-bg-blue-tint);
+  /* --ink/--ink-2/--line/--line-2/--paper/--paper-2 (issue #30 theme port,
+     2026-09-19) — values below are the approved theme's own numbers,
+     extracted from design/0002.6theme-white-prototype.html at sign-off
+     (.scratch/theme-customizer/extracted-theme-signed-off.json). None of
+     the 6 traces back to a --cman-* raw hex (verified against every value
+     above), so each is held as its own literal here, same precedent as
+     --line-on-shell/--error-on-shell/--status-rejected already set before
+     this pass — this file's "raw hex only in the CI-palette block" rule is
+     about BRAND colours specifically, not every neutral surface/ink tone. */
+  --ink: #1f2937;
+  --ink-2: #4b5563;
+  /* --ink-3 (PRD #25 Phase 4, ported here): darkened 58% -> 63% — the exact
+     ratio the approved theme measures — lifts the .data-table thead th /
+     chip family over 4.5:1. Still expressed through the raw CI hexes
+     (--cman-navy-ink/--cman-white), both of which DO trace back — only the
+     mix ratio changed. */
+  --ink-3: color-mix(in oklab, var(--cman-navy-ink) 63%, var(--cman-white));
+  /* --paper = the page SHELL. Issue #30 slice 2+3+4 (2026-09-19): flips from
+     the CI-green shell back to a LIGHT shell, per jakkaritw's sign-off on
+     the theme prototype ("เอาแน่", 2026-09-19) — cards now float on a
+     near-white field again, not green. --paper-2 is the header/th tint one
+     step off pure white. Neither traces to a --cman-* hex (both are new
+     neutral tones the approved theme introduces), so both are literals,
+     same as --ink/--ink-2 above. --surface is UNCHANGED (--cman-white
+     already matched the target exactly). */
+  --paper: #f5f7fa;
+  --paper-2: #eef1f5;
   --surface: var(--cman-white);
-  --line: rgba(28, 35, 49, 0.14);
-  --line-2: rgba(28, 35, 49, 0.07);
+  --line: #e2e5ea;
+  --line-2: #eef0f3;
 
-  --status-sap: var(--cman-green-dark);
-  --status-approved: var(--cman-blue);
-  --status-pending: var(--ink);
+  /* Status palette — Laddawan Kearnoi's authoritative issue (2026-09-18),
+     ported here (issue #30). --status-sap and --status-approved were
+     SWAPPED before this pass (sap held the green-dark hue, approved held
+     blue) — a real bug, not a style choice; both hexes below already exist
+     in the raw CI palette so both are references, not new literals.
+     --status-pending's hex (#a24a0e, a burnt rust) does not trace to any
+     --cman-* value, so it is held as its own literal, same precedent as
+     --ink/--ink-2 above. */
+  --status-sap: var(--cman-blue);
+  --status-approved: var(--cman-green-dark);
+  --status-pending: #a24a0e;
   /* Own hue, not --accent (2026-08-15 gate MED-4, still true post-CI-swap):
      reuses the reject-action red idiom (.btn-reject:hover in global.css now
      reads this token directly instead of duplicating the hex). */
   --status-rejected: oklch(0.5 0.155 28);
+  /* Draft's own status colour (issue #30, 2026-09-19, post-review) — a
+     darkened neutral, not raw --ink-3 (#676c77 measures only ~4.3:1 on its
+     own 14% tint); darkened in oklab, same hue, until it clears 5.0:1 live
+     (canvas-measured). Named alongside the other 4 --status-* tokens since
+     `.status-chip-draft` is a genuine status hue like the rest, just
+     neutral instead of coloured. */
+  --status-draft: #5d616c;
   --special-bg: color-mix(in oklab, var(--cman-yellow) 24%, var(--cman-white));
   --special-edge: color-mix(in oklab, var(--cman-yellow) 58%, var(--cman-brown));
 
-  /* ─── On-shell text roles — for the FEW spots that paint directly on
-     --paper (now the CI green #00805e) with no light-card ancestor. Do NOT
-     use these inside a card (--surface/--paper-2 already contrast fine with
-     the plain --ink/--ink-2/--accent-text tokens above). ───
-     White text on #00805e measures 4.94:1 — clears WCAG AA (4.5:1) and is a
-     real improvement over the Sea Green shell's 4.25:1 ceiling (measured
-     2026-08-21; verified with the same formula the 2026-08-15 comment used).
-     --ink-on-shell(-2)/--accent-on-shell stay collapsed to plain #ffffff —
-     same three-way collapse the 2026-08-15 gate flagged (WARNING below still
-     applies: do not repoint one of these three to signal a NEW state; add a
-     dedicated token instead, see --error-on-shell).
-     --accent-text: what --accent becomes when used as TEXT on a light card —
-     now the CI navy (--cman-navy), not the terracotta the Sea Green pass
-     introduced; navy is the CI-documented "accent text" role.
-     --line-on-shell: hairline dividers drawn directly on --paper — value
-     unchanged (75%-alpha white, ~3:1 measured against either green shell). */
-  --ink-on-shell: #ffffff;
-  --ink-on-shell-2: #ffffff;
+  /* ─── On-shell text roles — REPOINTED, not retired (issue #30, 2026-09-19).
+     These 5 existed only because --paper was CI green; now --paper is a
+     LIGHT shell (see above), so a spot painting directly on --paper needs
+     exactly the same ink/accent/line roles any light-card content already
+     uses — confirmed against the approved theme's own zone capture, which
+     shows the shell-painted elements (.nav-logo-text, .page-title/.glassy)
+     resolving to the PLAIN --ink/--ink-2/--accent values, not white. Kept as
+     a named family (not deleted + every call site inlined) so: (a) the ~15
+     existing consumers in this file need no edits, zero regression surface;
+     (b) "no name left pointing at a colour that no longer exists behind it"
+     holds structurally — each one is now a pure alias of its plain sibling,
+     so it can never again drift out of sync with what the shell actually is.
+     --error-on-shell repoints to --status-rejected, which already held the
+     exact same oklch value the approved theme's own "--error-on-shell" key
+     specifies — a second confirmation this family's job is now "be the
+     plain token", not "be a special shell-only colour". */
+  --ink-on-shell: var(--ink);
+  --ink-on-shell-2: var(--ink-2);
   --accent-text: var(--cman-navy);
-  --accent-on-shell: #ffffff;
-  --line-on-shell: rgba(255, 255, 255, 0.75);
-  /* --error-on-shell (2026-08-15 gate finding 1) — the on-shell approval-bar
-     error state must NOT collapse to the same white as --accent-on-shell
-     (colour is never the only cue: global.css pairs this with bold weight +
-     a darkened plate). Value unchanged by the CI-palette swap — it is a
-     warm off-white chosen to differ from plain white, not a --cman-* brand
-     hue; still clears AA on the darkened plate under the new (lighter)
-     green shell, same mechanism as before. */
-  --error-on-shell: #ffe4e1;
+  --accent-on-shell: var(--accent);
+  --line-on-shell: var(--line);
+  --error-on-shell: var(--status-rejected);
   /* --accent-2-text (2026-08-15 rule: a tint and its own text always mix
-     from the SAME base token) — now the CI green-dark, not the bespoke pine
-     green the Sea Green pass introduced; same role (a --accent companion
-     dark enough to clear 4.5:1 as solid-fill text). */
-  --accent-2-text: var(--cman-green-dark);
+     from the SAME base token) — issue #30 (2026-09-19): the approved theme's
+     own zone capture shows .user-avatar/.role-badge.user/.v3-gl-pill/
+     .user-chip.cc's value text all resolving to the CI blue (--cman-blue),
+     not green-dark — this token's ROLE changes from "--accent-2's dark-green
+     text companion" to "the operational blue used for user-identity/count
+     accents", so every one of its existing consumers (GATE LOW-7's same-
+     token-tint rule) moves together, by design. --accent-text (navy, above)
+     is DELIBERATELY left unchanged — it is what marks the ADMIN role badge
+     and error states; if it also became blue it would collapse visually
+     into this token's now-blue user-role badge (not evidenced by the
+     approved theme, which never captured the admin badge state — see final
+     report "not applied"). */
+  --accent-2-text: var(--cman-blue);
 
   /* --focus-ring: keyboard focus outline (global.css `:focus-visible`).
      Now the CI green (--accent) directly, per the ref — was --accent-text
@@ -139,5 +182,110 @@
   --fw-medium: 500;
   --fw-bold: 700;
 
-  --r: 6px;
+  /* Radius — 3 coexisting scales, deliberate (issue #30, 2026-09-19), each
+     named here rather than left as an inline literal:
+       --r      cards/controls/buttons/nav plate (6px -> 10px this pass)
+       --r-cell money-pill cells (.month-value/.month-input) — SMALLER than
+                --r on purpose, a tighter shape reads as "data", not "card"
+       --r-chip full-pill badges/chips (status/role/count/GL) — was already
+                a literal 999px at 9 call sites; named here so none of them
+                stays an inline literal, per this pass's own radius rule. */
+  --r: 10px;
+  --r-cell: 4px;
+  --r-chip: 999px;
+
+  /* GL group chip tint strength (issue #30, 2026-09-19, jakkaritw's
+     post-review "ตัดความฟุ้งออก ไห้ lean modern simple" correction) — the
+     signed-off extraction's own value. Consumed by the ONE shared
+     `.gl-group-cell .gl-chip.special-gl-group` formula (global.css); each
+     `.gl-*` class sets only `--chip-hue`/`--chip-ink` (literal hex, not a
+     new global token per class — six colours, one formula). */
+  --chip-tint-strength: 14%;
+
+  /* Gradient bars (issue #30, 2026-09-19) — NEW surface area: no gradient
+     exists anywhere in the app before this pass. Both stops are the raw CI
+     hexes (green/navy) referenced, not duplicated as literals, matching how
+     the approved theme's own export duplicates them — ported as var()s
+     here instead. Two token names (not one shared token) because the
+     approved theme names them separately, even though both currently hold
+     the identical formula — keeps the header user-bar and the toolbar
+     independently adjustable later without renaming anything.
+     Consumed by: .user-bar (--userbar-bg-img), .grid-toolbar
+     (--toolbar-bg-img). */
+  --userbar-bg-img: linear-gradient(135deg, var(--cman-green) 0%, var(--cman-navy) 100%);
+  --toolbar-bg-img: linear-gradient(135deg, var(--cman-green) 0%, var(--cman-navy) 100%);
+
+  /* "TC" = text-colour override for the identity/filter bar now that it
+     paints a dark gradient instead of --surface (issue #30, 2026-09-19).
+     Every one below is white because the bar behind it is dark on both
+     gradient stops — the SAME reasoning --ink-on-shell used to encode for
+     the green shell, now scoped to just this bar instead of the whole page
+     (the page shell itself is light again, see --paper above). Each token
+     is consumed by exactly one rule in this same change (global.css/
+     UserBar.tsx) — no token here is speculative. --tc-sap-freshness/
+     --tc-act-status-icon are deliberately NOT added: the healthy SAP-
+     freshness text inherits --tc-legend with no rule of its own needed, and
+     no .act-status-icon element exists anywhere in this app's real markup
+     (prototype-only), so there is no rule to wire it to. */
+  --tc-v3-name: var(--cman-white);
+  --tc-v3-email: var(--cman-white);
+  --tc-v3-division: var(--cman-white);
+  --tc-v3-logout: var(--cman-white);
+  --tc-act-status: var(--cman-white);
+  --tc-legend: var(--cman-white);
+  --tc-legend-note: var(--cman-white);
+  /* Literal, not var(--cman-white) mixed with transparent (issue #30,
+     2026-09-19, jakkaritw's post-review correction) — the approved design's
+     own zone capture shows this border as one flat baked colour (a pale
+     green tint), not a translucent white composited live over whatever the
+     gradient happens to be at each point along the border. Consuming rules
+     (.user-bar/.grid-toolbar, global.css) now use this directly, no
+     color-mix wrapper. */
+  --tc-toolbar-border: #c8dfd4;
+  /* Not white — issue #25 Phase 4h precedent: a brown/gold warning on this
+     dark gradient reads as dark-on-dark, so the staleness cue switches to CI
+     yellow here specifically (same hue .act-status-icon would use on a dark
+     bar, ported even though that icon element does not exist in this app's
+     real markup yet — this token has its own real consumer, .sap-freshness-warn). */
+  --tc-sap-freshness-warn: var(--cman-yellow);
+
+  /* Shared identity-bar pill formula (issue #30, 2026-09-19, jakkaritw's
+     post-review "make the identity bar match the picture exactly" pass) —
+     ONE tint/border pair instead of repeating the same two hexes across
+     `.role-badge.user`, `.user-chip.cc`, `.v3-cc-pill`, `.v3-gl-pill` and
+     `.v3-count` (per the PRD's own "one shared chip formula" instruction).
+     Ink for all five is `--status-sap` (= `--cman-blue`, already `#2f61ac`
+     — no new token needed there; verified 4.97:1 on this tint, 11.90:1 for
+     `--ink` text in the same chip). */
+  --identity-pill-tint: #e0e8f4;
+  --identity-pill-border: #99b0d3;
+
+  /* Legend-dot ring (issue #25 Phase 4d, ported issue #30, 2026-09-19) —
+     Laddawan's 3 fixed status hues measure 1.21-1.31:1 against the dark
+     gradient toolbar (WCAG 1.4.11 graphical-object floor is 3:1) — hue must
+     not change, so a light ring drawn OUTSIDE each dot restores contrast
+     without touching the dot's own colour. Consumed by .legend-dot below. */
+  --legend-dot-ring-w: 2px;
+  --legend-dot-ring-color: var(--cman-white);
+
+  /* Nine font-size roles the approved theme names (issue #30, Slice 1,
+     2026-09-19) — values are what global.css already renders TODAY, not the
+     theme export's numbers (those land in a later slice); this pass is a
+     pure refactor (var() resolves to the exact literal it replaced, checked
+     directly via getComputedStyle against the compiled CSS). The permanent
+     contrast ratchet (e2e/contrast.spec.ts) could NOT be run to a verdict
+     this session — scenario 01 fails before its audit call, on a pre-existing
+     bug unrelated to CSS (confirmed via `git stash` on these 2 files: same
+     failure with the change fully reverted); re-run it once that bug is
+     fixed. Each token is consumed by its production rule in the same change
+     — see global.css call sites. */
+  --fs-title: 14.5px; /* .nav-logo-text .name */
+  --fs-subtitle: 10.5px; /* .nav-logo-text .sub */
+  --fs-label: 13px; /* .btn, .year-select, .dept-picker-trigger */
+  --fs-table-head: 10.5px; /* .data-table thead th */
+  --fs-table-cell: 12.5px; /* .data-table (base) */
+  --fs-badge: 11.5px; /* .status-chip, .gl-group-cell .gl-chip.special-gl-group */
+  --fs-side-heading: 20px; /* .side-heading */
+  --fs-group-head: 9.5px; /* .data-table thead tr.group-head-row th */
+  --fs-month-group-label: 16px; /* .data-table thead tr.group-head-row th.month-group-label */
 }

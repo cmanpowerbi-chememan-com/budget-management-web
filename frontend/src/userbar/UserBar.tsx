@@ -221,7 +221,12 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
           the Sea Green theme file is frozen) — `--ink-2`/`--surface`/`--r`/
           `--sans` are the SAME already-live tokens `.v3-email`/`.v3-name`
           use two elements up, just read at the call site instead of adding
-          a new stylesheet selector. */}
+          a new stylesheet selector.
+          color moved to `--tc-v3-logout` (issue #30, 2026-09-19) — this
+          link now sits directly on `.user-bar`'s dark gradient fill, not
+          `--surface`; `--ink-2` (dark) would have been unreadable there.
+          This is one of the 3 places a stylesheet cannot reach (the PRD's
+          own list), so the value-only edit is made here, not in global.css. */}
       <a
         href="/.auth/logout"
         style={{
@@ -231,7 +236,7 @@ export function UserBar({ email, authLoading, authError, scope }: UserBarProps) 
           fontFamily: 'var(--sans)',
           fontSize: '12.5px',
           fontWeight: 600,
-          color: 'var(--ink-2)',
+          color: 'var(--tc-v3-logout)',
           textDecoration: 'none',
           borderRadius: 'var(--r)',
         }}

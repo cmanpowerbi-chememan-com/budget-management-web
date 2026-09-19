@@ -38,9 +38,34 @@ textarea {
    .approval-bar below). */
 button:focus-visible,
 a:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* GATE HIGH-2 (2026-09-19, issue #30 theme port): .user-bar/.grid-toolbar
+   became dark gradients (--userbar-bg-img/--toolbar-bg-img, tokens.css) that
+   start at --cman-green — the SAME hex --accent resolves to, so the
+   card-context ring above repeats the 1:1 trap this whole rule exists to
+   avoid, now on the gradient's own green stop. Scoped to the two bars
+   themselves so every focusable descendant inherits the override. */
+.user-bar,
+.grid-toolbar {
+  --focus-ring: var(--cman-white);
+}
+
+/* GATE HIGH-2 (2026-09-19, issue #30 theme port): --focus-ring inherits, and
+   two light-surfaced panels render INSIDE .grid-toolbar's dark gradient —
+   .dept-picker-panel (--surface) and .add-txn-form (--paper-2). The white
+   ring above is correct for controls sitting directly on the gradient but
+   invisible on these white/near-white panels (ratchet caught it at 1:1).
+   Reset back to the normal card-context default here. Any NEW light-surfaced
+   panel added inside .user-bar or .grid-toolbar must be added to this list —
+   the ratchet only catches it once someone tabs to a control inside it. */
+.grid-toolbar .dept-picker-panel,
+.grid-toolbar .add-txn-form {
+  --focus-ring: var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,10 +82,11 @@ input:focus-visible {
   top: 0;
   z-index: 100;
   background: var(--paper);
-  /* --line-on-shell (not --line-2): this border sits on --paper's OWN
-     background (green) with no light card behind it — the plain dark
-     hairline used everywhere else would vanish here (~1:1). */
-  border-bottom: 1px solid var(--line-on-shell);
+  /* No border (issue #25 Phase 4d, ported issue #30, 2026-09-19): jakkaritw
+     asked for the underline gone ("ตัดเส้นสีเขียวใต้ logo chememan ออก").
+     --paper is light now, and the dark gradient bar sitting directly below
+     (.user-bar) already reads as a clean zone break on its own — a hairline
+     here would only reintroduce the decorative line he removed. */
 }
 .nav-inner {
   display: flex;
@@ -117,14 +143,17 @@ input:focus-visible {
 }
 .nav-logo-text .name {
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: var(--fs-title);
   letter-spacing: -0.005em;
-  /* Sits directly on .nav's own --paper background (green) — was relying on
-     inherited body color (dark ink), invisible there. */
+  /* Sits directly on .nav's own --paper background. --ink-on-shell now
+     REPOINTS to plain --ink (issue #30, 2026-09-19 — --paper is a light
+     shell again, tokens.css) so this rule needs no edit; kept as the
+     on-shell token rather than inlined so it can never drift from what the
+     shell actually is again. */
   color: var(--ink-on-shell);
 }
 .nav-logo-text .sub {
-  font-size: 10.5px;
+  font-size: var(--fs-subtitle);
   color: var(--ink-on-shell-2);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -201,9 +230,20 @@ input:focus-visible {
   gap: 18px;
   flex-wrap: wrap;
   padding: 13px 18px;
+  /* Gradient bar (issue #30, 2026-09-19) — NEW surface area, ported from the
+     approved theme's zone capture (.user-bar backgroundImage). background:
+     var(--surface) stays first as a plain fallback if the image ever fails
+     to paint; background-image is the real, always-consuming rule. Every
+     child that sits directly on this dark fill (not inside its own opaque
+     chip) is repointed to the --tc-v3-* / --tc-toolbar-border family below —
+     see .v3/.role-badge/.v3-cc-pill/.v3-gl-pill rules further down. */
   background: var(--surface);
-  border: 1px solid var(--line);
+  background-image: var(--userbar-bg-img);
+  /* Literal token, no color-mix wrapper (issue #30, 2026-09-19, post-review
+     correction) — see --tc-toolbar-border's own comment in tokens.css. */
+  border: 1px solid var(--tc-toolbar-border);
   border-radius: var(--r);
+  box-shadow: 0 1px 2px rgba(28, 35, 49, 0.06);
 }
 .user-bar-status {
   font-family: var(--mono);
@@ -225,6 +265,12 @@ input:focus-visible {
   background: var(--paper-2);
   border: 1px solid var(--line-2);
   white-space: nowrap;
+  /* Hidden by default (approved theme's own signed-off state, attrs.data-
+     meta-tags="hidden" — issue #30, 2026-09-19): the "สายงาน/ฝ่าย" text
+     labels this pill would show are redundant with the breadcrumb text
+     right next to it. Rule kept (not deleted) so re-enabling is a 1-line
+     change, matching how the prototype itself treats this as a toggle. */
+  display: none;
 }
 .user-avatar {
   width: 42px;
@@ -242,6 +288,10 @@ input:focus-visible {
      initials on the bright hover-mint only cleared 3.25:1; the darker
      pine-green companion clears 6.48:1 while staying in the green family. */
   background: var(--accent-2-text);
+  /* Hidden by default (approved theme's own signed-off state, attrs.data-
+     avatar="hidden" — issue #30, 2026-09-19), same reasoning as .meta-tag
+     above. Every other property above is kept so re-enabling is 1 line. */
+  display: none;
 }
 .user-avatar.admin {
   background: var(--accent);
@@ -252,7 +302,12 @@ input:focus-visible {
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 2px 7px;
-  border-radius: 999px;
+  /* var(--r-chip), was a literal 999px (issue #30, 2026-09-19) — same
+     mechanical, zero-visual-diff sweep at 7 more full-pill sites in this
+     file (.dept-picker-badge/.special-open-btn/.status-chip/.approval-bar
+     .act-status-error/.pp/.admin-toggle-sw/.v3-count), per this pass's own
+     "never inline literals" rule for the 3 radius scales. */
+  border-radius: var(--r-chip);
 }
 /* GATE LOW-7 (2026-08-15) — rule: a tint (color-mix background/border) and
    its own text always mix from the SAME base token. Text here moved to
@@ -265,18 +320,33 @@ input:focus-visible {
    token (--accent-2) so this rule held for them too — but --accent-2 itself
    failed WCAG as text (2.63-2.65:1); see the --accent-2-text fix directly
    below, applied identically to all three plus 2 solid-fill sites. */
+/* Both tints mix into --surface, not transparent (issue #30, 2026-09-19,
+   same "own opaque fill" fix issue #25 Phase 4g already applied to
+   .v3-count/.meta-tag) — these badges render inside .user-bar, which is a
+   dark gradient now; mixing into transparent would show the gradient
+   through the tint as a muddy smudge instead of the light chip the approved
+   theme's own zone capture shows (.role-badge.user backgroundColor is an
+   opaque near-white, not a translucent one). */
 .role-badge.admin {
-  background: color-mix(in oklab, var(--accent-text) 16%, transparent);
+  background: color-mix(in oklab, var(--accent-text) 16%, var(--surface));
   color: var(--accent-text);
   border: 1px solid color-mix(in oklab, var(--accent-text) 42%, var(--line));
 }
 /* --accent-2-text (2026-08-15, contrast fix — same GATE LOW-7 rule: tint and
    text mix from the SAME base token): raw --accent-2 as text on this chip's
-   light tint measured 2.63:1; the darker pine-green companion clears 4.5:1. */
+   light tint measured 2.63:1; the darker pine-green companion clears 4.5:1.
+   --accent-2-text itself is now the CI blue, not pine-green (issue #30,
+   2026-09-19, tokens.css) — this rule needs no further edit, it already
+   reaches the palette through the token. */
 .role-badge.user {
-  background: color-mix(in oklab, var(--accent-2-text) 16%, transparent);
+  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
+     replaces the color-mix formula with the approved design's own literal
+     pair (tokens.css); ink (--accent-2-text = --cman-blue = #2f61ac) is
+     unchanged, already the value the approved design calls for — verified
+     4.97:1 on this tint. */
+  background: var(--identity-pill-tint);
   color: var(--accent-2-text);
-  border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
+  border: 1px solid var(--identity-pill-border);
 }
 
 /* ─── User bar · V3 layout (avatar/identity | สายงาน › ฝ่าย(n) › Cost
@@ -308,13 +378,18 @@ input:focus-visible {
   font-weight: 700;
   font-size: 13.5px;
   letter-spacing: -0.01em;
-  color: var(--ink);
+  /* var(--tc-v3-name), not --ink (issue #30, 2026-09-19) — sits directly on
+     .user-bar's own dark gradient fill now; see that rule's comment. */
+  color: var(--tc-v3-name);
   line-height: 1.2;
 }
 .v3 .v3-email {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--ink-3);
+  /* var(--tc-v3-email), not --ink-3 (issue #30, 2026-09-19) — see .v3-name
+     above; reused (not a new token) for .v3-arrow/.v3-allnote too, both
+     bare "muted" text on the same dark fill. */
+  color: var(--tc-v3-email);
   letter-spacing: 0.01em;
   line-height: 1;
 }
@@ -338,7 +413,12 @@ input:focus-visible {
   min-width: 0;
 }
 .v3 .v3-arrow {
-  color: var(--ink-3);
+  /* var(--tc-v3-email) — reused, not a new token (issue #30, 2026-09-19):
+     same "muted white ink on the dark bar" role as .v3-email; this arrow is
+     not one of the approved theme's own named 9 text roles, but it is a
+     real, always-visible separator between the breadcrumb segments and the
+     mandatory readability check covers every element in this zone. */
+  color: var(--tc-v3-email);
   opacity: 0.45;
   flex-shrink: 0;
 }
@@ -346,15 +426,19 @@ input:focus-visible {
   font-family: var(--serif);
   font-size: 20px;
   line-height: 1;
-  color: var(--accent-text);
+  /* var(--tc-v3-division), not --accent-text (issue #30, 2026-09-19) — sits
+     directly on the dark gradient fill now; see .v3-name above. */
+  color: var(--tc-v3-division);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
+/* Always empty now that both children below are hidden (issue #30,
+   2026-09-19) — without this the wrapper still occupies a flex slot in
+   .v3-seg (gap:8px), leaving a dangling gap in front of the department
+   chips (same edge case issue #25 Phase 4i found and fixed in the
+   prototype). */
 .v3 .v3-label-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
+  display: none;
 }
 .v3 .v3-count {
   font-family: var(--mono);
@@ -362,11 +446,17 @@ input:focus-visible {
   font-weight: 800;
   line-height: 1;
   /* --accent-2-text, not raw --accent-2 (2026-08-15, contrast fix) — was
-     2.65:1 as text on this tint; the pine-green companion clears 4.5:1. */
+     2.65:1 as text on this tint; the pine-green companion clears 4.5:1.
+     Tint/border are this element's OWN literal pair (issue #30, 2026-09-19,
+     post-review) — close to but distinct from the shared
+     --identity-pill-tint/-border (the approved design's own capture gives
+     this smaller badge a slightly stronger tint); element stays hidden by
+     default (see display:none below), so this is a dormant-consistency fix,
+     not a visible change. */
   color: var(--accent-2-text);
-  background: color-mix(in oklab, var(--accent-2-text) 15%, transparent);
-  border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
-  border-radius: 999px;
+  background: #dee7f4;
+  border: 1px solid #95add2;
+  border-radius: var(--r-chip);
   min-width: 17px;
   height: 17px;
   padding: 0 5px;
@@ -374,6 +464,14 @@ input:focus-visible {
   align-items: center;
   justify-content: center;
   font-variant-numeric: tabular-nums;
+  /* Hidden by default (jakkaritw, issue #25 Phase 4i, "ลบวงกลมเลขทิ้งเลย" —
+     ported issue #30, 2026-09-19, attrs.data-dept-count="hidden"): the
+     department count is redundant with .v3-depts listing the names right
+     next to it. Rule kept (not deleted) so re-enabling is 1 line; the
+     "own opaque fill" contrast fix issue #25 Phase 4g made for this element
+     is therefore intentionally NOT ported here — nothing renders this
+     colour today. */
+  display: none;
 }
 .v3 .v3-depts {
   display: flex;
@@ -388,15 +486,28 @@ input:focus-visible {
   flex-direction: row;
   gap: 0;
   padding: 4px 10px;
-  border-radius: var(--r);
-  border: 1px solid color-mix(in oklab, var(--accent-2) 30%, var(--line));
-  background: color-mix(in oklab, var(--accent-2) 6%, var(--surface));
+  /* var(--r-chip), not --r (issue #30, 2026-09-19) — a full pill, per the
+     approved theme's own zone capture (borderRadius: 999px); this chip
+     paints its own opaque light fill (--surface-mixed background below),
+     so it needs no --tc-* text treatment even sitting inside the dark
+     .user-bar — same "own opaque fill" rule as .role-badge above. */
+  border-radius: var(--r-chip);
+  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
+     see .role-badge.user's own comment; own ink is unset (inherits --ink
+     from body, already #1f2937, matching the approved design). */
+  border: 1px solid var(--identity-pill-border);
+  background: var(--identity-pill-tint);
 }
 .v3 .user-chip.cc .v {
   font-family: var(--sans);
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--ink-2);
+  /* var(--accent-2-text), not --ink-2 (issue #30, 2026-09-19) — the
+     approved theme's own zone capture shows this value text in the CI blue,
+     not plain ink; the chip's own opaque fill (above) still makes this a
+     "read against your own light background" case, unrelated to .user-bar's
+     dark fill behind the chip. */
+  color: var(--accent-2-text);
   white-space: nowrap;
 }
 .v3 .v3-metrics {
@@ -405,6 +516,14 @@ input:focus-visible {
   gap: 8px;
   flex-shrink: 0;
 }
+/* issue #30 (2026-09-19): the approved theme's own zone capture shows BOTH
+   pills as an identical LIGHT chip (opaque near-white fill, CI-blue text) —
+   not the two solid dark fills (green / accent-2-text) + white text this
+   rule used to paint. Both are now one shared "own opaque fill" formula
+   (same reasoning as .role-badge/.user-chip.cc above), so the separate
+   .v3-cc-pill/.v3-gl-pill colour overrides below this block are gone; the
+   inset highlight (meant for a dark fill) is gone too, per the same zone
+   capture (boxShadow: none). */
 .v3 .v3-cc-pill,
 .v3 .v3-gl-pill {
   display: inline-flex;
@@ -412,20 +531,13 @@ input:focus-visible {
   gap: 6px;
   flex-shrink: 0;
   padding: 5px 13px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-chip);
   white-space: nowrap;
-}
-.v3 .v3-cc-pill {
-  background: var(--accent);
-  color: #fff;
-}
-.v3 .v3-gl-pill {
-  /* --accent-2-text (2026-08-15, contrast fix) — raw --accent-2 as a solid
-     fill under white text measured the same 3.25:1 as .user-avatar; found
-     during the badge-contrast sweep, same fix applied. */
-  background: var(--accent-2-text);
-  color: #fff;
+  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
+     see .role-badge.user's own comment; ink unchanged. */
+  background: var(--identity-pill-tint);
+  border: 1px solid var(--identity-pill-border);
+  color: var(--accent-2-text);
 }
 .v3 .v3-cc-pill .n,
 .v3 .v3-gl-pill .n {
@@ -447,7 +559,9 @@ input:focus-visible {
 .v3 .v3-allnote {
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--ink-3);
+  /* var(--tc-v3-email) — reused, same "bare muted text on the dark bar"
+     role as .v3-arrow above (issue #30, 2026-09-19). */
+  color: var(--tc-v3-email);
   letter-spacing: 0.01em;
 }
 
@@ -481,7 +595,7 @@ input:focus-visible {
   gap: 8px;
   padding: 10px 16px;
   border-radius: var(--r);
-  font-size: 13px;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: -0.005em;
   white-space: nowrap;
@@ -607,25 +721,39 @@ input:focus-visible {
   gap: 12px;
   flex-wrap: wrap;
   padding: 14px 16px;
+  /* Gradient bar (issue #30, 2026-09-19) — same treatment as .user-bar
+     above; see that rule's comment. Its OWN controls (.year-select,
+     .dept-picker-trigger, .btn-add/.btn-attach) keep their existing opaque
+     white fills and explicit dark ink, so they stay legible unmoved — only
+     the toolbar's own background/border, plus the bare text sitting
+     directly on it (.legend/.legend-note/.act-status), need repointing. */
   background: var(--surface);
-  border: 1px solid var(--line);
+  background-image: var(--toolbar-bg-img);
+  /* Literal token, no color-mix wrapper (issue #30, 2026-09-19, post-review
+     correction) — see --tc-toolbar-border's own comment in tokens.css. */
+  border: 1px solid var(--tc-toolbar-border);
   border-radius: var(--r);
+  box-shadow: 0 1px 2px rgba(28, 35, 49, 0.06);
 }
 .year-select {
   padding: 9px 30px 9px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  font-size: 13px;
+  font-size: var(--fs-label);
   font-weight: 500;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   min-width: 120px;
-  /* Arrow stroke hardcoded to hex (2026-08-21, ref-alignment) — data-URIs
-     can't reference CSS custom properties; #3a4864 is --ink-2's literal
-     value under the CI palette (was an unrelated leftover blue-grey). */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233a4864' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* Arrow stroke hardcoded to hex (2026-08-21, ref-alignment; mirrored by
+     hand again 2026-09-19, issue #30) — data-URIs can't reference CSS
+     custom properties. #4b5563 is --ink-2's CURRENT literal value (was
+     #3a4864 before the theme port moved --ink-2) — this is the exact "data-
+     URI chevron" trap the port's own notes warn about: when --ink-2 moves,
+     this string must be mirrored by hand, there is no other way to keep it
+     in sync. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234b5563' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -656,15 +784,28 @@ input:focus-visible {
 }
 .legend-note {
   margin: 0;
+  /* One clear blank line above the note (jakkaritw, post-review: the
+     prototype capture has a visible gap here; the app pressed it straight
+     against the legend chips). `.legend-block`'s own flex `gap: 6px`
+     already contributes some of that space — this margin-top adds the
+     rest, landing close to one full line-height (12.5px * 1.4 = 17.5px)
+     of separation in total. Markup/text untouched, CSS only. */
+  margin-top: 12px;
   padding: 0 6px;
   font-size: 12.5px;
   line-height: 1.4;
-  color: var(--ink-3);
+  /* var(--tc-legend-note), not --ink-3 (issue #30, 2026-09-19) — this text
+     sits directly on .grid-toolbar's own dark gradient fill now; see that
+     rule's comment. */
+  color: var(--tc-legend-note);
   /* left-aligned (jakkaritw 2026-09-18): was text-align: right */
   text-align: left;
 }
 .legend-note strong {
-  color: var(--ink);
+  /* var(--tc-legend-note) (issue #30, 2026-09-19) — was --ink (dark), which
+     on the new dark gradient bar would have been the ONE unreadable word in
+     an otherwise-white line; font-weight alone still carries the emphasis. */
+  color: var(--tc-legend-note);
   font-weight: 600;
 }
 .legend {
@@ -677,7 +818,10 @@ input:focus-visible {
   gap: 20px;
   padding: 0 6px;
   font-size: 16px;
-  color: var(--ink-3);
+  /* var(--tc-legend), not --ink-3 (issue #30, 2026-09-19) — see .legend-note
+     above; .sap-freshness (the healthy-state suffix) has no rule of its own
+     and inherits this same white correctly. */
+  color: var(--tc-legend);
   font-family: var(--mono);
   letter-spacing: 0.02em;
 }
@@ -691,6 +835,10 @@ input:focus-visible {
   height: 11px;
   border-radius: 50%;
   flex-shrink: 0;
+  /* Ring (issue #25 Phase 4d, ported issue #30, 2026-09-19) — see
+     --legend-dot-ring-w/-color in tokens.css for why: Laddawan's 3 fixed
+     dot hues measure 1.21-1.31:1 against this dark gradient bar without it. */
+  box-shadow: 0 0 0 var(--legend-dot-ring-w) var(--legend-dot-ring-color);
 }
 .legend-dot.sap {
   background: var(--status-sap);
@@ -703,17 +851,15 @@ input:focus-visible {
 }
 /* SAP freshness suffix (ADR-0030 §3.2) — appended text inside the SAP
    legend-item, not a new chip. Healthy state inherits `.legend`'s own
-   ink-3/mono styling with no extra rule; `.sap-freshness-warn` (stale OR
-   unknown watermark) gets the SAME gold/brown hue `.status-chip-pending`
-   already uses for a cautionary state (not `--status-rejected`'s red —
-   staleness is an operational warning, not a hard error). Bold weight is
-   the SECOND cue alongside the ⚠ glyph already in the string, so color is
-   never the only signal (same rule tokens.css documents for --error-on-shell).
-   #80500d measured 5.09:1 for `.status-chip-pending` against its OWN
-   lighter gold-tint background; against `.grid-toolbar`'s plain --surface
-   (pure white, no tint) the same hex clears AA with more margin, not less. */
+   var(--tc-legend) white with no extra rule (issue #30, 2026-09-19 — was
+   ink-3/mono before the toolbar became a dark gradient). `.sap-freshness-warn`
+   (stale OR unknown watermark) used to share `.status-chip-pending`'s gold-
+   brown hue, which on THIS dark gradient reads as dark-on-dark — repointed
+   to CI yellow (var(--tc-sap-freshness-warn), issue #25 Phase 4h precedent)
+   instead. Bold weight is still the SECOND cue alongside the ⚠ glyph already
+   in the string, so color is never the only signal. */
 .sap-freshness-warn {
-  color: #80500d;
+  color: var(--tc-sap-freshness-warn);
   font-weight: 700;
 }
 
@@ -776,7 +922,7 @@ input:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  font-size: 13px;
+  font-size: var(--fs-label);
   font-weight: 600;
   cursor: pointer;
 }
@@ -834,7 +980,7 @@ input:focus-visible {
   color: var(--accent-2-text);
   background: color-mix(in oklab, var(--accent-2-text) 15%, transparent);
   border: 1px solid color-mix(in oklab, var(--accent-2-text) 42%, var(--line));
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   padding: 1px 6px;
 }
 .dept-picker-row {
@@ -1050,7 +1196,7 @@ input:focus-visible {
    (bg=rgb(26,71,42), ratio=1.64). */
 .side-heading {
   font-family: var(--serif);
-  font-size: 20px;
+  font-size: var(--fs-side-heading);
   font-weight: 500;
   color: var(--ink-on-shell);
   margin: 0;
@@ -1097,7 +1243,7 @@ input:focus-visible {
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-table-cell);
   background: var(--surface);
   /* --frz1/2/3 (frozen-column left offsets) are set INLINE from React state
      (UI-parity point 8c, `GridTable.tsx`'s `colWidths` + `freezeOffsets()`)
@@ -1132,8 +1278,12 @@ input:focus-visible {
   z-index: 10;
   background: var(--paper-2);
   font-weight: 600;
-  color: var(--ink-2);
-  font-size: 10.5px;
+  /* var(--ink-3), not --ink-2 (issue #30, 2026-09-19) — matches
+     .group-head-row th right below, which already used ink-3; the approved
+     theme's own zone capture shows both header rows at the same darkened
+     ink (PRD #25 Phase 4's ink-3 depth change, ported here). */
+  color: var(--ink-3);
+  font-size: var(--fs-table-head);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 8px 10px;
@@ -1173,7 +1323,7 @@ input:focus-visible {
   padding: 5px 10px;
   text-align: center;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--fs-group-head);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1198,7 +1348,7 @@ input:focus-visible {
    the inline comment at the call site in GridTable.tsx. */
 .data-table thead tr.group-head-row th.month-group-label {
   font-family: var(--serif);
-  font-size: 16px;
+  font-size: var(--fs-month-group-label);
   font-weight: 500;
   letter-spacing: -0.005em;
   text-transform: none;
@@ -1510,7 +1660,7 @@ body.col-dragging * {
   background: color-mix(in oklab, var(--status-approved) 9%, var(--surface));
 }
 .data-table tr[data-status='pending'] td:not(.shared):not(.frz):not(.status-cell):not(.action-cell) {
-  background: color-mix(in oklab, var(--ink) 9%, var(--surface));
+  background: color-mix(in oklab, var(--status-pending) 9%, var(--surface));
 }
 .data-table th.month-col {
   text-align: right;
@@ -1538,10 +1688,13 @@ body.col-dragging * {
    tinted header cell + gold dot/underline mark "today" so users don't have
    to count columns to find the current month. */
 .data-table thead th.month-col.now {
-  color: var(--accent-text);
-  /* GATE LOW-7: tint mixes from --accent-text, not raw --accent — see the
-     rule comment at .role-badge.admin. */
-  background: color-mix(in oklab, var(--accent-text) 8%, var(--paper-2));
+  /* var(--accent-2-text), not --accent-text (issue #30, 2026-09-19) — the
+     approved theme's own zone capture shows this "current month" highlight
+     as the CI blue, not navy; --accent-2-text is exactly that role already
+     (tokens.css). GATE LOW-7 still holds: tint mixes from the same token
+     the text uses. */
+  color: var(--accent-2-text);
+  background: color-mix(in oklab, var(--accent-2-text) 8%, var(--paper-2));
 }
 .data-table thead th.month-col.now .th-label {
   display: flex;
@@ -1611,60 +1764,73 @@ body.col-dragging * {
    here). The one place saturated color is allowed in this otherwise neutral
    grid; only the 6 special GL groups get a chip (groupChipClass), everything
    else stays plain text in the frozen white .gl-group-cell band. */
+/* Pale pill, not a solid glowing block (issue #30, 2026-09-19, jakkaritw's
+   post-review correction — "ตัดความฟุ้งออก ไห้ lean modern simple", pointing
+   at the Travelling Expense chip as the target look and Entertainment's old
+   solid-amber block as wrong). One shared formula for all 6 groups instead
+   of 6 hardcoded solid fills + glow — each `.gl-*` class below sets only
+   `--chip-hue`/`--chip-ink` (literal hex; not 6 new global tokens, per
+   instruction). `--chip-ink` is independently tuned per hue (not derived
+   from `--chip-hue` by CSS alone) because each hue needs a different amount
+   of darkening to clear AA on its own tint — see each class's own comment
+   for the measured ratio. */
 .gl-group-cell .gl-chip.special-gl-group {
-  /* Default (2026-08-21, ref-alignment) — navy, not grey; only visible if a
-     special-GL group ever renders without one of the specific gl-* color
-     classes below, which currently never happens (model.ts always pairs
-     one). The 6 specific overrides are UNCHANGED except .gl-green (below),
-     the only one the ref's sample data exercises — see plan.md/final report
-     for why the other 5 are left as-is pending ref coverage. */
-  --chip-bg: var(--ink-2);
-  --chip-fg: #fff;
-  --chip-glow: rgba(27, 53, 100, 0.28);
-  background: var(--chip-bg);
-  color: var(--chip-fg);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* Default — only visible if a special-GL group ever renders without one
+     of the specific gl-* classes below, which currently never happens
+     (model.ts always pairs one). */
+  --chip-hue: var(--ink-2);
+  --chip-ink: var(--ink);
+  background: color-mix(in oklab, var(--chip-hue) var(--chip-tint-strength), var(--surface));
+  border: 1px solid color-mix(in oklab, var(--chip-hue) 38%, var(--surface));
+  color: var(--chip-ink);
+  border-radius: var(--r-chip);
   padding: 5px 11px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
   font-weight: 700;
-  font-size: 11.5px;
+  font-size: var(--fs-badge);
+  font-variant-numeric: tabular-nums;
   display: inline-block;
   letter-spacing: -0.005em;
-  box-shadow: 0 0 12px var(--chip-glow), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-.gl-group-cell .gl-chip.gl-yellow {
-  --chip-bg: #f2b705;
-  --chip-fg: #3a2e00;
-  --chip-glow: rgba(242, 183, 5, 0.5);
+  box-shadow: none;
   text-shadow: none;
 }
+/* Ink darkened from the raw hue in oklab until the live-measured (canvas
+   pixels, not string comparison) ratio against this chip's own 14% tint
+   clears 5.0:1 — comfortable margin over AA's 4.5:1 so browser rounding and
+   the contrast ratchet cannot flip it. Hue itself is unchanged from before
+   this pass. */
+.gl-group-cell .gl-chip.gl-yellow {
+  --chip-hue: #f2b705;
+  /* Coordinator's starting point #9b6300 measured 4.673:1 (canvas-sampled,
+     under the 5.0 target) -- darkened in oklab, same hue, to 5.081:1. */
+  --chip-ink: #955d00;
+}
 .gl-group-cell .gl-chip.gl-pink {
-  --chip-bg: #ec4899;
-  --chip-fg: #fff;
-  --chip-glow: rgba(236, 72, 153, 0.5);
+  --chip-hue: #ec4899;
+  /* Starting point #c9207b measured 4.512:1 -- darkened to 5.141:1. */
+  --chip-ink: #be0d72;
 }
 .gl-group-cell .gl-chip.gl-purple {
-  --chip-bg: #845ef7;
-  --chip-fg: #fff;
-  --chip-glow: rgba(132, 94, 247, 0.5);
+  --chip-hue: #845ef7;
+  /* Starting point #754ce4 measured 4.547:1 -- darkened to 5.166:1. */
+  --chip-ink: #6d42da;
 }
 .gl-group-cell .gl-chip.gl-orange {
-  --chip-bg: #f97316;
-  --chip-fg: #fff;
-  --chip-glow: rgba(249, 115, 22, 0.5);
+  --chip-hue: #f97316;
+  /* Starting point #c24000 measured 4.587:1 -- darkened to 5.181:1. */
+  --chip-ink: #b83600;
 }
 .gl-group-cell .gl-chip.gl-blue {
-  --chip-bg: #3b82f6;
-  --chip-fg: #fff;
-  --chip-glow: rgba(59, 130, 246, 0.5);
+  --chip-hue: #3b82f6;
+  /* Starting point #1f66d8 measured 4.541:1 -- darkened to 5.145:1. */
+  --chip-ink: #145dce;
 }
-/* CI green, not lime (2026-08-21, ref-alignment — the only gl-* chip color
-   the ref's sample data exercises, Travelling Expense). */
+/* CI green (2026-08-21, ref-alignment — the only gl-* chip colour the ref's
+   sample data exercises, Travelling Expense) — ink is the signed-off
+   extraction's own value, kept exactly (measures 7.63:1, already clears the
+   5.0:1 bar with room to spare; not re-darkened like the other 5). */
 .gl-group-cell .gl-chip.gl-green {
-  --chip-bg: var(--accent);
-  --chip-fg: #fff;
-  --chip-glow: rgba(0, 128, 94, 0.45);
+  --chip-hue: var(--accent);
+  --chip-ink: #09532d;
 }
 /* Status indicator — swatch + text, never color alone (mockup 0002.3
    lines 457-466). The td itself stays a NORMAL table-cell (never
@@ -1741,31 +1907,56 @@ th.total-year-col {
    are harmless to share since the input's own explicit width (78px) already
    exceeds this min-width. */
 .month-value {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  font-weight: 500;
+  /* Sans, not mono, at the base table-cell size (issue #30, 2026-09-19,
+     jakkaritw's post-review correction — reverses the PRD's earlier
+     "fixed-width digits accepted as forgone" line; he asked for tabular
+     figures directly, so his instruction wins here) — matches the signed-
+     off extraction's `zones['data-table']` capture. Weight is per-state
+     now (.sap/.pending-readonly/.approved-ro/.zero below), not a flat
+     base value — every rendered pill always carries exactly one of those
+     4 state classes (model.ts), so this rule intentionally sets no
+     font-weight of its own. */
+  font-family: var(--sans);
+  font-size: var(--fs-table-cell);
+  font-variant-numeric: tabular-nums;
   padding: 4px 8px;
-  border-radius: var(--r);
+  /* var(--r-cell), not --r (issue #30, 2026-09-19) — a smaller, distinct
+     radius scale for money-pill cells specifically (tokens.css); .month-input
+     below moves to the SAME token so the editable cell keeps matching the
+     read-only pill it replaces (their radii must not diverge — nothing else
+     in this rule pair changes, so this is safe alongside the "editable
+     input wins by being later in the file" cascade the port's own notes
+     warn about — the file ORDER here is untouched, only each rule's own
+     value). */
+  border-radius: var(--r-cell);
   display: inline-block;
   min-width: 60px;
   text-align: right;
 }
-/* Data-layer pill colors — SAP = green, Approved (board, read-only) = blue,
-   pending read-only = neutral ink chip. Backgrounds color-mix into
-   `transparent` (not `--surface`) so the row-tint wash from point 2 shows
-   through-blended rather than the pill looking muddy/opaque. */
+/* Data-layer pill colors — SAP = blue, Approved (board, read-only) = green,
+   Pending (read-only) = rust (issue #30, 2026-09-19: --status-sap/
+   --status-approved were swapped before this pass — see tokens.css — so
+   this comment's own hue names now match what actually renders). Backgrounds
+   color-mix into `transparent` (not `--surface`) so the row-tint wash from
+   point 2 shows through-blended rather than the pill looking muddy/opaque. */
 .month-value.sap {
   color: var(--status-sap);
   background: color-mix(in oklab, var(--status-sap) 10%, transparent);
+  font-weight: 700;
 }
 .month-value.approved-ro {
   color: var(--status-approved);
   background: color-mix(in oklab, var(--status-approved) 10%, transparent);
+  font-weight: 400;
 }
+/* Wired to --status-pending (issue #30, 2026-09-19) — was a hardcoded
+   var(--ink)/var(--paper-2) pair with no real "pending" hue at all (that
+   token used to just alias --ink); now matches the SAME formula as .sap/
+   .approved-ro above, using Laddawan's authoritative rust. */
 .month-value.pending-readonly {
-  color: var(--ink);
-  background: var(--paper-2);
-  font-weight: 600;
+  color: var(--status-pending);
+  background: color-mix(in oklab, var(--status-pending) 10%, transparent);
+  font-weight: 500;
 }
 /* Zero value always mutes the pill, regardless of which layer it belongs
    to — must stay LAST so it overrides .sap/.approved-ro/.pending-readonly
@@ -1780,7 +1971,9 @@ th.total-year-col {
   width: 78px;
   padding: 5px 7px;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  /* var(--r-cell) — see .month-value above; kept in sync so the editable
+     input still matches the read-only pill's shape. */
+  border-radius: var(--r-cell);
   /* --paper-2 (not --paper): inset editable cell nested in .data-table's
      own --surface card, same reasoning as .dept-picker-search above. */
   background: var(--paper-2);
@@ -1856,7 +2049,7 @@ th.total-year-col {
   margin-top: 3px;
   padding: 2px 8px;
   border: 1px solid var(--special-edge);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: color-mix(in oklab, var(--special-bg) 55%, var(--surface));
   color: var(--special-edge);
   font-family: var(--mono);
@@ -2514,12 +2707,16 @@ th.total-year-col {
   flex-wrap: wrap;
 }
 /* .act-status is shared between .approval-bar (no card — sits directly on
-   the page shell, --paper) and .add-txn-trigger (inside .grid-toolbar's own
-   --surface card) — the base rule below serves the CARD case; the
-   .approval-bar-scoped overrides further down serve the shell case. Both
-   scoped overrides share specificity (0,2,0), so the error variant must
-   come AFTER the plain one to win on the same element (className="act-status
-   act-status-error"). */
+   the page shell, --paper) and AddTransactionForm's disabledReason span
+   (inside .grid-toolbar). The base rule below is the plain-card default;
+   both `.approval-bar`/`.grid-toolbar` scoped overrides further down serve
+   their own dark-fill context. All 3 share specificity (0,2,0), so the
+   error variant must come AFTER the plain one to win on the same element
+   (className="act-status act-status-error").
+   .grid-toolbar's own scoped override (issue #30, 2026-09-19) exists
+   because .grid-toolbar stopped being a plain --surface card the moment it
+   became a dark gradient bar — this comment used to call it "the CARD case"
+   served by the base rule; that stopped being true this pass. */
 .act-status {
   font-family: var(--mono);
   font-size: 11.5px;
@@ -2531,6 +2728,9 @@ th.total-year-col {
 }
 .approval-bar .act-status {
   color: var(--ink-on-shell-2);
+}
+.grid-toolbar .act-status {
+  color: var(--tc-act-status);
 }
 /* GATE finding 1 (2026-08-15): both this rule and the plain .act-status one
    above used to resolve to the SAME #ffffff (--ink-on-shell-2 ==
@@ -2548,23 +2748,29 @@ th.total-year-col {
   color: var(--error-on-shell);
   font-weight: 700;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--line-on-shell);
 }
 .status-chip {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-badge);
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   white-space: nowrap;
 }
 .status-chip-draft {
-  color: var(--ink-3);
-  background: var(--paper-2);
-  border: 1px solid var(--line);
+  /* Rebuilt on the same status-hue formula as .status-chip-approved/
+     -rejected below (issue #30, 2026-09-19, post-review) — was a flat
+     --ink-3/--paper-2/--line triple with no hue-driven tint at all, the
+     only status chip built that way; measured 3.84:1, a baselined
+     violation. --status-draft is a darkened --ink-3 (tokens.css) so the
+     TINT still reads as "neutral", same family shape as the coloured 3. */
+  color: var(--status-draft);
+  background: color-mix(in oklab, var(--ink-3) 14%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--ink-3) 40%, var(--line));
 }
 /* .status-chip-pending/approved/rejected render inside .approval-bar (no
    card — directly on --paper). Their backgrounds used to mix into
@@ -2574,14 +2780,15 @@ th.total-year-col {
    opaque light card of its own — same appearance as before (--surface is
    close to the old --paper), safe on any background behind it. */
 .status-chip-pending {
-  /* 2026-08-21 (ref-alignment): --c-gold moved to the CI brown and --surface
-     to pure white, which together lightened this tint enough to drop the
-     old #8a5a12 text under AA (4.40:1, caught by the contrast ratchet as a
-     NEW violation). Darkened just enough to clear 4.5:1 with margin
-     (5.09:1 measured against the new tint) — same hue, not a redesign. */
-  color: #80500d;
-  background: color-mix(in oklab, var(--c-gold) 18%, var(--surface));
-  border: 1px solid color-mix(in oklab, var(--c-gold) 50%, var(--line));
+  /* Re-keyed from --c-gold (brown, #734f21 — never the real "pending" hue)
+     to --status-pending (rust, #a24a0e) and the shared 14%/40% formula
+     every other status chip uses (issue #30, 2026-09-19, post-review) —
+     was its own one-off 18%/50% mix, the only status chip not on the
+     shared shape. Ink darkened from the raw hue (same reasoning as
+     --status-draft) to clear 5.0:1 on the new tint with margin. */
+  color: #9f4708;
+  background: color-mix(in oklab, var(--status-pending) 14%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--status-pending) 40%, var(--line));
 }
 .status-chip-approved {
   color: var(--status-approved);
@@ -2596,7 +2803,10 @@ th.total-year-col {
    --status-approved above, so it stays a stable red regardless of --accent. */
 .status-chip-rejected {
   color: var(--status-rejected);
-  background: color-mix(in oklab, var(--status-rejected) 12%, var(--surface));
+  /* 12% -> 14% (issue #30, 2026-09-19, post-review) — the only status chip
+     whose background mix didn't match the other 3's shared 14%; ink/border
+     unchanged, still clears AA with margin (measured 5.27:1). */
+  background: color-mix(in oklab, var(--status-rejected) 14%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--status-rejected) 40%, var(--line));
 }
 .btn-submit,
@@ -2781,7 +2991,7 @@ th.total-year-col {
   font-weight: 800;
   letter-spacing: 0.02em;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
@@ -2826,7 +3036,7 @@ th.total-year-col {
 .admin-toggle-sw {
   width: 36px;
   height: 20px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: var(--line);
   position: relative;
   transition: background 160ms;

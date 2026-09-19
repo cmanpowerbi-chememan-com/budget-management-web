@@ -308,6 +308,11 @@ test.describe('filler journey', () => {
     await card.getByRole('option', { name: 'ญี่ปุ่น' }).click()
     await expect(destinationInput).toHaveValue('ญี่ปุ่น')
     await card.getByLabel('days new-0').fill('5')
+    // 2a553eb (2026-09-16, issue #11): Project and Purpose are required on
+    // every Trip Manager save, so an unfilled card is refused client-side and
+    // no POST is ever sent — fill them or `tripBodies` stays empty.
+    await card.getByLabel('project new-0').fill('โครงการทดสอบ')
+    await card.getByLabel('purpose new-0').fill('ประชุมลูกค้า')
     await card.getByRole('button', { name: 'Mar', exact: true }).click()
     await card.getByRole('button', { name: 'Apr', exact: true }).click()
     // ฝั่งบัญชี (accounting side) is now locked to the GL row that opened this
@@ -363,8 +368,10 @@ test.describe('filler journey', () => {
     await expect(page.getByTestId('confirm-dialog')).toBeVisible()
     const dialogMessage = await page.getByTestId('confirm-message').innerText()
     expect(dialogMessage).toContain(DEPT)
-    expect(dialogMessage).toContain(`ปี ${PLANNING_YEAR}`)
-    expect(dialogMessage).toContain('จำนวน 1 รายการ')
+    // The confirm copy is English since 230ffa7 (2026-09-05) and the row/cost-centre
+    // counts were dropped from this dialog by c2b46ec (2026-09-16) — assert the bare
+    // year, which survives a re-wording, rather than the sentence around it.
+    expect(dialogMessage).toContain(String(PLANNING_YEAR))
     await page.getByTestId('confirm-ok').click()
 
     await expect.poll(() => world.captured.submitBodies.length).toBeGreaterThan(0)

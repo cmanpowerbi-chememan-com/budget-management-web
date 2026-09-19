@@ -126,6 +126,15 @@ export function makeBudgetRow(input: {
   costCenter: string
   glAccount: string
   editable?: boolean
+  /** Top-level row department (Issue #13, commit 991a982) — `admitRows()` in
+   * `src/grid/model.ts` filters every `GET /budget` row against the
+   * SELECTED ฝ่าย using THIS field, never `board.department`/
+   * `pending.department` (both stay `null` below on purpose, mirroring a
+   * real row with no board/pending data yet). Defaults to `DEPT` so every
+   * existing single-department spec needs no changes; a scenario whose
+   * deep-link department is `DEPT2` must pass `department: DEPT2` here or
+   * `admitRows` silently drops the row and the grid renders empty. */
+  department?: string | null
   sap?: Partial<Record<(typeof MONTH_KEYS)[number] | 'total_year', number>>
   pending?: Partial<Record<(typeof MONTH_KEYS)[number] | 'total_year', number>>
   pendingUpdatedAt?: string | null
@@ -149,6 +158,7 @@ export function makeBudgetRow(input: {
     board,
     pending,
     editable: input.editable ?? true,
+    department: input.department === undefined ? DEPT : input.department,
   }
 }
 

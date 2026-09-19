@@ -86,7 +86,9 @@ test.describe('edge states', () => {
     await m01.fill('200')
     await m01.blur()
 
-    await expect(page.getByText('This department is in approval or already approved — editing is locked.')).toBeVisible()
+    // 6a9d323 (2026-09-09, UAT-34) reverted this message to Thai; copied
+    // character-for-character from `messageForStatus` in src/api/client.ts:88.
+    await expect(page.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeVisible()
   })
 
   test('4.6 the userbar always offers a real Logout control pointing at the Easy Auth logout endpoint', async ({ page }) => {

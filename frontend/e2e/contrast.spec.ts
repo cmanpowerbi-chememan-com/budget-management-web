@@ -15,7 +15,7 @@
  * under 3:1 against the area it's drawn over.
  *
  * WHAT THIS DELIBERATELY IGNORES — this is a RATCHET, not a zero-violation
- * gate: `contrast-baseline.json` holds ~751 pre-existing violations
+ * gate: `contrast-baseline.json` holds 107 pre-existing violations
  * (`--ink-3` #86806f body text at 3.74:1, `--line`/`--line-2` hairline
  * borrows) that are jakkaritw's own accepted design trade-offs, not bugs.
  * The spec asserts only `new == 0` (a violation whose kind+selector+sample
@@ -113,7 +113,13 @@ const WORSEN_TOLERANCE = 0.05
 
 const DEEP_LINK = `/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`
 
-function richRows() {
+/** `department` defaults to `DEPT` (matches `makeBudgetRow`'s own default) —
+ * scenarios that deep-link `DEPT` need no argument; a scenario deep-linking
+ * `DEPT2` (05/06, the approver views) must pass `DEPT2` here or
+ * `admitRows()` filters every one of these rows out and the grid renders
+ * empty under that ฝ่าย (Issue #13, commit 991a982; see `fixtures.ts`'s
+ * `makeBudgetRow` doc comment). */
+function richRows(department: string = DEPT) {
   return [
     makeBudgetRow({
       costCenter: CC,
@@ -121,6 +127,7 @@ function richRows() {
       sap: { m01: 120_000, m02: 98_500, m03: 110_250 },
       pending: { m01: 130_000, m02: 100_000, m03: 115_000 },
       pendingUpdatedAt: 'PEND-1',
+      department,
     }),
     makeBudgetRow({
       costCenter: CC,
@@ -128,6 +135,7 @@ function richRows() {
       sap: { m01: 45_000, m02: 47_500 },
       pending: { m01: 50_000, m02: 50_000 },
       pendingUpdatedAt: 'PEND-2',
+      department,
     }),
     makeBudgetRow({
       costCenter: CC,
@@ -135,6 +143,7 @@ function richRows() {
       sap: { m01: 20_000 },
       pending: { m01: 25_000 },
       pendingUpdatedAt: 'PEND-ENT-1',
+      department,
     }),
     makeBudgetRow({
       costCenter: CC,
@@ -142,6 +151,7 @@ function richRows() {
       sap: { m03: 18_000 },
       pending: { m03: 22_000 },
       pendingUpdatedAt: 'PEND-TRV-1',
+      department,
     }),
   ]
 }
@@ -321,37 +331,143 @@ function structuralAudit(): Violation[] {
     return { r: parseFloat(m[1]), g: parseFloat(m[2]), b: parseFloat(m[3]), a: m[4] !== undefined ? parseFloat(m[4]) : 1 }
   }
 
-  function effectiveBackground(el: Element): { r: number; g: number; b: number } {
-    const chain: { r: number; g: number; b: number; a: number }[] = []
+  function splitTopLevel(str: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let current = ''
+    for (const ch of str) {
+      if (ch === '(') depth++
+      else if (ch === ')') depth--
+      if (ch === ',' && depth === 0) {
+        parts.push(current.trim())
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    if (current.trim()) parts.push(current.trim())
+    return parts
+  }
+
+  /** Pulls the leading colour token off one gradient stop (e.g.
+   * "rgb(0, 128, 94) 0%" -> "rgb(0, 128, 94)", "#1b3564 100%" -> "#1b3564"),
+   * discarding the trailing position/length hint(s) this does not need. */
+  function colorTokenOf(stop: string): string {
+    const trimmed = stop.trim()
+    if (trimmed.startsWith('#')) return trimmed.split(/\s+/)[0]
+    if (/^[a-zA-Z-]+\(/.test(trimmed)) {
+      let depth = 0
+      for (let i = 0; i < trimmed.length; i++) {
+        if (trimmed[i] === '(') depth++
+        else if (trimmed[i] === ')') {
+          depth--
+          if (depth === 0) return trimmed.slice(0, i + 1)
+        }
+      }
+    }
+    return trimmed.split(/\s+/)[0]
+  }
+
+  // The theme port (issue #30) introduced this app's first gradient
+  // backgrounds (`--userbar-bg-img`/`--toolbar-bg-img` on `.user-bar` /
+  // `.grid-toolbar`) — `effectiveBackground` below previously only ever
+  // read `backgroundColor`, so every white label sitting on one of those
+  // bars measured white-on-white (a false 1:1). This resolves every colour
+  // stop of a `linear-/radial-/conic-gradient(...)` in a computed
+  // `background-image` to real sRGB via the SAME canvas-normalize method
+  // as `parseColor` above — never by regex-parsing the stop's own
+  // oklab/color-mix arithmetic. `CSS.supports('color', token)` filters out
+  // the gradient's own non-colour arguments (angle/direction/shape-position,
+  // e.g. "135deg" or "to right") BEFORE they ever reach the canvas, which
+  // silently keeps its previous fillStyle (a false black) on an invalid
+  // assignment instead of throwing.
+  function gradientStopColors(backgroundImage: string): { r: number; g: number; b: number; a: number }[] {
+    if (!backgroundImage || backgroundImage === 'none') return []
+    for (const layer of splitTopLevel(backgroundImage)) {
+      const gradientMatch = layer.match(/^(?:repeating-)?(?:linear|radial|conic)-gradient\((.*)\)$/s)
+      if (!gradientMatch) continue
+      const colors: { r: number; g: number; b: number; a: number }[] = []
+      for (const arg of splitTopLevel(gradientMatch[1])) {
+        const token = colorTokenOf(arg)
+        if (!token || !CSS.supports('color', token)) continue
+        const c = parseColor(token)
+        if (c) colors.push(c)
+      }
+      if (colors.length > 0) return colors
+    }
+    return []
+  }
+
+  /** Every CANDIDATE effective background behind `el` — normally a
+   * single-element array (today's plain backgroundColor walk, unchanged).
+   * When an ancestor paints a gradient, that gradient is judged at its
+   * WORST stop, never its average (PRD #30 Testing Decisions) — every
+   * resolved stop becomes its own candidate final background, composited
+   * with whatever sits below it exactly like a normal opaque layer; callers
+   * keep whichever candidate produces the lowest contrast ratio. */
+  function effectiveBackground(el: Element): { r: number; g: number; b: number }[] {
+    const layers: { r: number; g: number; b: number; a: number }[][] = []
     let node: Element | null = el
     while (node) {
-      const bg = parseColor(getComputedStyle(node).backgroundColor)
-      if (bg && bg.a > 0) chain.push(bg)
+      const cs = getComputedStyle(node)
+      const stops = gradientStopColors(cs.backgroundImage)
+      if (stops.length > 0) {
+        // A gradient stop is opaque and paints on top of this same node's
+        // own background-color — it terminates the walk exactly like an
+        // opaque backgroundColor does below.
+        layers.push(stops)
+        break
+      }
+      const bg = parseColor(cs.backgroundColor)
+      if (bg && bg.a > 0) layers.push([bg])
       if (bg && bg.a >= 0.999) break
       node = node.parentElement
     }
-    let acc = { r: 255, g: 255, b: 255 }
-    for (let i = chain.length - 1; i >= 0; i--) {
-      const layer = chain[i]
-      acc = {
-        r: layer.r * layer.a + acc.r * (1 - layer.a),
-        g: layer.g * layer.a + acc.g * (1 - layer.a),
-        b: layer.b * layer.a + acc.b * (1 - layer.a),
+
+    let candidates: { r: number; g: number; b: number }[] = [{ r: 255, g: 255, b: 255 }]
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const next: { r: number; g: number; b: number }[] = []
+      for (const acc of candidates) {
+        for (const layer of layers[i]) {
+          next.push({
+            r: layer.r * layer.a + acc.r * (1 - layer.a),
+            g: layer.g * layer.a + acc.g * (1 - layer.a),
+            b: layer.b * layer.a + acc.b * (1 - layer.a),
+          })
+        }
       }
+      candidates = next
     }
-    return acc
+    return candidates
   }
 
-  function effectiveForeground(el: Element, cs: CSSStyleDeclaration): { r: number; g: number; b: number } {
+  function foregroundOver(cs: CSSStyleDeclaration, bg: { r: number; g: number; b: number }): { r: number; g: number; b: number } {
     const fg = parseColor(cs.color)
     if (!fg) return { r: 0, g: 0, b: 0 }
     if (fg.a >= 0.999) return fg
-    const bg = effectiveBackground(el)
     return {
       r: fg.r * fg.a + bg.r * (1 - fg.a),
       g: fg.g * fg.a + bg.g * (1 - fg.a),
       b: fg.b * fg.a + bg.b * (1 - fg.a),
     }
+  }
+
+  /** Picks the WORST (lowest-ratio) candidate background from
+   * `effectiveBackground`'s array and returns the fg/bg/ratio for that one
+   * candidate — the single "judge a gradient at its worst point" used by
+   * every check below (text/border/focus-ring alike). Non-gradient callers
+   * get exactly one candidate, so this is a no-op wrapper for them. */
+  function worstOver(
+    candidates: { r: number; g: number; b: number }[],
+    resolveFg: (bg: { r: number; g: number; b: number }) => { r: number; g: number; b: number },
+  ): { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } } {
+    let worst: { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } } | null = null
+    for (const bg of candidates) {
+      const fg = resolveFg(bg)
+      const r = ratio(fg, bg)
+      if (!worst || r < worst.ratio) worst = { ratio: r, bg, fg }
+    }
+    return worst as { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } }
   }
 
   function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
@@ -402,8 +518,8 @@ function structuralAudit(): Violation[] {
     // is also treated as text-bearing even when its content did not arrive
     // as a literal direct text-node child. Either way, the check always
     // runs against THAT element's own ancestor-walked background
-    // (`effectiveBackground`/`effectiveForeground` below), never a
-    // background guessed from an outer wrapper.
+    // (`effectiveBackground`/`foregroundOver` below), never a background
+    // guessed from an outer wrapper.
     let hasOwnText = false
     if (el.children.length === 0) {
       hasOwnText = (el.textContent ?? '').trim().length > 0
@@ -417,13 +533,11 @@ function structuralAudit(): Violation[] {
     }
 
     if (hasOwnText) {
-      const fg = effectiveForeground(el, cs)
-      const bg = effectiveBackground(el)
+      const { ratio: r, bg, fg } = worstOver(effectiveBackground(el), (candidateBg) => foregroundOver(cs, candidateBg))
       const fontSize = parseFloat(cs.fontSize)
       const weight = parseInt(cs.fontWeight, 10) || 400
       const isLarge = fontSize >= 24 || (weight >= 700 && fontSize >= 18.66)
       const required = isLarge ? 3.0 : 4.5
-      const r = ratio(fg, bg)
       if (r < required - 0.005) {
         violations.push({
           kind: 'text',
@@ -454,9 +568,9 @@ function structuralAudit(): Violation[] {
       // fine against its own fill (~4.2:1) while being nearly invisible
       // against the light card that button actually sits on
       // (SessionExpiredDialog's `.btn-submit`, ~1:1) — checking only one
-      // side missed exactly that. Flag only if BOTH fail.
-      const ownBg = effectiveBackground(el)
-      const behindBg = effectiveBackground(el.parentElement ?? el)
+      // side missed exactly that. Flag only if BOTH fail. Each side is
+      // itself judged at ITS worst candidate background (gradient-aware,
+      // via the same `worstOver` used by the text check above).
       const composite = (bg: { r: number; g: number; b: number }) =>
         borderColor.a >= 0.999
           ? borderColor
@@ -465,17 +579,17 @@ function structuralAudit(): Violation[] {
               g: borderColor.g * borderColor.a + bg.g * (1 - borderColor.a),
               b: borderColor.b * borderColor.a + bg.b * (1 - borderColor.a),
             }
-      const ratioOwn = ratio(composite(ownBg), ownBg)
-      const ratioBehind = ratio(composite(behindBg), behindBg)
-      if (ratioOwn < 3.0 - 0.005 && ratioBehind < 3.0 - 0.005) {
-        const worse = ratioOwn <= ratioBehind ? { r: ratioOwn, bg: ownBg } : { r: ratioBehind, bg: behindBg }
+      const ownWorst = worstOver(effectiveBackground(el), composite)
+      const behindWorst = worstOver(effectiveBackground(el.parentElement ?? el), composite)
+      if (ownWorst.ratio < 3.0 - 0.005 && behindWorst.ratio < 3.0 - 0.005) {
+        const worse = ownWorst.ratio <= behindWorst.ratio ? ownWorst : behindWorst
         violations.push({
           kind: 'border',
           selector: `${describe(el)} (border-${side.toLowerCase()})`,
           sample: '',
-          fg: rgbString(composite(worse.bg)),
+          fg: rgbString(worse.fg),
           bg: rgbString(worse.bg),
-          ratio: Math.round(worse.r * 100) / 100,
+          ratio: Math.round(worse.ratio * 100) / 100,
           required: 3.0,
         })
       }
@@ -513,25 +627,99 @@ function focusRingViolation(): Violation | null {
     return { r: parseFloat(m[1]), g: parseFloat(m[2]), b: parseFloat(m[3]), a: m[4] !== undefined ? parseFloat(m[4]) : 1 }
   }
 
-  function effectiveBackground(el: Element): { r: number; g: number; b: number } {
-    const chain: { r: number; g: number; b: number; a: number }[] = []
+  function splitTopLevel(str: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let current = ''
+    for (const ch of str) {
+      if (ch === '(') depth++
+      else if (ch === ')') depth--
+      if (ch === ',' && depth === 0) {
+        parts.push(current.trim())
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    if (current.trim()) parts.push(current.trim())
+    return parts
+  }
+
+  /** Pulls the leading colour token off one gradient stop (e.g.
+   * "rgb(0, 128, 94) 0%" -> "rgb(0, 128, 94)", "#1b3564 100%" -> "#1b3564"),
+   * discarding the trailing position/length hint(s) this does not need. */
+  function colorTokenOf(stop: string): string {
+    const trimmed = stop.trim()
+    if (trimmed.startsWith('#')) return trimmed.split(/\s+/)[0]
+    if (/^[a-zA-Z-]+\(/.test(trimmed)) {
+      let depth = 0
+      for (let i = 0; i < trimmed.length; i++) {
+        if (trimmed[i] === '(') depth++
+        else if (trimmed[i] === ')') {
+          depth--
+          if (depth === 0) return trimmed.slice(0, i + 1)
+        }
+      }
+    }
+    return trimmed.split(/\s+/)[0]
+  }
+
+  // Same gradient-stop resolver as `structuralAudit`'s copy above (see its
+  // doc comment) — duplicated, not imported, because this whole function is
+  // handed to `page.evaluate()` as a source string and must stay fully
+  // self-contained (no closures over the outer module).
+  function gradientStopColors(backgroundImage: string): { r: number; g: number; b: number; a: number }[] {
+    if (!backgroundImage || backgroundImage === 'none') return []
+    for (const layer of splitTopLevel(backgroundImage)) {
+      const gradientMatch = layer.match(/^(?:repeating-)?(?:linear|radial|conic)-gradient\((.*)\)$/s)
+      if (!gradientMatch) continue
+      const colors: { r: number; g: number; b: number; a: number }[] = []
+      for (const arg of splitTopLevel(gradientMatch[1])) {
+        const token = colorTokenOf(arg)
+        if (!token || !CSS.supports('color', token)) continue
+        const c = parseColor(token)
+        if (c) colors.push(c)
+      }
+      if (colors.length > 0) return colors
+    }
+    return []
+  }
+
+  /** Every CANDIDATE effective background behind `el` — see
+   * `structuralAudit`'s copy above for the full rationale. Normally a
+   * single-element array; a gradient ancestor expands it to one candidate
+   * per resolved stop, judged at its WORST (lowest-ratio) one below. */
+  function effectiveBackground(el: Element): { r: number; g: number; b: number }[] {
+    const layers: { r: number; g: number; b: number; a: number }[][] = []
     let node: Element | null = el
     while (node) {
-      const bg = parseColor(getComputedStyle(node).backgroundColor)
-      if (bg && bg.a > 0) chain.push(bg)
+      const cs = getComputedStyle(node)
+      const stops = gradientStopColors(cs.backgroundImage)
+      if (stops.length > 0) {
+        layers.push(stops)
+        break
+      }
+      const bg = parseColor(cs.backgroundColor)
+      if (bg && bg.a > 0) layers.push([bg])
       if (bg && bg.a >= 0.999) break
       node = node.parentElement
     }
-    let acc = { r: 255, g: 255, b: 255 }
-    for (let i = chain.length - 1; i >= 0; i--) {
-      const layer = chain[i]
-      acc = {
-        r: layer.r * layer.a + acc.r * (1 - layer.a),
-        g: layer.g * layer.a + acc.g * (1 - layer.a),
-        b: layer.b * layer.a + acc.b * (1 - layer.a),
+
+    let candidates: { r: number; g: number; b: number }[] = [{ r: 255, g: 255, b: 255 }]
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const next: { r: number; g: number; b: number }[] = []
+      for (const acc of candidates) {
+        for (const layer of layers[i]) {
+          next.push({
+            r: layer.r * layer.a + acc.r * (1 - layer.a),
+            g: layer.g * layer.a + acc.g * (1 - layer.a),
+            b: layer.b * layer.a + acc.b * (1 - layer.a),
+          })
+        }
       }
+      candidates = next
     }
-    return acc
+    return candidates
   }
 
   function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
@@ -557,6 +745,22 @@ function focusRingViolation(): Violation | null {
 
   function rgbString(c: { r: number; g: number; b: number }): string {
     return `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`
+  }
+
+  /** Picks the WORST (lowest-ratio) candidate background — same helper as
+   * `structuralAudit`'s copy, duplicated for the same self-contained-page-
+   * evaluate reason. */
+  function worstOver(
+    candidates: { r: number; g: number; b: number }[],
+    resolveFg: (bg: { r: number; g: number; b: number }) => { r: number; g: number; b: number },
+  ): { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } } {
+    let worst: { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } } | null = null
+    for (const bg of candidates) {
+      const fg = resolveFg(bg)
+      const r = ratio(fg, bg)
+      if (!worst || r < worst.ratio) worst = { ratio: r, bg, fg }
+    }
+    return worst as { ratio: number; bg: { r: number; g: number; b: number }; fg: { r: number; g: number; b: number } }
   }
 
   function sampleFor(el: Element): string {
@@ -589,26 +793,26 @@ function focusRingViolation(): Violation | null {
 
   // `outline-offset` paints the ring OUTSIDE the box, so the background it
   // sits over is the PARENT's effective background, not the element's own
-  // fill (same "behind the element" concept as the border fix above).
-  const behindBg = effectiveBackground(el.parentElement ?? el)
-  const composited =
+  // fill (same "behind the element" concept as the border fix above). Judged
+  // at its worst candidate background too (gradient-aware, via `worstOver`).
+  const composite = (bg: { r: number; g: number; b: number }) =>
     outlineColor.a >= 0.999
       ? outlineColor
       : {
-          r: outlineColor.r * outlineColor.a + behindBg.r * (1 - outlineColor.a),
-          g: outlineColor.g * outlineColor.a + behindBg.g * (1 - outlineColor.a),
-          b: outlineColor.b * outlineColor.a + behindBg.b * (1 - outlineColor.a),
+          r: outlineColor.r * outlineColor.a + bg.r * (1 - outlineColor.a),
+          g: outlineColor.g * outlineColor.a + bg.g * (1 - outlineColor.a),
+          b: outlineColor.b * outlineColor.a + bg.b * (1 - outlineColor.a),
         }
-  const r = ratio(composited, behindBg)
-  if (r >= 3.0 - 0.005) return null
+  const worst = worstOver(effectiveBackground(el.parentElement ?? el), composite)
+  if (worst.ratio >= 3.0 - 0.005) return null
 
   return {
     kind: 'focus',
     selector: `${describe(el)} (focus-ring)`,
     sample: sampleFor(el),
-    fg: rgbString(composited),
-    bg: rgbString(behindBg),
-    ratio: Math.round(r * 100) / 100,
+    fg: rgbString(worst.fg),
+    bg: rgbString(worst.bg),
+    ratio: Math.round(worst.ratio * 100) / 100,
     required: 3.0,
   }
 }
@@ -754,7 +958,7 @@ test.describe('contrast ratchet — Sea Green shell theme', () => {
 
   test('05 approver view — pending, approve/reject visible + reject panel open', async ({ page }) => {
     const world = approverWorld({
-      budgetGridQueue: [richRows(), richRows()],
+      budgetGridQueue: [richRows(DEPT2), richRows(DEPT2)],
       approvalStatusByDept: {
         [DEPT2]: approvalState({ department: DEPT2, status: 'PENDING_APPROVER1', can_act: true, current_position: 'Manager' }),
       },
@@ -770,7 +974,7 @@ test.describe('contrast ratchet — Sea Green shell theme', () => {
 
   test('06 approver view — rejected status + reject reason', async ({ page }) => {
     const world = approverWorld({
-      budgetGridQueue: [richRows(), richRows()],
+      budgetGridQueue: [richRows(DEPT2), richRows(DEPT2)],
       approvalStatusByDept: {
         [DEPT2]: approvalState({ department: DEPT2, status: 'REJECTED', reject_reason: 'ยอดรวมไม่ตรงกับที่ตกลงไว้ กรุณาแก้ไข' }),
       },
