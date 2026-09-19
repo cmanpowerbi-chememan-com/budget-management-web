@@ -689,6 +689,39 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toBeInTheDocument())
   })
 
+  // Issue #13 (2026-09-19): handleAddTransaction was the last write path
+  // with no department-locked branch — persistRow and handleDeleteRow (see
+  // the "on a department-locked refusal" test above) already had one. Same
+  // two consequences pinned here: the raw English detail must not leak
+  // alongside the Thai reason, and the grid must actually refetch (proven
+  // by the second fetchBudgetGrid call, not by reaching into the component).
+  it('a create rejected as department-locked (403) shows the Thai reason only and refetches the grid', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+    vi.mocked(budgetApi.saveRow).mockRejectedValue(
+      new ApiError(
+        403,
+        'บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่',
+        'Solution Delivery/2027 is PENDING_APPROVER1 — mid-approval or approved, editing is locked',
+      ),
+    )
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+    await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+    fireEvent.focus(screen.getByLabelText('Cost Center'))
+    fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+    fireEvent.focus(screen.getByLabelText('GL Code'))
+    fireEvent.click(screen.getByRole('option', { name: /5211800030/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+    await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('บันทึกไม่สำเร็จ — ฝ่ายนี้ส่งขออนุมัติแล้ว จึงแก้ไขไม่ได้ กรุณาโหลดหน้าใหม่')).toBeInTheDocument()
+    expect(screen.queryByText(/mid-approval or approved/)).not.toBeInTheDocument()
+  })
+
   // Spec B path ข (jakkaritw, 2026-08-05): picking a special-GL code in
   // "+ เพิ่ม Transaction" must NOT go through /budget/rows — the backend
   // unconditionally refuses to create a special-GL header row that way
@@ -1821,7 +1854,7 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
+      expect(suffix).toHaveTextContent('ข้อมูลอัปเดตล่าสุด 11 Sep 26')
       expect(suffix).not.toHaveTextContent('⚠')
       expect(suffix.className).not.toContain('sap-freshness-warn')
     })
@@ -1834,7 +1867,7 @@ describe('BudgetGrid', () => {
       render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('⚠ ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
+      expect(suffix).toHaveTextContent('⚠ ข้อมูลอัปเดตล่าสุด 11 Sep 26')
       expect(suffix.className).toContain('sap-freshness-warn')
     })
 
@@ -1867,7 +1900,7 @@ describe('BudgetGrid', () => {
       resolveFetch({ fiscal_year: 2026, watermark_date: '2026-09-11', days_behind: 1, is_stale: false })
 
       const suffix = await screen.findByTestId('sap-freshness')
-      expect(suffix).toHaveTextContent('ข้อมูลบันทึกถึงวันที่ 11 Sep 26')
+      expect(suffix).toHaveTextContent('ข้อมูลอัปเดตล่าสุด 11 Sep 26')
     })
 
     it('H1: a failed freshness fetch must WARN, never silently vanish (ADR-0030 §3.2 release-blocking chip)', async () => {

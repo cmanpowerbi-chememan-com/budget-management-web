@@ -560,6 +560,23 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       setDataVersion((v) => v + 1)
       return { ok: true }
     } catch (err) {
+      // Issue #13 (2026-09-19): this was the last write path without a
+      // department-locked branch — persistRow, handleDeleteRow, and both
+      // DetailSubform/TripManager saves already have one. Without it, a
+      // department locked between the Add form opening and this save
+      // landing fell through to the generic message below, which appends
+      // the raw English backend detail in brackets (the leak
+      // BudgetGrid.test.tsx already asserts against elsewhere), and never
+      // called refreshAfterLockChange, so the grid stayed unlocked and the
+      // Add button kept inviting retries. Mirrors handleDeleteRow's branch:
+      // Thai message only, shared refresh. No rowMessages update here —
+      // unlike a row edit/delete, there is no existing row key to attach a
+      // message to; the Thai reason goes back through errorTh instead, same
+      // as the generic branch below.
+      if (err instanceof ApiError && isDepartmentLockedError(err)) {
+        refreshAfterLockChange()
+        return { ok: false, errorTh: err.message }
+      }
       const message = err instanceof ApiError ? `${err.message}${err.detail ? ` (${err.detail})` : ''}` : 'สร้างรายการไม่สำเร็จ'
       return { ok: false, errorTh: message }
     }
