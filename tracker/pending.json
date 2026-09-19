@@ -1,8 +1,56 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-09-19T14:33:33+0700",
+  "updated": "2026-09-19T17:08:00+0700",
   "tasks": [
+    {
+      "id": "log-dd48897",
+      "state": "done",
+      "created": "2026-09-19T17:08:00+0700",
+      "updated": "2026-09-19T17:08:00+0700",
+      "agent": "autolog",
+      "ai": "feat(sap): the freshness chip reads \"ข้อมูลอัปเดตล่าสุด\" [commit dd48897]"
+    },
+    {
+      "id": "log-20399f0",
+      "state": "done",
+      "created": "2026-09-19T17:07:59+0700",
+      "updated": "2026-09-19T17:07:59+0700",
+      "agent": "autolog",
+      "ai": "fix(grid): Add-transaction recognises a department-locked refusal (issue #13) [commit 20399f0]"
+    },
+    {
+      "id": "grid-uniform-text-size",
+      "state": "done",
+      "created": "2026-09-19T16:16:14+0700",
+      "updated": "2026-09-19T16:54:47+0700",
+      "ai": "Grid uniform-text pass + 5 mid-task additions (weight, subform-btn border, identity-bar pills, dropdown chevron). Files: frontend/src/styles/tokens.css, frontend/src/styles/global.css, frontend/src/grid/GridTable.tsx, frontend/e2e/theme-port.spec.ts. Gates: next build clean, vitest 874/874, playwright 51/51 (all 9 contrast scenarios pass, 0 new/worsened). Screenshot .scratch/theme-customizer/review-shots/table-uniform-text.png. NOT committed, NOT deployed. Awaiting jakkaritw review + override on judgment calls (role-badge ink colour, .month-input weight untouched, border removal).",
+      "agent": "claude"
+    },
+    {
+      "id": "issue-31-subform-pill",
+      "state": "done",
+      "created": "2026-09-19T16:08:31+0700",
+      "updated": "2026-09-19T16:08:51+0700",
+      "ai": "issue #31 DONE, NOT committed (no commit per task brief). GridTable.tsx: full-size subform button body wrapped in span.special-open-btn-label + new span.special-open-btn-cta rendering SPECIAL_GL_CTA='คลิก', both states; compact variant untouched (bare glyph). global.css .special-open-btn: geometry now matches .status-chip (padding 5px 11px, font-size var(--fs-badge)=11.5px, --r-chip 999px), flex-direction column + gap 1px + line-height 1.2; .special-open-btn.compact resets flex-direction row/gap 0/line-height 1 so the stack does not leak. tokens.css: NEW --special-ink: var(--cman-brown) = pill TEXT ink; --special-bg/--special-edge fill+border unchanged. DECISION: locked-state opacity 0.55 REMOVED (now opacity:1) - measured 1.65:1 as shipped, 2.51:1 even with the new ink; >=5.0 needs opacity>=~0.87, which is imperceptible, so the dim cannot both signal and stay readable. Distinctness carried by padlock + own wording. MEASURED (canvas pixels, fg over proven painted fill): both lines both states 6.96:1 on rgb(255,249,233); 6.64:1 on hover fill. New permanent tests in frontend/e2e/theme-port.spec.ts (3): pill geometry compared LIVE vs .status-chip (no hardcoded px), both full-size states render คลิก smaller than the label, locked opacity==1. Verify: next build Compiled successfully; vitest 873/873; playwright 51 passed 0 failed (was 48; contrast ratchet green, NOT re-baselined - one div.grid-loading flake on the first run, passed on rerun). Review shots for jakkaritw: .scratch/theme-customizer/review-shots/btn-normal.png + btn-locked.png (+ contrast-probe.txt). NOTE: working tree was NOT clean at start - a parallel lane has uncommitted SAP-freshness wording changes (ข้อมูลบันทึกถึงวันที่ -> ข้อมูลอัปเดตล่าสุด) in BudgetGrid.tsx/model.ts/types.ts + 2 test files + backend/app/{sap.py,routers/budget.py}; untouched by me.",
+      "agent": "claude"
+    },
+    {
+      "id": "prd30-prd-rollout-blocked-on-classifier",
+      "state": "done",
+      "created": "2026-09-19T15:23:28+0700",
+      "updated": "2026-09-19T15:42:21+0700",
+      "ai": "PRODUCTION LIVE 2026-09-19. jakkaritw ran the az containerapp update himself (the AI is blocked from it by the auto-mode classifier, reason [Production Deploy]); my armed watcher caught the flip 760s later and ran the verification automatically. prd = cman-budget-web-prd--0000056, image budget-web:722ae67, verify_deploy_landed.py prd 722ae67 = 9/9 PASS (Healthy, traffic 100, RunningAtMaxScale, 2 replicas, anonymous 401). stg = 0000095 on the same image. Rollback target = budget-web:3b1ad9b (prd 0000055). GitHub #30 and #25 closed with the full record; #31 (subform button pill) and #13 (page lock) remain open. Memory project_prd_live_1b537f9 updated.",
+      "agent": "claude"
+    },
+    {
+      "id": "prd31-subform-button-pill",
+      "state": "willdo",
+      "created": "2026-09-19T15:23:28+0700",
+      "updated": "2026-09-19T15:23:28+0700",
+      "ai": "PRD #31 published 2026-09-19 (ready-for-agent), from jakkaritw's staging review: the special-GL subform button must join the pill family and state that it is clickable. FACTS ESTABLISHED: the button lives in GridTable.tsx's status cell with two branches - unlocked renders SPECIAL_GL_TOOLTIP ('แก้ไขผ่านฟอร์มย่อย') + an arrow glyph on .special-open-btn, locked renders '🔒 ดูรายละเอียด' on .special-open-btn.special-open-btn-locked. Current geometry font-size 10px / padding 2px 8px vs the pill family's var(--fs-badge) 11.5px / padding 5px 11px / var(--r-chip); it already uses var(--r-chip) and the --special-bg/--special-edge pair, so only size+padding+the added line change. DECIDED BY JAKKARITW via AskUserQuestion: the word 'คลิก' goes on a SECOND LINE INSIDE the button, both states (he rejected placing it outside the button and rejected replacing the arrow glyph with it). Locked state keeps its padlock and its own wording so the two states stay distinguishable. FLAGGED IN THE PRD, needs a decision when implementing: .special-open-btn-locked is opacity 0.55, which reads as DISABLED although the button works (it opens the subform read-only) - either lighten it or carry the read-only meaning via padlock+wording alone. The compact single-glyph variant (columnsCollapsed) stays compact, second line applies to the full-size button only. No class/testid/attr renames. jakkaritw also asked for a rendered image of BOTH states (normal + locked-during-approval) before any deploy - save to disk, report the path, never read the PNG into context. Blocked on nothing; do after the theme rollout lands on prd.",
+      "agent": "claude"
+    },
     {
       "id": "focus-ring-invisible-on-gradient-bars",
       "state": "done",
@@ -13,18 +61,18 @@
     },
     {
       "id": "add-transaction-missing-locked-branch",
-      "state": "willdo",
+      "state": "done",
       "created": "2026-09-19T12:47:01+0700",
-      "updated": "2026-09-19T12:47:01+0700",
-      "ai": "PRODUCTION GAP found 2026-09-19 by the adversarial lens on the 4.5b investigation, VERIFIED BY THE MAIN SESSION by reading the three catches directly. frontend/src/grid/BudgetGrid.tsx handleAddTransaction's catch (~:562-565) is the ONLY write path with no isDepartmentLockedError branch: persistRow (~:424) and handleDeleteRow (~:590) both have one, as do DetailSubform.tsx:179/227 and TripManager.tsx:620/752. Consequence when a department is locked between page load and the click (the UAT-34 race): the Add form renders err.message + ' (' + err.detail + ')', so the correct Thai reason is shown WITH the raw English backend detail appended - which BudgetGrid.test.tsx:597 explicitly forbids elsewhere (expect(queryByText(/mid-approval or approved/)).not.toBeInTheDocument()) - and refreshAfterLockChange() is never called, so the grid does not flip read-only and the Add button keeps its stale unlocked state. NOT NEW, and already deferred: plan/sit/sit-test-plan.md NEW-A4-09 records this same UI inconsistency as OBSERVE with 'ความไม่สอดคล้องของ UI ยกให้ jakkaritw ตัดสิน'. NEW-A3-02 additionally rules that e2e 4.5b should be REWRITTEN against the '+ เพิ่ม Transaction' trigger because the old pending-input trigger is unreachable on the real app after d0672fc (note: NEW-A3-02's expected string is itself stale English, pre-6a9d323). OUT OF SCOPE for the PRD #30 theme port (that is UI/UX-only, no logic) - needs jakkaritw's go-ahead as separate work. Proposed 2-line fix mirrors handleDeleteRow exactly. No automated test covers a department_locked 403 through the Add form today.",
+      "updated": "2026-09-19T16:11:35+0700",
+      "ai": "05-software-developer: added isDepartmentLockedError branch to handleAddTransaction catch (BudgetGrid.tsx ~562), mirrors handleDeleteRow (Thai msg only via errorTh, refreshAfterLockChange, no raw English detail leak). New unit test in BudgetGrid.test.tsx pins both consequences via fetchBudgetGrid call count + text assertions. vitest 874/874 pass, next build Compiled successfully. Not committed (per instructions). Files: frontend/src/grid/BudgetGrid.tsx, frontend/src/grid/BudgetGrid.test.tsx only.",
       "agent": "claude"
     },
     {
       "id": "prd30-slice234-theme-port",
       "state": "done",
       "created": "2026-09-19T12:31:33+0700",
-      "updated": "2026-09-19T14:33:33+0700",
-      "ai": "GATE 06+07+08: APPROVE WITH SUGGESTIONS. Scope=tokens.css+global.css+UserBar.tsx(value-only)+e2e specs, no-logic-change honored, grid/api/picker untouched, no renamed class/data-testid. 6 fragile items verified in final file (frz-edge shadow, month-value.zero order, month-value/month-input pairing, data-status untouched, chevron hex matches ink-2, GridTable.tsx mirrors live via getComputedStyle not hand-copied metrics except headerLabelStyle 10.5px which still matches --fs-table-head). Tests independently re-run: next build OK, vitest 873/873, playwright 48/48 passed (0 fail), backend pytest 1206 passed/49 deselected untouched. Contrast baseline independently reclassified via classify_baseline.py PRE-THEME vs current: 107-to-86, 24 removed/3 new/65 changed-ratio all confirmed and all explainable by documented intent (ink-3 darkening, status-draft/status-pending rework, meta-tag/v3-count hidden, new real border on identity pills) -- zero focus violations either side, no hidden regression found. MUST-DO-BEFORE-COMMIT: frontend/e2e/theme-port.spec.ts (3 of the 4 PRD-required permanent tests) is UNTRACKED -- git add it or it silently ships without its own regression tests. Non-blocking: 3 orphaned raw tokens --cman-ink/--cman-navy-80/--cman-bg-blue-tint now dead; 2 of 4 focus-ring overrides (global.css ~674,~2871) now redundant with root default; stale comment at .subtotal-row .month-value claims a base font-weight that no longer exists (visual result unaffected); tokens.css own comment claiming scenario 01 could not be verified is now stale (it passes).",
+      "updated": "2026-09-19T15:04:41+0700",
+      "ai": "[15:10 STAGING LIVE] Committed 22bc945 (11 files, 1411+/504-, path-scoped: 0 deletions staged so the parallel session's 62 deleted mockup/UAT files stayed out). The combined 06+07+08 gate APPROVED WITH SUGGESTIONS and caught one real blocker before commit: frontend/e2e/theme-port.spec.ts was UNTRACKED, so 3 of the 4 permanent tests (26 assertions) would have shipped missing; git add fixed it, verified by git ls-files. Gate re-ran everything itself: next build clean, vitest 873/873, playwright 48/48, backend pytest 1206 passed / 49 deselected, and it re-ran classify_baseline.py independently and confirmed the re-baseline hides nothing (it also corrected my composition figure: pre-theme was 90 border + 17 text, not 89 + 18; total 107 either way). Non-blocking suggestions logged for later: 3 orphaned raw tokens (--cman-ink, --cman-navy-80, --cman-bg-blue-tint) and 2 stale comments (global.css ~2018 claims .month-value still has base weight 500; tokens.css ~270 says contrast scenario 01 could not be verified this session, now false). IMAGE: az acr build run cm2r Succeeded in 1m35s, tag 22bc945 confirmed in the registry - the az CLI itself died on the cp1252 warn-glyph trap again, so the verdict came from acr task list-runs + show-tags, never the exit code. STAGING: cman-budget-web-stg--0000094, verify_deploy_landed.py stg 22bc945 = 9/9 PASS (first run was mid-transition, 4/9, 0000093 deprovisioning). This image also carries the held f9d83f0 self-hosted Prompt font and e586144 trip placeholder trim, so jakkaritw gets the one combined rollout he asked for. NEXT: jakkaritw smoke-tests staging, then an explicit approval before prd. GitHub: closed #16 #17 #18 #20 #23 with the decision each one recorded, then map #14; #25 and #30 stay open until prd lands.",
       "agent": "claude"
     },
     {

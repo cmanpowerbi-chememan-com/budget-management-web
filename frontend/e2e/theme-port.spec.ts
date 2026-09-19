@@ -35,7 +35,11 @@ import { COLUMN_WIDTH_MEASURE_PADDING, MONTH_COLUMN_WIDTH_FLOOR, TOTAL_YEAR_COLU
 
 const DEEP_LINK = `/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`
 
-function rows() {
+/** `editable: false` is what ADR-0013's read-only lock renders — the LOCKED
+ * variant of the special-GL subform button (issue #31's second state). Every
+ * pre-existing test in this file calls `gotoGrid(page)` with no argument and
+ * keeps the editable rows it always had. */
+function rows(editable = true) {
   return [
     makeBudgetRow({
       costCenter: CC,
@@ -43,6 +47,7 @@ function rows() {
       sap: { m01: 120_000 },
       pending: { m01: 130_000 },
       pendingUpdatedAt: 'PEND-1',
+      editable,
     }),
     makeBudgetRow({
       costCenter: CC,
@@ -50,12 +55,13 @@ function rows() {
       sap: { m03: 18_000 },
       pending: { m03: 22_000 },
       pendingUpdatedAt: 'PEND-2',
+      editable,
     }),
   ]
 }
 
-async function gotoGrid(page: Page) {
-  await installMocks(page, fillerWorld({ budgetGridQueue: [rows(), rows()] }))
+async function gotoGrid(page: Page, editable = true) {
+  await installMocks(page, fillerWorld({ budgetGridQueue: [rows(editable), rows(editable)] }))
   await page.goto(DEEP_LINK)
   await expect(page.getByTestId('side-section-COST')).toBeVisible()
 }
@@ -153,6 +159,101 @@ test.describe('theme port — parity', () => {
       .evaluate((el) => getComputedStyle(el).color)
     expect(pillColor).toBe(reference)
     expect(pillColor).toBe('rgb(162, 74, 14)') // #a24a0e, Laddawan's pending hue
+  })
+})
+
+/** Issue #31 — the special-GL subform button joins the pill family.
+ *
+ * The geometry assertions read BOTH elements live and compare them to each
+ * other; not one pixel value is hardcoded here. That is deliberate: the whole
+ * point of the change is that the two pills share ONE definition, so the test
+ * has to fail when they diverge, and keep passing when the shared tokens
+ * (--r-chip, --mono, font-weight) are legitimately re-tuned for both at once.
+ * A hardcoded "11.5px" would do the opposite on both counts.
+ *
+ * UPDATED 2026-09-19 (uniform-text pass, jakkaritw: "text ทั้งหมดปรับไห้เท่าๆกัน")
+ * — type SIZE is no longer one of the shared properties. The subform button
+ * lives INSIDE the budget grid, so it now takes the grid's one size
+ * (--fs-table-cell); `.status-chip` lives OUTSIDE the grid (ApprovalActionBar,
+ * below it) and keeps --fs-badge. `letterSpacing` is dropped from the shared
+ * set for the same reason — both rules still declare the SAME source value
+ * (`letter-spacing: 0.02em`), but its computed px is font-size-relative, so
+ * comparing the computed px would fail for a reason that has nothing to do
+ * with tracking actually diverging. */
+test.describe('theme port — special-GL subform pill (issue #31)', () => {
+  /** The properties that still make the two pills ONE family after the
+   * uniform-text pass: padding, corner, face, weight. Colour is NOT among
+   * them — the subform pill keeps its own --special-* fill/border/ink by
+   * design; type SIZE is NOT among them any more — see the comment above. */
+  const PILL_GEOMETRY = ['padding', 'borderRadius', 'fontFamily', 'fontWeight'] as const
+
+  function pillGeometry(page: Page, selector: string) {
+    return page.locator(selector).first().evaluate((el, props) => {
+      const cs = getComputedStyle(el)
+      return Object.fromEntries(props.map((p) => [p, cs[p as 'fontSize']]))
+    }, PILL_GEOMETRY as unknown as string[])
+  }
+
+  test('the subform button and .status-chip are one pill family (compared live, no hardcoded px)', async ({ page }) => {
+    await gotoGrid(page)
+    const button = page.locator('button.special-open-btn')
+    await expect(button.first()).toBeVisible()
+    // The reference pill, proven present rather than assumed — a missing
+    // reference would otherwise make this test vacuously pass.
+    await expect(page.locator('.status-chip').first()).toBeVisible()
+
+    const [pill, reference] = await Promise.all([pillGeometry(page, 'button.special-open-btn'), pillGeometry(page, '.status-chip')])
+    expect(pill, 'button.special-open-btn vs .status-chip').toEqual(reference)
+
+    // Type size now DELIBERATELY diverges — read both live from the tokens
+    // that drive them (never a hardcoded px), proving the button tracks the
+    // grid's one size while the out-of-grid chip keeps its own badge role.
+    const [buttonSize, chipSize, fsTableCell, fsBadge] = await Promise.all([
+      button.first().evaluate((el) => getComputedStyle(el).fontSize),
+      page.locator('.status-chip').first().evaluate((el) => getComputedStyle(el).fontSize),
+      page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fs-table-cell').trim()),
+      page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fs-badge').trim()),
+    ])
+    expect(buttonSize, 'button.special-open-btn font-size == --fs-table-cell').toBe(fsTableCell)
+    expect(chipSize, '.status-chip font-size == --fs-badge').toBe(fsBadge)
+
+    // The stacked label is what makes the second line possible; the compact
+    // variant must NOT inherit it (it stays a one-glyph pill by design).
+    expect(await button.first().evaluate((el) => getComputedStyle(el).flexDirection)).toBe('column')
+  })
+
+  test('both full-size states render the "คลิก" line under their label', async ({ page }) => {
+    for (const editable of [true, false]) {
+      await gotoGrid(page, editable)
+      const button = page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`)
+      await expect(button, `editable=${editable}`).toBeVisible()
+      // Line 1 keeps each state's own wording — that difference, plus the
+      // padlock, is what keeps the two states distinguishable now that the
+      // locked variant is no longer dimmed.
+      await expect(button.locator('.special-open-btn-label')).toHaveText(editable ? /แก้ไขผ่านฟอร์มย่อย/ : /🔒 ดูรายละเอียด/)
+      await expect(button.locator('.special-open-btn-cta'), `คลิก line, editable=${editable}`).toHaveText('คลิก')
+      // UPDATED 2026-09-19 (uniform-text pass + adversarial review finding):
+      // the hint line used to be strictly SMALLER than the label (9.5px vs
+      // --fs-badge) — at 9.5px the สระอิ mark in "คลิก" rendered too small to
+      // read reliably (คลิก vs คลก). It is no longer a smaller hint; both
+      // lines now share the grid's one text size — assert EQUAL, read live
+      // from --fs-table-cell rather than hardcoded, so line-1-vs-line-2
+      // reading order (not size) is what still separates them.
+      const [labelSize, ctaSize, fsTableCell] = await Promise.all([
+        button.locator('.special-open-btn-label').evaluate((el) => getComputedStyle(el).fontSize),
+        button.locator('.special-open-btn-cta').evaluate((el) => getComputedStyle(el).fontSize),
+        page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fs-table-cell').trim()),
+      ])
+      expect(labelSize, `label size == --fs-table-cell, editable=${editable}`).toBe(fsTableCell)
+      expect(ctaSize, `คลิก size == --fs-table-cell, editable=${editable}`).toBe(fsTableCell)
+    }
+  })
+
+  test('the locked variant is not dimmed — it opens the subform, so it must not look disabled', async ({ page }) => {
+    await gotoGrid(page, false)
+    const button = page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`)
+    await expect(button).toHaveClass(/special-open-btn-locked/)
+    expect(await button.evaluate((el) => parseFloat(getComputedStyle(el).opacity))).toBe(1)
   })
 })
 

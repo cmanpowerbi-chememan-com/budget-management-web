@@ -297,8 +297,12 @@ select:focus-visible {
   background: var(--accent);
 }
 .role-badge {
-  font-family: var(--mono);
-  font-size: 9px;
+  /* var(--sans)/var(--fs-badge), not mono/9px (2026-09-19, jakkaritw:
+     "ปรับตัวอักษรให้เสมอกัน font prompt, size เท่ากัน text สีดำ pill พื้นขาว" — every
+     pill in .user-bar.v3 moves to one font/size; weight (700) is untouched,
+     not part of that ask. */
+  font-family: var(--sans);
+  font-size: var(--fs-badge);
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 2px 7px;
@@ -327,26 +331,22 @@ select:focus-visible {
    through the tint as a muddy smudge instead of the light chip the approved
    theme's own zone capture shows (.role-badge.user backgroundColor is an
    opaque near-white, not a translucent one). */
+/* .role-badge.admin/.user (2026-09-19, jakkaritw, same-day later pass) — OFF
+   the GATE LOW-7 tint-mix pattern above by explicit decision: both badges
+   are now the shared plain-white pill (--identity-pill-tint), no border
+   (dropped outright, not recoloured — tokens.css). The role badge is the
+   ONE pill in .user-bar.v3 that does NOT take --ink: jakkaritw kept the
+   admin/filler distinction but moved it from fill to ink ("แยกด้วยสีtext
+   (เขียว/ฟ้า) แต่ pill พื้นขาวไม่มีขอบ") — both values are pre-existing tokens,
+   not new hues, and both clear 4.5:1 on white at their natural (undarkened)
+   value, so neither needed the darker sibling (--cman-green-dark/--cman-navy). */
 .role-badge.admin {
-  background: color-mix(in oklab, var(--accent-text) 16%, var(--surface));
-  color: var(--accent-text);
-  border: 1px solid color-mix(in oklab, var(--accent-text) 42%, var(--line));
-}
-/* --accent-2-text (2026-08-15, contrast fix — same GATE LOW-7 rule: tint and
-   text mix from the SAME base token): raw --accent-2 as text on this chip's
-   light tint measured 2.63:1; the darker pine-green companion clears 4.5:1.
-   --accent-2-text itself is now the CI blue, not pine-green (issue #30,
-   2026-09-19, tokens.css) — this rule needs no further edit, it already
-   reaches the palette through the token. */
-.role-badge.user {
-  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
-     replaces the color-mix formula with the approved design's own literal
-     pair (tokens.css); ink (--accent-2-text = --cman-blue = #2f61ac) is
-     unchanged, already the value the approved design calls for — verified
-     4.97:1 on this tint. */
   background: var(--identity-pill-tint);
-  color: var(--accent-2-text);
-  border: 1px solid var(--identity-pill-border);
+  color: var(--accent); /* CI green #00805e, measured 4.942:1 on white */
+}
+.role-badge.user {
+  background: var(--identity-pill-tint);
+  color: var(--accent-2-text); /* CI blue #2f61ac, measured 6.129:1 on white */
 }
 
 /* ─── User bar · V3 layout (avatar/identity | สายงาน › ฝ่าย(n) › Cost
@@ -441,21 +441,18 @@ select:focus-visible {
   display: none;
 }
 .v3 .v3-count {
-  font-family: var(--mono);
-  font-size: 9.5px;
+  /* var(--sans)/var(--fs-badge)/var(--ink)/var(--identity-pill-tint), no
+     border (2026-09-19, jakkaritw, same-day later pass) — brought into the
+     same white-pill-plain-ink formula as every other pill in .user-bar.v3
+     (this one is not the role badge, so it takes --ink, not a role colour).
+     Element stays hidden by default (see display:none below), so this is a
+     dormant-consistency fix, not a visible change. */
+  font-family: var(--sans);
+  font-size: var(--fs-badge);
   font-weight: 800;
   line-height: 1;
-  /* --accent-2-text, not raw --accent-2 (2026-08-15, contrast fix) — was
-     2.65:1 as text on this tint; the pine-green companion clears 4.5:1.
-     Tint/border are this element's OWN literal pair (issue #30, 2026-09-19,
-     post-review) — close to but distinct from the shared
-     --identity-pill-tint/-border (the approved design's own capture gives
-     this smaller badge a slightly stronger tint); element stays hidden by
-     default (see display:none below), so this is a dormant-consistency fix,
-     not a visible change. */
-  color: var(--accent-2-text);
-  background: #dee7f4;
-  border: 1px solid #95add2;
+  color: var(--ink);
+  background: var(--identity-pill-tint);
   border-radius: var(--r-chip);
   min-width: 17px;
   height: 17px;
@@ -492,22 +489,19 @@ select:focus-visible {
      so it needs no --tc-* text treatment even sitting inside the dark
      .user-bar — same "own opaque fill" rule as .role-badge above. */
   border-radius: var(--r-chip);
-  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
-     see .role-badge.user's own comment; own ink is unset (inherits --ink
-     from body, already #1f2937, matching the approved design). */
-  border: 1px solid var(--identity-pill-border);
+  /* No border (2026-09-19, jakkaritw, same-day later pass: "pill พื้นขาวไม่มี
+     ขอบ") — dropped outright rather than recoloured, same as every other
+     pill in .user-bar.v3; see tokens.css --identity-pill-tint comment. */
   background: var(--identity-pill-tint);
 }
 .v3 .user-chip.cc .v {
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: var(--fs-badge);
   font-weight: 600;
-  /* var(--accent-2-text), not --ink-2 (issue #30, 2026-09-19) — the
-     approved theme's own zone capture shows this value text in the CI blue,
-     not plain ink; the chip's own opaque fill (above) still makes this a
-     "read against your own light background" case, unrelated to .user-bar's
-     dark fill behind the chip. */
-  color: var(--accent-2-text);
+  /* var(--ink), not --accent-2-text (2026-09-19, jakkaritw, same-day later
+     pass: every pill text goes plain black except the role badge, which
+     keeps its own colour distinction — see .role-badge.admin/.user). */
+  color: var(--ink);
   white-space: nowrap;
 }
 .v3 .v3-metrics {
@@ -517,13 +511,14 @@ select:focus-visible {
   flex-shrink: 0;
 }
 /* issue #30 (2026-09-19): the approved theme's own zone capture shows BOTH
-   pills as an identical LIGHT chip (opaque near-white fill, CI-blue text) —
-   not the two solid dark fills (green / accent-2-text) + white text this
-   rule used to paint. Both are now one shared "own opaque fill" formula
-   (same reasoning as .role-badge/.user-chip.cc above), so the separate
-   .v3-cc-pill/.v3-gl-pill colour overrides below this block are gone; the
-   inset highlight (meant for a dark fill) is gone too, per the same zone
-   capture (boxShadow: none). */
+   pills as an identical LIGHT chip — not the two solid dark fills
+   (green / accent-2-text) + white text this rule used to paint. Both are
+   now one shared "own opaque fill" formula (same reasoning as
+   .role-badge/.user-chip.cc above), so the separate .v3-cc-pill/.v3-gl-pill
+   colour overrides below this block are gone; the inset highlight (meant
+   for a dark fill) is gone too, per the same zone capture (boxShadow: none).
+   Ink itself moved off CI-blue to plain --ink same-day, later pass — see
+   the rule below. */
 .v3 .v3-cc-pill,
 .v3 .v3-gl-pill {
   display: inline-flex;
@@ -533,24 +528,30 @@ select:focus-visible {
   padding: 5px 13px;
   border-radius: var(--r-chip);
   white-space: nowrap;
-  /* Shared identity-pill tint/border (issue #30, 2026-09-19, post-review) —
-     see .role-badge.user's own comment; ink unchanged. */
+  /* No border (2026-09-19, jakkaritw, same-day later pass) — same "pill
+     พื้นขาวไม่มีขอบ" ruling as .user-chip.cc above; ink moves off
+     --accent-2-text to plain --ink (this pill is not the role badge, the
+     one exception that keeps a colour). */
   background: var(--identity-pill-tint);
-  border: 1px solid var(--identity-pill-border);
-  color: var(--accent-2-text);
+  color: var(--ink);
 }
 .v3 .v3-cc-pill .n,
 .v3 .v3-gl-pill .n {
-  font-family: var(--mono);
-  font-size: 13px;
+  /* var(--sans)/var(--fs-badge), not mono/13px (2026-09-19, jakkaritw:
+     "size เท่ากัน... no exceptions" — every span inside a pill matches). */
+  font-family: var(--sans);
+  font-size: var(--fs-badge);
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .v3 .v3-cc-pill .t,
 .v3 .v3-gl-pill .t {
-  font-family: var(--mono);
-  font-size: 9px;
+  /* var(--sans)/var(--fs-badge), not mono/9px — same ruling as .n above;
+     text-transform/letter-spacing/opacity are untouched (not part of the
+     font/size/ink/fill ask). */
+  font-family: var(--sans);
+  font-size: var(--fs-badge);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -746,14 +747,10 @@ select:focus-visible {
   appearance: none;
   -webkit-appearance: none;
   min-width: 120px;
-  /* Arrow stroke hardcoded to hex (2026-08-21, ref-alignment; mirrored by
-     hand again 2026-09-19, issue #30) — data-URIs can't reference CSS
-     custom properties. #4b5563 is --ink-2's CURRENT literal value (was
-     #3a4864 before the theme port moved --ink-2) — this is the exact "data-
-     URI chevron" trap the port's own notes warn about: when --ink-2 moves,
-     this string must be mirrored by hand, there is no other way to keep it
-     in sync. */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234b5563' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* Chevron now a shared token (tokens.css --dropdown-chevron-svg,
+     2026-09-19) — see that token's comment for the "data-URI can't
+     reference a custom property" trap this still carries. */
+  background-image: var(--dropdown-chevron-svg);
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -924,13 +921,23 @@ select:focus-visible {
 .dept-picker-trigger {
   min-width: 220px;
   text-align: left;
-  padding: 9px 14px;
+  /* Right padding widened 14px -> 30px (2026-09-19, jakkaritw: dropdown
+     chevron added to match .year-select) — same right-side reservation as
+     that control, so the label text never runs under the new arrow; left
+     padding is untouched. */
+  padding: 9px 30px 9px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
   font-size: var(--fs-label);
   font-weight: 600;
   cursor: pointer;
+  /* Same chevron, same geometry, as .year-select (tokens.css
+     --dropdown-chevron-svg) — this button opens a panel, same "dropdown"
+     affordance as the native select beside it, so it gets the same symbol. */
+  background-image: var(--dropdown-chevron-svg);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
 }
 .dept-picker-trigger:hover {
   border-color: var(--ink);
@@ -1379,7 +1386,9 @@ select:focus-visible {
   padding: 5px 7px;
   border: 1px solid var(--line);
   border-radius: var(--r);
-  font-size: 11px;
+  /* var(--fs-table-cell), not an 11px literal (2026-09-19, jakkaritw
+     uniform-text pass) — the header-band filter inputs are inside the grid. */
+  font-size: var(--fs-table-cell);
   background: var(--surface);
   color: var(--ink);
   outline: none;
@@ -1395,7 +1404,9 @@ select:focus-visible {
 }
 .col-filter::placeholder {
   color: var(--ink-3);
-  font-size: 10.5px;
+  /* var(--fs-table-cell), not a 10.5px literal — same placeholder text as
+     the input it belongs to, uniform-text pass. */
+  font-size: var(--fs-table-cell);
 }
 .col-filter-spacer {
   height: 27px;
@@ -1461,12 +1472,26 @@ select:focus-visible {
 }
 /* Compact-mode ↗ button (special-GL subform access, moved into the GL cell
    while Status is hidden) — same amber "special" look as .special-open-btn,
-   tightened to an icon-only pill so it fits next to the GL code/name. */
+   tightened to an icon-only pill so it fits next to the GL code/name.
+   `flex-direction`/`gap`/`line-height` are reset here, not merely left alone:
+   the base rule stacks two lines (issue #31) and the compact button must NOT
+   inherit that — it is a single bare glyph by design, kept small so the row
+   does not grow taller when the month columns are already collapsed. Both
+   selectors are (0,2,0) vs (0,1,0), so every property named here wins. */
 .special-open-btn.compact {
   display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
   margin-top: 3px;
   padding: 2px 6px;
-  font-size: 11px;
+  /* var(--fs-table-cell), not an 11px literal (2026-09-19, jakkaritw
+     uniform-text pass) — the row-height guard in the comment above is
+     `flex-direction: row` + the smaller 2px/6px padding, not this glyph's
+     size; the sibling gl-code/gl-name text in the same cell is already at
+     --fs-table-cell, so this glyph was never the tallest thing in the row. */
+  font-size: var(--fs-table-cell);
+  line-height: 1;
 }
 /* Zero-match empty state (point 8b) — table keeps its header (with the
    filter inputs still editable) so the user can clear the filter without
@@ -1475,7 +1500,10 @@ select:focus-visible {
   text-align: center;
   padding: 24px 10px;
   color: var(--ink-3);
-  font-size: 12.5px;
+  /* var(--fs-table-cell) — was already this exact value as a literal;
+     tokenized during the uniform-text pass so it can never silently drift
+     from the table's one size again. */
+  font-size: var(--fs-table-cell);
 }
 /* Trailing "ลบ" (delete) column — mockup 0002.3budget-export.html lines
    579-587, one icon button per manually-added row. Deliberately quiet: a
@@ -1671,23 +1699,29 @@ body.col-dragging * {
 .data-table th.month-col {
   text-align: right;
 }
-/* Larger month labels (UI-parity point 8a, mockup lines 438-440) — the
-   header row's own uppercase/10.5px base is meant for short column names
-   ("Status" etc.); month names read better bigger, normal case. The
-   year-total ("Jan–Dec") header shares this exact format so the whole
-   money block reads as one family. */
+/* Month labels (UI-parity point 8a, mockup lines 438-440) — used to be a
+   deliberately LARGER override (14px) than the header row's 10.5px base, on
+   the reasoning that month names read better bigger. Superseded 2026-09-19
+   (jakkaritw uniform-text pass, "text ทั้งหมดปรับไห้เท่าๆกัน" — no exception was
+   named for these two headers): size now matches the table's one size,
+   var(--fs-table-cell); weight/letter-spacing/text-transform (the "normal
+   case, not uppercase" override) are untouched, so this is a size-only
+   change like everywhere else in this pass. The year-total ("Jan–Dec")
+   header still shares this rule so the whole money block reads as one
+   family. */
 .data-table thead th.month-col .th-label,
 .data-table thead th.total-year-col .th-label {
-  font-size: 14px;
+  font-size: var(--fs-table-cell);
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: none;
 }
-/* The year-total ("Jan–Dec") header reads as the SUM of the 12 month
-   headers next to it — same family but a step heavier/larger (+5% on the
-   14px month size) so the eye lands on the total first. */
+/* The year-total ("Jan–Dec") header still reads as the SUM of the 12 month
+   headers next to it — same family, still a step HEAVIER (800 vs 700) so
+   the eye lands on the total first; the extra SIZE step (+5%, was 14.7px)
+   is gone with the rule above, per the same uniform-text pass — weight
+   alone now carries that hierarchy. */
 .data-table thead th.total-year-col .th-label {
-  font-size: 14.7px;
   font-weight: 800;
 }
 /* Current-month highlight (UI-parity point 8a, mockup lines 444-448) — a
@@ -1753,7 +1787,8 @@ body.col-dragging * {
 }
 .gl-name {
   color: var(--ink-3);
-  font-size: 11px;
+  /* var(--fs-table-cell), not 11px (2026-09-19, jakkaritw uniform-text pass) — the GL name line. */
+  font-size: var(--fs-table-cell);
   margin-top: 2px;
 }
 /* Same reasoning as .idx-cell above, scoped to just the GL code text (not
@@ -1792,7 +1827,13 @@ body.col-dragging * {
   border-radius: var(--r-chip);
   padding: 5px 11px;
   font-weight: 700;
-  font-size: var(--fs-badge);
+  /* var(--fs-table-cell), not --fs-badge (2026-09-19, jakkaritw uniform-text
+     pass) — this chip lives INSIDE the budget grid, so it takes the table's
+     one size; --fs-badge is left untouched because it is shared with chips
+     OUTSIDE the grid (e.g. .status-chip in ApprovalActionBar, below the
+     grid, not in it — verified by grep before this override was scoped
+     here). */
+  font-size: var(--fs-table-cell);
   font-variant-numeric: tabular-nums;
   display: inline-block;
   letter-spacing: -0.005em;
@@ -1852,7 +1893,9 @@ body.col-dragging * {
 .status-cell {
   background: var(--surface);
   font-family: var(--mono);
-  font-size: 10.5px;
+  /* var(--fs-table-cell), not 10.5px (2026-09-19, jakkaritw uniform-text
+     pass) — the layer labels ("SAP · ใช้จริง" etc.). */
+  font-size: var(--fs-table-cell);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1885,21 +1928,48 @@ body.col-dragging * {
   display: block;
   flex-basis: 100%;
   font-family: var(--mono);
-  font-size: 10px;
+  /* var(--fs-table-cell), not 10px (2026-09-19, jakkaritw uniform-text pass). */
+  font-size: var(--fs-table-cell);
   color: var(--special-edge);
   margin-top: 3px;
 }
 .month-cell {
   text-align: right;
 }
-/* Year-total cell (before Jan) — visually set apart from the monthly cells:
-   bolder pill + a quiet separator on the Jan side so the eye reads
-   "total | months" as two zones. Header th matches via .total-year-col. */
-.total-year-cell .month-value {
-  font-weight: 700;
-}
+/* Year-total cell (before Jan) — a quiet separator on the Jan side so the
+   eye reads "total | months" as two zones. Header th matches via
+   .total-year-col. The "bolder pill" half of this used to live in a
+   `.total-year-cell .month-value { font-weight: 700 }` rule right here —
+   REMOVED (2026-09-19, jakkaritw uniform-weight pass), not merely
+   superseded: playwright-measured, it had already been fully inert for
+   3 of 4 data-row states before this session (.total-year-cell .month-value
+   and .month-value.sap/.approved-ro/.pending-readonly/.zero share equal
+   specificity (0,2,0); the LATER state-class rule always won the tie, and
+   every rendered pill always carries exactly one state class) — only the
+   .sap case coincidentally also resolved to 700, matching this rule by
+   accident. Thinning .sap to 400 (see .month-value.sap below) made it 4/4
+   dead, so it is deleted rather than left as unreachable CSS. Subtotal/
+   grand-total rows are untouched — `.subtotal-row .month-value` (below)
+   already supplies their 700 on its own, with no help from this rule. */
 .total-year-cell {
   border-right: 1px solid var(--line-2);
+}
+/* Jan-Dec is a total, not a monthly figure — jakkaritw wants it bold like
+   the subtotal and grand-total rows (2026-09-19, uniform-text pass review).
+   Selector is deliberately over-specified: `td.total-year-cell .month-value`
+   scores (0,2,1), beating .month-value.sap/.approved-ro/.pending-readonly/
+   .zero (each (0,2,0)) on the element count, so it no longer depends on sitting below
+   them in source order — the plain `.total-year-cell .month-value` form
+   tied those four on specificity and always lost the tie (see the removal
+   note above .total-year-cell). Do not simplify this selector back down;
+   that is exactly what killed the old rule. .zero stays 400 below — a bold
+   faded dash reads as a mistake, and a zero year-total isn't worth
+   emphasising. */
+td.total-year-cell .month-value {
+  font-weight: 700;
+}
+td.total-year-cell .month-value.zero {
+  font-weight: 400;
 }
 th.total-year-col {
   text-align: right;
@@ -1948,7 +2018,14 @@ th.total-year-col {
 .month-value.sap {
   color: var(--status-sap);
   background: color-mix(in oklab, var(--status-sap) 10%, transparent);
-  font-weight: 700;
+  /* 400, not 700 (2026-09-19, jakkaritw: "ตัวเลขปรับไห้ตัวบางทั้งหมด" — every
+     data-row money pill goes to one thin weight; 400 is Prompt's lightest
+     PRACTICAL weight (100 is a hairline face, fragile for Thai/digits at
+     12.5px) and is already what .approved-ro/.zero use. Subtotal/grand-total
+     rows keep their own bold — jakkaritw explicitly ruled they stay
+     distinguishable ("รวมเป็นตัวหนา พอ ถูกแล้ว") — see .subtotal-row
+     .month-value below, untouched. */
+  font-weight: 400;
 }
 .month-value.approved-ro {
   color: var(--status-approved);
@@ -1962,7 +2039,8 @@ th.total-year-col {
 .month-value.pending-readonly {
   color: var(--status-pending);
   background: color-mix(in oklab, var(--status-pending) 10%, transparent);
-  font-weight: 500;
+  /* 400, not 500 (2026-09-19) — same thin-weight ruling as .sap above. */
+  font-weight: 400;
 }
 /* Zero value always mutes the pill, regardless of which layer it belongs
    to — must stay LAST so it overrides .sap/.approved-ro/.pending-readonly
@@ -1984,7 +2062,9 @@ th.total-year-col {
      own --surface card, same reasoning as .dept-picker-search above. */
   background: var(--paper-2);
   color: var(--ink);
-  font-weight: 600;
+  /* 400, not 600 (jakkaritw, 2026-09-19): the editing input matches the
+     read-only pill it replaces so the digits do not shift weight on focus. */
+  font-weight: 400;
   outline: none;
 }
 .month-input:focus {
@@ -1996,7 +2076,10 @@ th.total-year-col {
    the editable input share one font size so the fit-to-content measurement
    (`.remark-text` in the hidden measurer) approximates both. */
 .remark-text {
-  font-size: 12px;
+  /* var(--fs-table-cell), not 12px (2026-09-19, jakkaritw uniform-text
+     pass) — kept identical to .remark-input below, per this rule pair's own
+     "share one font size" comment above. */
+  font-size: var(--fs-table-cell);
   color: var(--ink-2);
   line-height: 1.4;
 }
@@ -2008,7 +2091,7 @@ th.total-year-col {
   /* --paper-2 (not --paper): same reasoning as .month-input above. */
   background: var(--paper-2);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--fs-table-cell);
   outline: none;
   box-sizing: border-box;
 }
@@ -2029,7 +2112,10 @@ th.total-year-col {
   font-weight: 700;
 }
 .row-message {
-  font-size: 12px;
+  /* var(--fs-table-cell), not 12px (2026-09-19, jakkaritw uniform-text
+     pass) — this per-row save/error message renders as a <td> inside
+     .data-table (GridTable.tsx's txn-row-message row), so it is in scope. */
+  font-size: var(--fs-table-cell);
   padding: 6px 10px !important;
 }
 .row-message-error {
@@ -2048,33 +2134,82 @@ th.total-year-col {
 }
 
 /* ─── A9 special-GL subform / Trip Manager button on the main grid ─── */
+/* Issue #31 (2026-09-19): this button joins the pill family. Its geometry is
+   now the SAME as .status-chip's — --fs-badge type size, 5px/11px padding,
+   --r-chip radius, --mono at weight 700, 0.02em tracking — so a special-GL
+   row reads as one consistent set of pills instead of a pill plus a tag.
+   (e2e/theme-port.spec.ts compares the two LIVE, element against element, so
+   they cannot drift apart again.) The fill/border stay on the --special-bg /
+   --special-edge pair, unchanged; only size, shape, ink and the second line
+   moved. `flex-direction: column` is what makes the two lines possible —
+   .special-open-btn.compact resets it back to `row` (see that rule). */
 .special-open-btn {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 1px;
   margin-top: 3px;
-  padding: 2px 8px;
-  border: 1px solid var(--special-edge);
+  padding: 5px 11px;
+  /* var(--special-edge-strong), not --special-edge (issue #31 adversarial
+     review, 2026-09-19) — --special-edge measured only 2.61:1 on this
+     button's own fill / 2.76:1 on the white cell behind it, under WCAG
+     1.4.11's 3:1 boundary floor; see tokens.css for the measured fix.
+     --special-edge itself is untouched — .special-hint still uses it. */
+  border: 1px solid var(--special-edge-strong);
   border-radius: var(--r-chip);
   background: color-mix(in oklab, var(--special-bg) 55%, var(--surface));
-  color: var(--special-edge);
+  color: var(--special-ink);
   font-family: var(--mono);
-  font-size: 10px;
+  /* var(--fs-table-cell), not --fs-badge (2026-09-19, jakkaritw uniform-text
+     pass) — this button lives INSIDE the budget grid; see the identical note
+     on .gl-group-cell .gl-chip.special-gl-group above. */
+  font-size: var(--fs-table-cell);
   font-weight: 700;
   letter-spacing: 0.02em;
+  line-height: 1.2;
   cursor: pointer;
   transition: all 140ms ease;
+}
+/* Line 1 = what pressing does ("แก้ไขผ่านฟอร์มย่อย ↗" / "🔒 ดูรายละเอียด").
+   Line 2 = that pressing is possible ("คลิก"). The hint line is smaller than
+   the label on purpose, so it reads as an affordance cue rather than a second
+   label, and it inherits the label's ink so BOTH lines measure the same
+   contrast (no second colour to keep readable). */
+.special-open-btn-label {
+  display: block;
+}
+.special-open-btn-cta {
+  display: block;
+  /* var(--fs-table-cell), not a 9.5px literal (2026-09-19, jakkaritw uniform-
+     text pass + adversarial review finding: at 9.5px the สระอิ mark in
+     "คลิก" rendered too small to read reliably — คลิก vs คลก). This line is
+     no longer visually "smaller than the label" (comment above is now only
+     about reading order, line 1 vs line 2, not size) — both lines share the
+     grid's one text size like everything else in the table. */
+  font-size: var(--fs-table-cell);
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 .special-open-btn:hover {
   background: var(--special-bg);
   border-color: var(--ink);
 }
-/* ADR-0013 read-only lock (mockup 0002.3budget-export.html openDetailModal,
-   btn-detail's read-only branch: `opacity:.55`) — dims the button when the
-   department is locked / the caller is view-only, without hiding it: the
-   subform still opens, just in read-only mode. */
+/* ADR-0013 read-only lock — the button is offered on every special-GL row the
+   caller can SEE, and the LOCKED variant is fully clickable: it opens the
+   subform read-only. It used to be dimmed to `opacity: .55`, carried over
+   from mockup 0002.3's btn-detail read-only branch. That dim is REMOVED
+   (issue #31, 2026-09-19): just over half opacity is the platform's DISABLED
+   idiom, so people did not press a control that works — and a department
+   mid-approval is exactly when a filler most wants to open the subform and
+   read what was submitted. The two states stay distinct at a glance through
+   two channels the dim was never carrying anyway: a padlock instead of an
+   arrow, and their own wording (see GridTable.tsx). `opacity: 1` is written
+   out rather than deleting the rule so the intent is explicit and a future
+   blanket dim on .special-open-btn cannot silently reintroduce this; the
+   class itself stays regardless — it is a test anchor and query target. */
 .special-open-btn-locked {
-  opacity: 0.55;
+  opacity: 1;
 }
 
 /* ─── A9 modal shell (special-GL DetailSubform + Trip Manager) ─── */

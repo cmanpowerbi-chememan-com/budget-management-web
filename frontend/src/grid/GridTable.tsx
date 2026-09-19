@@ -98,6 +98,13 @@ const SPECIAL_GL_TOOLTIP = 'แก้ไขผ่านฟอร์มย่อ�
 // openDetailModal): shown on the locked-variant button in place of the
 // editable tooltip above.
 const SPECIAL_GL_LOCKED_TOOLTIP = 'อ่านอย่างเดียว — แก้ไม่ได้ในสถานะนี้'
+/* Second line inside the full-size subform button, both states (issue #31,
+   jakkaritw): line 1 says what pressing does, line 2 says that pressing is
+   possible at all. Chosen over putting the word beside the button and over
+   replacing the ↗ glyph with it. The COMPACT variant stays a bare glyph —
+   it exists to save horizontal space when the month columns are collapsed,
+   so it deliberately gets no second line. */
+const SPECIAL_GL_CTA = 'คลิก'
 const COLLAPSE_COLUMNS_LABEL = 'ซ่อนคอลัมน์ GL Group / Remark / Status'
 const EXPAND_COLUMNS_LABEL = 'แสดงคอลัมน์ GL Group / Remark / Status'
 const ENTER_FULLSCREEN_LABEL = 'ขยายตารางเต็มหน้าจอ'
@@ -328,7 +335,12 @@ function ColumnWidthMeasurer({
   const headerLabelStyle: CSSProperties = {
     display: 'inline-block',
     whiteSpace: 'nowrap',
-    fontSize: 10.5,
+    // 12.5, not 10.5 (2026-09-19, jakkaritw uniform-text pass) — mirrors
+    // `.data-table thead th`'s font-size now that --fs-table-head repoints
+    // to --fs-table-cell (tokens.css); e2e/theme-port.spec.ts's "mirror
+    // lock" test compares this literal against the real rendered `<th>`
+    // live, so a future size change must be made in both places again.
+    fontSize: 12.5,
     fontWeight: 600,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
@@ -669,7 +681,8 @@ function TxnBlock({
                   data-testid={`open-subform-${cc}-${gl}`}
                   onClick={() => onOpenSpecial(row, meta.gl_group)}
                 >
-                  {SPECIAL_GL_TOOLTIP} ↗
+                  <span className="special-open-btn-label">{SPECIAL_GL_TOOLTIP} ↗</span>
+                  <span className="special-open-btn-cta">{SPECIAL_GL_CTA}</span>
                 </button>
               )}
               {canOpenSpecial && specialLocked && (
@@ -680,7 +693,8 @@ function TxnBlock({
                   data-testid={`open-subform-${cc}-${gl}`}
                   onClick={() => onOpenSpecial(row, meta.gl_group)}
                 >
-                  🔒 ดูรายละเอียด
+                  <span className="special-open-btn-label">🔒 ดูรายละเอียด</span>
+                  <span className="special-open-btn-cta">{SPECIAL_GL_CTA}</span>
                 </button>
               )}
               {meta.is_special && !canOpenSpecial && (

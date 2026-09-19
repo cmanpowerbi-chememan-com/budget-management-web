@@ -105,6 +105,29 @@
   --status-draft: #5d616c;
   --special-bg: color-mix(in oklab, var(--cman-yellow) 24%, var(--cman-white));
   --special-edge: color-mix(in oklab, var(--cman-yellow) 58%, var(--cman-brown));
+  /* Text ink for the special-GL pill (issue #31, 2026-09-19). --special-edge
+     keeps its two existing jobs (the pill's BORDER and the .special-hint
+     annotation) unchanged, but it is a 58%-yellow mix and measures only
+     2.63:1 as TEXT on the pill's own fill — a violation that has sat in
+     contrast-baseline.json since the theme port only because the button was
+     a 10px annotation. Now that it joins the pill family at --fs-badge and
+     carries a second line, its text has to be readable. --special-ink is the
+     BROWN end of the very pair --special-edge is mixed from, so no new hue
+     enters the palette; canvas-measured at 6.920:1 on the pill's resting
+     fill #fff8e9 and 6.64:1 on its hover fill. */
+  --special-ink: var(--cman-brown);
+  /* Border-only darkening of --special-edge (issue #31 adversarial review,
+     2026-09-19) — --special-edge itself measured only 2.61:1 against the
+     button's own fill and 2.76:1 against the white cell behind it, both
+     under WCAG 1.4.11's 3:1 floor for an interactive control's boundary,
+     and the border is the ONLY channel drawing that shape (the fill itself
+     is 1.06:1 against the cell). Same two colours --special-edge already
+     mixes from, just more brown (35% yellow, was 58%) — no new hue enters
+     the palette. Canvas-measured 3.79:1 on the fill / 4.01:1 on the cell
+     (45%/55% clears 3.0 by only ~0.2, too close for browser rounding).
+     Consumed ONLY by `.special-open-btn`'s border — --special-edge keeps
+     every other job (`.special-hint`, the other modals' pill borders). */
+  --special-edge-strong: color-mix(in oklab, var(--cman-yellow) 35%, var(--cman-brown));
 
   /* ─── On-shell text roles — REPOINTED, not retired (issue #30, 2026-09-19).
      These 5 existed only because --paper was CI green; now --paper is a
@@ -150,6 +173,21 @@
      no card ancestor (.side-heading-row, .approval-bar) still repoint this
      locally in global.css. */
   --focus-ring: var(--accent);
+
+  /* Dropdown chevron, shared by `.year-select` and `.dept-picker-trigger`
+     (2026-09-19, jakkaritw: "เพิ่ม symbol dropdown as Year filter as same" —
+     both controls open a panel/native select, so both show the same arrow).
+     Arrow stroke is hardcoded to a hex literal, not a var() — a data URI
+     cannot reference a CSS custom property. #4b5563 is --ink-2's CURRENT
+     literal value (this exact "data-URI chevron" trap is already documented
+     at the old single call site, global.css .year-select, 2026-08-21/
+     2026-09-19) — now ONE token instead of two copies, so the next person
+     who moves --ink-2 mirrors one string, not two that can silently drift
+     apart. Both consumers keep an opaque --surface (white) fill behind the
+     arrow — canvas-measured 7.557:1, both identical (verified, not assumed:
+     `.year-select`/`.dept-picker-trigger` share the exact same
+     `background: var(--surface)` declaration). */
+  --dropdown-chevron-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234b5563' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 
   /* CI font: FC Minimal is licensed and not available to self-host, so
      jakkaritw chose Prompt (Cadson Demak, SIL Open Font License) as the free
@@ -251,14 +289,28 @@
 
   /* Shared identity-bar pill formula (issue #30, 2026-09-19, jakkaritw's
      post-review "make the identity bar match the picture exactly" pass) —
-     ONE tint/border pair instead of repeating the same two hexes across
-     `.role-badge.user`, `.user-chip.cc`, `.v3-cc-pill`, `.v3-gl-pill` and
-     `.v3-count` (per the PRD's own "one shared chip formula" instruction).
-     Ink for all five is `--status-sap` (= `--cman-blue`, already `#2f61ac`
-     — no new token needed there; verified 4.97:1 on this tint, 11.90:1 for
-     `--ink` text in the same chip). */
-  --identity-pill-tint: #e0e8f4;
-  --identity-pill-border: #99b0d3;
+     ONE tint pair instead of repeating the same hex across
+     `.role-badge.user`/`.role-badge.admin`, `.user-chip.cc`, `.v3-cc-pill`,
+     `.v3-gl-pill` and `.v3-count` (per the PRD's own "one shared chip
+     formula" instruction). SAME DAY, later pass: jakkaritw ruled every pill
+     in the identity bar white with NO border ("pill พื้นขาวไม่มีขอบ") — his own
+     wording, decided, not a judgment call — so `--identity-pill-tint` is now
+     `--surface` (plain white) and the border-color token this pair used to
+     carry (`--identity-pill-border`) is DELETED, not merely neutralised:
+     every consumer's `border` declaration is removed outright (see
+     global.css), so there is nothing left with a colour that could be
+     re-tinted back in by a future edit. Ink is no longer part of this
+     shared pair — a flat white fill has no tint to mix it from (GATE LOW-7's
+     "tint/text share a base token" rule needs a tint to apply to). Four of
+     the five consumers set `color: var(--ink)` directly (canvas-measured
+     14.679:1 on white); the role badge is the one exception jakkaritw named
+     ("แยกด้วยสีtext (เขียว/ฟ้า)") — `.role-badge.admin` keeps `--accent` (CI
+     green, #00805e, measured 4.942:1 on white) and `.role-badge.user` keeps
+     `--accent-2-text` (CI blue, #2f61ac, measured 6.129:1 on white) — both
+     already-existing tokens, no new hue introduced, both cleared 4.5:1 on
+     their natural (not darkened-sibling) value so neither needed to step to
+     `--cman-green-dark`/`--cman-navy`. */
+  --identity-pill-tint: var(--surface);
 
   /* Legend-dot ring (issue #25 Phase 4d, ported issue #30, 2026-09-19) —
      Laddawan's 3 fixed status hues measure 1.21-1.31:1 against the dark
@@ -282,10 +334,19 @@
   --fs-title: 14.5px; /* .nav-logo-text .name */
   --fs-subtitle: 10.5px; /* .nav-logo-text .sub */
   --fs-label: 13px; /* .btn, .year-select, .dept-picker-trigger */
-  --fs-table-head: 10.5px; /* .data-table thead th */
-  --fs-table-cell: 12.5px; /* .data-table (base) */
-  --fs-badge: 11.5px; /* .status-chip, .gl-group-cell .gl-chip.special-gl-group */
+  /* --fs-table-head/--fs-group-head/--fs-month-group-label REPOINTED to
+     --fs-table-cell (2026-09-19, jakkaritw: "ปรับขนาด text ทั้งหมดไห้เท่ากับ
+     ตัวเลขของแต่ละเดือน" — every piece of text in the budget grid becomes one
+     size, the month figures' own size). Each of the 3 is consumed by exactly
+     one rule and is a table-only role (unlike --fs-badge, shared with
+     non-table chips — see global.css's own in-table overrides for that one),
+     so repointing the token itself is the clean move; each rule keeps its
+     own weight/letter-spacing/text-transform/padding untouched — this is a
+     size-only change. */
+  --fs-table-head: var(--fs-table-cell); /* .data-table thead th */
+  --fs-table-cell: 12.5px; /* .data-table (base) — the reference size */
+  --fs-badge: 11.5px; /* status/GL chips + subform button OUTSIDE the grid; in-table consumers of this role are overridden to --fs-table-cell directly in global.css, this token is untouched */
   --fs-side-heading: 20px; /* .side-heading */
-  --fs-group-head: 9.5px; /* .data-table thead tr.group-head-row th */
-  --fs-month-group-label: 16px; /* .data-table thead tr.group-head-row th.month-group-label */
+  --fs-group-head: var(--fs-table-cell); /* .data-table thead tr.group-head-row th */
+  --fs-month-group-label: var(--fs-table-cell); /* .data-table thead tr.group-head-row th.month-group-label ("รวมทั้งปี") */
 }
