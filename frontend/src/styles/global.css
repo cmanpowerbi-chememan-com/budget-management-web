@@ -417,10 +417,16 @@ select:focus-visible {
      same "muted white ink on the dark bar" role as .v3-email; this arrow is
      not one of the approved theme's own named 9 text roles, but it is a
      real, always-visible separator between the breadcrumb segments and the
-     mandatory readability check covers every element in this zone. */
+     mandatory readability check covers every element in this zone.
+     Hidden below (jakkaritw, 2026-09-19, "ลบออก" — the chevron separators
+     go): rule kept, not deleted, so re-enabling is 1 line; color/opacity/
+     flex-shrink above cost nothing while hidden and are what the arrow
+     needs if it comes back. The ChevronIcon component and both call sites
+     in UserBar.tsx are intentionally left in place. */
   color: var(--tc-v3-email);
   opacity: 0.45;
   flex-shrink: 0;
+  display: none;
 }
 .v3 .v3-division {
   font-family: var(--serif);
@@ -880,6 +886,13 @@ select:focus-visible {
   background: color-mix(in oklab, var(--status-approved) 7%, var(--surface));
   border: 1px solid color-mix(in oklab, var(--status-approved) 32%, var(--line));
   border-left: 4px solid var(--status-approved);
+  /* Hidden (jakkaritw, 2026-09-19): "ซ่อนออกไปดีกว่า ... user ไม่จำเปนต้องรุ้"
+     — the provenance this strip explains (Approved layer = yearly SharePoint
+     Excel; FX master edited in Module 09) is not something a user needs on
+     screen. Same pattern as .meta-tag/.user-avatar above: element + tooltip
+     stay in the DOM (BudgetGrid.tsx, scope.isAdmin-gated), only display is
+     turned off, so re-enabling is a 1-line revert. */
+  display: none;
 }
 .admin-zone-ic {
   width: 16px;

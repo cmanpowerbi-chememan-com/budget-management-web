@@ -1699,6 +1699,11 @@ describe('BudgetGrid', () => {
     expect(screen.queryByTestId('admin-mode-checkbox')).not.toBeInTheDocument()
   })
 
+  // The strip itself is hidden via CSS (.admin-zone { display: none } in
+  // global.css, jakkaritw 2026-09-19 — "user ไม่จำเปนต้องรุ้") — jsdom does
+  // not apply the stylesheet, so these assertions still pass and are not a
+  // claim about what is on screen. They guard the DOM contract (element,
+  // tooltip, gear icon) that makes the hiding a 1-line, reversible change.
   it('shows only the gear + "Admin" marker for an admin scope, with the full provenance (incl. the FX year one behind the planning year) in its tooltip', async () => {
     const ADMIN_SCOPE: ScopeState = { role: 'admin', isAdmin: true, fillCostCenters: [], seeCostCenters: [], email: 'admin@chememan.com', loading: false, error: null }
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
