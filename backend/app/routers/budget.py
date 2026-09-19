@@ -58,7 +58,7 @@ def sap_coverage(
 ) -> SapCoverage:
     """Freshness of the SAP · ใช้จริง layer (ADR-0030, supersedes ADR-0026's
     "which months are shown" coverage — no month is ever withheld now) — the
-    grid's legend chip labels itself from this ("ข้อมูลบันทึกถึงวันที่ 11 ก.ย. 2026",
+    grid's legend chip labels itself from this ("ข้อมูลอัปเดตล่าสุด 11 ก.ย. 2026",
     or a ⚠ stale variant when 3+ days behind).
 
     Deliberately its OWN endpoint rather than an envelope around

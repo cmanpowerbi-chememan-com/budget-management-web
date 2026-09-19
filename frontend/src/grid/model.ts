@@ -885,8 +885,10 @@ const EN_MONTH_ABBR = [
 /** `2026-04-29` -> `29 Apr 26` (Gregorian, 2 digits) — the SAP freshness
  * chip's date format (jakkaritw, 2026-09-14: switched from a Thai/Buddhist
  * short date to English/Gregorian for this operational timestamp; the
- * `ข้อมูลบันทึกถึงวันที่` label around it stays Thai (jakkaritw, 2026-09-17:
- * formal wording, was ข้อมูลคีย์ถึง)). Parsed from the ISO parts, never via
+ * `ข้อมูลอัปเดตล่าสุด` label around it stays Thai (jakkaritw, 2026-09-17:
+ * formal wording, was ข้อมูลคีย์ถึง; 2026-09-19: jakkaritw's own wording,
+ * ข้อมูลอัปเดตล่าสุด — shown both spellings, picked the Royal Institute ต).
+ * Parsed from the ISO parts, never via
  * `new Date()`, so a timezone never shifts the day. */
 export function formatChipDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-').map(Number)
@@ -909,8 +911,8 @@ export interface SapFreshness {
  * new UI surface — see `BudgetGrid`'s `.legend-item.sap`). Three states, all
  * decided by the BACKEND (`SapCoverage.is_stale`) — this function never
  * computes staleness itself, only renders what it is told:
- *  - healthy: `ข้อมูลบันทึกถึงวันที่ 11 Sep 26`
- *  - stale (`is_stale`): `⚠ ข้อมูลบันทึกถึงวันที่ 11 Sep 26` — differs from healthy
+ *  - healthy: `ข้อมูลอัปเดตล่าสุด 11 Sep 26`
+ *  - stale (`is_stale`): `⚠ ข้อมูลอัปเดตล่าสุด 11 Sep 26` — differs from healthy
  *    ONLY by the `⚠` prefix (jakkaritw, 2026-09-14: dropped the trailing
  *    "(ช้ากว่าปกติ)" parenthetical); `isWarn: true` still carries the warning
  *    styling, so no marker is lost, only the redundant wording.
@@ -921,7 +923,7 @@ export function sapFreshnessLine(coverage: SapCoverage): SapFreshness {
   if (coverage.watermark_date === null) {
     return { text: '⚠ ไม่ทราบวันที่ข้อมูล', isWarn: true }
   }
-  const keyedThrough = `ข้อมูลบันทึกถึงวันที่ ${formatChipDate(coverage.watermark_date)}`
+  const keyedThrough = `ข้อมูลอัปเดตล่าสุด ${formatChipDate(coverage.watermark_date)}`
   return coverage.is_stale
     ? { text: `⚠ ${keyedThrough}`, isWarn: true }
     : { text: keyedThrough, isWarn: false }

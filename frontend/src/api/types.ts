@@ -69,7 +69,7 @@ export interface SapLayer {
 /** `GET /budget/sap-coverage?year=` (`app.sap.SapCoverage`) — how fresh the
  * SAP layer is (ADR-0030). `fiscal_year` is the SAP layer's own year
  * (planning year - 1). `watermark_date` is the newest SAP *entry* date
- * loaded in the warehouse ("ข้อมูลบันทึกถึงวันที่"), `null` when no data is loaded at
+ * loaded in the warehouse ("ข้อมูลอัปเดตล่าสุด"), `null` when no data is loaded at
  * all. `days_behind` is `today - watermark_date` in days, `null` alongside a
  * `null` watermark. `is_stale` is decided SERVER-SIDE (a browser clock is
  * not a trustworthy input to a financial freshness claim) — the frontend
