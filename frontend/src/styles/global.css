@@ -787,11 +787,17 @@ select:focus-visible {
   /* One clear blank line above the note (jakkaritw, post-review: the
      prototype capture has a visible gap here; the app pressed it straight
      against the legend chips). `.legend-block`'s own flex `gap: 6px`
-     already contributes some of that space — this margin-top adds the
-     rest, landing close to one full line-height (12.5px * 1.4 = 17.5px)
-     of separation in total. Markup/text untouched, CSS only. */
-  margin-top: 12px;
-  padding: 0 6px;
+     already contributes some of that space. The first attempt, 12px, was
+     measured on staging and still read as too tight, not a blank row
+     (jakkaritw); raised to 24px, which together with the block's 6px gap
+     lands at ~30px — about 1.7x the note's own line-height (12.5px * 1.4 =
+     17.5px) — so an empty row is now unmistakable, not just loose spacing.
+     Markup/text untouched, CSS only. */
+  margin-top: 24px;
+  /* No left padding (jakkaritw, staging review 2026-09-19): the note should
+     sit flush in the toolbar's left corner, and this rule's own 6px left
+     inset was the only thing holding it off that edge. */
+  padding: 0 6px 0 0;
   font-size: 12.5px;
   line-height: 1.4;
   /* var(--tc-legend-note), not --ink-3 (issue #30, 2026-09-19) — this text
