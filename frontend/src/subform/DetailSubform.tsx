@@ -340,7 +340,11 @@ export function DetailSubform({
                               ))}
                             </select>
                             {showFreeText && (
-                              <input
+                              <span className="autosize-field">
+                                <span className="autosize-mirror" aria-hidden="true">
+                                  {fieldFreeText(f, storedValue) || ' '}
+                                </span>
+                                <input
                                 aria-label={`${f.key} กำหนดเอง`}
                                 className="detail-input free-text-input"
                                 placeholder={`พิมพ์${f.key}`}
@@ -351,20 +355,30 @@ export function DetailSubform({
                                   // select stays on อื่นๆ; save is blocked in that state.
                                   setMeta(row.localId, f.key, e.target.value.trim() ? e.target.value : f.freeTextOption!)
                                 }
-                              />
+                                />
+                              </span>
                             )}
                           </td>
                         )
                       }
                       return (
                         <td key={f.key} className="special-col-cell">
-                          <input
-                            aria-label={f.key}
-                            className="detail-input"
-                            value={row.draft.meta[f.key] ?? ''}
-                            disabled={readOnly}
-                            onChange={(e) => setMeta(row.localId, f.key, e.target.value)}
-                          />
+                          {/* .autosize-field mirrors the value into a hidden ::after so the
+                            * cell has a real content width and the column grows with what is
+                            * typed (jakkaritw, 2026-09-19). Presentation only — the input, its
+                            * value, its handler and its aria-label are untouched. */}
+                          <span className="autosize-field">
+                            <span className="autosize-mirror" aria-hidden="true">
+                              {(row.draft.meta[f.key] ?? '') || ' '}
+                            </span>
+                            <input
+                              aria-label={f.key}
+                              className="detail-input"
+                              value={row.draft.meta[f.key] ?? ''}
+                              disabled={readOnly}
+                              onChange={(e) => setMeta(row.localId, f.key, e.target.value)}
+                            />
+                          </span>
                         </td>
                       )
                     })}

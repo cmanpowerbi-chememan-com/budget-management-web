@@ -2388,9 +2388,73 @@ th.total-year-col {
 }
 .detail-input.month-input {
   min-width: 62px;
-  width: 62px;
+  /* 100%, not a fixed 62px (jakkaritw, 2026-09-19: "ถ้า col ตัวเลข ตัวเลขต้อง
+     ไม่ทับ รองรับหลายหน่วยยาวๆ") — the month COLUMN is already sized by the
+     MONTHLY TOTAL row's formatThb() text, which is a real text node and is
+     always at least as wide as any single row's figure in that month. The
+     input was pinned to 62px inside that wider column, so a long amount
+     clipped inside the box while empty space sat beside it. Filling the
+     column lets the value use the width the column already has. */
+  width: 100%;
   text-align: right;
   font-family: var(--mono);
+}
+
+/* Auto-sizing text cell (jakkaritw, 2026-09-19: "ถ้าเปน text col ปรับขนาเองได้",
+   and "ฟอมย่อยใช้หลักเดียวกับหน้าหลัก" — the main grid already fits its columns
+   to their content). A <td> holding only an <input> has NO intrinsic content
+   width, so this column was pinned at .detail-input's 90px min-width however
+   long the value was: "ค่าประชาสัมพันธ์องค์กรและกิจกรรมเพื่อสังคม" needs 242px and
+   rendered into 108px.
+
+   The mirror is a REAL element, not a ::after, and the input is positioned over
+   it. That difference is the whole fix: a pseudo-element's contribution did not
+   reach the table's column algorithm here, while an in-flow block with
+   white-space: pre has a min-content width equal to its full text, which the
+   column must honour. Measured: ::after left the column at 108px; the mirror
+   grows it to fit.
+
+   The mirror's box MUST stay identical to .detail-input's (padding, border
+   width, font-size) or the column is sized wrong by exactly that difference. */
+.autosize-field {
+  position: relative;
+  display: block;
+}
+.autosize-mirror {
+  display: block;
+  visibility: hidden;
+  white-space: pre;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  /* Floor keeps a short or empty value at exactly today's width; the cap stops
+     one very long entry from pushing the twelve month columns off screen. */
+  min-width: 90px;
+  max-width: 420px;
+}
+.autosize-field > .detail-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+}
+.autosize-field::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  /* Floor keeps a short or empty value at exactly today's width; the cap stops
+     one very long entry from pushing the twelve month columns off screen.
+     NO overflow: hidden — it zeroes this element's minimum contribution, so the
+     table (width: 100%, squeezed into a scroll container) collapses the column
+     straight back to its floor and the whole rule does nothing. max-width alone
+     caps the growth without giving the browser permission to shrink it. */
+  min-width: 90px;
+  max-width: 420px;
+}
+.autosize-field > .detail-input {
+  width: 100%;
 }
 .detail-input:focus {
   border-color: var(--accent);
