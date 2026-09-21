@@ -78,6 +78,11 @@ export const DEPARTMENT_UNKNOWN_DETAIL_MARKER = 'cannot verify approval-lock sta
 const PAST_DEADLINE_DETAIL_PREFIX = 'the submission deadline for fiscal_year='
 const PAST_DEADLINE_DETAIL_SUFFIX = 'has passed'
 
+/** Issue #32 item 2: exported so `approval/model.ts`'s SUBMIT_BLOCKED_REASON
+ * map can reuse this EXACT sentence for its own `past_deadline` key instead
+ * of a second, independently-worded Thai phrase for the same condition. */
+export const PAST_DEADLINE_MESSAGE_TH = 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'
+
 function messageForStatus(status: number, detail?: string): string {
   if (status === 403) {
     if (detail?.includes(DEPARTMENT_LOCKED_DETAIL_MARKER)) {
@@ -91,7 +96,7 @@ function messageForStatus(status: number, detail?: string): string {
       return 'cost center นี้ยังไม่มีฝ่ายในไฟล์ master กรุณาติดต่อ admin'
     }
     if (detail?.includes(PAST_DEADLINE_DETAIL_PREFIX) && detail.includes(PAST_DEADLINE_DETAIL_SUFFIX)) {
-      return 'พ้นกำหนดส่งงบประมาณของปีนี้แล้ว — กรุณาติดต่อผู้ดูแลระบบ'
+      return PAST_DEADLINE_MESSAGE_TH
     }
     return 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้'
   }

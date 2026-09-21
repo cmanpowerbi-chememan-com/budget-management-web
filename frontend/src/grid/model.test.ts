@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlAccount, PendingRowState } from '../api/types'
 import {
+  addTransactionBlockedReasonTh,
   admitRows,
   applyMonthEdit,
   BLANK_COLUMN_FILTERS,
@@ -13,6 +14,8 @@ import {
   CC_RESTRICTED_GL_REASON_TH,
   CC_RESTRICTED_GLS,
   DEFAULT_COLUMN_WIDTHS,
+  DEPARTMENT_UNKNOWN_ADD_REASON_TH,
+  emptyGridMessage,
   filterRows,
   fitColumnWidth,
   formatChipDate,
@@ -28,10 +31,13 @@ import {
   isEditableCell,
   isGlPickableForCostCenter,
   loadStoredColumnWidths,
+  lockedAddReasonTh,
   lockReasonTooltipTh,
+  LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH,
   mergeSavedRow,
   MONTH_KEYS,
   MONTH_LABELS,
+  noFillCostCentersAddReasonTh,
   nowMonthKey,
   persistColumnWidths,
   pendingAmountNoticeTh,
@@ -612,6 +618,153 @@ describe('lockReasonTooltipTh', () => {
   it('returns a short read-only sentence for "not_in_fill_scope"', () => {
     const text = lockReasonTooltipTh({ lock_reason: 'not_in_fill_scope', department: null })
     expect(text).toBeTruthy()
+  })
+})
+
+describe('noFillCostCentersAddReasonTh', () => {
+  // MED gate finding (2026-09-21): renamed from `seeOnlyAddReasonTh` — the
+  // old "คุณมีสิทธิ์ดูอย่างเดียว" (you have view-only rights) wording is false
+  // for a dual-role admin viewing a foreign ฝ่าย with admin mode ON (they ARE
+  // an admin, just with no personal Fill Cost Center there) and for a ฝ่าย
+  // simply missing from cc dept.xlsx (a master-data gap, not a rights
+  // question). Reworded in Cost Center terms, which is true for every case.
+  it('names the department in Cost Center terms, asserting nothing about the caller\'s role', () => {
+    const text = noFillCostCentersAddReasonTh('Accounting')
+    expect(text).toContain('Accounting')
+    expect(text).toContain('Cost Center')
+    expect(text).not.toContain('สิทธิ์')
+    expect(text).not.toContain('ดูอย่างเดียว')
+  })
+})
+
+describe('addTransactionBlockedReasonTh (issue #32 — the Add button + emptyGridMessage share this)', () => {
+  const OPEN: Parameters<typeof addTransactionBlockedReasonTh>[0] = {
+    yearNotOpen: false,
+    departmentUnknown: false,
+    lockStatusUnavailable: false,
+    departmentLocked: false,
+    department: 'Accounting',
+    hasFillCostCenters: true,
+  }
+
+  it('returns null (nothing blocks the click) when every condition is open', () => {
+    expect(addTransactionBlockedReasonTh(OPEN)).toBeNull()
+  })
+
+  it('yearNotOpen wins over every other reason', () => {
+    expect(
+      addTransactionBlockedReasonTh({
+        ...OPEN, yearNotOpen: true, departmentUnknown: true, departmentLocked: true, hasFillCostCenters: false,
+      }),
+    ).toBe(YEAR_NOT_OPEN_ADD_REASON_TH)
+  })
+
+  it('departmentUnknown wins over lockStatusUnavailable/departmentLocked/hasFillCostCenters', () => {
+    expect(
+      addTransactionBlockedReasonTh({
+        ...OPEN, departmentUnknown: true, lockStatusUnavailable: true, departmentLocked: true, hasFillCostCenters: false,
+      }),
+    ).toBe(DEPARTMENT_UNKNOWN_ADD_REASON_TH)
+  })
+
+  it('lockStatusUnavailable wins over departmentLocked/hasFillCostCenters', () => {
+    expect(
+      addTransactionBlockedReasonTh({ ...OPEN, lockStatusUnavailable: true, departmentLocked: true, hasFillCostCenters: false }),
+    ).toBe(LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH)
+  })
+
+  it('departmentLocked wins over hasFillCostCenters, naming the department', () => {
+    expect(
+      addTransactionBlockedReasonTh({ ...OPEN, departmentLocked: true, hasFillCostCenters: false }),
+    ).toBe(lockedAddReasonTh('Accounting'))
+  })
+
+  it('departmentLocked falls back to a generic department phrase when department is null', () => {
+    expect(
+      addTransactionBlockedReasonTh({ ...OPEN, department: null, departmentLocked: true }),
+    ).toBe(lockedAddReasonTh('ฝ่ายนี้'))
+  })
+
+  it('!hasFillCostCenters is the last-resort reason, naming the department', () => {
+    expect(
+      addTransactionBlockedReasonTh({ ...OPEN, hasFillCostCenters: false }),
+    ).toBe(noFillCostCentersAddReasonTh('Accounting'))
+  })
+
+  // HIGH gate finding: before `GET /scope/departments` resolves, `department`
+  // is still `null` and `departmentUnknown` is deliberately `false` (it is
+  // gated on `deptResolved`, which has not flipped yet) — a pre-fix reading
+  // of `!hasFillCostCenters` alone fell all the way through to the See-only
+  // reason for the 2-3s of every mount, mislabeling every caller as
+  // view-only. The branch must require a RESOLVED department, same as
+  // `departmentUnknown` already does, so this window returns null instead.
+  it('mirrors the null-department precedence: pre-resolve (department null, every flag false incl. hasFillCostCenters) blocks nothing yet', () => {
+    expect(
+      addTransactionBlockedReasonTh({
+        yearNotOpen: false,
+        departmentUnknown: false,
+        lockStatusUnavailable: false,
+        departmentLocked: false,
+        department: null,
+        hasFillCostCenters: false,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('emptyGridMessage (issue #32 item 1 — the empty-grid states the real situation)', () => {
+  it('can-add: names the fiscal year and hints at "+ เพิ่ม Transaction"', () => {
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: true, addBlockedReasonTh: null,
+    })
+    expect(result.title).toBe('ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027')
+    expect(result.hint).toContain('เพิ่ม Transaction')
+  })
+
+  it('cannot-add: the hint is the SAME reason the disabled Add button already shows', () => {
+    const reason = lockedAddReasonTh('Accounting')
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: false, addBlockedReasonTh: reason,
+    })
+    expect(result.title).toBe('ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027')
+    expect(result.hint).toBe(reason)
+  })
+
+  it('year-not-open: title always renders, hint carries the year-wide reason', () => {
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: false, addBlockedReasonTh: YEAR_NOT_OPEN_ADD_REASON_TH,
+    })
+    expect(result.title).toBeTruthy()
+    expect(result.hint).toBe(YEAR_NOT_OPEN_ADD_REASON_TH)
+  })
+
+  it('department-locked: hint names the ฝ่าย that is mid-approval/approved', () => {
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: false, addBlockedReasonTh: lockedAddReasonTh('Accounting'),
+    })
+    expect(result.hint).toContain('Accounting')
+  })
+
+  it('no Fill Cost Center: hint says so in Cost Center terms, never the Add-button call to action', () => {
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: false, addBlockedReasonTh: noFillCostCentersAddReasonTh('Accounting'),
+    })
+    expect(result.hint).toContain('Cost Center')
+    expect(result.hint).not.toContain('เพิ่ม Transaction')
+  })
+
+  it('is total: cannot-add with no resolved reason (defensive edge case) still returns a title and simply omits the hint', () => {
+    const result = emptyGridMessage({
+      fiscalYear: 2027, department: 'Accounting', canAddTransaction: false, addBlockedReasonTh: null,
+    })
+    expect(result.title).toBeTruthy()
+    expect(result.hint).toBeUndefined()
+  })
+
+  it('never learns the department name into the title — the ฝ่าย picker already shows it', () => {
+    const withDept = emptyGridMessage({ fiscalYear: 2027, department: 'Accounting', canAddTransaction: true, addBlockedReasonTh: null })
+    const withoutDept = emptyGridMessage({ fiscalYear: 2027, department: null, canAddTransaction: true, addBlockedReasonTh: null })
+    expect(withDept.title).toBe(withoutDept.title)
   })
 })
 

@@ -267,18 +267,82 @@ describe('ApprovalActionBar', () => {
     await waitFor(() => expect(screen.getByTestId('approval-reject-reason')).toHaveTextContent('ยอดไม่ตรง'))
   })
 
-  it('on a 409 conflict, shows an error message and refetches the status', async () => {
+  // Issue #32 item 3: `describeApiError` no longer special-cases 409 with
+  // its own English sentence — it falls through to `ApiError.message`,
+  // which the REAL API client already sets to the shared Thai 409 copy
+  // (`messageForStatus`, api/client.ts). The mock below carries that same
+  // Thai message to match what a genuine 409 response produces.
+  it('on a 409 conflict, shows the shared Thai message and refetches the status', async () => {
     vi.mocked(approvalApi.fetchApprovalStatus)
       .mockResolvedValueOnce(state({ status: 'DRAFT' }))
       .mockResolvedValueOnce(state({ status: 'PENDING_APPROVER1', current_position: 1 }))
-    vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(409, 'Conflict', 'concurrent'))
+    vi.mocked(approvalApi.submitDepartment).mockRejectedValue(
+      new ApiError(409, 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง', 'concurrent'),
+    )
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<ApprovalActionBar {...BASE_PROPS} />)
     fireEvent.click(await screen.findByTestId('approval-submit-btn'))
 
-    await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('Someone else'))
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น'),
+    )
     await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+  })
+
+  // Issue #32 item 4: a SUCCESSFUL action carrying `notification_warning`
+  // (the write committed, the Graph mail failed) must render as a NOTICE —
+  // Thai, role="status" — never as the error treatment a thrown call gets.
+  describe('notification_warning — successful action vs thrown error (issue #32 item 4)', () => {
+    it('a successful submit with notification_warning="notify_failed" renders the Thai notice with role="status", not the error treatment', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+      vi.mocked(approvalApi.submitDepartment).mockResolvedValue(
+        state({ status: 'PENDING_APPROVER1', current_position: 1, notification_warning: 'notify_failed' }),
+      )
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      render(<ApprovalActionBar {...BASE_PROPS} />)
+      fireEvent.click(await screen.findByTestId('approval-submit-btn'))
+
+      const notice = await screen.findByTestId('approval-action-notice')
+      expect(notice).toHaveAttribute('role', 'status')
+      expect(notice).toHaveTextContent('บันทึกผลการอนุมัติเรียบร้อยแล้ว')
+      expect(notice).toHaveTextContent('อีเมลแจ้งเตือนไม่สำเร็จ')
+      expect(notice).not.toHaveClass('act-status-error')
+      expect(screen.queryByTestId('approval-action-message')).not.toBeInTheDocument()
+    })
+
+    it('an unrecognised notification_warning code passes through unchanged (older backend / newer frontend degrade gracefully)', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+      vi.mocked(approvalApi.submitDepartment).mockResolvedValue(
+        state({
+          status: 'PENDING_APPROVER1', current_position: 1,
+          notification_warning: 'The email notification failed, but your action was saved.',
+        }),
+      )
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      render(<ApprovalActionBar {...BASE_PROPS} />)
+      fireEvent.click(await screen.findByTestId('approval-submit-btn'))
+
+      expect(await screen.findByTestId('approval-action-notice')).toHaveTextContent(
+        'The email notification failed, but your action was saved.',
+      )
+    })
+
+    it('a THROWN error still renders act-status-error with role="alert" — the new notice class never masks a real failure', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(state({ status: 'DRAFT', can_submit: true }))
+      vi.mocked(approvalApi.submitDepartment).mockRejectedValue(new ApiError(500, 'เซิร์ฟเวอร์ขัดข้อง'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      render(<ApprovalActionBar {...BASE_PROPS} />)
+      fireEvent.click(await screen.findByTestId('approval-submit-btn'))
+
+      const message = await screen.findByTestId('approval-action-message')
+      expect(message).toHaveAttribute('role', 'alert')
+      expect(message).toHaveClass('act-status-error')
+      expect(screen.queryByTestId('approval-action-notice')).not.toBeInTheDocument()
+    })
   })
 
   it('on a 400 department_empty error, shows the server\'s own detail (bug 3, 2026-08-08 -- defense in depth for a stale can_submit=true, same describeApiError fallback every non-409 submit failure already uses)', async () => {
@@ -326,7 +390,7 @@ describe('ApprovalActionBar', () => {
     )
     render(<ApprovalActionBar {...BASE_PROPS} isAdmin adminViewEnabled isFillerOfDept={false} />)
     await waitFor(() =>
-      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('normal approval cycle'),
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('รอบอนุมัติปกติ'),
     )
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })
@@ -422,7 +486,7 @@ describe('ApprovalActionBar', () => {
     )
     render(<ApprovalActionBar {...BASE_PROPS} isFillerOfDept adminViewEnabled={false} />)
     await waitFor(() =>
-      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('This department has no budget data yet'),
+      expect(screen.getByTestId('approval-submit-blocked-hint')).toHaveTextContent('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ'),
     )
     expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
   })

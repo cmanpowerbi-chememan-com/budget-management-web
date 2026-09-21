@@ -18,7 +18,8 @@ import { TripManager } from '../subform/TripManager'
 import { AddTransactionForm, type AddResult } from './AddTransactionForm'
 import { GridTable, type RowMessage } from './GridTable'
 import {
-  admitRows, buildNewRowPayload, buildSavePayload, glMetaFor, mergeSavedRow, sapFreshnessLine, type MonthKey,
+  addTransactionBlockedReasonTh, admitRows, buildNewRowPayload, buildSavePayload, emptyGridMessage,
+  glMetaFor, mergeSavedRow, sapFreshnessLine, type MonthKey,
 } from './model'
 import { DeptPicker } from '../picker/DeptPicker'
 import { buildDeptHierarchy, resolveInitialDept } from '../picker/model'
@@ -369,6 +370,25 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
   const isFillerOfSelectedDept = department !== null && isFillerOfDepartment(departments, department, scope.fillCostCenters)
   const canUploadAttachments = adminViewEnabled || isFillerOfSelectedDept
+
+  /** Issue #32: the SAME reason `<AddTransactionForm>` resolves for its own
+   * disabled state — computed from the exact inputs already passed to it
+   * (`fillCostCentersOfSelectedDept`, not `isFillerOfSelectedDept`/
+   * `scope.fillCostCenters` above, since a pure admin's Add button bypasses
+   * via the former, not the latter — using the wrong one here would make
+   * the empty-grid hint disagree with the Add button for that caller). Fed
+   * into `emptyGridMessage` below; no new fetch, no new state. */
+  const addBlockedReasonTh = addTransactionBlockedReasonTh({
+    yearNotOpen,
+    departmentUnknown: deptResolved && department === null,
+    lockStatusUnavailable: lockedDepartmentsFailed,
+    departmentLocked: selectedDepartmentLocked,
+    department,
+    hasFillCostCenters: fillCostCentersOfSelectedDept.length > 0,
+  })
+  const emptyState = emptyGridMessage({
+    fiscalYear: year, department, canAddTransaction: addBlockedReasonTh === null, addBlockedReasonTh,
+  })
 
   /** Issue #13, decision H (2026-09-17): the ONE reaction to "the server
    * says this write is now department-locked" — shared by `persistRow` and
@@ -800,14 +820,21 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
               Pending · งบรออนุมัติ ({year})
             </span>
           </div>
-          {/* States the PENDING_AMOUNT_ROUND_TO rule (model.ts) up front so the
-              filler is not surprised when a typed 146 commits as 100 — the
-              rounding itself is silent by design (no toast). */}
-          <p className="legend-note" data-testid="pending-rounding-note">
-            <strong>หมายเหตุ:</strong> กรอกได้ตั้งแต่ <strong>100</strong> ขึ้นไป
-            {' '}โดยระบบจะปรับตัวเลข 2 หลักสุดท้ายเป็น <strong>00</strong> โดยอัตโนมัติ
-          </p>
         </div>
+        {/* jakkaritw 2026-09-21: moved OUT of .legend-block (which used to own
+            both the legend chips and this note, right-aligned as one block)
+            into .grid-toolbar directly, so it can sit at the toolbar's own
+            LEFT edge instead of trailing the legend on the right. Direct
+            .grid-toolbar child + CSS `flex-basis: 100%` forces it onto its
+            own full-width row; `order` pins that row last regardless of DOM
+            position, so it never moves the picker/Add/แนบไฟล์/admin controls
+            before it. States the PENDING_AMOUNT_ROUND_TO rule (model.ts) up
+            front so the filler is not surprised when a typed 146 commits as
+            100 — the rounding itself is silent by design (no toast). */}
+        <p className="legend-note" data-testid="pending-rounding-note">
+          <strong>หมายเหตุ:</strong> กรอกได้ตั้งแต่ <strong>100</strong> ขึ้นไป
+          {' '}โดยระบบจะปรับตัวเลข 2 หลักสุดท้ายเป็น <strong>00</strong> โดยอัตโนมัติ
+        </p>
       </div>
 
       {/* Admin marker only (jakkaritw 2026-08-04) — the strip used to carry the
@@ -858,6 +885,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           onDeleteRow={handleDeleteRow}
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => setIsFullscreen((v) => !v)}
+          emptyState={emptyState}
         />
       )}
 

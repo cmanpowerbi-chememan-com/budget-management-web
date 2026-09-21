@@ -110,6 +110,40 @@ describe('GridTable', () => {
     expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument()
   })
 
+  // Issue #32 item 1: GridTable renders exactly what `emptyState` resolves
+  // to — it never learns the fiscal year, the scope or the lock state
+  // itself (that stays BudgetGrid's job, via `emptyGridMessage`).
+  describe('emptyState prop (issue #32)', () => {
+    it('renders the resolved title, and no hint when none is supplied', () => {
+      render(
+        <GridTable
+          rows={[]}
+          glRef={GL_REF}
+          onCommitMonth={vi.fn()}
+          emptyState={{ title: 'ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027' }}
+        />,
+      )
+      expect(screen.getByText('ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027')).toBeInTheDocument()
+      expect(screen.queryByText(/เพิ่ม Transaction|สิทธิ์/)).not.toBeInTheDocument()
+    })
+
+    it('renders the hint as a second line when supplied', () => {
+      render(
+        <GridTable
+          rows={[]}
+          glRef={GL_REF}
+          onCommitMonth={vi.fn()}
+          emptyState={{
+            title: 'ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027',
+            hint: 'กดปุ่ม "+ เพิ่ม Transaction" ด้านบนเพื่อเริ่มกรอกงบประมาณปีนี้',
+          }}
+        />,
+      )
+      expect(screen.getByText('ฝ่ายนี้ยังไม่มีรายการงบประมาณปี 2027')).toBeInTheDocument()
+      expect(screen.getByText(/เพิ่ม Transaction/)).toBeInTheDocument()
+    })
+  })
+
   it('shows an "เปิดฟอร์มย่อย" button for an editable special-GL row and calls onOpenSpecial with the row + group', () => {
     const onOpenSpecial = vi.fn()
     const rows = [makeRow({ cost_center: 'CC1', gl_account: '5211900030', editable: true })]

@@ -1,6 +1,8 @@
 /** Pure helpers for the A10 approval UI — no DOM, no fetch. Keeps
  * `ApprovalActionBar` a thin renderer over these decisions. */
+import { PAST_DEADLINE_MESSAGE_TH } from '../api/client'
 import type { ApprovalStatusState, DepartmentRow } from '../api/types'
+import { YEAR_NOT_OPEN_ADD_REASON_TH } from '../grid/model'
 
 // Reject reason cap (jakkaritw, 2026-09-17, from UAT): the box's `maxLength`
 // and its counter both read this ONE constant so they can never drift. The
@@ -144,21 +146,48 @@ export function canSubmit(params: {
  * IS admin-only (`evaluate_submit_eligibility` only returns it after
  * confirming `scope.is_admin`) — the reason code itself already determines
  * who can receive each string, so a second per-audience copy would just be
- * duplication with nothing to disambiguate. */
+ * duplication with nothing to disambiguate.
+ *
+ * Issue #32 item 2 (2026-09-21): translated to Thai. Keys, this map's shape
+ * and `submitBlockedReasonLabel`'s null-for-unknown-code behaviour are
+ * unchanged. `year_not_open` and `past_deadline` reuse the EXACT sentence
+ * already shown for the same underlying server condition elsewhere
+ * (`YEAR_NOT_OPEN_ADD_REASON_TH` in the grid's Add-button reason, and
+ * `PAST_DEADLINE_MESSAGE_TH` in the API client's 403 mapping) rather than a
+ * second, independently-worded phrase — `mid_chain_admin_overwrite` and
+ * `invalid_approval_state` share one constant below for the same reason:
+ * their English copy was already identical. */
+const REOPEN_BLOCKED_REASON_TH = 'ฝ่ายนี้อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว จึงส่งขออนุมัติซ้ำไม่ได้'
+
 const SUBMIT_BLOCKED_REASON: Record<string, string> = {
   admin_cannot_submit_in_cycle:
-    'This department is still inside the normal approval cycle, so an admin cannot submit for it (wait until the submission deadline has passed, or the department genuinely has no filler).',
-  mid_chain_admin_overwrite: 'This department is already in approval or approved, so it cannot be submitted again.',
-  department_empty: 'This department has no budget data yet, so it cannot be submitted.',
-  not_filler_of_department: 'You are not a filler of this department, so you cannot submit on its behalf.',
-  year_not_open: 'This fiscal year is not open for submission yet. Please wait for the round to be announced.',
-  past_deadline: 'The submission deadline for this fiscal year has passed, so it can no longer be submitted.',
-  invalid_approval_state: 'This department is already in approval or approved, so it cannot be submitted again.',
+    'ฝ่ายนี้ยังอยู่ในรอบอนุมัติปกติ แอดมินจึงยังส่งขออนุมัติแทนไม่ได้ (กรุณารอจนพ้นกำหนดส่งงบประมาณ หรือฝ่ายนี้ต้องไม่มีผู้กรอกงบจริง ๆ)',
+  mid_chain_admin_overwrite: REOPEN_BLOCKED_REASON_TH,
+  department_empty: 'ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงยังส่งขออนุมัติไม่ได้',
+  not_filler_of_department: 'คุณไม่ได้เป็นผู้กรอกงบของฝ่ายนี้ จึงส่งขออนุมัติแทนไม่ได้',
+  year_not_open: YEAR_NOT_OPEN_ADD_REASON_TH,
+  past_deadline: PAST_DEADLINE_MESSAGE_TH,
+  invalid_approval_state: REOPEN_BLOCKED_REASON_TH,
 }
 
 export function submitBlockedReasonLabel(reason: string | null): string | null {
   if (!reason) return null
   return SUBMIT_BLOCKED_REASON[reason] ?? null
+}
+
+/** Issue #32 item 4: the approval router now sends a stable CODE for
+ * `notification_warning` (`notify_failed`) instead of English prose — this
+ * is the ONE place that owns the Thai sentence for it. An unrecognised
+ * value (e.g. an older container still sending the old English sentence
+ * itself, or a future code this frontend build predates) passes through
+ * UNCHANGED — degrading to whatever the server sent rather than a blank,
+ * so mixed old-backend/new-frontend deploys still show something. */
+const NOTIFICATION_WARNING_LABEL: Record<string, string> = {
+  notify_failed: 'บันทึกผลการอนุมัติเรียบร้อยแล้ว แต่ระบบส่งอีเมลแจ้งเตือนไม่สำเร็จ',
+}
+
+export function notificationWarningLabel(code: string): string {
+  return NOTIFICATION_WARNING_LABEL[code] ?? code
 }
 
 /** Confirm-dialog text for Submit — a deliberate-act guard, not a data

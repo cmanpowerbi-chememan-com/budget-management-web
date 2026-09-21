@@ -716,6 +716,113 @@ export function lockReasonTooltipTh(row: Pick<BudgetRow, 'lock_reason' | 'depart
   }
 }
 
+/** Issue #32: shown when the caller has no Fill Cost Center in this ฝ่าย at
+ * all — the lowest-precedence reason in `addTransactionBlockedReasonTh`
+ * below, since every other reason there is a more fundamental block than a
+ * plain scope mismatch.
+ *
+ * MED gate finding (2026-09-21), renamed from `seeOnlyAddReasonTh`: the old
+ * "คุณมีสิทธิ์ดูอย่างเดียว" (you have view-only rights) wording is FALSE for
+ * two real callers — a dual-role admin (e.g. nipapornt@/warapornt@) viewing
+ * a foreign ฝ่าย with admin mode ON is an admin, not a view-only user; their
+ * OWN personal Fill scope just doesn't cover this ฝ่าย (admin mode never
+ * widens `fillCostCentersOfSelectedDept`, see `BudgetGrid`'s `fillCostCenters`
+ * memo). And a ฝ่าย simply missing from `cc dept.xlsx` sent that reader to
+ * IT about their own permissions, when the real fix is an admin adding the
+ * mapping. Worded in COST CENTRE terms instead — true for all three cases,
+ * since it never asserts anything about who the caller is, only that this
+ * ฝ่าย has no Cost Center they can currently fill. */
+export function noFillCostCentersAddReasonTh(department: string): string {
+  return `ฝ่าย "${department}" ไม่มี Cost Center ที่คุณกรอกงบได้ จึงไม่สามารถเพิ่มรายการงบประมาณในฝ่ายนี้ได้`
+}
+
+export interface AddTransactionBlockedInput {
+  /** A year-wide lock outranks every other reason below — see
+   * `YEAR_NOT_OPEN_ADD_REASON_TH`'s own doc. */
+  yearNotOpen: boolean
+  departmentUnknown: boolean
+  lockStatusUnavailable: boolean
+  departmentLocked: boolean
+  /** The ฝ่าย on screen, when known. `departmentLocked` falls back to
+   * `'ฝ่ายนี้'` when this is `null` (same as `lockReasonTooltipTh` above).
+   * `!hasFillCostCenters` does NOT fall back — see that field's own doc. */
+  department?: string | null
+  /** `false` when the caller has NO Fill Cost Center in `department` at all
+   * (issue #32, PRD user story 3). Checked LAST: it is the least urgent of
+   * the five reasons, since a caller already blocked by one of the four
+   * above gets that more specific explanation instead.
+   *
+   * HIGH gate finding (2026-09-21): this branch REQUIRES a resolved
+   * `department` — before `GET /scope/departments` resolves, `department`
+   * is still `null` and `departmentUnknown` is deliberately still `false`
+   * (it only flips once `deptResolved` does), so reading this flag alone
+   * during that ~2-3s window mislabeled every caller as view-only for the
+   * whole app's first paint. `addTransactionBlockedReasonTh` below only
+   * acts on this flag once `department` is known — `departmentUnknown`
+   * already owns the "not resolved yet" state. */
+  hasFillCostCenters: boolean
+}
+
+/** THE ONE precedence chain deciding whether "+ เพิ่ม Transaction" may be
+ * clicked and, if not, why in Thai — shared by `AddTransactionForm` (renders
+ * the button + the reason beside it) and `BudgetGrid`'s call into
+ * `emptyGridMessage` (issue #32) so the two surfaces can never disagree
+ * about the same state. `null` = nothing blocks the click.
+ *
+ * The last branch (`!hasFillCostCenters`) only fires once `input.department`
+ * is a RESOLVED, known ฝ่าย — see that field's own doc for the mount-window
+ * bug this guards against. A `null`/unknown department with every flag
+ * false (the pre-resolve window) falls through to `null` here, same as
+ * "nothing blocks the click yet" — not a false See-only claim. */
+export function addTransactionBlockedReasonTh(input: AddTransactionBlockedInput): string | null {
+  if (input.yearNotOpen) return YEAR_NOT_OPEN_ADD_REASON_TH
+  if (input.departmentUnknown) return DEPARTMENT_UNKNOWN_ADD_REASON_TH
+  if (input.lockStatusUnavailable) return LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH
+  if (input.departmentLocked) return lockedAddReasonTh(input.department ?? 'ฝ่ายนี้')
+  if (!input.hasFillCostCenters && input.department) return noFillCostCentersAddReasonTh(input.department)
+  return null
+}
+
+/** Issue #32 item 1: hint shown on the empty grid when the caller MAY add a
+ * transaction — points at the button by its exact on-screen label so the
+ * two never drift apart. */
+const ADD_TRANSACTION_HINT_TH = 'กดปุ่ม "+ เพิ่ม Transaction" ด้านบนเพื่อเริ่มกรอกงบประมาณปีนี้'
+
+export interface EmptyGridMessageInput {
+  fiscalYear: number
+  /** Read for signature completeness / future callers only — the title
+   * below deliberately stays generic ("ฝ่ายนี้", per the approved copy) since
+   * the ฝ่าย picker already names the department elsewhere on the toolbar;
+   * a locked/see-only `hint` still names it, via `addBlockedReasonTh`. */
+  department: string | null
+  /** Whether the caller may click "+ เพิ่ม Transaction" right now — pass
+   * `addTransactionBlockedReasonTh(...) === null`, the SAME precedence the
+   * Add button itself uses, so this can never disagree with it. */
+  canAddTransaction: boolean
+  /** The Add button's own (already-resolved) blocked reason — required only
+   * when `canAddTransaction` is false; ignored otherwise. */
+  addBlockedReasonTh: string | null
+}
+
+export interface EmptyGridMessage {
+  title: string
+  hint?: string
+}
+
+/** PRD #32 item 1: the first screen almost every ฝ่าย sees for a new fiscal
+ * year is an empty grid — this names the real situation instead of the old
+ * hardcoded "no rows match this filter" (nobody applied one). Total: every
+ * input combination returns a `title`; `hint` appears only when there is a
+ * next step the caller can actually take — the Add-button call to action
+ * when they may use it, or the exact SAME Thai reason the (disabled) Add
+ * button already shows when they may not, so the two surfaces can never
+ * disagree. */
+export function emptyGridMessage(input: EmptyGridMessageInput): EmptyGridMessage {
+  const title = `ฝ่ายนี้ยังไม่มีรายการงบประมาณปี ${input.fiscalYear}`
+  if (input.canAddTransaction) return { title, hint: ADD_TRANSACTION_HINT_TH }
+  return input.addBlockedReasonTh ? { title, hint: input.addBlockedReasonTh } : { title }
+}
+
 /** Issue #13, decision E: the ONE point through which a row enters `rows`
  * state — `BudgetGrid.loadGrid`'s full replace AND `handleAddTransaction`'s
  * single-row append both pass through this, so a future "add a row" path

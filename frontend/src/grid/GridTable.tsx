@@ -44,9 +44,16 @@ import {
   type ColumnFilters,
   type ColumnWidthKey,
   type ColumnWidths,
+  type EmptyGridMessage,
   type MonthKey,
   type MoneyColumnWidths,
 } from './model'
+
+/** Default for the `emptyState` prop (issue #32) — keeps every presentational
+ * test render that omits the prop passing, and the substring `/ไม่มีรายการ/`
+ * a few of them already assert on. `BudgetGrid` (the only real caller) always
+ * resolves the actual `emptyGridMessage(...)` result instead. */
+const DEFAULT_EMPTY_GRID_MESSAGE: EmptyGridMessage = { title: 'ไม่มีรายการ' }
 
 export interface RowMessage {
   kind: 'error' | 'saving' | 'saved'
@@ -86,6 +93,12 @@ export interface GridTableProps {
   isFullscreen?: boolean
   /** Flip fullscreen. Undefined in isolated/unit renders → button is a no-op. */
   onToggleFullscreen?: () => void
+  /** Issue #32 item 1: resolved by `BudgetGrid.emptyGridMessage(...)` from
+   * the fiscal year, ฝ่าย and Add-eligibility it already holds — GridTable
+   * itself learns none of that, it only renders the result. Defaults to a
+   * generic message so a presentational test render that omits this prop
+   * still shows something. */
+  emptyState?: EmptyGridMessage
 }
 
 const SIDE_LABEL: Record<'COST' | 'SGA', string> = {
@@ -781,6 +794,7 @@ export function GridTable({
   onDeleteRow,
   isFullscreen = false,
   onToggleFullscreen,
+  emptyState = DEFAULT_EMPTY_GRID_MESSAGE,
 }: GridTableProps) {
   // Shared per-column filter state (UI-parity point 8b) — held LOCALLY here
   // (not lifted to BudgetGrid) since both side-tables live inside this one
@@ -1071,9 +1085,16 @@ export function GridTable({
 
   // Unfiltered emptiness is unrelated to the filter feature (no data at all
   // for this scope/year) — keep the original plain empty state, no headers,
-  // nothing to filter.
+  // nothing to filter. Issue #32 item 1: the copy itself is resolved by the
+  // caller (`emptyState`) so it can name the real reason instead of a filter
+  // nobody applied.
   if (rows.length === 0) {
-    return <div className="grid-empty">ไม่มีรายการที่ตรงกับตัวกรองนี้</div>
+    return (
+      <div className="grid-empty">
+        <p className="grid-empty-title">{emptyState.title}</p>
+        {emptyState.hint && <p className="grid-empty-hint">{emptyState.hint}</p>}
+      </div>
+    )
   }
 
   // Filter BEFORE grouping so both side-tables and their subtotals reflect

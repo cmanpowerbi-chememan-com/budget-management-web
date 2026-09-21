@@ -1,9 +1,6 @@
 import { useState } from 'react'
 import type { BudgetRow, DepartmentRow, GlAccount } from '../api/types'
-import {
-  DEPARTMENT_UNKNOWN_ADD_REASON_TH, LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH,
-  YEAR_NOT_OPEN_ADD_REASON_TH, isGlPickableForCostCenter, lockedAddReasonTh, validateNewTransaction,
-} from './model'
+import { addTransactionBlockedReasonTh, isGlPickableForCostCenter, validateNewTransaction } from './model'
 
 export interface AddResult {
   ok: boolean
@@ -11,6 +8,10 @@ export interface AddResult {
 }
 
 export interface AddTransactionFormProps {
+  /** Issue #32 (2026-09-21): an EMPTY array (the caller has no Fill Cost
+   * Center in the ฝ่าย on screen at all) now disables the button too, with
+   * its own Thai reason (`noFillCostCentersAddReasonTh`) — was previously
+   * left enabled with nothing pickable, a dead-end open form. */
   fillCostCenters: string[]
   glRef: GlAccount[]
   existingRows: BudgetRow[]
@@ -168,20 +169,16 @@ export function AddTransactionForm({
   // jakkaritw's decision (2026-08-08, reaffirmed 2026-09-17 issue #13): the
   // button stays VISIBLE (never hidden silently) but non-actionable, with
   // the Thai reason shown right beside it — same "say why on screen" tone as
-  // the subform's own 🔒 ดูรายละเอียด lock affordance. Precedence: a
-  // year-wide lock outranks everything; not knowing the ฝ่าย at all outranks
-  // not knowing whether it's locked (which in turn outranks knowing it IS
-  // locked) — each state is strictly less informative than the next.
-  const disabled = yearNotOpen || departmentUnknown || lockStatusUnavailable || departmentLocked
-  const disabledReason = yearNotOpen
-    ? YEAR_NOT_OPEN_ADD_REASON_TH
-    : departmentUnknown
-      ? DEPARTMENT_UNKNOWN_ADD_REASON_TH
-      : lockStatusUnavailable
-        ? LOCK_STATUS_UNAVAILABLE_ADD_REASON_TH
-        : departmentLocked
-          ? lockedAddReasonTh(selectedDepartment ?? 'ฝ่ายนี้')
-          : null
+  // the subform's own 🔒 ดูรายละเอียด lock affordance. Precedence (issue #32
+  // extended this with a 5th, lowest-priority reason — see
+  // `addTransactionBlockedReasonTh`'s own doc in model.ts, the ONE place
+  // this chain is defined, shared with the empty-grid message so the two
+  // surfaces can never disagree about the same state).
+  const disabledReason = addTransactionBlockedReasonTh({
+    yearNotOpen, departmentUnknown, lockStatusUnavailable, departmentLocked,
+    department: selectedDepartment, hasFillCostCenters: fillCostCenters.length > 0,
+  })
+  const disabled = disabledReason !== null
 
   if (!open) {
     return (

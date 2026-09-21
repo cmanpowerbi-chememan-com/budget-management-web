@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { PAST_DEADLINE_MESSAGE_TH } from '../api/client'
 import type { DepartmentRow } from '../api/types'
+import { YEAR_NOT_OPEN_ADD_REASON_TH } from '../grid/model'
 import {
   buildOverrideConfirmText,
   buildSubmitConfirmText,
@@ -146,17 +148,17 @@ describe('canSubmit', () => {
   })
 })
 
-describe('submitBlockedReasonLabel', () => {
+describe('submitBlockedReasonLabel (issue #32 item 2 — Thai copy)', () => {
   it('returns null when there is no blocked reason', () => {
     expect(submitBlockedReasonLabel(null)).toBeNull()
   })
 
   it("explains shape (a)'s admin_cannot_submit_in_cycle reason", () => {
-    expect(submitBlockedReasonLabel('admin_cannot_submit_in_cycle')).toContain('normal approval cycle')
+    expect(submitBlockedReasonLabel('admin_cannot_submit_in_cycle')).toContain('รอบอนุมัติปกติ')
   })
 
   it('explains department_empty, for a department with no budget data yet', () => {
-    expect(submitBlockedReasonLabel('department_empty')).toBe('This department has no budget data yet, so it cannot be submitted.')
+    expect(submitBlockedReasonLabel('department_empty')).toBe('ฝ่ายนี้ยังไม่มีข้อมูลงบประมาณ จึงยังส่งขออนุมัติไม่ได้')
   })
 
   it('returns null for an unmapped/unknown reason code (never shows a raw machine code)', () => {
@@ -167,16 +169,20 @@ describe('submitBlockedReasonLabel', () => {
   // these 3 reasons are the filler-reachable ones confirmed against
   // `evaluate_submit_eligibility` in backend/app/approval.py (department_empty
   // was already covered above, since it fires for every caller).
-  it('explains year_not_open, saying the year has not opened yet', () => {
-    expect(submitBlockedReasonLabel('year_not_open')).toContain('not open')
+  it('explains year_not_open, reusing the SAME Thai sentence as the grid\'s Add-button reason', () => {
+    expect(submitBlockedReasonLabel('year_not_open')).toBe(YEAR_NOT_OPEN_ADD_REASON_TH)
   })
 
-  it('explains past_deadline, saying the deadline has already passed', () => {
-    expect(submitBlockedReasonLabel('past_deadline')).toContain('has passed')
+  it('explains past_deadline, reusing the SAME Thai sentence as the API client\'s 403 mapping', () => {
+    expect(submitBlockedReasonLabel('past_deadline')).toBe(PAST_DEADLINE_MESSAGE_TH)
   })
 
   it('explains invalid_approval_state (already mid-chain or approved)', () => {
-    expect(submitBlockedReasonLabel('invalid_approval_state')).toContain('cannot be submitted again')
+    expect(submitBlockedReasonLabel('invalid_approval_state')).toContain('ซ้ำไม่ได้')
+  })
+
+  it('mid_chain_admin_overwrite and invalid_approval_state share the exact same Thai sentence (their English copy already did)', () => {
+    expect(submitBlockedReasonLabel('mid_chain_admin_overwrite')).toBe(submitBlockedReasonLabel('invalid_approval_state'))
   })
 
   it('explains not_filler_of_department without assuming the reader is an admin (evaluate_submit_eligibility only returns this reason when scope.is_admin is False -- an actual admin never sees it)', () => {

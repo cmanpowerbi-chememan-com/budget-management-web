@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BudgetRow } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
@@ -832,10 +832,33 @@ describe('BudgetGrid', () => {
 
       const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
       await waitFor(() => expect(trigger).toBeDisabled())
-      // The reason names the LOCKED ฝ่าย on screen — one text node combining
-      // both, so this uniquely targets the disabled-reason span (not the
-      // dept-picker trigger, which also just says "Solution Delivery" alone).
-      expect(screen.getByText(/Solution Delivery.*อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/)).toBeInTheDocument()
+      // Scoped to the Add trigger itself (`within`) — issue #32's empty-grid
+      // hint can show this SAME reason too once its own (separately-timed)
+      // rows fetch settles, which would make an unscoped query flaky.
+      expect(
+        within(trigger.closest('.add-txn-trigger') as HTMLElement)
+          .getByText(/Solution Delivery.*อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/),
+      ).toBeInTheDocument()
+    })
+
+    // Issue #32 item 1: the empty grid (0 rows) must show the exact SAME
+    // Thai reason as the Add button beside it — `waitFor` covers BOTH the
+    // Add button's disabled state AND the grid's own (separately-timed)
+    // rows fetch settling to empty, so this never races like an unscoped
+    // single assertion would.
+    it('the empty grid shows the SAME Thai reason as the disabled Add button — the two can never disagree', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'], year_not_open: false })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: null }} />)
+
+      const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+      await waitFor(() => expect(trigger).toBeDisabled())
+      await waitFor(() => {
+        expect(screen.getAllByText(/Solution Delivery.*อยู่ระหว่างอนุมัติหรืออนุมัติแล้ว/)).toHaveLength(2)
+      })
     })
 
     // 2026-08-08 3-state extension: a YEAR-wide lock (from the SAME
@@ -851,7 +874,13 @@ describe('BudgetGrid', () => {
 
       const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
       await waitFor(() => expect(trigger).toBeDisabled())
-      expect(screen.getByText(/ไม่เปิดให้กรอกในเว็บ/)).toBeInTheDocument()
+      // Scoped to the Add trigger (`within`) — issue #32's empty-grid hint
+      // can show this SAME reason too once its own (separately-timed) rows
+      // fetch resolves, which would otherwise make an unscoped query flaky
+      // (1 match while the grid is still loading, 2 once it settles empty).
+      expect(
+        within(trigger.closest('.add-txn-trigger') as HTMLElement).getByText(/ไม่เปิดให้กรอกในเว็บ/),
+      ).toBeInTheDocument()
     })
 
     it('the department is open (DRAFT, nothing locked) — unchanged: Add button works and the new row renders editable (derived, not hardcoded)', async () => {
@@ -1260,7 +1289,12 @@ describe('BudgetGrid', () => {
 
       const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
       await waitFor(() => expect(trigger).toBeDisabled())
-      expect(screen.getByText(/ยังไม่ทราบฝ่าย/)).toBeInTheDocument()
+      // Scoped to the Add trigger itself (`within`) — issue #32's empty-grid
+      // hint can show this SAME reason too once its own (separately-timed)
+      // rows fetch settles, which would make an unscoped query flaky.
+      expect(
+        within(trigger.closest('.add-txn-trigger') as HTMLElement).getByText(/ยังไม่ทราบฝ่าย/),
+      ).toBeInTheDocument()
     })
 
     it('an admin gets the GL on a cost center outside the allowed list', async () => {
@@ -1660,6 +1694,50 @@ describe('BudgetGrid', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Alpha Dept' })).toBeInTheDocument())
   })
 
+  // HIGH+MED gate findings (2026-09-21, issue #32 follow-up): a dual-role
+  // admin's OWN personal Fill scope does not widen just because admin mode
+  // is ON (`fillCostCentersOfSelectedDept` reads `scope.fillCostCenters`,
+  // never the admin-wide department list — see `BudgetGrid`'s `fillCostCenters`
+  // memo) — the Add button stays correctly disabled when they browse a
+  // foreign ฝ่าย. What was WRONG was the reason text claiming they have
+  // "view-only rights", which is false for an admin. Asserts the button is
+  // still disabled AND the reason is the new Cost Center wording, never a
+  // rights claim.
+  it('a dual-role admin with admin mode ON, viewing a ฝ่าย outside their personal fill scope, gets a disabled Add button with the Cost Center reason (not a rights claim)', async () => {
+    const DUAL_ROLE_ADMIN: ScopeState = {
+      role: 'admin', isAdmin: true, fillCostCenters: ['CC1'], seeCostCenters: ['CC1'], email: 'admin@chememan.com', loading: false, error: null,
+    }
+    const TWO_DEPTS = [
+      { cost_center: 'CC1', department: 'Solution Delivery', division: 'Digital Technology Division', c_level: 'CTO' },
+      { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+    ]
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(TWO_DEPTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={DUAL_ROLE_ADMIN} initialFilter={{ dept: null, year: null }} />)
+
+    const toggle = await screen.findByTestId('admin-mode-checkbox')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+    fireEvent.click(toggle) // admin mode ON
+
+    // Toggling admin mode re-auto-selects the first ฝ่าย once its own
+    // refetch settles (see the "re-auto-selects" test above) — switching
+    // department BEFORE that settles races the auto-select effect, which
+    // would silently overwrite the manual pick back to "Solution Delivery".
+    await waitFor(() => expect(budgetApi.fetchDepartments).toHaveBeenLastCalledWith(true))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solution Delivery' })).toBeInTheDocument())
+
+    switchDepartment('Warehouse') // outside this admin's own fillCostCenters (CC1)
+
+    const trigger = await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+    await waitFor(() => expect(trigger).toBeDisabled())
+    const reason = within(trigger.closest('.add-txn-trigger') as HTMLElement).getByText(/Warehouse/)
+    expect(reason.textContent).toContain('Cost Center')
+    expect(reason.textContent).not.toContain('สิทธิ์')
+    expect(reason.textContent).not.toContain('ดูอย่างเดียว')
+  })
+
   it('shows the status legend with SAP/Approved at year-1 and Pending at the selected year (they disambiguate the prior-year baseline)', async () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
@@ -1675,7 +1753,7 @@ describe('BudgetGrid', () => {
     expect(items[2]).toHaveTextContent('Pending · งบรออนุมัติ (2027)')
   })
 
-  it('spells out the 100-rounding rule under the legend (fillers must not be surprised by the silent round on commit)', async () => {
+  it('spells out the 100-rounding rule (fillers must not be surprised by the silent round on commit)', async () => {
     vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
     vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
     vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
@@ -1686,6 +1764,23 @@ describe('BudgetGrid', () => {
     expect(note.textContent?.replace(/\s+/g, ' ')).toBe(
       'หมายเหตุ: กรอกได้ตั้งแต่ 100 ขึ้นไป โดยระบบจะปรับตัวเลข 2 หลักสุดท้ายเป็น 00 โดยอัตโนมัติ',
     )
+  })
+
+  // jakkaritw 2026-09-21 (issue #32): the note moved out of .legend-block
+  // (which used to right-align it alongside the legend chips) to become its
+  // own row directly inside .grid-toolbar, so it can sit at the toolbar's
+  // own left corner instead of trailing the legend on the right.
+  it('sits directly in .grid-toolbar, not inside .legend-block, so it can render at the toolbar\'s left corner', async () => {
+    vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+    vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+    render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+    const note = await screen.findByTestId('pending-rounding-note')
+    expect(note.closest('.legend-block')).toBeNull()
+    expect(note.closest('.grid-toolbar')).not.toBeNull()
+    expect(note.parentElement).toHaveClass('grid-toolbar')
   })
 
   it('a non-admin, non-dual-role user never sees the admin-mode toggle', async () => {

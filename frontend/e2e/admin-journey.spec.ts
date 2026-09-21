@@ -132,7 +132,8 @@ test.describe('admin journey', () => {
     await expect(page.getByTestId('approval-status-chip')).toBeVisible()
 
     await expect(page.getByTestId('approval-submit-btn')).toHaveCount(0)
-    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('normal approval cycle')
+    // Issue #32 item 2: SUBMIT_BLOCKED_REASON's copy is Thai now.
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('รอบอนุมัติปกติ')
   })
 
   test('3.5 the SAME blocked admin/department sees Submit once the server allows it -- proves the button tracks the server verdict, not a client-side guess', async ({ page }) => {

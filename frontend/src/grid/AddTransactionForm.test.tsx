@@ -293,6 +293,33 @@ describe('AddTransactionForm', () => {
       expect(trigger).toBeDisabled()
       expect(screen.getByText(/ไม่สามารถตรวจสอบสถานะฝ่าย/)).toBeInTheDocument()
     })
+
+    // Issue #32 (2026-09-21): a real ฝ่าย on screen, the lock status known
+    // and open, but NO Fill Cost Center in it at all (empty fillCostCenters
+    // is not the departmentUnknown case, which needs the ฝ่าย itself to be
+    // unresolved). Previously the button stayed enabled with nothing
+    // pickable — a dead-end open form. MED gate finding (2026-09-21): the
+    // reason is worded in Cost Center terms, never a claim about the
+    // caller's role — see `noFillCostCentersAddReasonTh`'s own doc (it used
+    // to say "คุณมีสิทธิ์ดูอย่างเดียว", false for a dual-role admin viewing a
+    // foreign ฝ่าย).
+    it('no Fill Cost Center in the ฝ่าย on screen — disabled, naming the ฝ่าย in Cost Center terms', () => {
+      render(
+        <AddTransactionForm
+          fillCostCenters={[]}
+          glRef={GL_REF}
+          existingRows={[]}
+          onAdd={vi.fn()}
+          selectedDepartment="Accounting"
+        />,
+      )
+      const trigger = screen.getByRole('button', { name: /เพิ่ม transaction/i })
+      expect(trigger).toBeDisabled()
+      expect(screen.getByText(/Accounting/)).toBeInTheDocument()
+      expect(screen.getByText(/Cost Center/)).toBeInTheDocument()
+      expect(screen.queryByText(/ดูอย่างเดียว/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/สิทธิ์/)).not.toBeInTheDocument()
+    })
   })
 
   // 2026-08-08 3-state extension: a YEAR-wide lock (every department, not

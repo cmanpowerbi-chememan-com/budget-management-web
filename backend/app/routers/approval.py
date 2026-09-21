@@ -138,7 +138,7 @@ def _notify_after_transition(
                     )
                     override_send_failed = True
             if override_send_failed:
-                state.notification_warning = "The email notification failed, but your action was saved."
+                state.notification_warning = "notify_failed"
         elif state.current_position is not None:  # submit/approve landed on a PENDING_* step
             notifications.notify_turn(
                 conn, department=state.department, fiscal_year=state.fiscal_year,
@@ -147,7 +147,7 @@ def _notify_after_transition(
             )
     except Exception as exc:  # noqa: BLE001 -- deliberate: a notify failure must never fail the action
         logger.error("notification failed after %s for %s/%s: %s", action, state.department, state.fiscal_year, exc)
-        state.notification_warning = "The email notification failed, but your action was saved."
+        state.notification_warning = "notify_failed"
 
 
 class DepartmentYearBody(BaseModel):

@@ -770,36 +770,36 @@ select:focus-visible {
    Sizes are the mockup's scaled +40% (11.5->16px text, 8->11px dot, gaps
    14/6->20/8px) at jakkaritw's request 2026-08-04 — the strip was too small
    to read on the floor; deliberate divergence from 0002.3, not drift. */
-/* Legend + the rounding note stack as one right-hand block so the note sits
-   under the chips instead of taking a toolbar slot of its own. The block's
-   own position (right-hand side of the toolbar) is unchanged; only the
-   cross-axis alignment of its two children changes below. */
+/* .legend-block wraps ONLY the status chips now (jakkaritw 2026-09-21,
+   issue #32: .legend-note moved OUT — see its own rule below — to become
+   its own full-width row at the toolbar's LEFT edge, instead of trailing
+   the chips on the right as part of this block). */
 .legend-block {
   display: flex;
   flex-direction: column;
-  /* stretch (jakkaritw 2026-09-18): both children span the block's full
-     width so .legend-note can left-align under the first chip; .legend
-     keeps its old flush-right look via justify-content below (chips do
-     not move — verified via bounding-box measurement, chip row is the
-     wider child so stretching it to block width is a no-op). */
-  align-items: stretch;
   gap: 6px;
 }
 .legend-note {
   margin: 0;
   /* One clear blank line above the note (jakkaritw, post-review: the
      prototype capture has a visible gap here; the app pressed it straight
-     against the legend chips). `.legend-block`'s own flex `gap: 6px`
-     already contributes some of that space. The first attempt, 12px, was
-     measured on staging and still read as too tight, not a blank row
-     (jakkaritw); raised to 24px, which together with the block's 6px gap
-     lands at ~30px — about 1.7x the note's own line-height (12.5px * 1.4 =
-     17.5px) — so an empty row is now unmistakable, not just loose spacing.
-     Markup/text untouched, CSS only. */
+     against the row above). `.grid-toolbar`'s own flex `gap: 12px`
+     (between wrapped rows) already contributes some of that space. The
+     first attempt, 12px, was measured on staging and still read as too
+     tight, not a blank row (jakkaritw); raised to 24px — so an empty row
+     is now unmistakable, not just loose spacing. Markup/text untouched,
+     CSS only. */
   margin-top: 24px;
-  /* No left padding (jakkaritw, staging review 2026-09-19): the note should
-     sit flush in the toolbar's left corner, and this rule's own 6px left
-     inset was the only thing holding it off that edge. */
+  /* jakkaritw 2026-09-21: lifted OUT of .legend-block into .grid-toolbar
+     directly (was the LAST child of .legend-block, right-aligned as part
+     of that block) — `flex-basis: 100%` forces it onto its own row inside
+     .grid-toolbar's `flex-wrap: wrap`, and `order` pins that row last
+     regardless of DOM position, so it never displaces the year/ฝ่าย
+     pickers, Add, แนบไฟล์ or the admin toggle before it. No left padding:
+     .grid-toolbar's own 14px/16px padding already puts the note flush at
+     the toolbar's left corner — the goal jakkaritw asked for. */
+  flex-basis: 100%;
+  order: 1;
   padding: 0 6px 0 0;
   font-size: 12.5px;
   line-height: 1.4;
@@ -820,9 +820,11 @@ select:focus-visible {
 .legend {
   display: flex;
   align-items: center;
-  /* flex-end (jakkaritw 2026-09-18): .legend-block now stretches this row
-     to the block's full width so .legend-note can left-align; this keeps
-     the chips themselves flush right at their old position, unmoved. */
+  /* flex-end: kept unmoved (jakkaritw 2026-09-18 originally added this so
+     .legend stayed flush-right while .legend-block stretched wider for
+     .legend-note's sake — that stretching is gone now that .legend-note
+     lives outside this block, issue #32, so this has no visible effect
+     today; left as-is, unrelated to the 2026-09-21 change). */
   justify-content: flex-end;
   gap: 20px;
   padding: 0 6px;
@@ -1162,6 +1164,18 @@ select:focus-visible {
   background: var(--surface);
   border: 1px dashed var(--line);
   border-radius: var(--r);
+}
+/* Issue #32 item 1: the empty grid now names the real situation (title) and,
+   when there is one, the caller's actual next step (hint) — 2 lines instead
+   of 1. Reset the browser default <p> margins to the block's own 6px gap;
+   the hint reuses the block's own --ink-3 (no new colour token) at a smaller
+   size so it reads as secondary to the title. */
+.grid-empty-title {
+  margin: 0;
+}
+.grid-empty-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
 }
 /* No-scope empty state (059ebe0 shipped the markup hooks without CSS while
    this file was in flight in a parallel session — handoff §3): tighten the
@@ -2969,6 +2983,37 @@ th.total-year-col {
   border-radius: var(--r-chip);
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--line-on-shell);
+}
+/* Issue #32 item 4: a SUCCESSFUL action whose notification mail failed —
+   the action was saved, so this must not compete with a real failure
+   (user story 18). Deliberately LIGHTER than .act-status-error above: no
+   dark plate, no bold — colour alone (yellow vs red) is not a safe cue for
+   a colour-blind reader either, same GATE finding 1 principle that shaped
+   the error rule, so weight/background carry the rest of the distinction.
+   HIGH gate finding (2026-09-21): this used to reuse --tc-sap-freshness-warn
+   (CI yellow #fdcb35) with a comment claiming it was "already proven
+   readable on THIS exact dark gradient" — true of .sap-freshness-warn
+   (which paints on .grid-toolbar's dark gradient) but NOT of this rule,
+   which paints on .approval-bar — no card, no gradient, sitting directly on
+   the plain --paper page shell (#f5f7fa, see the shared .act-status comment
+   above). Measured there: 1.42:1, effectively invisible against a 4.5:1
+   floor. --status-pending (#a24a0e) is the project's warning-toned status
+   ink (Laddawan's palette) and clears 5.56:1 on --paper — this IS a status
+   message, so it is the more accurate token besides. No border: a matching
+   1px var(--line-on-shell) border on --paper was already a recorded
+   near-invisible violation on the sibling .act-status-error rule
+   (contrast-baseline.json, ~1.18:1) — this rule stays borderless instead of
+   shipping a second one; the notice already reads as visually distinct from
+   the error (no dark plate, normal weight vs error's bold+plate), so
+   dropping the border loses no distinguishing cue. */
+.act-status-notice {
+  color: var(--status-pending);
+}
+.approval-bar .act-status-notice {
+  display: inline-block;
+  color: var(--status-pending);
+  padding: 3px 10px;
+  border-radius: var(--r-chip);
 }
 .status-chip {
   font-family: var(--mono);

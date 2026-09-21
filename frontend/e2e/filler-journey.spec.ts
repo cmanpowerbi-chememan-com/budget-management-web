@@ -398,7 +398,9 @@ test.describe('filler journey', () => {
 
     await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
 
-    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('not open for submission yet')
+    // Issue #32 item 2: SUBMIT_BLOCKED_REASON's copy is Thai now -- reuses
+    // the SAME sentence as the grid's Add-button year-wide-lock reason.
+    await expect(page.getByTestId('approval-submit-blocked-hint')).toContainText('ไม่เปิดให้กรอกในเว็บ')
     await expect(page.getByTestId('approval-submit-btn')).not.toBeVisible()
   })
 })

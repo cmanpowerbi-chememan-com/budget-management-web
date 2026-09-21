@@ -8,6 +8,7 @@ import {
   buildSubmitConfirmText,
   canSubmit,
   isEditLocked,
+  notificationWarningLabel,
   REJECT_REASON_MAX_LEN,
   statusChipLabel,
   submitBlockedReasonLabel,
@@ -58,6 +59,14 @@ export function ApprovalActionBar({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  /** Issue #32 item 4: a SUCCESSFUL action that still carries
+   * `notification_warning` (the approval saved, the mail did not go out) —
+   * kept separate from `actionMessage` (a THROWN error) so the two can
+   * render with different treatments: `act-status-error`/`role="alert"` for
+   * a real failure, a quieter notice/`role="status"` for this partial
+   * success. Never both non-null at once — `runAction` clears both at the
+   * start of every call. */
+  const [actionNotice, setActionNotice] = useState<string | null>(null)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
 
@@ -89,6 +98,7 @@ export function ApprovalActionBar({
   useEffect(() => {
     setStatus(null)
     setActionMessage(null)
+    setActionNotice(null)
     setRejecting(false)
     setReason('')
     load()
@@ -127,9 +137,12 @@ export function ApprovalActionBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataVersion])
 
+  // Issue #32 item 3: the 409 special case is DELETED — `ApiError.message`
+  // already carries the shared Thai sentence for a 409 (`messageForStatus`,
+  // api/client.ts), so this now falls through to the same fallback every
+  // other status already uses instead of a second, English-only phrasing.
   function describeApiError(err: unknown, fallback: string): string {
     if (err instanceof ApiError) {
-      if (err.status === 409) return 'Someone else changed this status. Reload the page and try again.'
       return `${err.message}${err.detail ? ` (${err.detail})` : ''}`
     }
     return fallback
@@ -153,10 +166,14 @@ export function ApprovalActionBar({
   ) {
     setActionBusy(true)
     setActionMessage(null)
+    setActionNotice(null)
     try {
       const result = await action()
       setStatus(result)
-      if (result.notification_warning) setActionMessage(result.notification_warning)
+      // Issue #32 item 4: a successful action that still carries
+      // `notification_warning` is a PARTIAL success (saved, mail failed) —
+      // renders as a notice, never the error treatment below.
+      if (result.notification_warning) setActionNotice(notificationWarningLabel(result.notification_warning))
       onChanged()
     } catch (err) {
       setActionMessage(describeError(err, fallbackError))
@@ -287,6 +304,17 @@ export function ApprovalActionBar({
         {actionMessage && (
           <span className="act-status act-status-error" role="alert" data-testid="approval-action-message">
             {actionMessage}
+          </span>
+        )}
+        {/* Issue #32 item 4: a SUCCESSFUL action (approve/reject/submit
+         * committed) whose email notification failed — `role="status"`, not
+         * "alert": it is a partial success, not a failure, so a screen
+         * reader should announce it calmly rather than urgently (user
+         * story 19). Never renders alongside `actionMessage` above — see
+         * `runAction`, which always clears the other on every call. */}
+        {actionNotice && (
+          <span className="act-status act-status-notice" role="status" data-testid="approval-action-notice">
+            {actionNotice}
           </span>
         )}
       </div>

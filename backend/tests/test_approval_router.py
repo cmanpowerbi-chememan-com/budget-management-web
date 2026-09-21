@@ -640,7 +640,9 @@ def test_submit_success_notifies_the_new_current_approver(client):
 
 def test_submit_notification_failure_never_fails_the_request(client):
     """Never-cut: a notify_turn exception must not roll back or fail the
-    already-committed transition -- 200 with a non-fatal warning field."""
+    already-committed transition -- 200 with a non-fatal warning field.
+    Issue #32 item 4: the field carries a stable CODE, not English prose --
+    the frontend owns the Thai copy for it."""
     _override_auth("filler@chememan.com")
     state = _fake_state(status=PENDING_APPROVER1, current_position=1, current_approver_empcode="200")
     with patch("app.routers.approval.get_fabric_conn") as mock_conn, patch(
@@ -654,7 +656,7 @@ def test_submit_notification_failure_never_fails_the_request(client):
         response = client.post("/approval/submit", json={"department": DEPT, "fiscal_year": FY})
 
     assert response.status_code == 200
-    assert response.json()["notification_warning"] is not None
+    assert response.json()["notification_warning"] == "notify_failed"
 
 
 def test_approve_notifies_next_approver_when_still_pending(client):
@@ -724,7 +726,8 @@ def test_approve_mid_chain_still_notifies_turn_not_approved(client):
 
 def test_approve_final_step_notification_failure_never_fails_the_request(client):
     """Never-cut: a notify_approved exception must not roll back or fail the
-    already-committed transition -- 200 with a non-fatal warning field."""
+    already-committed transition -- 200 with a non-fatal warning field.
+    Issue #32 item 4: the field carries a stable CODE, not English prose."""
     _override_auth("manager@chememan.com")
     state = _fake_state(
         status=APPROVED, current_position=None, current_approver_empcode=None,
@@ -739,7 +742,7 @@ def test_approve_final_step_notification_failure_never_fails_the_request(client)
         response = client.post("/approval/approve", json={"department": DEPT, "fiscal_year": FY})
 
     assert response.status_code == 200
-    assert response.json()["notification_warning"] is not None
+    assert response.json()["notification_warning"] == "notify_failed"
 
 
 def test_reject_notifies_the_last_submitter(client):
@@ -1062,7 +1065,8 @@ def test_override_step_notification_failure_never_fails_the_request(client):
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
     assert response.status_code == 200
-    assert response.json()["notification_warning"] is not None
+    # Issue #32 item 4: a stable CODE, not English prose.
+    assert response.json()["notification_warning"] == "notify_failed"
     mock_turn.assert_called_once()  # the defect this test catches: notify_turn must still fire
     assert mock_turn.call_args.kwargs["approver_empcode"] == "101032"
 
@@ -1089,7 +1093,8 @@ def test_override_step_notify_turn_failure_still_sends_override_notice(client):
         response = client.post("/approval/override-step", json={"department": DEPT, "fiscal_year": FY})
 
     assert response.status_code == 200
-    assert response.json()["notification_warning"] is not None
+    # Issue #32 item 4: a stable CODE, not English prose.
+    assert response.json()["notification_warning"] == "notify_failed"
     mock_overridden.assert_called_once()  # the override notice must still have been sent
 
 

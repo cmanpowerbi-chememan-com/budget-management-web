@@ -158,7 +158,14 @@ describe('apiFetch', () => {
   it('maps a 409 response to a conflict ApiError with a Thai message', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'row changed' })))
 
-    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({ status: 409 })
+    // The exact Thai sentence is asserted here (not just the status) because
+    // `ApprovalActionBar.test.tsx`'s 409 scenario mocks this same message by
+    // hand — pinning it on both sides is what keeps them from drifting apart
+    // (issue #32 gate finding).
+    await expect(apiFetch('/budget/rows')).rejects.toMatchObject({
+      status: 409,
+      message: 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง',
+    })
   })
 
   it('captures the backend detail string from an error response body (per-row error surfacing)', async () => {

@@ -150,7 +150,10 @@ test.describe('approver journey', () => {
     await expect(page.getByTestId('confirm-dialog')).toBeVisible()
     await page.getByTestId('confirm-ok').click()
 
-    await expect(page.getByTestId('approval-action-message')).toContainText('Someone else changed this status')
+    // Issue #32 item 3: `describeApiError`'s own 409 special case is
+    // deleted -- the shared Thai message from `messageForStatus` (api/
+    // client.ts) applies instead of the old English-only sentence.
+    await expect(page.getByTestId('approval-action-message')).toContainText('ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น')
     // load() ran again after the 409 — the chip reflects the FRESH (position 2) truth.
     await expect(page.getByTestId('approval-status-chip')).toContainText('Step 2')
   })
