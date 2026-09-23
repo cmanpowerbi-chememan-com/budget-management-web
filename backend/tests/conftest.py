@@ -2,8 +2,10 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth import clear_sit_targets_cache
 from app.config import Settings, get_settings
 from app.main import app
+from app.routers.sit import clear_sit_target_directory_cache
 from app.sap import clear_sap_caches
 
 
@@ -64,3 +66,16 @@ def _clear_sap_caches_every_test():
     clear_sap_caches()
     yield
     clear_sap_caches()
+
+
+@pytest.fixture(autouse=True)
+def _clear_sit_targets_cache_every_test():
+    """Same leak risk as `_clear_sap_caches_every_test`, for `app.auth`'s
+    single-entry live SIT-impersonation target-set cache AND
+    `app.routers.sit`'s picker-directory cache (both ADR-0031) — a mocked
+    target list/directory from one test must never serve another."""
+    clear_sit_targets_cache()
+    clear_sit_target_directory_cache()
+    yield
+    clear_sit_targets_cache()
+    clear_sit_target_directory_cache()

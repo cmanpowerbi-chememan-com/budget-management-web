@@ -110,6 +110,17 @@ auto-escalation below.
 _Avoid_: "approve on behalf" — the admin is not approving the budget, only releasing the
 step so the chain continues to the real reviewers.
 
+### Impersonation (สวมสิทธิ์)
+jakkaritw — and only jakkaritw — using the app **as** another person: every screen, save,
+submit, approve and reject behaves exactly as if that person did it (decided 2026-09-23,
+permanent on production). The people who can be impersonated are the **Impersonation
+targets**: every **Filler** plus each Filler's **direct manager**, following the Cost
+Center ↔ Filler map as it changes. A separate power from **Step override**: the override's
+limits (position 1 only, never final `APPROVED`, own name) do NOT apply here — impersonating a
+step-2/3 approver can land final `APPROVED`. Whatever is done while impersonating is recorded
+and mailed as the impersonated person's own action (ADR-0031).
+_Avoid_: "SIT impersonation" for the production use — SIT was only its first use.
+
 ### Auto-escalation — RETIRED 2026-08-01
 The former rule where a step untouched for 30 days was advanced by a scheduled job and
 logged `AUTO_ESCALATE`. Deleted with ADR-0027; nothing in the system now moves an approval

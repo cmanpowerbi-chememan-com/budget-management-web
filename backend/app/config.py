@@ -51,30 +51,37 @@ class Settings(BaseSettings):
     # Local-only Easy Auth override — honored ONLY when app_env == "local".
     dev_auth_email: str | None = None
 
-    # SIT/UAT test aid (2026-08-10, grammar + guard extended 2026-08-17):
-    # rewrites one resolved Easy Auth identity to one of a configured list of
-    # targets, e.g. "jakkaritw@chememan.com:nipapornt@chememan.com,warapornt@chememan.com"
-    # (the old single-target "from:to" form still works, a 1-target list).
-    # Which target applies is picked per browser session by the `sit_as`
-    # cookie (default = the first target) — see `app.routers.sit` and
-    # `app.auth._select_sit_target`. Lets a tester with no employee row act
-    # as ANY of the configured approvers on staging, where header spoofing no
-    # longer works against real Easy Auth.
+    # Permanent production impersonation (ADR-0031, 2026-09-23 — supersedes
+    # the 2026-08-10/08-17 staging-only design). Now names ONLY the from-side
+    # (who may impersonate) — e.g. "jakkaritw@chememan.com". A legacy value
+    # with a trailing ":target1,target2,..." (the current live prd value)
+    # still parses fine: everything after the first ':' is ignored, so no
+    # env edit is required on deploy. `app.auth._parse_sit_from_email` does
+    # the parsing.
+    #
+    # WHO may be impersonated is no longer this env var's job — it is read
+    # live from the DB and cached (`app.auth.live_sit_targets`,
+    # `sit_targets_cache_ttl_seconds` below): every distinct Filler email in
+    # `dbo.cc_filler_map` UNION each Filler's `dbo.v_employee_budget_01
+    # .manager_email` (95 people on 2026-09-23 — 74 Fillers + 21 managers who
+    # are not Fillers). The hand-typed target list is dropped entirely.
     #
     # Honored ONLY when THREE conditions all hold (`app.auth._sit_guard_ok`):
     # (1) HARD `app_env != "production"` (dead on PRD, which runs
-    # app_env=production, checked first, absolute); (2) the resolved caller
-    # email is in `admin_emails_set` (2026-08-17 — replaces the old
-    # `notifications_environment_label` non-blank check: staging now removes
-    # that label entirely so SIT mail looks byte-identical to production, no
-    # test banner/subject prefix — so it can no longer double as a
-    # non-production signal here); (3) this value is set and well-formed.
-    # Condition 2 alone only rules out non-admins — it is NOT "any admin
-    # may impersonate": the caller must additionally equal this value's own
+    # app_env=production, checked first, absolute) — note prd deliberately
+    # runs `app_env=uat`, not `production`, so this is a live-on-prd switch
+    # by design (ADR-0031), not a bug; (2) the resolved caller email is in
+    # `admin_emails_set`; (3) this value is set and well-formed. Condition 2
+    # alone only rules out non-admins — it is NOT "any admin may
+    # impersonate": the caller must additionally equal this value's own
     # `from_email` (enforced by `app.auth.sit_targets_for` /
-    # `_apply_sit_impersonation`), so a different admin is refused too
-    # (2026-08-18 gate fix — do not loosen this to match the old, wrong
-    # reading). Never set this on PRD.
+    # `_apply_sit_impersonation`), so a different admin is refused too.
+    #
+    # Default = the real caller's OWN email whenever there is no `sit_as`
+    # cookie, a blank cookie, or a cookie naming someone outside the CURRENT
+    # live target set (e.g. dropped from `cc_filler_map`) — never
+    # `targets[0]`, since the from-email (jakkaritw) is never itself a
+    # member of the live set.
     sit_impersonate: str = ""
 
     # Fabric SQL Database — ONE DB, budget.* (transactional) + dbo.* (masters/employee) schemas.
@@ -199,6 +206,14 @@ class Settings(BaseSettings):
     # disables caching entirely (always hits the DB) — the test/kill-switch
     # path; the hermetic test fixture sets this to 0 for every unit test.
     sap_cache_ttl_seconds: int = 600
+
+    # Live SIT-impersonation target-set cache (ADR-0031) — mirrors
+    # `sap_cache_ttl_seconds` above. TTL for `app.auth.live_sit_targets`'s
+    # DB read of the Filler UNION manager-of-Filler email set, so an
+    # ordinary request that happens to carry a `sit_as` cookie does not hit
+    # Fabric on every call. `0` disables caching entirely (always hits the
+    # DB) — the hermetic test kill-switch path.
+    sit_targets_cache_ttl_seconds: int = 600
 
     # Connection-pool + SAP-cache warmup at startup (perf fix, see
     # app.main's lifespan handler): runs in a daemon thread so it never
