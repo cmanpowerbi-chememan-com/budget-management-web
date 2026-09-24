@@ -239,10 +239,13 @@ export interface ApiFetchOptions extends RequestInit {
   onUnauthorized?: () => void
 }
 
-/** Calls the backend and returns the parsed JSON body, or throws
- * `ApiError`. A 401 triggers `onUnauthorized` (real redirect by default)
- * before throwing, so callers never need to special-case auth. */
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+/** Shared preamble for every call: sends the request, resolves the
+ * session-dead/401/error branches identically for every caller, and
+ * returns the raw (ok) `Response` — `apiFetch` parses it as JSON,
+ * `apiFetchBlob` (export downloads) reads it as a `Blob` instead. Callers
+ * never need to special-case auth; a 401 triggers `onUnauthorized` (real
+ * redirect by default) before throwing. */
+async function fetchOk(path: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { onUnauthorized = defaultOnUnauthorized, ...init } = options
 
   let response: Response
@@ -289,5 +292,49 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new ApiError(response.status, message, detail)
   }
 
+  return response
+}
+
+/** Calls the backend and returns the parsed JSON body, or throws
+ * `ApiError`. A 401 triggers `onUnauthorized` (real redirect by default)
+ * before throwing, so callers never need to special-case auth. */
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const response = await fetchOk(path, options)
   return (await response.json()) as T
+}
+
+/** A file download resolved by `apiFetchBlob` — the raw bytes plus the
+ * server-chosen file name (from `Content-Disposition`), when present. */
+export interface BlobDownload {
+  blob: Blob
+  filename: string | null
+}
+
+/** RFC 5987 extended parameter parsing for `Content-Disposition`: prefers
+ * `filename*` (UTF-8, e.g. a non-ASCII ฝ่าย name) over the ASCII `filename`
+ * fallback in the same header — the same precedence browsers use when both
+ * are present. Returns `null` when the header is absent or has neither. */
+export function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+  const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header)
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim())
+    } catch {
+      // malformed percent-encoding — fall through to the ASCII fallback below
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header)
+  return plain ? plain[1].trim() : null
+}
+
+/** Same request/error handling as `apiFetch`, but reads the response body
+ * as a `Blob` instead of JSON — the smallest addition needed for the
+ * "ดาวน์โหลด Excel" export download (issue #35), keeping the shared 401/
+ * session-expiry/error handling identical for both. */
+export async function apiFetchBlob(path: string, options: ApiFetchOptions = {}): Promise<BlobDownload> {
+  const response = await fetchOk(path, options)
+  const blob = await response.blob()
+  const filename = filenameFromContentDisposition(response.headers.get('Content-Disposition'))
+  return { blob, filename }
 }

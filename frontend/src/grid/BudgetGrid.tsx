@@ -3,7 +3,7 @@ import { AdminModeToggle } from '../admin/AdminModeToggle'
 import { useAdminViewToggle } from '../admin/useAdminViewToggle'
 import { fetchApprovalStatus, fetchLockedDepartments, fetchPendingDepartments, fetchPendingForMe } from '../api/approval'
 import { ApiError, isDepartmentLockedError } from '../api/client'
-import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
+import { deleteRow, downloadBudgetExport, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, fetchSapCoverage, saveRow } from '../api/budget'
 import type { BudgetRow, DepartmentRow, GlAccount, SapCoverage } from '../api/types'
 import { costCentersOfDepartment, isFillerOfDepartment } from '../approval/model'
 import { ApprovalActionBar } from '../approval/ApprovalActionBar'
@@ -94,6 +94,12 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     null,
   )
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
+  // "ดาวน์โหลด Excel" (issue #35) — one ฝ่าย's grid as the approved 1-sheet
+  // workbook. Own loading/error state, separate from the grid's own
+  // `loading`/`error` (a download in flight must never look like the grid
+  // itself is reloading).
+  const [exportLoading, setExportLoading] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   // Fullscreen overlay (⤢ toggle, jakkaritw-approved 2026-07-31) — lifts the
   // WHOLE grid block (toolbar + legend + both side-tables + Submit bar) into
   // a fixed layer above the nav. State lives HERE, not in GridTable (unlike
@@ -497,6 +503,31 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     openSpecialForm(row.cost_center, row.gl_account, glGroup, !row.editable)
   }
 
+  /** "ดาวน์โหลด Excel" (issue #35) — downloads the SAME rows on screen
+   * (current year / ฝ่าย / admin flag) as the approved 1-sheet workbook,
+   * via a blob + object-URL anchor (never `showSaveFilePicker` — dead on
+   * Edge for this app, files land in Downloads like any browser download). */
+  async function handleExportDownload() {
+    if (!department) return
+    setExportLoading(true)
+    setExportError(null)
+    try {
+      const { blob, filename } = await downloadBudgetExport({ year, department, adminViewEnabled })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename ?? `budget_FY${year}_export.xlsx`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : 'ดาวน์โหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   /** "+ เพิ่ม Transaction" — a special-GL pick (Spec B path ข, jakkaritw
    * 2026-08-05) skips `/budget/rows` entirely and opens that GL's own
    * subform directly, exactly like clicking an existing special-GL row's
@@ -796,6 +827,21 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
             แนบไฟล์
           </button>
         )}
+        {department && (
+          <button
+            type="button"
+            className="btn btn-download"
+            onClick={handleExportDownload}
+            // `rows` keeps the PREVIOUS ฝ่าย/year's data during a reload
+            // (`loadGrid` never clears it before fetching) — `loading`/
+            // `error` must ALSO gate this button, or a refetch for a
+            // different ฝ่าย (or one that fails) leaves stale rows behind
+            // that would download the wrong data (gate fix round, issue #35).
+            disabled={exportLoading || loading || error !== null || rows.length === 0}
+          >
+            {exportLoading ? 'กำลังสร้างไฟล์…' : 'ดาวน์โหลด Excel'}
+          </button>
+        )}
         {isDualRoleAdmin && <AdminModeToggle enabled={adminModeOn} onChange={handleAdminModeToggle} />}
         <div className="legend-block">
           <div className="legend" data-testid="status-legend">
@@ -868,6 +914,15 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           <span>{error}</span>
           <button type="button" className="btn" onClick={loadGrid}>
             ลองใหม่
+          </button>
+        </div>
+      )}
+
+      {exportError && (
+        <div className="grid-error" role="alert">
+          <span>{exportError}</span>
+          <button type="button" className="btn" onClick={() => setExportError(null)}>
+            ปิด
           </button>
         </div>
       )}

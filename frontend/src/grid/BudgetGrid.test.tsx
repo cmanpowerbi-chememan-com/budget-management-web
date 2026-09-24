@@ -2013,4 +2013,157 @@ describe('BudgetGrid', () => {
       expect(suffix.className).toContain('sap-freshness-warn')
     })
   })
+
+  describe('"ดาวน์โหลด Excel" export button (issue #35)', () => {
+    beforeEach(() => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+      // jsdom does not implement the Blob-URL APIs — stub them so the
+      // handler's object-URL anchor download never throws in tests.
+      window.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
+      window.URL.revokeObjectURL = vi.fn()
+    })
+
+    function exportButton(): HTMLElement {
+      return screen.getByRole('button', { name: 'ดาวน์โหลด Excel' })
+    }
+
+    it('is disabled while the grid has no rows', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      await waitFor(() => expect(exportButton()).toBeDisabled())
+    })
+
+    it('is enabled once the grid has rows, and downloads with the current year/department/admin flag', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      vi.mocked(budgetApi.downloadBudgetExport).mockResolvedValue({
+        blob: new Blob(['xlsx-bytes']), filename: 'budget_FY2027_Solution_Delivery_20260924_0924.xlsx',
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+
+      await waitFor(() =>
+        expect(budgetApi.downloadBudgetExport).toHaveBeenCalledWith({
+          year: 2027, department: 'Solution Delivery', adminViewEnabled: false,
+        }),
+      )
+    })
+
+    // Item 3 (gate fix round): `rows` keeps the PREVIOUS ฝ่าย's data during a
+    // reload (`loadGrid` never clears it before fetching) — disabling only on
+    // `rows.length === 0` therefore leaves the button clickable while a
+    // refetch for a DIFFERENT ฝ่าย is in flight, downloading stale/wrong data.
+    it('is disabled while a refetch is in flight, even though stale rows from the previous ฝ่าย are still on screen', async () => {
+      const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
+      const twoDepartments = [
+        ...DEPARTMENTS,
+        { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+      ]
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030')])
+      let resolveSecondFetch: (value: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolveSecondFetch = resolve }),
+      )
+
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+
+      switchDepartment('Warehouse')
+      await waitFor(() => expect(exportButton()).toBeDisabled())
+
+      resolveSecondFetch([makeRow('CC2', '5211800030', { department: 'Warehouse' })])
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+    })
+
+    it('is disabled while the grid is in its loud error state, even if stale rows remain', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030')])
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+
+      vi.mocked(budgetApi.fetchBudgetGrid).mockRejectedValueOnce(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'))
+      fireEvent.change(screen.getByLabelText('ปีฐาน (SAP/Approved · Pending = ปีถัดไป)'), { target: { value: '2026' } })
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+      expect(exportButton()).toBeDisabled()
+    })
+
+    // Item 5 (gate fix round): the actual download mechanics — object-URL
+    // anchor creation/click/revoke and the server file name reaching
+    // `anchor.download` — not just that the API call happened.
+    it('creates an object URL, clicks a hidden anchor with the server file name, then revokes the URL', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      const fakeBlob = new Blob(['xlsx-bytes'])
+      vi.mocked(budgetApi.downloadBudgetExport).mockResolvedValue({
+        blob: fakeBlob, filename: 'budget_FY2027_Solution_Delivery_20260924_0924.xlsx',
+      })
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+
+      await waitFor(() => expect(clickSpy).toHaveBeenCalledOnce())
+      expect(window.URL.createObjectURL).toHaveBeenCalledWith(fakeBlob)
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url')
+
+      clickSpy.mockRestore()
+    })
+
+    it('passes adminViewEnabled=true through to the download call for a dual-role admin with admin mode on', async () => {
+      const adminScope: ScopeState = { ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['CC1'], seeCostCenters: ['CC1'] }
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      vi.mocked(budgetApi.downloadBudgetExport).mockResolvedValue({ blob: new Blob(['x']), filename: 'x.xlsx' })
+
+      render(<BudgetGrid scope={adminScope} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+
+      fireEvent.click(screen.getByTestId('admin-mode-checkbox'))
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+
+      await waitFor(() =>
+        expect(budgetApi.downloadBudgetExport).toHaveBeenCalledWith(
+          expect.objectContaining({ adminViewEnabled: true }),
+        ),
+      )
+    })
+
+    it('shows a loading label and disables the button while the download is in flight', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      let resolveDownload: (value: Awaited<ReturnType<typeof budgetApi.downloadBudgetExport>>) => void = () => {}
+      vi.mocked(budgetApi.downloadBudgetExport).mockImplementation(
+        () => new Promise((resolve) => { resolveDownload = resolve }),
+      )
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'กำลังสร้างไฟล์…' })).toBeDisabled())
+
+      resolveDownload({ blob: new Blob(['x']), filename: 'x.xlsx' })
+      await waitFor(() => expect(screen.getByRole('button', { name: 'ดาวน์โหลด Excel' })).not.toBeDisabled())
+    })
+
+    it('shows a Thai error message when the download fails, without breaking the grid', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+      vi.mocked(budgetApi.downloadBudgetExport).mockRejectedValue(
+        new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'),
+      )
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+
+      await waitFor(() => expect(screen.getAllByRole('alert').at(-1)).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+      expect(exportButton()).not.toBeDisabled()
+    })
+  })
 })

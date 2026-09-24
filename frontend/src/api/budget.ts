@@ -2,7 +2,7 @@
  * `apiFetch` (401/error handling centralized there). Kept thin — one
  * function per endpoint, no caching/state here (that lives in the grid
  * hooks/components that call these). */
-import { apiFetch } from './client'
+import { apiFetch, apiFetchBlob, type BlobDownload } from './client'
 import type { BudgetRow, DepartmentRow, GlAccount, PendingRowInput, PendingRowState, SapCoverage } from './types'
 
 export interface BudgetGridFilter {
@@ -31,6 +31,20 @@ export function fetchBudgetGrid(filter: BudgetGridFilter): Promise<BudgetRow[]> 
     admin_view_enabled: filter.adminViewEnabled,
   })
   return apiFetch<BudgetRow[]>(`/budget${query}`)
+}
+
+/** `GET /budget/export` — "ดาวน์โหลด Excel" (issue #35): the same grid
+ * filter, turned into the approved 1-sheet workbook. `filter.department`
+ * is required by the endpoint (one ฝ่าย per download — no "all
+ * departments" option). */
+export function downloadBudgetExport(filter: BudgetGridFilter): Promise<BlobDownload> {
+  const query = buildQuery({
+    year: filter.year,
+    cost_center: filter.costCenter,
+    department: filter.department,
+    admin_view_enabled: filter.adminViewEnabled,
+  })
+  return apiFetchBlob(`/budget/export${query}`)
 }
 
 /** `GET /budget/gl-accounts` — full GL master, flagged `is_special` (A8). */

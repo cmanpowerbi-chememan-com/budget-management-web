@@ -3328,6 +3328,13 @@ th.total-year-col {
 .btn-attach {
   border-color: var(--line);
 }
+/* "ดาวน์โหลด Excel" (issue #35) — same plain toolbar-utility treatment as
+   .btn-attach right beside it (both secondary actions next to the ฝ่าย
+   picker); NOT .btn-export (that class is the loud filled primary/confirm
+   style used by form-submit buttons elsewhere, e.g. AddTransactionForm). */
+.btn-download {
+  border-color: var(--line);
+}
 .attach-drop {
   display: block;
   box-sizing: border-box;

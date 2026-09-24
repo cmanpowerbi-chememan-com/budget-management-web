@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deleteRow, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from './budget'
+import { deleteRow, downloadBudgetExport, fetchBudgetGrid, fetchDepartments, fetchGlAccounts, saveRow } from './budget'
 import { ApiError } from './client'
+
+function blobResponse(status: number, disposition: string | null): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name: string) => (name === 'Content-Disposition' ? disposition : null) },
+    blob: async () => new Blob(['xlsx-bytes']),
+    json: async () => ({}),
+  } as unknown as Response
+}
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -41,6 +51,41 @@ describe('fetchBudgetGrid', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, rows)))
 
     await expect(fetchBudgetGrid({ year: 2027 })).resolves.toEqual(rows)
+  })
+})
+
+describe('downloadBudgetExport', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('calls GET /budget/export with year, department, and admin_view_enabled as query params', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(blobResponse(200, 'attachment; filename="x.xlsx"'))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await downloadBudgetExport({ year: 2027, department: 'ฝ่ายบัญชี', adminViewEnabled: true })
+
+    const calledUrl = String(fetchSpy.mock.calls[0][0])
+    expect(calledUrl).toContain('/budget/export?')
+    expect(calledUrl).toContain('year=2027')
+    expect(calledUrl).toContain(encodeURIComponent('ฝ่ายบัญชี'))
+    expect(calledUrl).toContain('admin_view_enabled=true')
+  })
+
+  it('resolves the blob and the server file name', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(blobResponse(200, "attachment; filename=\"x.xlsx\"; filename*=UTF-8''budget_FY2027_A.xlsx")),
+    )
+
+    const result = await downloadBudgetExport({ year: 2027, department: 'A' })
+
+    expect(result.filename).toBe('budget_FY2027_A.xlsx')
+    expect(result.blob).toBeInstanceOf(Blob)
+  })
+
+  it('propagates a 502 as an ApiError (caller shows the Thai error)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) } as unknown as Response))
+
+    await expect(downloadBudgetExport({ year: 2027, department: 'A' })).rejects.toBeInstanceOf(ApiError)
   })
 })
 

@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isSessionExpired, SESSION_EXPIRED_MESSAGE, subscribeSessionExpired } from './sessionExpiry'
-import { ApiError, apiFetch, buildLoginRedirectUrl, isDepartmentLockedError } from './client'
+import {
+  apiFetch,
+  apiFetchBlob,
+  ApiError,
+  buildLoginRedirectUrl,
+  filenameFromContentDisposition,
+  isDepartmentLockedError,
+} from './client'
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -448,6 +455,75 @@ describe('apiFetch', () => {
         status: 413,
         message: 'ไฟล์ใหญ่เกินกำหนด',
       })
+    })
+  })
+})
+
+describe('filenameFromContentDisposition', () => {
+  it('prefers the RFC 5987 filename* (UTF-8) over the ASCII fallback when both are present', () => {
+    const header = 'attachment; filename="budget_FY2027_.xlsx"; filename*=UTF-8\'\'budget_FY2027_%E0%B8%9D%E0%B9%88%E0%B8%B2%E0%B8%A2A.xlsx'
+    expect(filenameFromContentDisposition(header)).toBe('budget_FY2027_ฝ่ายA.xlsx')
+  })
+
+  it('falls back to the plain filename when filename* is absent', () => {
+    expect(filenameFromContentDisposition('attachment; filename="plain.xlsx"')).toBe('plain.xlsx')
+  })
+
+  it('returns null when the header is absent', () => {
+    expect(filenameFromContentDisposition(null)).toBeNull()
+  })
+})
+
+describe('apiFetchBlob', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function blobResponse(status: number, disposition: string | null): Response {
+    const blob = new Blob(['xlsx-bytes'])
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: (name: string) => (name === 'Content-Disposition' ? disposition : null) },
+      blob: async () => blob,
+      json: async () => ({}),
+    } as unknown as Response
+  }
+
+  it('returns the blob and the parsed server file name on success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        blobResponse(200, "attachment; filename=\"budget.xlsx\"; filename*=UTF-8''budget_FY2027_%E0%B8%9D%E0%B9%88%E0%B8%B2%E0%B8%A2A.xlsx"),
+      ),
+    )
+
+    const result = await apiFetchBlob('/budget/export?year=2027&department=%E0%B8%9D%E0%B9%88%E0%B8%B2%E0%B8%A2A')
+
+    expect(result.filename).toBe('budget_FY2027_ฝ่ายA.xlsx')
+    expect(result.blob).toBeInstanceOf(Blob)
+  })
+
+  it('returns filename=null when Content-Disposition is absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(blobResponse(200, null)))
+
+    const result = await apiFetchBlob('/budget/export?year=2027&department=A')
+
+    expect(result.filename).toBeNull()
+  })
+
+  it('reuses the same error handling as apiFetch on a non-2xx response (502)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(502, {})))
+
+    await expect(apiFetchBlob('/budget/export?year=2027&department=A')).rejects.toMatchObject({ status: 502 })
+  })
+
+  it('raises the session-expiry dialog on an opaqueredirect response, same as apiFetch', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 0, type: 'opaqueredirect', json: async () => ({}) } as unknown as Response),
+    )
+
+    await expect(apiFetchBlob('/budget/export?year=2027&department=A')).rejects.toMatchObject({
+      message: SESSION_EXPIRED_MESSAGE,
     })
   })
 })
