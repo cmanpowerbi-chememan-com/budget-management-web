@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import * as subformApi from '../api/subform'
@@ -1169,6 +1169,216 @@ describe('DetailSubform', () => {
       fireEvent.click(backdrop())
 
       expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // BUG FIX (jakkaritw, gate finding 2026-09-25): ✕, ยกเลิก, and the backdrop
+  // all called onClose() directly, discarding any typed-but-unsaved line
+  // with no warning — this subform never had TripManager's confirm-before-
+  // discard guard (2026-09-24's onCancel). Mirrors it exactly: a dirty row
+  // asks CANCEL_UNSAVED_CONFIRM_TEXT before closing; declining keeps the
+  // modal (and the typed value) intact. window.confirm is the fallback
+  // `confirmDialog` uses when no <ConfirmDialog/> host is mounted (these
+  // tests render DetailSubform alone), same idiom the "delete" describe
+  // block above already uses.
+  describe('unsaved-changes confirm on close (bug fix 2026-09-25)', () => {
+    function backdrop(): HTMLElement {
+      const el = document.querySelector('.modal-backdrop')
+      if (!el) throw new Error('modal-backdrop not found')
+      return el as HTMLElement
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('editing a line then clicking ✕ asks to confirm; declining keeps the modal open and onClose is not called', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch with client' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      await act(async () => {})
+
+      expect(window.confirm).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('detail-subform')).toBeInTheDocument()
+    })
+
+    it('editing a line then clicking ยกเลิก asks to confirm; declining keeps the modal open', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch with client' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+      await act(async () => {})
+
+      expect(window.confirm).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('accepting the confirm from ยกเลิก closes the modal', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch with client' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+      await act(async () => {})
+
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('a genuine backdrop press+release+click on a dirty subform asks to confirm before closing', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch with client' } })
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
+      fireEvent.click(backdrop())
+      await act(async () => {})
+
+      expect(window.confirm).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('detail-subform')).toBeInTheDocument()
+    })
+
+    it('a clean subform (no edits) closes on ยกเลิก with no confirm asked', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      const confirmSpy = vi.spyOn(window, 'confirm')
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('readOnly closes with no confirm, even though a line is loaded', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      const confirmSpy = vi.spyOn(window, 'confirm')
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          readOnly
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
+
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('while saving, ✕ is disabled and a backdrop press/release/click does not close the modal', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([blankLine()])
+      let resolveSave!: (line: DetailLineState) => void
+      vi.mocked(subformApi.saveDetailLine).mockImplementation(
+        () =>
+          new Promise<DetailLineState>((resolve) => {
+            resolveSave = resolve
+          }),
+      )
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
+      fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })
+      fireEvent.click(screen.getByTestId('save-all'))
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled())
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
+      fireEvent.click(backdrop())
+      await act(async () => {})
+
+      expect(onClose).not.toHaveBeenCalled()
+      // Let the held save resolve so no dangling promise leaks into the next test.
+      resolveSave(blankLine({ detail_id: 99 }))
+      await act(async () => {})
     })
   })
 })

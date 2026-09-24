@@ -196,4 +196,63 @@ describe('ConfirmDialog', () => {
       expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
     })
   })
+
+  // BUG FIX (jakkaritw, gate finding 2026-09-25, probe D2): holding Enter
+  // through the dialog's open animation fired a SECOND, auto-repeat keydown
+  // (`e.repeat === true`) once the dialog itself had focus — with no guard,
+  // that repeat keydown silently answered `true` before the user could read
+  // the question. A repeated keydown must never answer the dialog; a fresh
+  // press right after must still behave exactly as before.
+  describe('held-key auto-repeat guard (bug fix 2026-09-25)', () => {
+    it('a repeat Enter keydown does not resolve the promise and the dialog stays open', async () => {
+      render(<ConfirmDialog />)
+
+      let result: boolean | undefined
+      act(() => {
+        confirmDialog('ลบรายการนี้?').then((v) => {
+          result = v
+        })
+      })
+
+      fireEvent.keyDown(screen.getByTestId('confirm-dialog'), { key: 'Enter', repeat: true })
+      await act(async () => {})
+
+      expect(result).toBeUndefined()
+      expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+    })
+
+    it('a fresh (non-repeat) Enter right after the repeat still resolves true', async () => {
+      render(<ConfirmDialog />)
+
+      let result: boolean | undefined
+      act(() => {
+        confirmDialog('ลบรายการนี้?').then((v) => {
+          result = v
+        })
+      })
+
+      fireEvent.keyDown(screen.getByTestId('confirm-dialog'), { key: 'Enter', repeat: true })
+      fireEvent.keyDown(screen.getByTestId('confirm-dialog'), { key: 'Enter' })
+      await act(async () => {})
+
+      expect(result).toBe(true)
+    })
+
+    it('a repeat Escape keydown does not resolve the promise either', async () => {
+      render(<ConfirmDialog />)
+
+      let result: boolean | undefined
+      act(() => {
+        confirmDialog('ลบรายการนี้?').then((v) => {
+          result = v
+        })
+      })
+
+      fireEvent.keyDown(screen.getByTestId('confirm-dialog'), { key: 'Escape', repeat: true })
+      await act(async () => {})
+
+      expect(result).toBeUndefined()
+      expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+    })
+  })
 })

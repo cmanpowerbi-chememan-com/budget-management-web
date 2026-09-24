@@ -49,6 +49,19 @@ export function ConfirmDialog() {
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    // Gate finding 2026-09-25 (probe D2): a HELD key auto-repeats keydown
+    // events (`e.repeat`). Holding Enter through this dialog's open
+    // animation used to fire a repeat keydown once the dialog itself had
+    // focus, silently answering `true` before the user could read the
+    // question. A repeat keydown must never answer the dialog. preventDefault
+    // matters here too: without it, Enter's browser default (clicking the
+    // focused Cancel button) would fire and cycle the dialog open->cancel->
+    // open for as long as the key is held. A fresh, non-repeat press behaves
+    // exactly as before.
+    if (e.repeat) {
+      e.preventDefault()
+      return
+    }
     // preventDefault on both branches: without it, Enter's own browser
     // default (clicking whichever button currently has focus — Cancel, per
     // the effect above) would fire alongside this handler's explicit

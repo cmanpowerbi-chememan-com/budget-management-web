@@ -22,6 +22,12 @@ import {
   type TravelExpenseType,
 } from './glDropdownConstants'
 
+/** Shared "close with unsaved edits?" confirm text — TripManager's `onCancel`
+ * (2026-09-24 fix) and DetailSubform's `onCancel` (2026-09-25 fix) both use
+ * this exact wording. Moved here so it has exactly ONE source instead of
+ * being duplicated when DetailSubform gained the same guard. */
+export const CANCEL_UNSAVED_CONFIRM_TEXT = 'มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?'
+
 /** The 5 non-travel special groups DetailSubform renders. Travelling
  * Expense is a structurally different entity (trip-centric) handled by
  * TripManager instead — never by DetailSubform. */

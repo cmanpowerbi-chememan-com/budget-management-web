@@ -9,6 +9,7 @@ import { MonthAmountInput } from './MonthAmountInput'
 import {
   blankDetailDraft,
   buildDetailLinePayload,
+  CANCEL_UNSAVED_CONFIRM_TEXT,
   detailFieldsFor,
   detailLineTotal,
   draftFromServerLine,
@@ -52,13 +53,20 @@ interface RowState {
   draft: DetailLineDraft
   status: RowStatus
   errorText?: string
+  /** True once this row's draft has changed since it was last loaded from
+   * (or saved to) the server — drives `onCancel`'s unsaved-changes confirm.
+   * Same semantics as TripManager's `TripCardState.dirty`: a freshly ADDED
+   * blank row starts clean (nothing to lose yet) and only flips to dirty
+   * once a field is actually touched (`updateDraft` below); a row loaded
+   * from the server starts clean too. */
+  dirty: boolean
 }
 
 const DELETE_CONFIRM_TEXT = 'ลบรายการนี้?'
 const DELETE_CONFLICT_MESSAGE = 'รายการนี้ถูกแก้ไขหรือถูกลบโดยผู้อื่นไปแล้ว กรุณาตรวจสอบข้อมูลล่าสุด'
 
 function rowsFromServer(lines: DetailLineState[]): RowState[] {
-  return lines.map((line) => ({ localId: `existing-${line.detail_id}`, draft: draftFromServerLine(line), status: 'idle' }))
+  return lines.map((line) => ({ localId: `existing-${line.detail_id}`, draft: draftFromServerLine(line), status: 'idle', dirty: false }))
 }
 
 /** Special-GL detail-line subform for the 5 non-travel groups (Entertainment,
@@ -112,11 +120,11 @@ export function DetailSubform({
     if (readOnly) return
     const localId = `new-${newRowCounter}`
     setNewRowCounter((n) => n + 1)
-    setRows((prev) => [...prev, { localId, draft: blankDetailDraft(costCenter, glAccount, fiscalYear), status: 'idle' }])
+    setRows((prev) => [...prev, { localId, draft: blankDetailDraft(costCenter, glAccount, fiscalYear), status: 'idle', dirty: false }])
   }
 
   function updateDraft(localId: string, updater: (draft: DetailLineDraft) => DetailLineDraft) {
-    setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, draft: updater(r.draft) } : r)))
+    setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, draft: updater(r.draft), dirty: true } : r)))
   }
 
   function setMeta(localId: string, key: string, value: string) {
@@ -163,7 +171,7 @@ export function DetailSubform({
         try {
           const saved = await saveDetailLine(buildDetailLinePayload(row.draft))
           anySaved = true
-          nextRows[i] = { localId: `existing-${saved.detail_id}`, draft: draftFromServerLine(saved), status: 'idle' }
+          nextRows[i] = { localId: `existing-${saved.detail_id}`, draft: draftFromServerLine(saved), status: 'idle', dirty: false }
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
             // Someone else changed these lines — replace with the server's
@@ -240,11 +248,28 @@ export function DetailSubform({
   const monthlyTotals = MONTH_KEYS.map((m) => rows.reduce((sum, r) => sum + (r.draft.months[m] || 0), 0))
   const grandTotal = monthlyTotals.reduce((a, b) => a + b, 0)
 
+  /** 2026-09-25 bug fix (gate finding on the modal-close fix below): ✕,
+   * ยกเลิก, and the backdrop all called onClose() directly, discarding any
+   * typed-but-unsaved line with no warning — this subform never had
+   * TripManager's confirm-before-discard guard (2026-09-24's onCancel).
+   * Mirrors it exactly: a dirty row asks CANCEL_UNSAVED_CONFIRM_TEXT before
+   * closing; declining keeps the modal open. `readOnly` can never set
+   * `dirty` (every mutator above early-returns under readOnly), so a
+   * read-only subform always falls through to a plain close. */
+  async function onCancel() {
+    if (saving) return
+    const anyDirty = rows.some((r) => r.dirty)
+    if (anyDirty && !(await confirmDialog(CANCEL_UNSAVED_CONFIRM_TEXT, { danger: true, confirmLabel: 'ยกเลิกการแก้ไข' }))) return
+    onClose()
+  }
+
   // 2026-09-24 bug fix: a plain `e.target === e.currentTarget` backdrop check
   // also fired on a drag that started inside the modal and released over the
   // backdrop (see backdropDismiss.ts) — that used to close the modal and
-  // discard whatever the user was typing.
-  const backdropHandlers = useBackdropDismiss(onClose)
+  // discard whatever the user was typing. Now routed through onCancel
+  // (above) so a genuine backdrop click also asks before discarding unsaved
+  // edits.
+  const backdropHandlers = useBackdropDismiss(onCancel)
 
   return (
     <div className="modal-backdrop open" {...backdropHandlers}>
@@ -260,7 +285,7 @@ export function DetailSubform({
               {readOnly ? ' · อ่านอย่างเดียว (แก้ไม่ได้)' : ''}
             </p>
           </div>
-          <button type="button" className="modal-close" aria-label="Close" onClick={onClose}>
+          <button type="button" className="modal-close" aria-label="Close" disabled={saving} onClick={onCancel}>
             ✕
           </button>
         </div>
@@ -463,7 +488,7 @@ export function DetailSubform({
             Rows: <b>{rows.length}</b> · Year total: <b>฿{formatThb(grandTotal)}</b>
           </div>
           <div className="modal-actions">
-            <button type="button" className="btn" disabled={loading || saving} onClick={onClose}>
+            <button type="button" className="btn" disabled={loading || saving} onClick={onCancel}>
               {readOnly ? 'ปิด' : 'ยกเลิก'}
             </button>
             {/* Add/save hidden entirely when read-only (ADR-0013) — mockup

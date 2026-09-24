@@ -18,6 +18,7 @@ import {
   blankTripDraft,
   buildManualLinePayload,
   buildTripPayload,
+  CANCEL_UNSAVED_CONFIRM_TEXT,
   countryGroupFor,
   draftFromTripListItem,
   indexDetailLinesByTrip,
@@ -95,7 +96,6 @@ interface TripCardState {
 
 const DELETE_TRIP_CONFIRM_TEXT = 'ลบทริปนี้ทั้งหมด? รายการเบี้ยเลี้ยง/ค่าเดินทางทั้งหมดของทริปจะถูกลบ'
 const DELETE_TRIP_CONFLICT_MESSAGE = 'ทริปนี้ถูกแก้ไขหรือถูกลบโดยผู้อื่นไปแล้ว กรุณาตรวจสอบข้อมูลล่าสุด'
-const CANCEL_UNSAVED_CONFIRM_TEXT = 'มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?'
 /** One card/line's write hit a 409 during `saveAll` — same Thai wording the
  * single-item paths already used, now shown per-card/per-line instead of
  * auto-reloading (a batch holds too much unsaved state to discard silently). */

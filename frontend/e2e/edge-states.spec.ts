@@ -232,4 +232,44 @@ test.describe('edge states', () => {
     await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
     await expect(projectInput).toHaveValue('โครงการทดสอบลากย้อนกลับ')
   })
+
+  test('4.10 holding Enter on a dirty Trip Manager\'s ✕ does not auto-confirm the discard-unsaved dialog (gate finding 2026-09-25, probe D2)', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_TRAVEL_PERDIEM_COST, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-TRV-1' })]],
+      tripsQueue: [[]],
+      detailLinesQueue: [[]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+
+    await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
+    const card = page.getByTestId('trip-card-new-0')
+    const projectInput = card.getByLabel('project new-0')
+    await projectInput.fill('โครงการทดสอบกด Enter ค้าง')
+
+    const closeBtn = page.getByTestId('trip-manager').getByRole('button', { name: 'Close' })
+    await closeBtn.focus()
+
+    // First keydown: ✕'s onClick fires onCancel -> dirty -> opens the
+    // discard-unsaved confirm, which focuses ITS OWN Cancel button.
+    await page.keyboard.down('Enter')
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+
+    // The auto-repeat keydown Chromium fires while the key is still held
+    // (Playwright marks this second `down` as `repeat: true`) used to answer
+    // the confirm as `true` before this fix — both dialogs must survive it.
+    await page.keyboard.down('Enter')
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+
+    await page.keyboard.up('Enter')
+    await page.getByTestId('confirm-cancel').click()
+
+    // Declining the confirm keeps Trip Manager open with the typed value intact.
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+    await expect(projectInput).toHaveValue('โครงการทดสอบกด Enter ค้าง')
+  })
 })
