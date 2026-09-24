@@ -112,6 +112,16 @@ def install_email_redaction() -> None:
         handler.setFormatter(formatter)
 
 
+def _quiet_httpx_logger() -> None:
+    """L5 fix round 4 (finding 8): `httpx` logs its own INFO-level request
+    summary lines (method, URL, status) that propagate to the root handler
+    this job configures — a Graph URL under `/drives/{id}/items/{id}` embeds
+    the drive and item id. Neither is PII, but there is no reason for this
+    public-repo CI log to print them either; WARNING and above (the actual
+    transport failures this job already handles) still come through."""
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
 class OfficerConfigError(RuntimeError):
     """A required piece of configuration (gold DB connection info) is
     missing — a clear, loud error BEFORE any connection attempt (D10),
@@ -370,8 +380,10 @@ def run_build(
         # (and `_RedactingFormatter`) as everything else — never a bare print().
         logger.error("PUBLISH FAIL: type=%s message=%s", type(exc).__name__, exc)
         return 1
-    logger.info("PUBLISHED: file overwritten in SharePoint (officer review/)")
-    logger.info("officer_review: published webUrl=%s", web_url)
+    # L5 fix round 4 (finding 8): the webUrl is never logged (it is behind
+    # login and not PII, but the link is already in the mail — a log line
+    # does not need to repeat it). Byte size only, no Graph-supplied text.
+    logger.info("PUBLISHED: file overwritten in SharePoint (officer review/), %d bytes", len(build.xlsx_bytes))
 
     try:
         results = notify_officer_review(
@@ -414,6 +426,7 @@ def run_build(
 def main() -> int:
     configure_logging()
     install_email_redaction()  # OPS-2/SEC-F2/SPEC-6: right after configure_logging(), per its own contract
+    _quiet_httpx_logger()  # L5 fix round 4: after configure_logging(), same as the redaction install above
     parser = argparse.ArgumentParser(description="Weekly officer-review workbook robot (PRD #34)")
     add_common_args(parser)
     parser.add_argument("--probe", action="store_true", help="read-only permission check only; no build, no write")
@@ -443,6 +456,14 @@ def main() -> int:
             planning_year=args.fiscal_year, dry_run=dry_run, settings=settings,
             out_path=args.out, recipients=recipients, recipients_dropped=dropped,
         )
+    except OfficerConfigError as exc:
+        # L6 fix round 4 (finding 9): missing configuration (GOLD_SQL_SERVER/
+        # GOLD_SQL_DATABASE) is a KNOWN, clearly-diagnosable setup problem —
+        # same class as a control FAIL, not an "unexpected exception". Exits
+        # 1 (matching every other config/control FAIL in this job) instead
+        # of 2, on both `--probe` and the normal build path.
+        logger.error("CONFIG FAIL: %s", exc)
+        return 1
     except Exception as exc:  # noqa: BLE001 — unexpected exception -> loud, type+message (never a raw
         # traceback — see `_RedactingFormatter`), never a silent partial run.
         logger.error("officer_review: unexpected exception type=%s message=%s", type(exc).__name__, exc)

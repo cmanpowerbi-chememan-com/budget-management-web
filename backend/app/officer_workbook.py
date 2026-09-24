@@ -986,7 +986,20 @@ def build_officer_workbook(
         logger.warning("officer_workbook: SAP coverage lookup failed, watermark unknown: %s", exc)
         sap_watermark = None
 
-    n_departments = len({r.department for r in summary_rows if r.department and r.department != UNKNOWN_DEPT})
+    depts_with_rows = {r.department for r in summary_rows if r.department and r.department != UNKNOWN_DEPT}
+    n_departments = len(depts_with_rows)
+
+    # L7 fix round 4 (finding 10): an APPROVED department whose name no
+    # longer matches the master (e.g. a `cc_filler_map` rename/purge that
+    # left `budget.approval_status` pointing at a now-unresolvable label) is
+    # silently left out of `web_rows` on both WEB and FABRIC alike, so the
+    # gate stays green — this mirrors a blind spot the web app already has.
+    # WARN (never FAIL — this is a scope/master-data gap, not a data
+    # mismatch) naming only the COUNT, never which department, per the
+    # public-log rule.
+    approved_zero_rows = approved_depts - depts_with_rows
+    if approved_zero_rows:
+        warnings.append(f"approved departments with 0 rows: {len(approved_zero_rows)}")
 
     wb = Workbook()
     ws1 = wb.active

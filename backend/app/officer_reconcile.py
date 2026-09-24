@@ -135,7 +135,21 @@ def _load_file_side(xlsx_bytes: bytes) -> tuple[_FileSheet1Result, dict[str, lis
         dept = ws1.cell(row=r, column=1).value
         cc = ws1.cell(row=r, column=4).value
         gl = ws1.cell(row=r, column=6).value
-        if not cc and not gl:
+        if not cc or not gl:
+            # L3 fix round 4 (finding 4): the OLD guard here only skipped a
+            # row when CC AND GL were BOTH blank — a row with money and a
+            # department but only ONE of CC/GL missing (or a stray CC with
+            # no GL) passed straight through with `str(None)` standing in
+            # for the missing code, and the row-3 SUBTOTAL range check
+            # (`last1 = max_row`) never noticed either. The current writer
+            # can never produce such a row, but a future writer bug could —
+            # defence in depth: a row that is genuinely BLANK (no cell at
+            # all, e.g. row 5 of an empty-scope sheet, D6) is still skipped;
+            # any OTHER row with at least one non-empty cell but a missing
+            # CC or GL is now a FAIL naming only the row number, never a
+            # cell value (this repo is public).
+            if any(ws1.cell(row=r, column=c).value is not None for c in range(1, ws1.max_column + 1)):
+                failures.append(f"{sheet1_name}!row {r} missing CC/GL")
             continue
         months = tuple(_dec(ws1.cell(row=r, column=FIRST_NUM_COL + i).value) for i in range(12))
         total_year = _dec(ws1.cell(row=r, column=FIRST_NUM_COL + 12).value)

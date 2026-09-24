@@ -49,6 +49,11 @@ ROOT_MASTER_FILENAMES = frozenset({
     "อัตราแลกเปลี่ยนเฉลี่ยรายปี.xlsx",
 })
 _APPROVED_BUDGET_RE = re.compile(r"approved_budget_(\d{4})\.xlsx")
+# L2 fix round 4 (finding 3): a Graph `error.code` is caller-supplied text
+# that reaches a log line — pattern-check it the same way `_q()`'s SQL guard
+# constrains its own inputs, instead of trusting Graph to only ever send a
+# short identifier-shaped string.
+_GRAPH_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 # 423 (Excel has the file locked open) and 409 with error.code=='resourceLocked'
 # both mean "someone has it open" — retry with backoff, honoring Retry-After.
@@ -103,12 +108,30 @@ def _graph_error_code(resp: httpx.Response) -> str:
     file, or echo other Graph-supplied text; this log is public, see
     `officer-review.yml`). Parses `error.code` from the JSON body if
     present and well-formed, else `"-"` — never raises on a malformed or
-    non-JSON body."""
+    non-JSON body.
+
+    L2 fix round 4 (finding 3): the previous version assumed the body was
+    always `{"error": {"code": ...}}` — a body that is a JSON list, or
+    `{"error": "some string"}`, or `{"error": null}` all raised a bare
+    `AttributeError`/`TypeError` straight out of this "never raises"
+    helper (Graph does not promise this shape on every error path, e.g. a
+    gateway-level failure). Now tolerant of ANY JSON shape, and the code
+    itself is pattern-checked (`_GRAPH_ERROR_CODE_RE`) so an oversized or
+    free-text 'code' Graph might one day send can never reach a log line
+    unconstrained."""
     try:
-        code = resp.json().get("error", {}).get("code")
+        body = resp.json()
     except ValueError:
         return "-"
-    return code if isinstance(code, str) and code else "-"
+    if not isinstance(body, dict):
+        return "-"
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return "-"
+    code = error.get("code")
+    if not isinstance(code, str) or not _GRAPH_ERROR_CODE_RE.match(code):
+        return "-"
+    return code
 
 
 def _parse_json_body(resp: httpx.Response, *, description: str) -> dict:
@@ -247,14 +270,27 @@ def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float],
         )
 
     item = _parse_json_body(resp, description=f"'{OFFICER_FOLDER_NAME}' folder body")
-    if "folder" not in item:
+    # L2 fix round 4 (finding 3): a non-dict body (e.g. a JSON list) used to
+    # raise a bare AttributeError on the very next `.get` call below.
+    if not isinstance(item, dict) or "folder" not in item:
         raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' resolved to a non-folder item — refusing to publish")
+    # L2 fix round 4 (finding 7): never print the Graph-supplied `name` value
+    # — "folder name mismatch" says everything an operator needs (which
+    # structural guard tripped) without echoing arbitrary Graph text into a
+    # public log.
     if item.get("name") != OFFICER_FOLDER_NAME:
-        raise OfficerPublishError(f"resolved item name {item.get('name')!r} != {OFFICER_FOLDER_NAME!r} — refusing to publish")
-    parent_path = (item.get("parentReference") or {}).get("path", "")
-    if not parent_path.rstrip("/").endswith("root:"):
-        raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' is not a direct child of the library root (parent path {parent_path!r}) — refusing to publish")
-    return item["id"]
+        raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' folder name mismatch — refusing to publish")
+    parent_ref = item.get("parentReference")
+    # L2 fix round 4 (finding 3): `parentReference: null` (present but None)
+    # is a valid JSON shape Graph could send — `isinstance` catches that the
+    # same as a missing key. Finding 7: never print `parentReference.path`.
+    parent_path = parent_ref.get("path", "") if isinstance(parent_ref, dict) else ""
+    if not isinstance(parent_path, str) or not parent_path.rstrip("/").endswith("root:"):
+        raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' parent mismatch — refusing to publish")
+    folder_id = item.get("id")
+    if not isinstance(folder_id, str) or not folder_id:
+        raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' folder body missing id — refusing to publish")
+    return folder_id
 
 
 def publish_officer_workbook(
@@ -293,9 +329,18 @@ def publish_officer_workbook(
         # never `resp.text`.
         raise OfficerPublishError(f"publish PUT failed: status={resp.status_code} code={_graph_error_code(resp)}")
     item = _parse_json_body(resp, description="publish PUT response body")
-    if (item.get("parentReference") or {}).get("id") != folder_id:
-        raise OfficerPublishError(
-            f"published item's parentReference.id {item.get('parentReference', {}).get('id')!r} "
-            f"!= expected folder id {folder_id!r} — refusing to trust the write"
-        )
-    return item["webUrl"]
+    # L2 fix round 4 (finding 3): tolerate any JSON shape — a non-dict body,
+    # a null/missing `parentReference`, or a missing `id`/`webUrl` must all
+    # raise `OfficerPublishError` (exit 1), never a bare KeyError/AttributeError.
+    # Finding 7: never print the parentReference.id VALUE — "parent mismatch"
+    # names which guard tripped without echoing Graph-supplied ids.
+    if not isinstance(item, dict):
+        raise OfficerPublishError("publish PUT response body was not a JSON object — refusing to trust the write")
+    parent_ref = item.get("parentReference")
+    parent_id = parent_ref.get("id") if isinstance(parent_ref, dict) else None
+    if parent_id != folder_id:
+        raise OfficerPublishError("published item parent mismatch — refusing to trust the write")
+    web_url, item_id = item.get("webUrl"), item.get("id")
+    if not isinstance(web_url, str) or not web_url or not isinstance(item_id, str) or not item_id:
+        raise OfficerPublishError("publish PUT response missing id/webUrl — refusing to trust the write")
+    return web_url

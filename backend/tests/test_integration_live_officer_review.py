@@ -329,3 +329,24 @@ def test_negative_controls_topic_and_department_synthetic():
     assert any(cc in f and gl in f for f in file_result_e.failures), (
         f"duplicate-(cc, gl)-different-department FAIL messages did not name the key ({cc}, {gl}): {file_result_e.failures}"
     )
+
+    # --- (f) non-empty row missing CC (L3 fix round 4, finding 4) ---
+    # The OLD guard in `_load_file_side` only skipped a row when CC AND GL
+    # were BOTH blank — a row with a department and a GL but no CC used to
+    # pass straight through unflagged. Insert one such row and assert it now
+    # FAILs, naming only the row number (never the department/GL VALUES —
+    # this repo is public).
+    wb_f = load_workbook(BytesIO(baseline_bytes))
+    ws1_f = wb_f[wb_f.sheetnames[0]]
+    ws1_f.insert_rows(5)
+    ws1_f.cell(row=5, column=1).value = "SOMEDEPT"
+    ws1_f.cell(row=5, column=6).value = gl  # GL present, CC (column 4) left blank
+    buf_f = BytesIO()
+    wb_f.save(buf_f)
+    file_result_f, _ = _load_file_side(buf_f.getvalue())
+    assert any("row 5 missing CC/GL" in f for f in file_result_f.failures), (
+        f"a non-empty row missing CC must FAIL naming the row: {file_result_f.failures}"
+    )
+    assert not any("SOMEDEPT" in f or gl in f for f in file_result_f.failures), (
+        f"the missing-CC/GL FAIL message must never carry cell values: {file_result_f.failures}"
+    )

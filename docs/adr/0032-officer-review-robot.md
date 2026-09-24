@@ -3,9 +3,11 @@
 Date: 2026-09-24
 
 Status: Accepted (jakkaritw, 2026-09-24, PRD issue #34). Implemented 2026-09-24 (backend, TDD via a
-live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`). Two fix
+live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`). Three fix
 rounds applied same day (gate finding round, see "Hardening added in the 2026-09-24 fix round"
-below; re-verify fix round 2, see "Fix round 2" below).
+below; two further re-verify rounds — commit history holds their per-finding notes), plus a
+same-day LOW-severity fix round 4 (public-log hardening, a config-error exit code, and defence-in-
+depth checks on malformed Graph responses / malformed rows — no design change).
 
 ## Context
 
@@ -110,7 +112,7 @@ first fix round both missed). Two of them change this ADR's own rules:
   plain text on every Actions run page) to a repo SECRET (masked) in
   `.github/workflows/officer-review.yml` — the same public-repo reasoning as above.  `OFFICER_REVIEW_LIVE`
   stays a variable; it only ever holds `true`/`false`.
-- **OPS-10 residual (accepted, not a bug).** The fiscal-year sanity gate (below) only rejects a year
+- **OPS-10 residual (accepted, not a bug).** The fiscal-year sanity gate (above) only rejects a year
   outside {current Bangkok year, next year}. Moving `AUTOMATION_FISCAL_YEAR` forward to next year
   WITHIN that window — e.g. bumping it from 2027 to 2028 while FY2027 departments are still mid
   approval — still passes the sanity check and can publish a legitimately empty file (0 in-scope
@@ -139,7 +141,7 @@ the 2026-08-10 rule, scoped to `officer review/` and this robot only.**
 **Notifier.** Thai HTML mail built in `backend/app/officer_notify.py` (not inside
 `notifications.py` — that module is not edited by this change), sent via the existing
 `app.notifications.send_mail` seam, one call per recipient in `OFFICER_REVIEW_RECIPIENTS` (a repo
-variable, comma/semicolon-separated). Link only, no attachment.
+secret — see "Credentials" below, comma/semicolon-separated). Link only, no attachment.
 
 **Schedule + kill switch.** A new, separate workflow (`.github/workflows/officer-review.yml`),
 `cron: "10 0 * * 5"` (Friday 07:10 Bangkok) + `workflow_dispatch`. Real publish+mail requires the
@@ -185,3 +187,13 @@ variable). Only `OFFICER_REVIEW_LIVE` stays a repo variable. See `--probe` below
   succeed — both are jakkaritw's call, not made by this change.
 - `openpyxl` moves from a "TEST-only" `requirements.txt` comment to a stated runtime dependency
   (already installed in the production image either way).
+- **Pending:** `officer_reconcile._clean_dept` still normalises department labels with
+  `openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE`, while `app.budget_xlsx`'s own writer now strips the
+  broader `XLSX_ILLEGAL_TEXT_RE` (issue #35, the web "ดาวน์โหลด Excel" button — landed same day,
+  after this fix round's brief was written) — U+FFFE/U+FFFF and lone surrogates in addition to the
+  control characters both regexes already cover. `_clean_dept` should switch to the same regex so
+  all three reconcile sides stay aligned with what the writer actually strips; a department label
+  containing one of those extra characters would otherwise false-FAIL the gate (no publish, no
+  mail) even though the FILE side is genuinely clean. Not fixed in this round (out of scope for the
+  LOW-findings list it was scoped to) — flagged here so the next touch of `officer_reconcile.py`
+  picks it up.

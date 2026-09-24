@@ -92,7 +92,17 @@ def notify_officer_review(
     `NotificationError`, OR a raw `httpx.HTTPError` a transport failure can
     raise straight through it — no longer aborts the remaining recipients.
     Every recipient is always attempted; a failed one comes back as
-    `NotificationResult(sent=False, ...)` instead of propagating."""
+    `NotificationResult(sent=False, ...)` instead of propagating.
+
+    L1 fix round 4 (finding 2): `app.notifications` (zero-edit) can also let
+    a bare `ValueError` (e.g. a non-finite `Retry-After` header, see
+    `officer_publisher._retry_after_seconds`'s sibling problem) or an
+    `OverflowError` (an absurdly large `Retry-After` reaching `time.sleep`)
+    escape from underneath `send_mail` — both are now caught per recipient
+    too, same as `NotificationError`/`httpx.HTTPError`, so one hostile
+    header on one recipient's send can never abort the rest. The caller
+    (`jobs.officer_review.run_build`) already exits 1 on a REAL run when any
+    `NotificationResult.sent` is `False`."""
     settings = settings or get_settings()
     subject = build_subject(planning_year, as_of)
     body = build_body_html(
@@ -104,7 +114,7 @@ def notify_officer_review(
     for to in recipients:
         try:
             results.append(send_mail(to, subject, body, dry_run=dry_run, settings=settings))
-        except (notifications.NotificationError, httpx.HTTPError) as exc:
+        except (notifications.NotificationError, httpx.HTTPError, ValueError, OverflowError) as exc:
             logger.warning("officer_notify: send failed for one recipient (%s) — continuing with the rest", type(exc).__name__)
-            results.append(NotificationResult(sent=False, to_email=to, subject=subject, dry_run=dry_run, detail=str(exc)))
+            results.append(NotificationResult(sent=False, to_email=to, subject=subject, dry_run=dry_run, detail=type(exc).__name__))
     return results
