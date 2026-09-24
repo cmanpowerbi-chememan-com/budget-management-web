@@ -3,6 +3,7 @@ import { ApiError, isDepartmentLockedError } from '../api/client'
 import { deleteDetailLine, fetchDetailLines, saveDetailLine } from '../api/subform'
 import type { DetailLineState } from '../api/types'
 import { formatThb, MONTH_KEYS, MONTH_LABELS } from '../grid/model'
+import { useBackdropDismiss } from '../platform/backdropDismiss'
 import { confirmDialog } from '../platform/confirm'
 import { MonthAmountInput } from './MonthAmountInput'
 import {
@@ -239,8 +240,14 @@ export function DetailSubform({
   const monthlyTotals = MONTH_KEYS.map((m) => rows.reduce((sum, r) => sum + (r.draft.months[m] || 0), 0))
   const grandTotal = monthlyTotals.reduce((a, b) => a + b, 0)
 
+  // 2026-09-24 bug fix: a plain `e.target === e.currentTarget` backdrop check
+  // also fired on a drag that started inside the modal and released over the
+  // backdrop (see backdropDismiss.ts) — that used to close the modal and
+  // discard whatever the user was typing.
+  const backdropHandlers = useBackdropDismiss(onClose)
+
   return (
-    <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop open" {...backdropHandlers}>
       <div className="modal" data-testid="detail-subform">
         <div className="modal-head">
           <div>

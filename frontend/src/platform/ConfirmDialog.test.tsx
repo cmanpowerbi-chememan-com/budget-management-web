@@ -142,4 +142,57 @@ describe('ConfirmDialog', () => {
     expect(result).toBe(true)
     spy.mockRestore()
   })
+
+  // BUG FIX (jakkaritw, prd report 2026-09-24): pressing the mouse inside the
+  // dialog and releasing over the dim backdrop used to fire a native `click`
+  // on the backdrop itself — the browser's common-ancestor rule for a
+  // cross-element press/release — which the old `e.target === e.currentTarget`
+  // check couldn't tell apart from a real backdrop click, silently resolving
+  // the confirm as `false`. Fixed by `useBackdropDismiss`
+  // (src/platform/backdropDismiss.ts), which only dismisses when the PRESS
+  // also started on the backdrop itself.
+  describe('backdrop drag-release guard (bug fix 2026-09-24)', () => {
+    function backdrop(): HTMLElement {
+      const el = document.querySelector('.modal-backdrop')
+      if (!el) throw new Error('modal-backdrop not found')
+      return el as HTMLElement
+    }
+
+    it('a press that starts inside the dialog and a click that lands on the backdrop (drag-release) does not resolve false', async () => {
+      render(<ConfirmDialog />)
+
+      let result: boolean | undefined
+      act(() => {
+        confirmDialog('ลบรายการนี้?').then((v) => {
+          result = v
+        })
+      })
+
+      fireEvent.mouseDown(screen.getByTestId('confirm-dialog'))
+      fireEvent.mouseUp(backdrop())
+      fireEvent.click(backdrop())
+      await act(async () => {})
+
+      expect(result).toBeUndefined()
+      expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+    })
+
+    it('a press and click that both land on the backdrop resolve false (clean backdrop click still works)', async () => {
+      render(<ConfirmDialog />)
+
+      let result: boolean | undefined
+      act(() => {
+        confirmDialog('ลบรายการนี้?').then((v) => {
+          result = v
+        })
+      })
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.click(backdrop())
+      await act(async () => {})
+
+      expect(result).toBe(false)
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+    })
+  })
 })

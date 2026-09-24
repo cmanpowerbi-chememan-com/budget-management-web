@@ -166,4 +166,45 @@ describe('AttachmentsModal', () => {
     )
     confirmSpy.mockRestore()
   })
+
+  // BUG FIX (jakkaritw, prd report 2026-09-24): pressing the mouse inside the
+  // modal and releasing over the dim backdrop used to fire a native `click`
+  // on the backdrop itself — the browser's common-ancestor rule for a
+  // cross-element press/release — which the old `e.target === e.currentTarget`
+  // check couldn't tell apart from a real backdrop click, silently closing
+  // the modal. Fixed by `useBackdropDismiss` (src/platform/backdropDismiss.ts),
+  // which only dismisses when the PRESS also started on the backdrop itself.
+  describe('backdrop drag-release guard (bug fix 2026-09-24)', () => {
+    function backdrop(): HTMLElement {
+      const el = document.querySelector('.modal-backdrop')
+      if (!el) throw new Error('modal-backdrop not found')
+      return el as HTMLElement
+    }
+
+    it('a press that starts inside the modal and a click that lands on the backdrop (drag-release) does not close it', async () => {
+      vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([])
+      const onClose = vi.fn()
+      render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={onClose} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีไฟล์/)).toBeInTheDocument())
+
+      fireEvent.mouseDown(screen.getByTestId('attachments-modal'))
+      fireEvent.mouseUp(backdrop())
+      fireEvent.click(backdrop())
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('attachments-modal')).toBeInTheDocument()
+    })
+
+    it('a press and click that both land on the backdrop close it (clean backdrop click still works)', async () => {
+      vi.mocked(attachmentsApi.fetchAttachments).mockResolvedValue([])
+      const onClose = vi.fn()
+      render(<AttachmentsModal department="Accounting" fiscalYear={2027} canUpload onClose={onClose} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีไฟล์/)).toBeInTheDocument())
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.click(backdrop())
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
 })

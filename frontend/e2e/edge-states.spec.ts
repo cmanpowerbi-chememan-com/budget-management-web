@@ -2,7 +2,7 @@
  * a silent empty grid), a /scope failure banner, an out-of-scope deep-link
  * dept being safely ignored, and the two specific 403 Thai messages
  * (past_deadline / department_locked) mapped in `src/api/client.ts`. */
-import { CC, DEEP_LINK_YEAR, DEPT, err, fillerWorld, GL_OFFICE_COST, installMocks, makeBudgetRow, noScopeWorld, PLANNING_YEAR, test, expect } from './fixtures'
+import { CC, DEEP_LINK_YEAR, DEPT, err, fillerWorld, GL_OFFICE_COST, GL_TRAVEL_PERDIEM_COST, installMocks, makeBudgetRow, noScopeWorld, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('edge states', () => {
   test('4.1 a no-scope caller sees the friendly empty state, never the grid', async ({ page }) => {
@@ -146,5 +146,50 @@ test.describe('edge states', () => {
     expect(overflow.year.contentRight).toBeLessThanOrEqual(overflow.year.cellRight + 0.5)
     // ...which means it can never have painted over Jan's cell either.
     expect(overflow.year.contentRight).toBeLessThanOrEqual(overflow.jan.cellLeft + 0.5)
+  })
+
+  test('4.8 dragging a text selection from inside Trip Manager onto the backdrop does not close it, and a genuine backdrop click asks to confirm unsaved changes (bug fix 2026-09-24)', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_TRAVEL_PERDIEM_COST, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-TRV-1' })]],
+      tripsQueue: [[]],
+      detailLinesQueue: [[]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+
+    await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
+    const card = page.getByTestId('trip-card-new-0')
+    const projectInput = card.getByLabel('project new-0')
+    await projectInput.fill('โครงการทดสอบลากเมาส์')
+
+    // A real drag: mousedown INSIDE the project input, drag left past the
+    // modal's own edge, mouseup over the dim backdrop. The root cause (see
+    // TripManager.tsx / backdropDismiss.ts): the browser fires `click` on the
+    // nearest common ancestor of the press/release targets — the backdrop —
+    // which a naive `e.target === e.currentTarget` check cannot distinguish
+    // from a real backdrop click.
+    const modalBox = await page.getByTestId('trip-manager').boundingBox()
+    const inputBox = await projectInput.boundingBox()
+    if (!modalBox || !inputBox) throw new Error('trip-manager or project input has no bounding box')
+    const dragY = inputBox.y + inputBox.height / 2
+    await page.mouse.move(inputBox.x + inputBox.width - 4, dragY)
+    await page.mouse.down()
+    await page.mouse.move(modalBox.x - 8, dragY, { steps: 12 })
+    await page.mouse.up()
+
+    // Still open, and the typed Project survived — nothing was lost.
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+    await expect(projectInput).toHaveValue('โครงการทดสอบลากเมาส์')
+
+    // A genuine backdrop click (no drag) on this now-dirty card must ask
+    // before discarding it — it must NOT close immediately the way a plain
+    // onClose() used to.
+    await page.mouse.click(modalBox.x - 20, modalBox.y + 100)
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    await page.getByTestId('confirm-cancel').click()
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
   })
 })

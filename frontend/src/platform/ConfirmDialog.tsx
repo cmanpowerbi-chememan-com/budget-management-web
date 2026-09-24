@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useBackdropDismiss } from './backdropDismiss'
 import { answerConfirm, subscribeConfirmRequests, type ConfirmRequest } from './confirm'
 
 const MESSAGE_ID = 'confirm-dialog-message'
@@ -35,6 +36,12 @@ export function ConfirmDialog() {
     }
   }, [request])
 
+  // 2026-09-24 bug fix: a plain `e.target === e.currentTarget` backdrop check
+  // also fired on a drag that started inside the dialog and released over
+  // the backdrop (see backdropDismiss.ts) — that used to resolve the confirm
+  // as `false` from a stray drag, not a real dismiss.
+  const backdropHandlers = useBackdropDismiss(() => answer(false))
+
   if (!request) return null
 
   function answer(value: boolean) {
@@ -56,10 +63,7 @@ export function ConfirmDialog() {
   }
 
   return (
-    <div
-      className="modal-backdrop open confirm-dialog-backdrop"
-      onClick={(e) => e.target === e.currentTarget && answer(false)}
-    >
+    <div className="modal-backdrop open confirm-dialog-backdrop" {...backdropHandlers}>
       <div
         className="modal confirm-dialog-modal"
         role="dialog"

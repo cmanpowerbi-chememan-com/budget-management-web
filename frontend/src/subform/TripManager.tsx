@@ -11,6 +11,7 @@ import {
   type TravelExpenseType,
 } from './glDropdownConstants'
 import { MonthAmountInput } from './MonthAmountInput'
+import { useBackdropDismiss } from '../platform/backdropDismiss'
 import { confirmDialog } from '../platform/confirm'
 import {
   blankManualLineDraft,
@@ -773,8 +774,18 @@ export function TripManager({
     onClose()
   }
 
+  // 2026-09-24 bug fix (prd user report): the backdrop AND the ✕ button used
+  // to call onClose() directly — bypassing onCancel's unsaved-changes confirm
+  // above — so a misclick on the dim area, OR a drag that started inside the
+  // modal (e.g. selecting text in an input) and released over the backdrop,
+  // silently discarded every unsaved trip. Both now route through onCancel
+  // (which already no-ops while saving); the drag case is additionally
+  // guarded by useBackdropDismiss (see backdropDismiss.ts) so a genuine
+  // in-modal drag-release never even reaches onCancel.
+  const backdropHandlers = useBackdropDismiss(onCancel)
+
   return (
-    <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && !saving && onClose()}>
+    <div className="modal-backdrop open" {...backdropHandlers}>
       <div className="modal trip-modal" data-testid="trip-manager">
         <div className="modal-head">
           <div>
@@ -786,7 +797,7 @@ export function TripManager({
               {readOnly ? ' · 🔒 อ่านอย่างเดียว (แก้ไม่ได้)' : ''}
             </p>
           </div>
-          <button type="button" className="modal-close" aria-label="Close" disabled={saving} onClick={onClose}>
+          <button type="button" className="modal-close" aria-label="Close" disabled={saving} onClick={onCancel}>
             ✕
           </button>
         </div>

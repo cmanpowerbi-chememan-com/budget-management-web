@@ -1709,4 +1709,92 @@ describe('TripManager', () => {
       expect(subformApi.deleteTrip).not.toHaveBeenCalled()
     })
   })
+
+  // BUG FIX (jakkaritw, prd report 2026-09-24): pressing the mouse INSIDE the
+  // modal (e.g. drag-selecting text in an input) and releasing over the dim
+  // backdrop used to fire a native `click` on the backdrop — the browser's
+  // common-ancestor rule for a cross-element press/release — which the old
+  // `e.target === e.currentTarget` check couldn't tell apart from a real
+  // backdrop click, so the whole modal silently closed and every typed trip
+  // was lost. The ✕ button had the same problem one level up: it called
+  // onClose() directly, bypassing onCancel's unsaved-changes confirm.
+  // Fixed by `useBackdropDismiss` (src/platform/backdropDismiss.ts) for the
+  // drag case, and by routing the backdrop AND ✕ through the existing
+  // onCancel for the confirm case. jsdom never synthesizes a `click` from a
+  // separate mousedown+mouseup on different elements, so each case fires
+  // mousedown/mouseup/click explicitly, mirroring the real browser sequence.
+  describe('backdrop / ✕ drag-release guard (bug fix 2026-09-24)', () => {
+    function backdrop(): HTMLElement {
+      const el = document.querySelector('.modal-backdrop')
+      if (!el) throw new Error('modal-backdrop not found')
+      return el as HTMLElement
+    }
+
+    it('a press that starts inside the modal and a click that lands on the backdrop (drag-release) does not close the modal', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      const onClose = vi.fn()
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={onClose} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่มทริป/ }))
+
+      const projectInput = screen.getByLabelText('project new-0')
+      fireEvent.mouseDown(projectInput)
+      fireEvent.mouseUp(backdrop())
+      fireEvent.click(backdrop())
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('trip-manager')).toBeInTheDocument()
+    })
+
+    it('a press and click that both land on the backdrop (clean, no unsaved edits) close the modal with no confirm prompt', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([])
+      mockNoManualLines()
+      const onClose = vi.fn()
+      const confirmSpy = vi.spyOn(window, 'confirm')
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={onClose} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.click(backdrop())
+
+      expect(confirmSpy).not.toHaveBeenCalled()
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+      confirmSpy.mockRestore()
+    })
+
+    it('a press and click that both land on the backdrop, with a dirty card, ask to confirm before closing — declining keeps the modal open', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      const onClose = vi.fn()
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={onClose} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.click(backdrop())
+
+      expect(confirmSpy).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('trip-manager')).toBeInTheDocument()
+      confirmSpy.mockRestore()
+    })
+
+    it('the ✕ button on a dirty card asks to confirm before closing, instead of closing immediately', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()])
+      mockNoManualLines()
+      const onClose = vi.fn()
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={onClose} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+      fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+      expect(confirmSpy).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      expect(onClose).not.toHaveBeenCalled()
+      confirmSpy.mockRestore()
+    })
+  })
 })

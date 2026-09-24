@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { deleteAttachment, fetchAttachments, fetchDownloadUrl, uploadAttachment } from '../api/attachments'
 import { ApiError } from '../api/client'
 import type { AttachmentInfo } from '../api/types'
+import { useBackdropDismiss } from '../platform/backdropDismiss'
 import { confirmDialog } from '../platform/confirm'
 
 export interface AttachmentsModalProps {
@@ -104,8 +105,14 @@ export function AttachmentsModal({ department, fiscalYear, canUpload, onClose }:
     }
   }
 
+  // 2026-09-24 bug fix: a plain `e.target === e.currentTarget` backdrop check
+  // also fired on a drag that started inside the modal and released over the
+  // backdrop (see backdropDismiss.ts) — that used to close the modal on a
+  // stray drag.
+  const backdropHandlers = useBackdropDismiss(onClose)
+
   return (
-    <div className="modal-backdrop open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop open" {...backdropHandlers}>
       <div className="modal" data-testid="attachments-modal">
         <div className="modal-head">
           <div>
