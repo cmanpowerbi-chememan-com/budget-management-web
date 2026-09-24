@@ -24,7 +24,7 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE, TYPE_STRING
+from openpyxl.cell.cell import TYPE_STRING
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -43,6 +43,16 @@ MONTH_ABBR: tuple[str, ...] = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", 
 _FORMULA_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 _PII_KEY_RE = re.compile(r"email|empcode|employee|traveler|traveller|_user", re.IGNORECASE)
+
+# Illegal-text guard (SEC-F4, extended for gate fix round 2 item J): C0
+# control characters (openpyxl's own ILLEGAL_CHARACTERS_RE set, \t/\n/\r kept
+# usable), the two Unicode noncharacters U+FFFE/U+FFFF, and lone (unpaired)
+# UTF-16 surrogates (\ud800-\udfff) — any of these crashes openpyxl with
+# `IllegalCharacterError` on cell assignment otherwise. PUBLIC (no leading
+# underscore): `app.budget_export`'s `department_clean` and the PRD #34
+# officer-review reconcile both import this exact name/pattern so the file
+# builder and the reconcile can never disagree on what counts as illegal.
+XLSX_ILLEGAL_TEXT_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff\ud800-\udfff]")
 
 FONT_NAME = "Tahoma"
 NUM_FMT = "#,##0.00"
@@ -161,7 +171,7 @@ def _write_text_cell(ws: Worksheet, row: int, column: int, value, *, warnings: l
     cell must never be able to block the file by itself)."""
     text = value
     if isinstance(value, str):
-        stripped = ILLEGAL_CHARACTERS_RE.sub("", value)
+        stripped = XLSX_ILLEGAL_TEXT_RE.sub("", value)
         if stripped != value and warnings is not None:
             warnings.append(f"illegal character stripped in {ws.title}!{get_column_letter(column)}{row}")
         text = stripped
