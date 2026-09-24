@@ -2094,6 +2094,79 @@ describe('BudgetGrid', () => {
       expect(exportButton()).toBeDisabled()
     })
 
+    // Item A (gate fix round 2, repro 1): switching ฝ่าย X -> Warehouse ->
+    // Finance, where Finance's response lands FIRST (out of order) and
+    // Warehouse's stale response only settles afterward — the stale
+    // Warehouse response must never overwrite what's on screen, and the
+    // button must keep reflecting Finance (the ACTUAL current ฝ่าย), not
+    // whichever fetch happened to settle last.
+    it('an out-of-order response for an abandoned ฝ่าย never overwrites the current one', async () => {
+      const threeDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2', 'CC3'], seeCostCenters: ['CC1', 'CC2', 'CC3'] }
+      const threeDepartments = [
+        { cost_center: 'CC1', department: 'Accounting', division: 'Digital Technology Division', c_level: 'CTO' },
+        { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+        { cost_center: 'CC3', department: 'Finance', division: 'Digital Technology Division', c_level: 'CTO' },
+      ]
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(threeDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([]) // initial mount, auto-selects 'Accounting'
+      let resolveWarehouse: (rows: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolveWarehouse = resolve }),
+      )
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([
+        makeRow('CC3', '5211800030', { department: 'Finance' }),
+      ])
+
+      render(<BudgetGrid scope={threeDeptScope} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(screen.getByRole('button', { name: /^Accounting/ })).toBeInTheDocument())
+
+      switchDepartment('Warehouse')
+      switchDepartment('Finance')
+
+      // Finance's response settles FIRST (out of order) — the grid shows it.
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      expect(screen.getByTestId('pending-cell-CC3-5211800030-m01')).toBeInTheDocument()
+
+      // The stale Warehouse response settles LATE — it must be dropped
+      // entirely, never shown under the current (Finance) heading.
+      resolveWarehouse([makeRow('CC2', '5211800030', { department: 'Warehouse' })])
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      expect(screen.getByTestId('pending-cell-CC3-5211800030-m01')).toBeInTheDocument()
+      expect(screen.queryByTestId('pending-cell-CC2-5211800030-m01')).not.toBeInTheDocument()
+    })
+
+    // Item A (gate fix round 2, repro 2): a double year change (2027 ->
+    // 2026 -> 2025) — the button must stay disabled until the LATEST
+    // request settles; the stale 2026 response settling late must not
+    // re-enable it.
+    it('stays disabled through a double year change until only the LATEST request settles', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030')])
+      let resolve2026: (rows: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolve2026 = resolve }),
+      )
+      let resolve2025: (rows: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolve2025 = resolve }),
+      )
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+
+      const yearPicker = screen.getByLabelText('ปีฐาน (SAP/Approved · Pending = ปีถัดไป)')
+      fireEvent.change(yearPicker, { target: { value: '2026' } })
+      fireEvent.change(yearPicker, { target: { value: '2025' } })
+
+      await waitFor(() => expect(exportButton()).toBeDisabled())
+
+      resolve2026([makeRow('CC1', '5211800030')]) // stale — must NOT re-enable
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(exportButton()).toBeDisabled()
+
+      resolve2025([makeRow('CC1', '5211800030')]) // the latest — this one may
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+    })
+
     // Item 5 (gate fix round): the actual download mechanics — object-URL
     // anchor creation/click/revoke and the server file name reaching
     // `anchor.download` — not just that the API call happened.

@@ -299,6 +299,16 @@ def test_sanitize_department_also_replaces_dots():
     assert sanitize_department_for_filename("A.B.C") == "A_B_C"
 
 
+# Item E (gate fix round 2): \x7f (DEL) plus Unicode Cf (format — e.g.
+# U+202E RIGHT-TO-LEFT OVERRIDE, a filename-spoofing trick that can make
+# "cmd.exe" read as "exe.dmc" in a file listing) and Cc (control, incl. the
+# C1 block \x80-\x9f the plain regex does not reach) categories are dropped.
+def test_sanitize_department_replaces_del_and_drops_format_and_control_categories():
+    assert sanitize_department_for_filename("A\x7fB") == "A_B"
+    assert sanitize_department_for_filename("A‮B") == "A_B"  # Cf: right-to-left override
+    assert sanitize_department_for_filename("A\x80B") == "A_B"  # Cc: C1 control block
+
+
 def test_content_disposition_carries_ascii_fallback_and_rfc5987_utf8_name():
     header = content_disposition("budget_FY2027_ฝ่ายบัญชี_20260924_0924.xlsx")
     assert 'filename="budget_FY2027_' in header
@@ -335,6 +345,27 @@ def test_department_with_illegal_xml_chars_does_not_crash_and_is_stripped_everyw
     assert ws["A1"].value == "งบประมาณ FY2027 · ข้อมูล ณ 24/09/2026 09:24 น. · ฝ่าย: ABC"
     assert "\x0b" not in filename and "\x01" not in filename
     assert "ABC" in filename
+
+
+# Items D + H (gate fix round 2): the FULL C0 control-char range (minus
+# \t\n\r, which stay legal/usable text) PLUS the two Unicode noncharacters
+# and a lone surrogate — `department_clean` now delegates to
+# `app.budget_xlsx.XLSX_ILLEGAL_TEXT_RE` (item J), so every one of these
+# must build without raising and leave the character out of both the title
+# and the filename.
+_C0_MINUS_TAB_NEWLINE_CR = [chr(c) for c in range(0x00, 0x20) if chr(c) not in ("\t", "\n", "\r")]
+
+
+@pytest.mark.parametrize("illegal_char", _C0_MINUS_TAB_NEWLINE_CR + ["\ufffe", "\uffff", "\ud800"])
+def test_department_with_any_illegal_char_builds_without_crashing(illegal_char):
+    department = f"A{illegal_char}B"
+    filename, xlsx_bytes = build_export_workbook(
+        [], planning_year=2027, department=department, as_of=AS_OF, sap_watermark=None,
+    )
+    ws = load_workbook(BytesIO(xlsx_bytes)).active
+    assert illegal_char not in ws["A1"].value
+    assert "AB" in ws["A1"].value
+    assert illegal_char not in filename
 
 
 # ---------------------------------------------------------------------------
@@ -389,3 +420,103 @@ def test_gl_name_and_group_prefer_the_master_over_the_row_layers():
 
     assert result[0].gl_name == "Master Name"
     assert result[0].gl_group == "Master Group"
+
+
+# ---------------------------------------------------------------------------
+# Item B (gate fix round 2, MED): a fixture that can actually distinguish
+# the PRD sort key (c_level, division, department, cost_center, side,
+# gl_group, gl_account) from sorting by gl_account alone / dropping
+# gl_group / gl_account-before-gl_group, and from sorting cost_center ahead
+# of c_level/division — `test_budget.py`'s own parity-test fixture cannot:
+# its two same-CC GLs happen to agree on BOTH gl_group order AND gl_account
+# order, so it would pass even with a wrong key.
+# ---------------------------------------------------------------------------
+def test_build_export_summary_rows_sort_key_isolates_c_level_and_gl_group():
+    # Same CC "AA_CC": GL-code order DISAGREES with GL-GROUP order — under
+    # the PRD key, GL "...010" (group "Alpha") must come BEFORE GL "...030"
+    # (group "Zulu") despite having the LARGER gl_account string.
+    alpha_row = BudgetRow(
+        cost_center="AA_CC", gl_account="5215000010", department="Dept",
+        pending=PendingLayer(total_year=1.0), board=BoardLayer(), sap=SapLayer(),
+    )
+    zulu_row = BudgetRow(
+        cost_center="AA_CC", gl_account="5211800030", department="Dept",
+        pending=PendingLayer(total_year=2.0), board=BoardLayer(), sap=SapLayer(),
+    )
+    # A second CC "ZZ_CC" whose c_level/division sort BEFORE "AA_CC"'s, even
+    # though "ZZ_CC" > "AA_CC" as a plain string — proves c_level/division
+    # outrank cost_center rather than merely tie-breaking it.
+    other_cc_row = BudgetRow(
+        cost_center="ZZ_CC", gl_account="6000000000", department="Dept",
+        pending=PendingLayer(total_year=3.0), board=BoardLayer(), sap=SapLayer(),
+    )
+
+    cc_dims = {
+        "AA_CC": {"department": "Dept", "division": "Z_Div", "c_level": "Z_Level"},
+        "ZZ_CC": {"department": "Dept", "division": "A_Div", "c_level": "A_Level"},
+    }
+    gl_master = [
+        {"gl_code": "5215000010", "gl_name": "Alpha GL", "gl_group": "Alpha"},
+        {"gl_code": "5211800030", "gl_name": "Zulu GL", "gl_group": "Zulu"},
+        {"gl_code": "6000000000", "gl_name": "Other GL", "gl_group": "Beta"},
+    ]
+
+    with patch("app.budget_export.fetch_cc_dims", return_value=cc_dims), patch(
+        "app.budget_export._fetch_cc_names", return_value={}
+    ), patch("app.budget_export._fetch_department_status", return_value="APPROVED"), patch(
+        "app.budget_export.fetch_gl_accounts", return_value=gl_master
+    ):
+        result = build_export_summary_rows(
+            MagicMock(), [alpha_row, zulu_row, other_cc_row], planning_year=2027, department="Dept",
+        )
+
+    order = [(r.cost_center, r.gl_account) for r in result]
+    assert order == [("ZZ_CC", "6000000000"), ("AA_CC", "5215000010"), ("AA_CC", "5211800030")]
+
+
+# ---------------------------------------------------------------------------
+# Item I (gate fix round 2): special-GL detection (`_attach_detail_lines`)
+# must key off the SAME master-first `gl_group` `build_export_summary_rows`
+# resolves (item 4), never the row's own pending layer — in EITHER
+# direction (master says special but the layer disagrees, and vice versa).
+# ---------------------------------------------------------------------------
+def test_special_gl_detection_follows_the_master_gl_group_both_ways():
+    # Master says "Travelling Expense", the row's own layer disagrees
+    # ("Office") -> the master wins -> detail lines ARE fetched.
+    travel_row = BudgetRow(
+        cost_center="CC1", gl_account="5000000001", department="Dept",
+        pending=PendingLayer(gl_group="Office", total_year=1.0), board=BoardLayer(), sap=SapLayer(),
+    )
+    with patch("app.budget_export.fetch_cc_dims", return_value={}), patch(
+        "app.budget_export._fetch_cc_names", return_value={}
+    ), patch("app.budget_export._fetch_department_status", return_value="APPROVED"), patch(
+        "app.budget_export.fetch_gl_accounts",
+        return_value=[{"gl_code": "5000000001", "gl_name": "X", "gl_group": "Travelling Expense"}],
+    ), patch("app.budget_export.fetch_detail_lines", return_value=[]) as mock_detail, patch(
+        "app.budget_export.fetch_trips", return_value=[]
+    ) as mock_trips, patch("app.budget_export._fetch_is_auto_calc", return_value={}):
+        build_export_summary_rows(MagicMock(), [travel_row], planning_year=2027, department="Dept")
+
+    assert mock_detail.called
+    assert mock_trips.called
+
+    # Reverse: master says "Office", the row's own layer disagrees
+    # ("Travelling Expense") -> the master wins -> NOT special, detail lines
+    # are NOT fetched.
+    office_row = BudgetRow(
+        cost_center="CC1", gl_account="5000000002", department="Dept",
+        pending=PendingLayer(gl_group="Travelling Expense", total_year=1.0), board=BoardLayer(), sap=SapLayer(),
+    )
+    with patch("app.budget_export.fetch_cc_dims", return_value={}), patch(
+        "app.budget_export._fetch_cc_names", return_value={}
+    ), patch("app.budget_export._fetch_department_status", return_value="APPROVED"), patch(
+        "app.budget_export.fetch_gl_accounts",
+        return_value=[{"gl_code": "5000000002", "gl_name": "X", "gl_group": "Office"}],
+    ), patch("app.budget_export.fetch_detail_lines", return_value=[]) as mock_detail2, patch(
+        "app.budget_export.fetch_trips", return_value=[]
+    ) as mock_trips2, patch("app.budget_export._fetch_is_auto_calc", return_value={}) as mock_auto2:
+        build_export_summary_rows(MagicMock(), [office_row], planning_year=2027, department="Dept")
+
+    assert not mock_detail2.called
+    assert not mock_trips2.called
+    assert not mock_auto2.called

@@ -102,7 +102,10 @@ def budget_export(
             sap_watermark=sap_watermark,
         )
     except (SapActualsFetchError, pyodbc.Error) as exc:
-        logger.exception("Budget export failed for year=%s, department=%s, email=%s", year, department, email)
+        # `department` is caller-supplied free text — %r (not %s) so a
+        # CR/LF or other control character in it can never forge a fake log
+        # line (gate fix round 2, item F).
+        logger.exception("Budget export failed for year=%s, department=%r, email=%s", year, department, email)
         raise HTTPException(status_code=502, detail=_SAP_UNAVAILABLE_DETAIL) from exc
 
     return Response(

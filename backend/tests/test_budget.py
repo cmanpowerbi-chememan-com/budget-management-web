@@ -1,12 +1,14 @@
 """Unit tests for GET /budget, GET /budget/export and GET /budget/sap-coverage
 — DB always mocked, no live connection."""
+import logging
 from contextlib import contextmanager, ExitStack
 from datetime import date
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from openpyxl import load_workbook
 import pyodbc
+import pytest
 
 from app.auth import get_current_user_email
 from app.budget_xlsx import SummaryRow
@@ -351,7 +353,8 @@ def test_budget_export_empty_grid_yields_header_only_workbook_no_leaked_rows(cli
 # character used to crash the endpoint with an uncaught IllegalCharacterError
 # (500) rather than a clean 200 — fixed in `build_export_workbook` (see
 # test_budget_export.py's dedicated unit test for the exact stripped value).
-def test_budget_export_department_with_illegal_xml_chars_returns_200_not_500(client):
+@pytest.mark.parametrize("illegal_char", ["\x0b", "￿"])
+def test_budget_export_department_with_illegal_xml_chars_returns_200_not_500(client, illegal_char):
     _override_auth("filler@chememan.com")
     fake_scope = Scope(email="filler@chememan.com", is_admin=False, role="filler", fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
 
@@ -364,11 +367,32 @@ def test_budget_export_department_with_illegal_xml_chars_returns_200_not_500(cli
         mocks["resolve_sap_coverage_cached"].return_value = SapCoverage(
             fiscal_year=2026, watermark_date=None, days_behind=None, is_stale=True,
         )
-        response = client.get("/budget/export", params={"year": 2027, "department": "A\x0bB"})
+        response = client.get("/budget/export", params={"year": 2027, "department": f"A{illegal_char}B"})
 
     assert response.status_code == 200
     wb = load_workbook(BytesIO(response.content))
     assert wb.active is not None
+
+
+# Item F (gate fix round 2): `department` is caller-supplied free text — the
+# 502 failure log must use %r (repr), never raw %s, so a CR/LF-bearing value
+# can't forge a fake extra log line.
+def test_budget_export_502_log_uses_repr_for_department_no_log_forging(client, caplog):
+    _override_auth("filler@chememan.com")
+    fake_scope = Scope(email="filler@chememan.com", is_admin=False, role="filler", fill_cost_centers=["CC1"], see_cost_centers=["CC1"])
+    malicious_department = "Dept\r\nFAKE LOG LINE: admin login succeeded"
+
+    with _export_mocks() as mocks:
+        mocks["get_fabric_conn"].return_value.__enter__.return_value = MagicMock()
+        mocks["get_gold_conn"].return_value.__enter__.return_value = MagicMock()
+        mocks["resolve_scope"].return_value = fake_scope
+        mocks["get_budget_grid"].side_effect = SapActualsFetchError("boom")
+        with caplog.at_level(logging.ERROR):
+            response = client.get("/budget/export", params={"year": 2027, "department": malicious_department})
+
+    assert response.status_code == 502
+    assert repr(malicious_department) in caplog.text  # escaped \r\n, one literal log line
+    assert "\nFAKE LOG LINE" not in caplog.text  # never a raw injected newline forging a new line
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +409,7 @@ FIRST_NUM_COL = 11  # K = ม.ค.
 TOTAL_COL = FIRST_NUM_COL + 12  # W = รวมปี
 BOARD_COL = FIRST_NUM_COL + 13  # X = งบอนุมัติ
 SAP_COL = FIRST_NUM_COL + 14  # Y = ใช้จริง SAP
+REMARK_COL = SAP_COL + 1  # Z = Remark
 
 
 @contextmanager
@@ -416,7 +441,10 @@ def test_budget_export_seam_a_parity_full_enrichment_pipeline(client):
 
     cost_row = BudgetRow(
         cost_center="10CS010000", gl_account="5211800030", department="Corporate Strategy 2",
-        pending=PendingLayer(m01=10, m02=20, m03=30, m04=40, m05=50, m06=60, m07=70, m08=80, m09=90, m10=100, m11=110, m12=120, total_year=780),
+        pending=PendingLayer(
+            m01=10, m02=20, m03=30, m04=40, m05=50, m06=60, m07=70, m08=80, m09=90, m10=100, m11=110, m12=120,
+            total_year=780, remark="Note X",
+        ),
         board=BoardLayer(total_year=500), sap=SapLayer(total_year=300),
     )
     sga_row = BudgetRow(
@@ -479,8 +507,15 @@ def test_budget_export_seam_a_parity_full_enrichment_pipeline(client):
 
     # Sort order: (c_level, division, department, cost_center, side, gl_group,
     # gl_account) — cost_row and special_row share cost_center "10CS010000"
-    # (side COST for both); "Office Group" < "Travelling Expense" puts
-    # cost_row first, then special_row, then sga_row (cost_center "...020000").
+    # (side COST for both), so the tie-break falls to gl_group then
+    # gl_account. NOTE (item B, gate fix round 2): in THIS fixture
+    # gl_group ("Office Group" < "Travelling Expense") and gl_account
+    # ("...5211800030" < "...5215000010") happen to AGREE, so this
+    # assertion alone does not prove gl_group is consulted before
+    # gl_account, or even that gl_group is consulted at all — sorting by
+    # gl_account alone would produce the same order here. The dedicated
+    # isolation proof (a fixture where the two DISAGREE) lives in
+    # test_budget_export.py::test_build_export_summary_rows_sort_key_isolates_c_level_and_gl_group.
     data_rows = list(range(5, 8))
     assert ws.max_row == 7  # 3 admitted rows — the foreign-department row is GONE
     keys = [(ws.cell(row=r, column=4).value, ws.cell(row=r, column=6).value) for r in data_rows]
@@ -518,6 +553,42 @@ def test_budget_export_seam_a_parity_full_enrichment_pipeline(client):
     assert detail_text.index("ทริป 1") < detail_text.index("ทริป 2")
     assert "(เบี้ยเลี้ยงคำนวณอัตโนมัติ)" in detail_text.split("\n")[0]  # detail_id 1 -> is_auto_calc True
     assert "(เบี้ยเลี้ยงคำนวณอัตโนมัติ)" not in detail_text.split("\n")[1]  # detail_id 2 -> False
+
+    # Item G (gate fix round 2): enriched text columns A ฝ่าย / B สายงาน /
+    # C C-Level / E ชื่อ Cost Center, per row (not just spot-checked once) —
+    # and the remark landing in ITS row only, never bleeding into another.
+    expected_text_cols = {
+        ("10CS010000", "5211800030"): ("Corporate Strategy 2", "Strategy Division", "CEO", "Strategy CC1"),
+        ("10CS010000", "5215000010"): ("Corporate Strategy 2", "Strategy Division", "CEO", "Strategy CC1"),
+        ("10CS020000", "6210900010"): ("Corporate Strategy 2", "Strategy Division", "CEO", "Strategy CC2"),
+    }
+    for r in data_rows:
+        key = (ws.cell(row=r, column=4).value, ws.cell(row=r, column=6).value)
+        actual = (ws.cell(row=r, column=1).value, ws.cell(row=r, column=2).value, ws.cell(row=r, column=3).value, ws.cell(row=r, column=5).value)
+        assert actual == expected_text_cols[key], key
+    assert ws.cell(row=5, column=REMARK_COL).value == "Note X"  # cost_row's own remark
+    assert ws.cell(row=6, column=REMARK_COL).value in (None, "")  # special_row: no remark
+    assert ws.cell(row=7, column=REMARK_COL).value in (None, "")  # sga_row: no remark
+
+    # K..V (pending months) on EVERY admitted row, not just row 5.
+    expected_months = {
+        ("10CS010000", "5211800030"): [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+        ("10CS010000", "5215000010"): [0.0] * 12,
+        ("10CS020000", "6210900010"): [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+    }
+    for r in data_rows:
+        key = (ws.cell(row=r, column=4).value, ws.cell(row=r, column=6).value)
+        row_months = [ws.cell(row=r, column=FIRST_NUM_COL + i).value for i in range(12)]
+        assert row_months == expected_months[key], key
+
+    # Item C (gate fix round 2): the EXACT year/department/cost_center args
+    # reaching the leaf reads — a `planning_year - 1` (or similarly wrong)
+    # mutation on any of these must fail here, not just silently fetch the
+    # wrong year's data through a mock that ignores its own arguments.
+    mocks["_fetch_department_status"].assert_called_once_with(ANY, "Corporate Strategy 2", 2027)
+    mocks["fetch_detail_lines"].assert_called_once_with(ANY, "10CS010000", "5215000010", 2027)
+    mocks["fetch_trips"].assert_called_once_with(ANY, "10CS010000", 2027)
+    mocks["_fetch_is_auto_calc"].assert_called_once_with(ANY, 2027, ["10CS010000"])
 
     # No traveller name/empcode anywhere on the sheet (PDPA).
     all_text = " ".join(

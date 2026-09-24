@@ -73,6 +73,9 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Latest-request guard for `loadGrid` (gate fix round 2, item A) — see
+  // that function's own doc comment for why this exists.
+  const loadSeqRef = useRef(0)
 
   // A9: which special-GL subform (or Trip Manager) is currently open, if
   // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย" /
@@ -309,18 +312,31 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     loadGrid()
   }
 
+  /** Latest-request guard (gate fix round 2, item A): `loadGrid` fires again
+   * on every year/department/adminViewEnabled change, but nothing ever
+   * cancelled the PREVIOUS in-flight fetch — a late response for a ฝ่าย/year
+   * the user has since navigated away from used to overwrite `rows` with
+   * stale data (shown under the NEW heading) and could leave `loading`
+   * cleared while a newer request was still pending, silently re-enabling
+   * "ดาวน์โหลด Excel" against the wrong ฝ่าย. Each call claims the next
+   * sequence number; only the call that still holds the LATEST number when
+   * its fetch settles is allowed to touch `rows`/`error`/`loading` — an
+   * out-of-order (or simply superseded) response is dropped entirely. */
   async function loadGrid() {
     if (hasNoScope) return
+    const seq = ++loadSeqRef.current
     setLoading(true)
     setError(null)
     try {
       const data = await fetchBudgetGrid({ year, department: department ?? undefined, adminViewEnabled })
+      if (seq !== loadSeqRef.current) return
       setRows(admitRows(data, department))
     } catch (err) {
+      if (seq !== loadSeqRef.current) return
       const message = err instanceof ApiError ? err.message : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
       setError(message)
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
   }
 

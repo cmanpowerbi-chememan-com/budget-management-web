@@ -21,6 +21,7 @@ number format, or the row-3 SUBTOTAL. It only:
 that this is normally a no-op for server data.
 """
 import dataclasses
+import unicodedata
 from datetime import date, datetime
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -28,9 +29,15 @@ import re
 
 import pyodbc
 from openpyxl import Workbook
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
-from app.budget_xlsx import SummaryRow, render_detail_line, resolve_status_label, workbook_bytes, write_summary_sheet
+from app.budget_xlsx import (
+    SummaryRow,
+    XLSX_ILLEGAL_TEXT_RE,
+    render_detail_line,
+    resolve_status_label,
+    workbook_bytes,
+    write_summary_sheet,
+)
 from app.read_model import BudgetRow, fetch_cc_dims
 from app.reference_data import fetch_gl_accounts
 from app.special_gl import SPECIAL_GL_GROUPS
@@ -39,7 +46,13 @@ from app.subform_read import fetch_detail_lines, fetch_trips
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
-_INVALID_FILENAME_CHARS_RE = re.compile(r'[\\/:*?"<>|.\x00-\x1f]')
+_INVALID_FILENAME_CHARS_RE = re.compile(r'[\\/:*?"<>|.\x00-\x1f\x7f]')
+# Unicode categories replaced with '_' by `sanitize_department_for_filename`
+# (gate fix round 2, item E): Cf (format, invisible-but-meaningful —
+# e.g. U+202E RIGHT-TO-LEFT OVERRIDE, a filename-spoofing vector) and Cc
+# (control — the regex above already covers the ASCII C0/DEL range; this
+# also catches the C1 control block, \x80-\x9f, which the regex does not).
+_STRIP_UNICODE_CATEGORIES = frozenset({"Cf", "Cc"})
 # The SharePoint board-budget import trigger (ADR-0021) — a downloaded file
 # must never be able to collide with it if dropped back onto SharePoint
 # (issue #35 story 34).
@@ -68,9 +81,13 @@ class ExportFilenameCollisionError(RuntimeError):
 # Pure helpers — filename, Content-Disposition, admitRows mirror.
 # ---------------------------------------------------------------------------
 def sanitize_department_for_filename(name: str) -> str:
-    """Replace filesystem-unsafe characters with '_' and collapse
-    whitespace, so a ฝ่าย name safely becomes one filename segment."""
+    """Replace filesystem-unsafe characters with '_', drop Unicode
+    Cf/format (e.g. U+202E right-to-left override — a filename-spoofing
+    trick) and Cc/control characters (e.g. \\x7f DEL, the C1 block), and
+    collapse whitespace, so a ฝ่าย name safely becomes one filename
+    segment (gate fix round 2, item E)."""
     cleaned = _INVALID_FILENAME_CHARS_RE.sub("_", name.strip())
+    cleaned = "".join("_" if unicodedata.category(ch) in _STRIP_UNICODE_CATEGORIES else ch for ch in cleaned)
     cleaned = re.sub(r"\s+", "_", cleaned)
     return cleaned or "unknown"
 
@@ -275,19 +292,21 @@ def build_export_workbook(
     UTC-aware `as_of` (e.g. a UTC container) still gets one consistent
     local time across the title, the filename, and row 2.
 
-    `department` is stripped of XML-illegal control characters (`\\x0b`,
-    `\\x01`, ...) ONCE here and the cleaned value reused for `scope_label`,
-    the A1 title override, and the filename (gate fix round, item 2): a raw
-    control character reaching `write_summary_sheet`'s own title-row
-    assignment (a plain `ws["A1"] = ...`, not routed through its
-    `_write_text_cell` sanitizer) crashes with `IllegalCharacterError`
-    before this function ever gets a chance to overwrite it. Per-row cells
-    (the ฝ่าย TEXT COLUMN, `SummaryRow.department`) already go through that
-    sanitizer inside `write_summary_sheet` and are unaffected."""
+    `department` is stripped of illegal text (`app.budget_xlsx`'s
+    `XLSX_ILLEGAL_TEXT_RE` — C0 control chars, U+FFFE/U+FFFF, lone
+    surrogates) ONCE here and the cleaned value reused for `scope_label`,
+    the A1 title override, and the filename (gate fix round, item 2 +
+    item J): a raw illegal character reaching `write_summary_sheet`'s own
+    title-row assignment (a plain `ws["A1"] = ...`, not routed through its
+    `_write_text_cell` sanitizer) crashes with `IllegalCharacterError`/
+    `ValueError`/`UnicodeEncodeError` before this function ever gets a
+    chance to overwrite it. Per-row cells (the ฝ่าย TEXT COLUMN,
+    `SummaryRow.department`) already go through that same sanitizer inside
+    `write_summary_sheet` and are unaffected."""
     if as_of.tzinfo is None:
         raise ValueError("build_export_workbook: as_of must be tz-aware (matches write_summary_sheet's SPEC-9 guard)")
     as_of_bkk = as_of.astimezone(BANGKOK_TZ)
-    department_clean = ILLEGAL_CHARACTERS_RE.sub("", department)
+    department_clean = XLSX_ILLEGAL_TEXT_RE.sub("", department)
     wb = Workbook()
     ws = wb.active
     write_summary_sheet(
