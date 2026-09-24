@@ -187,13 +187,9 @@ variable). Only `OFFICER_REVIEW_LIVE` stays a repo variable. See `--probe` below
   succeed — both are jakkaritw's call, not made by this change.
 - `openpyxl` moves from a "TEST-only" `requirements.txt` comment to a stated runtime dependency
   (already installed in the production image either way).
-- **Pending:** `officer_reconcile._clean_dept` still normalises department labels with
-  `openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE`, while `app.budget_xlsx`'s own writer now strips the
-  broader `XLSX_ILLEGAL_TEXT_RE` (issue #35, the web "ดาวน์โหลด Excel" button — landed same day,
-  after this fix round's brief was written) — U+FFFE/U+FFFF and lone surrogates in addition to the
-  control characters both regexes already cover. `_clean_dept` should switch to the same regex so
-  all three reconcile sides stay aligned with what the writer actually strips; a department label
-  containing one of those extra characters would otherwise false-FAIL the gate (no publish, no
-  mail) even though the FILE side is genuinely clean. Not fixed in this round (out of scope for the
-  LOW-findings list it was scoped to) — flagged here so the next touch of `officer_reconcile.py`
-  picks it up.
+- **Done (2026-09-25):** `officer_reconcile._clean_dept` now normalises department labels with
+  `app.budget_xlsx.XLSX_ILLEGAL_TEXT_RE` — the SAME pattern `app.budget_xlsx`'s own writer strips
+  with (issue #35, the web "ดาวน์โหลด Excel" button) — instead of the narrower
+  `openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE`. All three reconcile sides (FILE/WEB/FABRIC) now stay
+  aligned with what the writer actually strips; a department label containing U+FFFE/U+FFFF or a
+  lone surrogate no longer false-FAILs the gate.

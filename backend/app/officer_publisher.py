@@ -129,7 +129,13 @@ def _graph_error_code(resp: httpx.Response) -> str:
     if not isinstance(error, dict):
         return "-"
     code = error.get("code")
-    if not isinstance(code, str) or not _GRAPH_ERROR_CODE_RE.match(code):
+    # Fix round 2026-09-25: `re.match` with a trailing `$` in the pattern
+    # accepts a string with one extra trailing newline (`$` matches just
+    # before a final `\n`, not only true end-of-string) — e.g.
+    # "resourceLocked\n" would have passed `.match()` even though it is not
+    # a clean 1-64-char code. `.fullmatch()` requires the ENTIRE string to
+    # match, so that trailing newline is correctly rejected.
+    if not isinstance(code, str) or not _GRAPH_ERROR_CODE_RE.fullmatch(code):
         return "-"
     return code
 

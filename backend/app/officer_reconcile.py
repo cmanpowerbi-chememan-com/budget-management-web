@@ -30,9 +30,8 @@ from io import BytesIO
 
 import pyodbc
 from openpyxl import load_workbook
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
-from app.budget_xlsx import FIRST_NUM_COL
+from app.budget_xlsx import FIRST_NUM_COL, XLSX_ILLEGAL_TEXT_RE
 from app.officer_workbook import (
     CC_COL,
     GL_COL,
@@ -61,17 +60,20 @@ def _dec(v) -> Decimal:
 
 def _clean_dept(dept: str | None) -> str:
     """R4/N5 fix round 2026-09-24: `app.budget_xlsx._write_text_cell` strips
-    XML-illegal control characters (e.g. `\\x0b`) before writing ANY text
-    cell — so a department label containing one always comes back CLEAN on
-    the FILE side. WEB and FABRIC never go through that writer, so without
-    this same strip a department name with a stray control character in the
-    master data FAILed the gate on every single run (row-key set FILE !=
-    WEB), even though nothing was actually wrong. Reuses
-    `openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE` directly — never edits
-    `app.budget_xlsx` (out of scope this round)."""
+    XML-illegal text (control characters, U+FFFE/U+FFFF, lone surrogates)
+    before writing ANY text cell — so a department label containing one
+    always comes back CLEAN on the FILE side. WEB and FABRIC never go
+    through that writer, so without this same strip a department name with
+    one of those characters in the master data FAILed the gate on every
+    single run (row-key set FILE != WEB), even though nothing was actually
+    wrong. Fix round 2026-09-25 (ADR-0032 pending item): now reuses
+    `app.budget_xlsx.XLSX_ILLEGAL_TEXT_RE` — the SAME pattern the writer
+    strips with — instead of the narrower `openpyxl.cell.cell.
+    ILLEGAL_CHARACTERS_RE`, so all three reconcile sides stay aligned with
+    what the writer actually strips."""
     if not dept:
         return dept or ""
-    return ILLEGAL_CHARACTERS_RE.sub("", dept)
+    return XLSX_ILLEGAL_TEXT_RE.sub("", dept)
 
 
 class FabricReconcileError(RuntimeError):
