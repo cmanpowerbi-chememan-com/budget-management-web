@@ -162,6 +162,16 @@ def _load_file_side(xlsx_bytes: bytes) -> tuple[_FileSheet1Result, dict[str, lis
         if count > 1:
             failures.append(f"FILE duplicate sheet-1 row (cc={cc}, gl={gl}) (appears {count} times)")
 
+    # NEW-3 fix round 3: the check above only catches an EXACT (dept, cc,
+    # gl) repeat. Two rows sharing (cc, gl) under DIFFERENT department
+    # labels are different full keys, so they passed silently and only ONE
+    # of them (whichever `_by_ccgl` iterates last) survived the sheet-1
+    # reporting view — proven: a zero-amount extra row under another
+    # department, placed before the real row, made the run go green.
+    # Counter on (cc, gl) ONLY catches that case too; reports (cc, gl)
+    # only, per the public-log rule.
+    failures.extend(_check_ccgl_duplicates("FILE", row_keys))
+
     file_result = _FileSheet1Result(
         rows=sheet1, failures=failures, grand_total_year=grand_total, grand_board_total=grand_board, grand_sap_total=grand_sap,
     )
@@ -370,13 +380,36 @@ def _fabric_reconcile_data(
 # ---------------------------------------------------------------------------
 # Compare
 # ---------------------------------------------------------------------------
+def _check_ccgl_duplicates(source: str, keys: list[Sheet1Key]) -> list[str]:
+    """NEW-3 fix round 3: two rows sharing (cost_center, gl_account) under
+    DIFFERENT department labels are different `Sheet1Key` tuples, so a
+    Counter on the full key misses them — `_by_ccgl` below then silently
+    drops all but one when it reduces a side to its reporting view. Counter
+    on (cc, gl) ONLY catches that case. Used for FILE from its own raw,
+    pre-dedup row list (`_load_file_side`) and defensively here for
+    WEB/FABRIC too, even though their own construction (exactly one dict
+    entry per (cc, gl) — see `_web_sheet1`/`_fabric_reconcile_data`) makes a
+    genuine collision unreachable today. Reports (cc, gl) only — this log
+    is public."""
+    failures: list[str] = []
+    for (cc, gl), count in Counter((k[1], k[2]) for k in keys).items():
+        if count > 1:
+            failures.append(f"{source} duplicate (cc={cc}, gl={gl})")
+    return failures
+
+
 def _by_ccgl(side: dict[Sheet1Key, _Sheet1Row]) -> dict[tuple[str, str], tuple[str, _Sheet1Row]]:
     """(cost_center, gl_account) -> (department LABEL, row) — the reporting
-    view of a sheet-1 side. Exactly one entry per (cc, gl) on the WEB/FABRIC
-    sides by construction; on FILE, two rows differing ONLY by department
-    label collide here (last one wins) — that is fine, because such a row is
-    always ALSO a `Sheet1Key`-level duplicate the FILE-side Counter check
-    already caught (same (cc, gl), so `row_keys` counts it twice)."""
+    view of a sheet-1 side. Exactly one entry per (cc, gl) on every side by
+    construction: WEB/FABRIC each resolve one department label per (cc, gl)
+    before this function ever runs; FILE is guarded by
+    `_check_ccgl_duplicates`, called from `_load_file_side` (NEW-3 fix
+    round 3) — two rows sharing (cc, gl) under DIFFERENT department labels
+    now FAIL there BEFORE reaching this reduction, so the last-one-wins
+    collapse here never hides a real duplicate. (The PREVIOUS docstring
+    here claimed the full-key Counter already caught that case — it did
+    not, because two differently-labelled rows are different full keys;
+    that claim was false and is corrected by this fix.)"""
     return {(cc, gl): (dept, row) for (dept, cc, gl), row in side.items()}
 
 
@@ -513,6 +546,13 @@ def reconcile(
     web_topics = _web_topics(build)
     fabric_sheet1, fabric_topics, fabric_failures = _fabric_reconcile_data(fabric_conn, gold_conn, planning_year)
     failures.extend(fabric_failures)
+
+    # NEW-3 fix round 3: defensive symmetry with the FILE-side check above —
+    # unreachable today (WEB/FABRIC each resolve exactly one dict entry per
+    # (cc, gl) by construction), kept so a future refactor that breaks that
+    # invariant fails loud instead of silently.
+    failures.extend(_check_ccgl_duplicates("WEB", list(web_sheet1)))
+    failures.extend(_check_ccgl_duplicates("FABRIC", list(fabric_sheet1)))
 
     failures.extend(_compare_sheet1(file_sheet1, web_sheet1, fabric_sheet1))
     failures.extend(_compare_topics(file_topics, web_topics, fabric_topics, web_sheet1))

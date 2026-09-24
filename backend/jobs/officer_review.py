@@ -18,8 +18,12 @@ additionally gates on the repo variable `OFFICER_REVIEW_LIVE` — its own gate,
 deliberately NOT the shared `NOTIFICATIONS_DRY_RUN`/reminders variables (PRD
 story 29: keep this robot separate from the armed reminder automation).
 
-Never logs department names, personal names, or recipient email addresses —
-only counts and control numbers (PRD: PII stays out of CI logs)."""
+Never logs department names, personal names, recipient email addresses, or
+raw Graph/error response bodies — only counts, control numbers,
+cost-center/GL codes, sheet!cell coordinates, and exception type names
+(PRD: PII stays out of CI logs; NEW-2 fix round 3 closed the last channel
+that could carry a Graph response body — `officer_publisher.py`'s own
+warnings/errors)."""
 import argparse
 import logging
 import os
@@ -381,6 +385,20 @@ def run_build(
         logger.error(
             "MAIL FAIL: send raised — type=%s message=%s — file already published, re-run is idempotent",
             type(exc).__name__, exc,
+        )
+        return 1
+    except ValueError as exc:
+        # NEW-6 fix round 3: `app.notifications` (zero-edit) computes its own
+        # Graph-retry delay from an unvalidated `Retry-After` header — a
+        # non-finite value (e.g. "nan") reaches `time.sleep` and raises a
+        # bare `ValueError` there, which used to escape uncaught to `main()`'s
+        # outer handler and exit 2 ("unexpected exception") instead of the
+        # correct MAIL FAIL (exit 1 — the file was already published, a
+        # re-run is idempotent). Type name only: the message could echo the
+        # raw header value from an untrusted Graph response.
+        logger.error(
+            "MAIL FAIL: send raised — type=%s — file already published, re-run is idempotent",
+            type(exc).__name__,
         )
         return 1
     failed = [r for r in results if not r.sent]

@@ -185,6 +185,13 @@ def test_negative_controls_topic_and_department_synthetic():
     `_write_topic_sheets` — never a hand-rolled xlsx), so all four branches
     below are NEVER vacuous, whatever live data looks like this week.
 
+    Fix round 3 (NEW-3, 2026-09-24) added branch (e): a zero-amount EXTRA
+    FILE row sharing (cc, gl) with the real row but under a DIFFERENT
+    department label. The (dept, cc, gl)-keyed Counter that guards branch
+    (b) does not catch this — the two rows are different full keys — so it
+    used to pass the gate silently (proven: placed BEFORE the real row, it
+    made a live run go green with 0 failures).
+
     Fix round 2 (R7/C-F6/N8, 2026-09-24): NOT `@pytest.mark.integration`
     anymore — it never touched a DB or a live connection to begin with (D15
     kept the marker on it anyway, "belt and braces"), which meant it was
@@ -298,4 +305,27 @@ def test_negative_controls_topic_and_department_synthetic():
     # name) — the line-multiset diff is the FAIL that carries it.
     assert any(cc in f and gl in f for f in failures_d), (
         f"topic-delete FAIL messages did not name the (cc, gl) key ({cc}, {gl}): {failures_d}"
+    )
+
+    # --- (e) zero-amount extra FILE row, same (cc, gl), OTHER department ---
+    # (NEW-3 fix round 3): inserted BEFORE the real row, mirroring the proven
+    # regression — a (dept, cc, gl)-keyed Counter alone never sees these two
+    # rows as duplicates, because the department label differs.
+    wb_e = load_workbook(BytesIO(baseline_bytes))
+    ws1_e = wb_e[wb_e.sheetnames[0]]
+    ws1_e.insert_rows(5)
+    ws1_e.cell(row=5, column=1).value = "OTHERDEPT"
+    ws1_e.cell(row=5, column=4).value = cc
+    ws1_e.cell(row=5, column=6).value = gl
+    for c in range(FIRST_NUM_COL, FIRST_NUM_COL + 15):
+        ws1_e.cell(row=5, column=c).value = 0.0
+    buf_e = BytesIO()
+    wb_e.save(buf_e)
+    file_result_e, _ = _load_file_side(buf_e.getvalue())
+    assert file_result_e.failures, (
+        "a zero-amount extra FILE row sharing (cc, gl) under a DIFFERENT "
+        "department label must FAIL even though it is a different full key (NEW-3)"
+    )
+    assert any(cc in f and gl in f for f in file_result_e.failures), (
+        f"duplicate-(cc, gl)-different-department FAIL messages did not name the key ({cc}, {gl}): {file_result_e.failures}"
     )

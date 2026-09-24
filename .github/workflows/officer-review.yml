@@ -145,9 +145,10 @@ jobs:
             *) LIVE_ON=false ;;
           esac
           # SEC-F6/OPS-6/SPEC-10: quoted shell vars only (never an inlined
-          # `${{ inputs.* }}` in this script — see the `env:` block above),
-          # and the CLI args are built as a bash ARRAY, never a word-split
-          # string, so a free-text fiscal_year can never inject extra flags.
+          # GitHub Actions "inputs.*" expression in this script — see the
+          # `env:` block above), and the CLI args are built as a bash ARRAY,
+          # never a word-split string, so a free-text fiscal_year can never
+          # inject extra flags.
           if [ "$EXECUTE_INPUT" = "true" ] || { [ "$LIVE_ON" = "true" ] && [ "$EVENT_NAME" = "schedule" ]; }; then
             export DRY_RUN=false
             MODE=REAL

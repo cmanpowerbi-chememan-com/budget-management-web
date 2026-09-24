@@ -96,15 +96,41 @@ def _retry_after_seconds(resp: httpx.Response) -> float | None:
     return value
 
 
+def _graph_error_code(resp: httpx.Response) -> str:
+    """NEW-2 fix round 3: the ONLY per-response detail any warning or
+    `OfficerPublishError` message below may carry — never `resp.text`
+    (which can hold a SharePoint lock message naming the user holding the
+    file, or echo other Graph-supplied text; this log is public, see
+    `officer-review.yml`). Parses `error.code` from the JSON body if
+    present and well-formed, else `"-"` — never raises on a malformed or
+    non-JSON body."""
+    try:
+        code = resp.json().get("error", {}).get("code")
+    except ValueError:
+        return "-"
+    return code if isinstance(code, str) and code else "-"
+
+
+def _parse_json_body(resp: httpx.Response, *, description: str) -> dict:
+    """NEW-6 fix round 3: a Graph response that returns 2xx with a
+    malformed/non-JSON body (seen on a folder-create 201) used to raise a
+    bare `json.JSONDecodeError` (a `ValueError`) straight out of this
+    module — uncaught by the caller's `except OfficerPublishError`, it
+    escaped all the way to `jobs.officer_review.main`'s outer handler and
+    exited 2 ("unexpected exception") instead of the correct PUBLISH FAIL
+    (exit 1). Wraps the parse so this is always a normal
+    `OfficerPublishError` — type name only, never the body text."""
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise OfficerPublishError(f"{description}: response body was not valid JSON (type={type(exc).__name__})") from exc
+
+
 def _is_retryable(resp: httpx.Response) -> bool:
     if resp.status_code in (423, 429, 503, 504):
         return True
     if resp.status_code == 409:
-        try:
-            code = resp.json().get("error", {}).get("code")
-        except ValueError:
-            code = None
-        return code == "resourceLocked"
+        return _graph_error_code(resp) == "resourceLocked"
     return False
 
 
@@ -125,13 +151,18 @@ def _call_with_retry(call: Callable[[], httpx.Response], *, description: str, sl
         try:
             resp = call()
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_error = str(exc)
-            logger.warning("officer_publisher: %s attempt %d transport error: %s", description, attempt + 1, exc)
+            # NEW-2 fix round 3: never `str(exc)` — an httpx transport
+            # error's text can embed the request URL/host; type name only.
+            last_error = f"status=- code=- type={type(exc).__name__}"
+            logger.warning("officer_publisher: %s attempt %d transport error type=%s", description, attempt + 1, type(exc).__name__)
         else:
             if not _is_retryable(resp):
                 return resp
-            last_error = f"{resp.status_code} {resp.text}"
-            logger.warning("officer_publisher: %s attempt %d retryable failure: %s", description, attempt + 1, last_error)
+            # NEW-2 fix round 3: never `resp.text` — status code + parsed
+            # Graph `error.code` only (see `_graph_error_code`).
+            code = _graph_error_code(resp)
+            last_error = f"status={resp.status_code} code={code}"
+            logger.warning("officer_publisher: %s attempt %d retryable failure status=%d code=%s", description, attempt + 1, resp.status_code, code)
         if attempt == _TOTAL_ATTEMPTS - 1:
             break
         retry_after = _retry_after_seconds(resp) if resp is not None else None
@@ -153,12 +184,16 @@ def _step_with_retry(step: Callable[[], T], *, description: str, sleep: Callable
         try:
             return step()
         except (AttachmentTransportError, httpx.TimeoutException, httpx.TransportError) as exc:
-            last_error = str(exc)
-            logger.warning("officer_publisher: %s attempt %d failed: %s", description, attempt + 1, exc)
+            # NEW-2 fix round 3: never `str(exc)` — `AttachmentTransportError`
+            # (zero-edit `app.attachments`) builds its text as
+            # `f"... {resp.status_code} {resp.text}"`, so printing it here
+            # would leak whatever Graph put in the response body. Type name only.
+            last_error = type(exc).__name__
+            logger.warning("officer_publisher: %s attempt %d failed type=%s", description, attempt + 1, last_error)
             if attempt == _TOTAL_ATTEMPTS - 1:
                 break
             sleep(_RETRY_BACKOFF_SECONDS[attempt])
-    raise OfficerPublishError(f"{description} failed after {_TOTAL_ATTEMPTS} attempts — last error: {last_error}")
+    raise OfficerPublishError(f"{description} failed after {_TOTAL_ATTEMPTS} attempts — last error type={last_error}")
 
 
 def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float], None]) -> str:
@@ -195,7 +230,11 @@ def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float],
         elif create_resp.status_code in (200, 201):
             resp = create_resp
         else:
-            raise OfficerPublishError(f"could not create '{OFFICER_FOLDER_NAME}' folder: {create_resp.status_code} {create_resp.text}")
+            # NEW-2 fix round 3: status code + parsed Graph `error.code`
+            # only — never `create_resp.text` (see `_graph_error_code`).
+            raise OfficerPublishError(
+                f"could not create '{OFFICER_FOLDER_NAME}' folder: status={create_resp.status_code} code={_graph_error_code(create_resp)}"
+            )
     # N1 fix round 2026-09-24: a 201 Created from the POST above is success,
     # not a failure — the code used to fall through to this check, see it was
     # not exactly 200, and raise `OfficerPublishError` on the VERY FIRST real
@@ -203,9 +242,11 @@ def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float],
     # on week 1). `create_resp` (200 or 201) is a valid DriveItem body either
     # way — same shape the GET below returns.
     if resp.status_code not in (200, 201):
-        raise OfficerPublishError(f"could not resolve '{OFFICER_FOLDER_NAME}' folder: {resp.status_code} {resp.text}")
+        raise OfficerPublishError(
+            f"could not resolve '{OFFICER_FOLDER_NAME}' folder: status={resp.status_code} code={_graph_error_code(resp)}"
+        )
 
-    item = resp.json()
+    item = _parse_json_body(resp, description=f"'{OFFICER_FOLDER_NAME}' folder body")
     if "folder" not in item:
         raise OfficerPublishError(f"'{OFFICER_FOLDER_NAME}' resolved to a non-folder item — refusing to publish")
     if item.get("name") != OFFICER_FOLDER_NAME:
@@ -248,8 +289,10 @@ def publish_officer_workbook(
         description="publish PUT", sleep=sleep,
     )
     if resp.status_code not in (200, 201):
-        raise OfficerPublishError(f"publish PUT failed: {resp.status_code} {resp.text}")
-    item = resp.json()
+        # NEW-2 fix round 3: status code + parsed Graph `error.code` only —
+        # never `resp.text`.
+        raise OfficerPublishError(f"publish PUT failed: status={resp.status_code} code={_graph_error_code(resp)}")
+    item = _parse_json_body(resp, description="publish PUT response body")
     if (item.get("parentReference") or {}).get("id") != folder_id:
         raise OfficerPublishError(
             f"published item's parentReference.id {item.get('parentReference', {}).get('id')!r} "

@@ -808,16 +808,20 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
     # (R8/SPEC-4: `_expected_sheet1_headers`/`_expected_topic_headers`
     # above, never the writer's own `_sheet1_headers`/`COMMON_HEADERS`/
     # `TRAVEL_FIELDS`/`TOPIC_META_FIELDS`).
+    # NEW-4 fix round 3: coordinate ONLY, never the header TEXT — this repo
+    # is public, and a header rename target or a corrupted header can carry
+    # free text. Compare per column and name the one `sheet!cell` that
+    # actually differs, not the whole expected/actual header list.
     expected_sheet1_headers = _expected_sheet1_headers(planning_year)
-    actual_sheet1_headers = [ws1.cell(row=4, column=c).value for c in range(1, len(expected_sheet1_headers) + 1)]
-    if actual_sheet1_headers != expected_sheet1_headers:
-        failures.append(f"{sheet1_name}: row-4 headers mismatch: expected {expected_sheet1_headers} got {actual_sheet1_headers}")
+    for c, expected in enumerate(expected_sheet1_headers, start=1):
+        if ws1.cell(row=4, column=c).value != expected:
+            failures.append(f"{sheet1_name}!{get_column_letter(c)}4 header mismatch")
     for group, meta in sheet_meta.items():
         ws = wb[group]
         expected_headers = _expected_topic_headers(group, planning_year)
-        actual_headers = [ws.cell(row=4, column=c).value for c in range(1, len(expected_headers) + 1)]
-        if actual_headers != expected_headers:
-            failures.append(f"{group}: row-4 headers mismatch: expected {expected_headers} got {actual_headers}")
+        for c, expected in enumerate(expected_headers, start=1):
+            if ws.cell(row=4, column=c).value != expected:
+                failures.append(f"{group}!{get_column_letter(c)}4 header mismatch")
 
     # D6 empty-scope edge: `ws1.max_row` under-counts to 4 (header only) when
     # 0 data rows were ever written (row 5 then has no cell at all), but the
@@ -848,7 +852,9 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
     for (sheet, coord), expected_formula in allowed.items():
         cell = wb[sheet][coord]
         if cell.data_type != "f" or cell.value != expected_formula:
-            failures.append(f"missing/altered SUBTOTAL(9,...) formula at {sheet}!{coord}: got {cell.value!r}")
+            # NEW-4 fix round 3: coordinate only — never the formula/cell
+            # TEXT (a tampered formula could reference/embed arbitrary text).
+            failures.append(f"{sheet}!{coord} SUBTOTAL formula altered")
 
     # -- CC / GL columns: text-typed, number_format "@" --
     for name in expected_sheets:
@@ -860,9 +866,9 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
                 if cell.value in (None, ""):
                     continue
                 if not isinstance(cell.value, str) or cell.number_format != "@":
-                    failures.append(
-                        f"{name}!{cell.coordinate} (CC/GL) not text-typed: value={cell.value!r} number_format={cell.number_format!r}"
-                    )
+                    # NEW-4 fix round 3: coordinate only — never the CC/GL
+                    # cell VALUE (this repo is public).
+                    failures.append(f"{name}!{cell.coordinate} code not stored as text")
 
     # -- freeze panes + autofilter --
     expected_freeze1 = f"{get_column_letter(FIRST_NUM_COL)}5"
@@ -884,11 +890,12 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
     has_sheet1_rows = ws1.cell(row=5, column=4).value not in (None, "")
     a2 = ws1["A2"].value
     if has_sheet1_rows == (a2 == "ยังไม่มีรายการ"):
-        failures.append(f"{sheet1_name}!A2 empty-scope note inconsistent with data rows present={has_sheet1_rows}: {a2!r}")
+        # NEW-4 fix round 3: coordinate only — never the A2 note TEXT.
+        failures.append(f"{sheet1_name}!A2 empty-scope note inconsistent with data rows present={has_sheet1_rows}")
     for group, meta in sheet_meta.items():
         a2 = wb[group]["A2"].value
         if (meta.n_data_rows == 0) != (a2 == "ยังไม่มีรายการ"):
-            failures.append(f"{group}!A2 empty-scope note inconsistent with n_data_rows={meta.n_data_rows}: {a2!r}")
+            failures.append(f"{group}!A2 empty-scope note inconsistent with n_data_rows={meta.n_data_rows}")
 
     # -- sheet-1 X/Y tint (header + values), literal hexes --
     for c, (head_hex, value_hex) in _SHEET1_TINT_LITERAL.items():
