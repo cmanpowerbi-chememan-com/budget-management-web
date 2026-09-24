@@ -3,7 +3,8 @@
 Date: 2026-09-24
 
 Status: Accepted (jakkaritw, 2026-09-24, PRD issue #34). Implemented 2026-09-24 (backend, TDD via a
-live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`).
+live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`). Fix round
+applied same day (gate finding round, see "Hardening added in the 2026-09-24 fix round" below).
 
 ## Context
 
@@ -56,11 +57,46 @@ sleep (default 300s) — a live save during the submission window, or a SAP load
 cause one honest transient mismatch; a second FAIL is treated as real.
 
 **PDPA (jakkaritw 2026-09-24, "ไม่เป็นไร grant personal info").** The traveller NAME is allowed, but
-ONLY in the travel sheet's ชื่อผู้เดินทาง column. System-sourced columns (codes, names, status,
-headers) FAIL on an email address, a traveller name outside that one column, or a traveller
-employee code. User free-text columns (Remark, รายละเอียด, meta_json-sourced topic columns, trip
+ONLY in the travel sheet's ชื่อผู้เดินทาง column. System-sourced columns (names, status, headers) FAIL
+on an email address, a traveller name outside that one column, or a traveller employee code; the
+Cost Center / GL CODE columns specifically are exempt from the empcode check only (a numeric CC/GL
+code can coincidentally match a numeric empcode pattern — not a real PII leak), never from the
+'@'/name checks. User free-text columns (Remark, รายละเอียด, meta_json-sourced topic columns, trip
 project/purpose/remark/destination) get the same three checks at WARN level only — a typed email
-inside a free-text field must never be able to block the weekly file by itself.
+inside a free-text field must never be able to block the weekly file by itself. Every PDPA/layout
+read-back control runs on the SAVED xlsx bytes (`load_workbook` of what was actually written), never
+the in-memory workbook, so it checks exactly what would be published (fix round 2026-09-24).
+
+**Hardening added in the 2026-09-24 fix round (same day, before first push).** A gate review found
+6 findings worth a same-day fix, folded into this ADR rather than a separate one:
+- **Recipient domain allow-list (SEC-F5, owner decision: company domain only).** `OFFICER_REVIEW_RECIPIENTS`
+  entries must end in `@chememan.com` (case-insensitive); a non-matching or malformed entry is
+  dropped. A REAL run FAILs BEFORE publishing if anything was dropped (never a silent partial
+  recipient list, never an accidental external send) — a PREVIEW run only logs the valid/dropped
+  counts.
+- **Fiscal-year sanity gate (OPS-10).** The job now refuses to read at all unless
+  `--fiscal-year` is the current Bangkok year or the next one — a mistyped or bumped
+  `AUTOMATION_FISCAL_YEAR` (shared with the armed reminders) can no longer produce a green REAL run
+  that quietly stops updating the real year's file and starts publishing an empty file for the
+  wrong year (D6's "empty scope still publishes" edge stays correct for a genuinely empty in-scope
+  set, just not for an outright wrong year).
+- **Log redaction (OPS-2/SEC-F2/SPEC-6/SEC-F1/OPS-8).** A `logging.Filter`, installed on the ROOT
+  log handlers right after `configure_logging()`, redacts every email-like substring from every log
+  line this job process emits — this also covers `app.notifications`'s own `sent to=%s` line
+  (zero-edit there) without needing per-caller discipline. The PDPA FAIL messages no longer embed
+  the caught cell value either — sheet!coordinate only, matching the WARN path.
+- **Excel formula-injection guard (SEC-F3) + illegal-character strip (SEC-F4).** Every free-text
+  cell written by either writer (`app.budget_xlsx.write_summary_sheet` and
+  `app.officer_workbook`'s topic-sheet writer) goes through one shared helper that forces plain-text
+  type for a value starting with `=`/`+`/`-`/`@`/tab/CR (never lets openpyxl or Excel treat a typed
+  remark as a formula) and strips XML-illegal control characters before assignment (a stripped cell
+  is a WARN, coordinate only — a pasted control character must never crash the weekly build).
+
+**`--probe`** (`python -m jobs.officer_review --fiscal-year <Y> --probe`, `--fiscal-year` is always
+required, even for the probe) is the first-slice read-only check: Fabric read, gold read, Graph
+token roles (`Sites.ReadWrite.All` + `Mail.Send`), and a read-only site/drive/`officer review/`
+folder resolution — each check is wrapped individually so one failing check never hides the rest
+(OPS-9).
 
 **Publisher — the SharePoint write exception.** Site `CMANDWPRD`, library `Budgeting and
 Management`, folder `officer review/` (created if missing), file
@@ -89,10 +125,8 @@ the kill switch — no commit, no redeploy.
 
 **Credentials.** The CI service principal (`FABRIC_AAD_*` secrets) now also needs
 `GOLD_SQL_SERVER` / `GOLD_SQL_DATABASE` secrets and Viewer on the DW gold workspace — **neither
-existed as of this change** (confirmed via `gh secret list` / `gh variable list`, 2026-09-24).
-`--probe` (`python -m jobs.officer_review --probe`) is the first-slice read-only check: Fabric
-read, gold read, Graph token roles (`Sites.ReadWrite.All` + `Mail.Send`), and a read-only
-site/drive/`officer review/` folder resolution.
+existed as of this change** (confirmed via `gh secret list` / `gh variable list`, 2026-09-24). See
+`--probe` below.
 
 ## Considered Options
 

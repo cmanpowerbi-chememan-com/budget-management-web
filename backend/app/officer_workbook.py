@@ -14,10 +14,24 @@ instant-approve) — APPROVED always wins the status label on the same key.
 WEB side (D1): rows come from `app.read_model.get_budget_grid` — the exact
 function `GET /budget` calls — run once per in-scope department (the literal
 admin-view web path), PLUS one extra unfiltered admin-wide call to recover
-rows whose department cannot be resolved at all (never silently dropped,
-PRD story: "(ไม่ทราบฝ่าย)"). This module never re-implements the
-pending ∪ board ∪ SAP-nonzero merge, the net-zero hide, or the master-GL
-drop — those rules are reused, not copied (issue #34 story 32).
+`template='ADMIN'` rows a per-department call never reaches (an ADMIN row
+whose department cannot be resolved AT ALL by `_resolve_scope_departments`,
+e.g. a CC missing from `cc_filler_map`, never gets a per-department call in
+the first place — never silently dropped, PRD story: "(ไม่ทราบฝ่าย)"). The
+unfiltered pass only ADDS a key not already present (fix round 2026-09-24,
+finding F2/F3/SPEC-1/SPEC-2): the ORIGINAL D1 proof ("unfiltered
+`department is None` implies live-unresolvable") was backwards — the
+unfiltered call never fetches `cc_dims` at all (`read_model.py`:
+`department_filter is None` and `locked_departments` empty for admin-wide),
+so its `row.department` is only the pending/board SNAPSHOT, and CAN be
+`None` even when the live master (`cc_filler_map`) resolves a real
+department. The LABEL department for every row (from either pass) is
+therefore resolved HERE, independently of what `get_budget_grid` happened to
+fetch, via the shared `app.read_model._resolve_live_department` chain (live
+`cc_dims` -> `pending` snapshot -> `board` snapshot -> `None` ->
+`"(ไม่ทราบฝ่าย)"`) — see `_build_summary_rows`. This module never
+re-implements the pending ∪ board ∪ SAP-nonzero merge, the net-zero hide, or
+the master-GL drop — those rules are reused, not copied (issue #34 story 32).
 
 Everything BudgetRow does not carry (CC name, live GL name/group, live
 division/c_level, department status) is read here via the module's OWN
@@ -32,27 +46,31 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from io import BytesIO
 from zoneinfo import ZoneInfo
 
 import pyodbc
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from app.budget_xlsx import (
-    COL_TINT,
+    FIRST_NUM_COL,
+    LAST_NUM_COL,
     FONT_NAME,
     NUM_FMT,
     ADMIN_TEMPLATE_STATUS_KEY,
     SummaryRow,
     UnknownStatusError,
+    _sheet1_headers,
+    _write_text_cell,
     resolve_status_label,
     tint50,
     workbook_bytes,
     write_summary_sheet,
 )
 from app.config import SHARED_ADMIN_MAILBOX, Settings, get_settings
-from app.read_model import BudgetRow, fetch_cc_dims, get_budget_grid
+from app.read_model import BudgetRow, _resolve_live_department, fetch_cc_dims, get_budget_grid
 from app.reference_data import fetch_gl_accounts
 from app.rls import Scope
 from app.sap import resolve_sap_coverage_cached
@@ -122,6 +140,9 @@ _STATUS_BY_DEPT_SQL = "SELECT department, status FROM budget.approval_status WHE
 _ADMIN_TEMPLATE_PENDING_SQL = (
     "SELECT cost_center, gl_account, department FROM budget.pending_budget "
     "WHERE fiscal_year = ? AND template = 'ADMIN'"
+)
+_ADMIN_TEMPLATE_BOARD_DEPT_SQL = (
+    "SELECT cost_center, gl_account, department FROM dbo.board_budget WHERE fiscal_year = ?"
 )
 _IS_AUTO_CALC_SQL = "SELECT detail_id, is_auto_calc FROM budget.pending_budget_detail WHERE fiscal_year = ?"
 _TRAVELLER_PII_SQL = "SELECT traveler_name, traveler_empcode FROM budget.budget_trip WHERE fiscal_year = ?"
@@ -207,6 +228,12 @@ class BuildResult:
     web_rows: dict[tuple[str, str], BudgetRow]
     detail_by_key: dict[tuple[str, str], list[dict]]
     gl_group_by_key: dict[tuple[str, str], str | None]
+    # SPEC-2: the resolved LABEL department per (cost_center, gl_account) key
+    # — the SAME value written to sheet-1 column A — so the reconcile can key
+    # its sheet-1 compare on (department, cost_center, gl_account), not just
+    # (cost_center, gl_account) (a mislabeled-department row must FAIL, not
+    # publish green).
+    department_by_key: dict[tuple[str, str], str]
 
 
 def _amt_whole_baht(value: float) -> str:
@@ -275,15 +302,23 @@ def _resolve_scope_departments(
 ) -> tuple[frozenset[str], frozenset[str]]:
     """approved_depts (status == APPROVED) and admin_depts (>=1 pending row
     with template='ADMIN', LIVE-resolved department via `fetch_cc_dims`,
-    falling back to the row's own snapshot department column)."""
+    falling back to the row's own `pending` snapshot, THEN the `board`
+    snapshot — the SAME 3-step chain `read_model._resolve_live_department`
+    and the Fabric reconcile side both use (fix round finding F3: a CC
+    dropped from `cc_filler_map`, e.g. the 08-31 purge, with only a board
+    department on record used to resolve to no department here at all,
+    silently excluding it from scope while the Fabric side still saw it)."""
     approved_depts = frozenset(d for d, s in status_by_dept.items() if s == "APPROVED")
 
     admin_rows = q(fabric_conn, _ADMIN_TEMPLATE_PENDING_SQL, planning_year)
     ccs = sorted({r[0] for r in admin_rows})
     cc_dims = fetch_cc_dims(fabric_conn, ccs) if ccs else {}
+    board_dept_by_key = {
+        (cc, gl): dept for cc, gl, dept in q(fabric_conn, _ADMIN_TEMPLATE_BOARD_DEPT_SQL, planning_year - 1)
+    }
     admin_depts: set[str] = set()
-    for cc, _gl, snapshot_dept in admin_rows:
-        dept = cc_dims.get(cc, {}).get("department") or snapshot_dept
+    for cc, gl, snapshot_dept in admin_rows:
+        dept = cc_dims.get(cc, {}).get("department") or snapshot_dept or board_dept_by_key.get((cc, gl))
         if dept:
             admin_depts.add(dept)
     return approved_depts, frozenset(admin_depts)
@@ -299,9 +334,20 @@ def _fetch_web_rows(
 ) -> dict[tuple[str, str], BudgetRow]:
     """D1: the literal web path — `get_budget_grid(admin_view_enabled=True,
     department_filter=<dept>)` once per in-scope department, PLUS one extra
-    unfiltered admin-wide pass to recover unresolved-department ADMIN rows
-    (a per-department call can never return `department=None` rows — see
-    `app.read_model._resolve_live_department`)."""
+    unfiltered admin-wide pass to catch every `template='ADMIN'` key that
+    per-department loop above did not already return.
+
+    Fix round 2026-09-24 (F2/F3/SPEC-1): the unfiltered pass ADDS a key ONLY
+    when it is not already in `web_rows` — it must NEVER overwrite a
+    per-department row, because the unfiltered call never fetches `cc_dims`
+    (`read_model.py`: no filter, `locked_departments` empty for admin-wide),
+    so its own `row.department` is only the pending/board SNAPSHOT and can be
+    `None` even when the per-department call already resolved the row's real
+    (live) department correctly. The filter is now "ADMIN template, key not
+    yet present" — no longer "department is None" (that check ran on the
+    WRONG side's department value; see the module docstring). The row's
+    LABEL department is resolved live, uniformly for every row regardless of
+    which pass produced it, in `_build_summary_rows`."""
     admin_scope = Scope(email=SHARED_ADMIN_MAILBOX, is_admin=True, role="admin", fill_cost_centers=[], see_cost_centers=[])
     web_rows: dict[tuple[str, str], BudgetRow] = {}
 
@@ -319,8 +365,11 @@ def _fetch_web_rows(
         admin_view_enabled=True, department_filter=None, settings=settings,
     )
     for row in unfiltered:
-        if row.department is None and row.pending.template == "ADMIN":
-            web_rows[(row.cost_center, row.gl_account)] = row
+        key = (row.cost_center, row.gl_account)
+        if key in web_rows:
+            continue
+        if row.pending.template == "ADMIN":
+            web_rows[key] = row
 
     return web_rows
 
@@ -344,7 +393,16 @@ def _build_summary_rows(
             continue
         seen_keys.add(key)
 
-        dept = br.department  # raw (may be None), used for status precedence
+        # Fix round 2026-09-24 (F2/F3/SPEC-1/SPEC-2): resolve the LABEL
+        # department here, uniformly for every row, via the SAME live-first
+        # chain `read_model._resolve_live_department` uses — never trust
+        # `br.department` directly, because for a row added by the
+        # UNFILTERED admin-wide pass it is only the pending/board snapshot
+        # (that call never fetches `cc_dims`). `cc_dims` here was fetched by
+        # the caller for every cost_center now IN `web_rows` (after the
+        # unfiltered merge), so a live master department is always available
+        # when one exists, regardless of which pass produced the row.
+        dept = _resolve_live_department(cc, br, cc_dims)
         dims = cc_dims.get(cc, {})
         glmeta = gl_master.get(gl, {})
         side = "COST" if gl.startswith("5") else ("SGA" if gl.startswith("6") else "")
@@ -393,13 +451,20 @@ def _build_summary_rows(
 # ---------------------------------------------------------------------------
 def _fetch_detail_and_trips(
     fabric_conn: pyodbc.Connection, planning_year: int, rows: list[SummaryRow],
-) -> tuple[dict[tuple[str, str], list[dict]], dict[int, dict], dict[int, int], dict[int, bool]]:
+) -> tuple[dict[tuple[str, str], list[dict]], dict[int, dict], dict[int, int], dict[int, bool], list[str]]:
     """One `fetch_detail_lines` call per special-GL parent key (small scope,
     weekly job — acceptable round-trip count), one `fetch_trips` call per
     distinct cost_center that has a Travelling Expense parent (covers BOTH
     GL sides for that CC, per D9's trip-numbering rule), plus one bulk
-    `is_auto_calc` read (not selected by `fetch_detail_lines`, D9)."""
+    `is_auto_calc` read (not selected by `fetch_detail_lines`, D9).
+
+    C-F7: a special-GL parent that carries PENDING money but has ZERO detail
+    lines (a legacy/imported row, or its detail lines were deleted) is
+    reported as a WARN — "keys only" (cost_center, gl_account), never a
+    department or any other name — the topic sheet would silently understate
+    that group otherwise, count/SUM still agreeing across FILE/WEB/FABRIC."""
     detail_by_key: dict[tuple[str, str], list[dict]] = {}
+    warnings: list[str] = []
     travel_ccs: set[str] = set()
     for r in rows:
         if r.gl_group not in SPECIAL_GL_GROUPS:
@@ -407,6 +472,8 @@ def _fetch_detail_and_trips(
         lines = fetch_detail_lines(fabric_conn, r.cost_center, r.gl_account, planning_year)
         if lines:
             detail_by_key[(r.cost_center, r.gl_account)] = lines
+        elif r.total_year:
+            warnings.append(f"special-GL parent with pending money but zero detail lines: ({r.cost_center}, {r.gl_account})")
         if r.gl_group == "Travelling Expense":
             travel_ccs.add(r.cost_center)
 
@@ -419,7 +486,7 @@ def _fetch_detail_and_trips(
             trip_no_by_id[t["trip_id"]] = i
 
     is_auto_calc_by_id: dict[int, bool] = {r[0]: bool(r[1]) for r in q(fabric_conn, _IS_AUTO_CALC_SQL, planning_year)}
-    return detail_by_key, trips_by_id, trip_no_by_id, is_auto_calc_by_id
+    return detail_by_key, trips_by_id, trip_no_by_id, is_auto_calc_by_id, warnings
 
 
 def _attach_sheet1_detail_text(
@@ -484,6 +551,7 @@ def _build_topic_rows(
 # ---------------------------------------------------------------------------
 def _write_topic_sheets(
     wb: Workbook, topic_rows: dict[str, list[TopicRow]], planning_year: int, as_of: datetime, sap_watermark: date | None,
+    *, warnings: list[str] | None = None,
 ) -> dict[str, SheetMeta]:
     base = Font(name=FONT_NAME, size=10)
     head_font = Font(name=FONT_NAME, size=10, bold=True, color="FFFFFF")
@@ -543,14 +611,14 @@ def _write_topic_sheets(
             rn = first + i
             common_vals = [t.department, t.division, t.cost_center, t.cc_name, t.gl_account, t.gl_name, t.side, t.status_label]
             for c, v in enumerate(common_vals, start=1):
-                cell = ws.cell(row=rn, column=c, value=v if v is not None else "")
+                cell = _write_text_cell(ws, rn, c, v if v is not None else "", warnings=warnings)
                 cell.font = base
                 cell.alignment = top
                 if c in (CC_COL, GL_COL):
                     cell.number_format = "@"
             for j, v in enumerate(t.topic_vals):
                 c = n_common + 1 + j
-                cell = ws.cell(row=rn, column=c, value=v if v is not None else "")
+                cell = _write_text_cell(ws, rn, c, v if v is not None else "", warnings=warnings)
                 cell.font = base
                 cell.alignment = top_wrap if topic_headers[j] in WRAP_FIELDS else top
                 cell.fill = tint_value_fill
@@ -611,10 +679,13 @@ def _scan_pdpa(
             return
         coord = cell.coordinate
         level = warnings if is_free_text else failures
+        # SEC-F1/OPS-8/SPEC-6 fix round 2026-09-24: sheet!coordinate ONLY,
+        # never the value — the ONE column this check exists to catch would
+        # otherwise print the caught PII into the (public repo's) CI log.
         if "@" in v:
-            level.append(f"PDPA at-sign in {cell.parent.title}!{coord}" + ("" if is_free_text else f": {v!r}"))
+            level.append(f"PDPA at-sign in {cell.parent.title}!{coord}")
         if not is_name_col and any(n and n in v for n in traveller_names):
-            level.append(f"PDPA traveller name in {cell.parent.title}!{coord}" + ("" if is_free_text else ""))
+            level.append(f"PDPA traveller name in {cell.parent.title}!{coord}")
         if not exempt_from_code and any(rx.search(v) for rx in code_res):
             level.append(f"PDPA traveller empcode in {cell.parent.title}!{coord}")
 
@@ -651,18 +722,166 @@ def _scan_pdpa(
     return failures, warnings
 
 
-def _check_tints(wb: Workbook, sheet1_name: str) -> list[str]:
-    """D9: literal-hex tint read-back (never re-call `tint50` — that would be
-    circular, a prototype leftover bug)."""
+# D9/SPEC-4: LITERAL expected hexes, declared independently of
+# `app.budget_xlsx.COL_TINT`/`tint50` — the read-back control must never
+# import the same table the painter used to paint (SPEC-4's own complaint:
+# a bug in the shared table would move the paint AND the check together).
+# Sheet-1 X/Y columns 24/25 (งบอนุมัติ/ใช้จริง SAP <board_year>).
+_SHEET1_TINT_LITERAL: dict[int, tuple[str, str]] = {
+    24: ("FAE7EB", "FDF3F5"),
+    25: ("E0D4E7", "F0EAF3"),
+}
+# Topic-sheet value-column tint per group (header hex = the group's own
+# literal `TOPIC_SHEETS` swatch, already independent of the painter).
+_TOPIC_TINT_VALUE_HEX: dict[str, str] = {
+    "Travelling Expense": "FDF3F5",
+    "Professional & Legal Fee": "F0EAF3",
+    "Entertainment": "EDF7FB",
+    "Training & Seminar": "DEE9F2",
+    "Public Relation & Donation": "F7E7ED",
+    "Lease & Rental": "E6EEF5",
+}
+
+
+def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta: dict[str, SheetMeta]) -> list[str]:
+    """SPEC-4: restore the prototype's runtime layout read-back controls
+    (sheet names/order, row-4 headers, SUBTOTAL(9)-only formulas, CC/GL
+    text-typed, freeze/autofilter, tab colours, sheet-1 + topic tints,
+    empty-sheet note). Called on the SAVED bytes only (SEC-F7 — the caller
+    passes `load_workbook(BytesIO(xlsx_bytes))`, never the in-memory `wb`).
+
+    The header TEXT itself is the one check reused from the writers' own
+    header-construction (both already treat it as the ONE shared truth,
+    D17) — a documented, accepted limit; every tint/colour value below is a
+    hardcoded literal, independent of the code that painted it."""
     failures: list[str] = []
-    ws = wb[sheet1_name]
-    last = ws.max_row
-    for c, (head_hex, value_hex) in COL_TINT.items():
-        head_ok = (_fill_rgb(ws.cell(row=4, column=c)) or "").endswith(head_hex)
-        rows_to_check = [3] + (list(range(5, last + 1)) if last >= 5 else [])
-        vals_ok = all((_fill_rgb(ws.cell(row=r, column=c)) or "").endswith(value_hex) for r in rows_to_check)
+
+    expected_sheets = [sheet1_name] + [g for g, _ in TOPIC_SHEETS]
+    if wb.sheetnames != expected_sheets:
+        failures.append(f"sheet name/order mismatch: expected {expected_sheets} got {wb.sheetnames}")
+        return failures  # every other check below indexes sheets by name — bail out loud
+
+    ws1 = wb[sheet1_name]
+
+    # -- row-4 headers per sheet, exactly --
+    expected_sheet1_headers = _sheet1_headers(planning_year)
+    actual_sheet1_headers = [ws1.cell(row=4, column=c).value for c in range(1, len(expected_sheet1_headers) + 1)]
+    if actual_sheet1_headers != expected_sheet1_headers:
+        failures.append(f"{sheet1_name}: row-4 headers mismatch: expected {expected_sheet1_headers} got {actual_sheet1_headers}")
+    for group, meta in sheet_meta.items():
+        ws = wb[group]
+        topic_headers = list(TRAVEL_FIELDS) if group == "Travelling Expense" else list(TOPIC_META_FIELDS[group])
+        expected_headers = COMMON_HEADERS + topic_headers + [f"รวมปี {planning_year}"] + [
+            "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+        ]
+        actual_headers = [ws.cell(row=4, column=c).value for c in range(1, len(expected_headers) + 1)]
+        if actual_headers != expected_headers:
+            failures.append(f"{group}: row-4 headers mismatch: expected {expected_headers} got {actual_headers}")
+
+    # D6 empty-scope edge: `ws1.max_row` under-counts to 4 (header only) when
+    # 0 data rows were ever written (row 5 then has no cell at all), but the
+    # writer's own `last = max(first, 4 + len(rows))` still resolves to 5 —
+    # floor-clamp to reconstruct that same structural fact without
+    # re-deriving it from `len(rows)` (never available here).
+    last1 = max(5, ws1.max_row)
+
+    # -- formulas: ONLY row-3 SUBTOTAL(9,...) over the declared range, nowhere else --
+    allowed: dict[tuple[str, str], str] = {}
+    for c in range(FIRST_NUM_COL, LAST_NUM_COL + 1):
+        col = get_column_letter(c)
+        allowed[(sheet1_name, f"{col}3")] = f"=SUBTOTAL(9,{col}5:{col}{last1})"
+    for group, meta in sheet_meta.items():
+        for j in range(13):
+            col = get_column_letter(meta.first_money_col + j)
+            allowed[(group, f"{col}3")] = f"=SUBTOTAL(9,{col}{meta.first}:{col}{meta.last})"
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.data_type == "f" and (ws.title, cell.coordinate) not in allowed:
+                    failures.append(f"unexpected formula outside row-3 SUBTOTAL at {ws.title}!{cell.coordinate}: {cell.value}")
+    for (sheet, coord), expected_formula in allowed.items():
+        cell = wb[sheet][coord]
+        if cell.data_type != "f" or cell.value != expected_formula:
+            failures.append(f"missing/altered SUBTOTAL(9,...) formula at {sheet}!{coord}: got {cell.value!r}")
+
+    # -- CC / GL columns: text-typed, number_format "@" --
+    for name in expected_sheets:
+        ws = wb[name]
+        cc_col, gl_col = (4, 6) if name == sheet1_name else (CC_COL, GL_COL)
+        for r in range(5, ws.max_row + 1):
+            for col in (cc_col, gl_col):
+                cell = ws.cell(row=r, column=col)
+                if cell.value in (None, ""):
+                    continue
+                if not isinstance(cell.value, str) or cell.number_format != "@":
+                    failures.append(
+                        f"{name}!{cell.coordinate} (CC/GL) not text-typed: value={cell.value!r} number_format={cell.number_format!r}"
+                    )
+
+    # -- freeze panes + autofilter --
+    expected_freeze1 = f"{get_column_letter(FIRST_NUM_COL)}5"
+    if ws1.freeze_panes != expected_freeze1:
+        failures.append(f"{sheet1_name}: freeze_panes expected {expected_freeze1!r} got {ws1.freeze_panes!r}")
+    expected_af1 = f"A4:{get_column_letter(ws1.max_column)}{last1}"
+    if str(ws1.auto_filter.ref) != expected_af1:
+        failures.append(f"{sheet1_name}: autofilter expected {expected_af1!r} got {ws1.auto_filter.ref!r}")
+    for group, meta in sheet_meta.items():
+        ws = wb[group]
+        expected_freeze = f"{get_column_letter(meta.first_money_col)}{meta.first}"
+        if ws.freeze_panes != expected_freeze:
+            failures.append(f"{group}: freeze_panes expected {expected_freeze!r} got {ws.freeze_panes!r}")
+        expected_af = f"A4:{get_column_letter(len(meta.headers))}{meta.last}"
+        if str(ws.auto_filter.ref) != expected_af:
+            failures.append(f"{group}: autofilter expected {expected_af!r} got {ws.auto_filter.ref!r}")
+
+    # -- empty-sheet note (D6) --
+    has_sheet1_rows = ws1.cell(row=5, column=4).value not in (None, "")
+    a2 = ws1["A2"].value
+    if has_sheet1_rows == (a2 == "ยังไม่มีรายการ"):
+        failures.append(f"{sheet1_name}!A2 empty-scope note inconsistent with data rows present={has_sheet1_rows}: {a2!r}")
+    for group, meta in sheet_meta.items():
+        a2 = wb[group]["A2"].value
+        if (meta.n_data_rows == 0) != (a2 == "ยังไม่มีรายการ"):
+            failures.append(f"{group}!A2 empty-scope note inconsistent with n_data_rows={meta.n_data_rows}: {a2!r}")
+
+    # -- sheet-1 X/Y tint (header + values), literal hexes --
+    for c, (head_hex, value_hex) in _SHEET1_TINT_LITERAL.items():
+        head_ok = (_fill_rgb(ws1.cell(row=4, column=c)) or "").endswith(head_hex)
+        # row 3 (the SUBTOTAL total) is always painted; data rows only exist
+        # when the sheet is non-empty (D6 edge — nothing was ever written to
+        # row 5 when `rows` was empty, so checking it would false-positive).
+        rows_to_check = [3] + (list(range(5, last1 + 1)) if has_sheet1_rows else [])
+        vals_ok = all((_fill_rgb(ws1.cell(row=r, column=c)) or "").endswith(value_hex) for r in rows_to_check)
         if not (head_ok and vals_ok):
-            failures.append(f"tint mismatch on column {get_column_letter(c)}: header expected #{head_hex}, values expected #{value_hex}")
+            failures.append(f"{sheet1_name}: tint mismatch on column {get_column_letter(c)}: header expected #{head_hex}, values expected #{value_hex}")
+
+    # -- topic tab colour + swatch header (#1F1F1F font) + literal value tint, no fill elsewhere --
+    for group, swatch in TOPIC_SHEETS:
+        ws = wb[group]
+        meta = sheet_meta[group]
+        tab = (ws.sheet_properties.tabColor.rgb if ws.sheet_properties.tabColor else None) or ""
+        if not str(tab).upper().endswith(swatch):
+            failures.append(f"{group}: tab colour expected #{swatch} got {tab!r}")
+        value_hex = _TOPIC_TINT_VALUE_HEX[group]
+        for c in range(meta.n_common + 1, meta.n_common + meta.n_topic + 1):
+            head_cell = ws.cell(row=4, column=c)
+            head_fill = _fill_rgb(head_cell) or ""
+            if not head_fill.endswith(swatch):
+                failures.append(f"{group}!{head_cell.coordinate}: topic header tint expected #{swatch} got {head_fill}")
+            font_color = str((head_cell.font.color.rgb if head_cell.font and head_cell.font.color else "") or "")
+            if not font_color.upper().endswith("1F1F1F"):
+                failures.append(f"{group}!{head_cell.coordinate}: topic header font expected #1F1F1F got {font_color}")
+        for r in range(meta.first, meta.first + meta.n_data_rows):  # empty sheet -> no data rows -> nothing to check
+            for c in range(1, len(meta.headers) + 1):
+                cell = ws.cell(row=r, column=c)
+                fill = _fill_rgb(cell)
+                is_topic_col = meta.n_common < c <= meta.n_common + meta.n_topic
+                if is_topic_col:
+                    if not (fill or "").endswith(value_hex):
+                        failures.append(f"{group}!{cell.coordinate}: topic value tint expected #{value_hex} got {fill}")
+                elif fill:
+                    failures.append(f"{group}!{cell.coordinate}: unexpected fill outside topic-detail columns: {fill}")
+
     return failures
 
 
@@ -700,7 +919,10 @@ def build_officer_workbook(
     summary_rows, dup_failures = _build_summary_rows(web_rows, cc_dims, cc_names, gl_master, status_by_dept, approved_depts)
     failures.extend(dup_failures)
 
-    detail_by_key, trips_by_id, trip_no_by_id, is_auto_calc_by_id = _fetch_detail_and_trips(fabric_conn, planning_year, summary_rows)
+    detail_by_key, trips_by_id, trip_no_by_id, is_auto_calc_by_id, special_gl_warnings = _fetch_detail_and_trips(
+        fabric_conn, planning_year, summary_rows
+    )
+    warnings.extend(special_gl_warnings)
     summary_rows = _attach_sheet1_detail_text(summary_rows, detail_by_key, trips_by_id, trip_no_by_id, is_auto_calc_by_id)
     topic_rows = _build_topic_rows(summary_rows, detail_by_key, trips_by_id, trip_no_by_id)
 
@@ -718,18 +940,24 @@ def build_officer_workbook(
     write_summary_sheet(
         ws1, summary_rows, planning_year=planning_year, as_of=as_of,
         scope_label=SCOPE_LABEL, n_departments=n_departments, sap_watermark=sap_watermark,
+        warnings=warnings,
     )
     sheet1_name = ws1.title
-    sheet_meta = _write_topic_sheets(wb, topic_rows, planning_year, as_of, sap_watermark)
+    sheet_meta = _write_topic_sheets(wb, topic_rows, planning_year, as_of, sap_watermark, warnings=warnings)
     wb.calculation.fullCalcOnLoad = True
     xlsx_bytes = workbook_bytes(wb)
 
-    failures.extend(_check_tints(wb, sheet1_name))
+    # SEC-F7 fix round 2026-09-24: every runtime read-back control below runs
+    # on the SAVED BYTES (`load_workbook(BytesIO(xlsx_bytes))`), never the
+    # in-memory `wb` — the control must check exactly what gets published,
+    # the same rule `app.officer_reconcile._load_file_side` already follows.
+    saved_wb = load_workbook(BytesIO(xlsx_bytes))
+    failures.extend(_check_layout(saved_wb, planning_year, sheet1_name, sheet_meta))
 
     traveller_rows = q(fabric_conn, _TRAVELLER_PII_SQL, planning_year)
     traveller_names = {str(n).strip() for n, _c in traveller_rows if n and str(n).strip()}
     traveller_codes = {str(c).strip() for _n, c in traveller_rows if c and str(c).strip()}
-    pdpa_failures, pdpa_warnings = _scan_pdpa(wb, sheet1_name, sheet_meta, traveller_names, traveller_codes)
+    pdpa_failures, pdpa_warnings = _scan_pdpa(saved_wb, sheet1_name, sheet_meta, traveller_names, traveller_codes)
     failures.extend(pdpa_failures)
     warnings.extend(pdpa_warnings)
 
@@ -755,4 +983,5 @@ def build_officer_workbook(
         web_rows=web_rows,
         detail_by_key=detail_by_key,
         gl_group_by_key={(r.cost_center, r.gl_account): r.gl_group for r in summary_rows},
+        department_by_key={(r.cost_center, r.gl_account): r.department for r in summary_rows},
     )

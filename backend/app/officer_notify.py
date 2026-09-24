@@ -14,6 +14,8 @@ import logging
 from datetime import date, datetime
 from decimal import Decimal
 
+import httpx
+
 from app import notifications
 from app.config import Settings, get_settings
 from app.notifications import NotificationResult, send_mail
@@ -84,7 +86,13 @@ def notify_officer_review(
     `sent=False` result on a REAL run as a job FAIL: the file is already
     published at that point, but a re-run is idempotent (the same file is
     simply overwritten again next time). Recipient addresses are never
-    logged here — only the count, by the caller."""
+    logged here — only the count, by the caller.
+
+    OPS-3 fix round 2026-09-24: a per-recipient failure — `send_mail`'s own
+    `NotificationError`, OR a raw `httpx.HTTPError` a transport failure can
+    raise straight through it — no longer aborts the remaining recipients.
+    Every recipient is always attempted; a failed one comes back as
+    `NotificationResult(sent=False, ...)` instead of propagating."""
     settings = settings or get_settings()
     subject = build_subject(planning_year, as_of)
     body = build_body_html(
@@ -92,4 +100,11 @@ def notify_officer_review(
         fy_total=fy_total, board_total=board_total, sap_total=sap_total, sap_watermark=sap_watermark,
         lines_per_topic=lines_per_topic,
     )
-    return [send_mail(to, subject, body, dry_run=dry_run, settings=settings) for to in recipients]
+    results: list[NotificationResult] = []
+    for to in recipients:
+        try:
+            results.append(send_mail(to, subject, body, dry_run=dry_run, settings=settings))
+        except (notifications.NotificationError, httpx.HTTPError) as exc:
+            logger.warning("officer_notify: send failed for one recipient (%s) — continuing with the rest", type(exc).__name__)
+            results.append(NotificationResult(sent=False, to_email=to, subject=subject, dry_run=dry_run, detail=str(exc)))
+    return results

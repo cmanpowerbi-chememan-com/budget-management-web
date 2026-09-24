@@ -24,16 +24,19 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from typing import TypeVar
 from urllib.parse import quote
 
 import httpx
 
-from app.attachments import GRAPH_BASE, _get_graph_token, _resolve_site_and_drive
+from app.attachments import GRAPH_BASE, AttachmentTransportError, _get_graph_token, _resolve_site_and_drive
 from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
 OFFICER_FOLDER_NAME = "officer review"
+
+T = TypeVar("T")
 
 # The 8 admin master workbooks (memory `project_protected_master_files.md`,
 # test_attachments.py::ROOT_MASTERS) — the published filename must match
@@ -53,7 +56,9 @@ _APPROVED_BUDGET_RE = re.compile(r"approved_budget_(\d{4})\.xlsx")
 # it — notifications.py is on the zero-edit list, and the retryable status
 # set here is a superset anyway).
 _RETRY_BACKOFF_SECONDS = (10, 30, 60, 120)
+_RETRY_AFTER_CAP_SECONDS = 120.0
 _TIMEOUT_SECONDS = 60.0
+_TOTAL_ATTEMPTS = 1 + len(_RETRY_BACKOFF_SECONDS)
 
 
 class OfficerPublishError(RuntimeError):
@@ -92,6 +97,59 @@ def _is_retryable(resp: httpx.Response) -> bool:
     return False
 
 
+def _call_with_retry(call: Callable[[], httpx.Response], *, description: str, sleep: Callable[[float], None]) -> httpx.Response:
+    """OPS-1/OPS-4: retry ONE Graph HTTP call (this module's own GET/POST/PUT
+    — never `app.attachments`' functions, see `_step_with_retry` for those)
+    on a transport error or a retryable status (423/429/503/504, 409
+    resourceLocked). `Retry-After` REPLACES the fixed backoff step for that
+    wait (never adds to it), capped at `_RETRY_AFTER_CAP_SECONDS`; there is
+    no sleep after the FINAL attempt. Returns the response UNCHANGED on a
+    non-retryable status (including a plain 404 — some callers, e.g. the
+    folder GET, still need to branch on that) — only raises
+    `OfficerPublishError` once every attempt failed on a transport error or
+    a retryable status."""
+    last_error: str | None = None
+    for attempt in range(_TOTAL_ATTEMPTS):
+        resp: httpx.Response | None = None
+        try:
+            resp = call()
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_error = str(exc)
+            logger.warning("officer_publisher: %s attempt %d transport error: %s", description, attempt + 1, exc)
+        else:
+            if not _is_retryable(resp):
+                return resp
+            last_error = f"{resp.status_code} {resp.text}"
+            logger.warning("officer_publisher: %s attempt %d retryable failure: %s", description, attempt + 1, last_error)
+        if attempt == _TOTAL_ATTEMPTS - 1:
+            break
+        retry_after = _retry_after_seconds(resp) if resp is not None else None
+        wait = min(retry_after, _RETRY_AFTER_CAP_SECONDS) if retry_after is not None else _RETRY_BACKOFF_SECONDS[attempt]
+        sleep(wait)
+    raise OfficerPublishError(f"{description} failed after {_TOTAL_ATTEMPTS} attempts — last error: {last_error}")
+
+
+def _step_with_retry(step: Callable[[], T], *, description: str, sleep: Callable[[float], None]) -> T:
+    """OPS-1: retry a Graph resolution step from `app.attachments`
+    (`_get_graph_token` / `_resolve_site_and_drive`, zero-edit — neither
+    exposes a status code or `Retry-After`, only `AttachmentTransportError`
+    on any non-2xx or a raw `httpx` transport error) with the SAME fixed
+    backoff sequence as `_call_with_retry` — no `Retry-After` to honor here,
+    so every wait uses the plain schedule; no sleep after the FINAL
+    attempt."""
+    last_error: str | None = None
+    for attempt in range(_TOTAL_ATTEMPTS):
+        try:
+            return step()
+        except (AttachmentTransportError, httpx.TimeoutException, httpx.TransportError) as exc:
+            last_error = str(exc)
+            logger.warning("officer_publisher: %s attempt %d failed: %s", description, attempt + 1, exc)
+            if attempt == _TOTAL_ATTEMPTS - 1:
+                break
+            sleep(_RETRY_BACKOFF_SECONDS[attempt])
+    raise OfficerPublishError(f"{description} failed after {_TOTAL_ATTEMPTS} attempts — last error: {last_error}")
+
+
 def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float], None]) -> str:
     """Returns the `officer review/` folder's item id. Creates it once if
     missing (404 -> POST, 409 there means a parallel run already created it
@@ -100,16 +158,29 @@ def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float],
     the structural write-scope guard (PRD story 26): this publisher must be
     physically unable to resolve any other folder."""
     headers = {"Authorization": f"Bearer {token}"}
-    resp = httpx.get(f"{GRAPH_BASE}/drives/{drive_id}/root:/{quote(OFFICER_FOLDER_NAME, safe='')}", headers=headers, timeout=_TIMEOUT_SECONDS)
+    get_url = f"{GRAPH_BASE}/drives/{drive_id}/root:/{quote(OFFICER_FOLDER_NAME, safe='')}"
+    # OPS-1/OPS-4: every Graph call below retries transient failures
+    # (429/503/504/423, or a transport error) with backoff, `Retry-After`
+    # honored — `sleep` is finally used for what it was always meant for.
+    resp = _call_with_retry(
+        lambda: httpx.get(get_url, headers=headers, timeout=_TIMEOUT_SECONDS),
+        description=f"'{OFFICER_FOLDER_NAME}' folder GET", sleep=sleep,
+    )
     if resp.status_code == 404:
-        create_resp = httpx.post(
-            f"{GRAPH_BASE}/drives/{drive_id}/root/children",
-            headers={**headers, "Content-Type": "application/json"},
-            json={"name": OFFICER_FOLDER_NAME, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"},
-            timeout=_TIMEOUT_SECONDS,
+        create_resp = _call_with_retry(
+            lambda: httpx.post(
+                f"{GRAPH_BASE}/drives/{drive_id}/root/children",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"name": OFFICER_FOLDER_NAME, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"},
+                timeout=_TIMEOUT_SECONDS,
+            ),
+            description=f"'{OFFICER_FOLDER_NAME}' folder create POST", sleep=sleep,
         )
         if create_resp.status_code == 409:
-            resp = httpx.get(f"{GRAPH_BASE}/drives/{drive_id}/root:/{quote(OFFICER_FOLDER_NAME, safe='')}", headers=headers, timeout=_TIMEOUT_SECONDS)
+            resp = _call_with_retry(
+                lambda: httpx.get(get_url, headers=headers, timeout=_TIMEOUT_SECONDS),
+                description=f"'{OFFICER_FOLDER_NAME}' folder re-GET after 409", sleep=sleep,
+            )
         elif create_resp.status_code in (200, 201):
             resp = create_resp
         else:
@@ -142,37 +213,29 @@ def publish_officer_workbook(
     settings = settings or get_settings()
     filename = officer_filename(planning_year)
 
-    token = _get_graph_token(settings)
-    _site_id, drive_id = _resolve_site_and_drive(token, settings)
+    # OPS-1: token fetch and site/drive resolution now retry transient
+    # failures too — before this fix, only the PUT below did, so a transient
+    # 503 anywhere earlier in the flow escaped as an unmapped exception
+    # instead of a clean "no publish, no mail" `OfficerPublishError`.
+    token = _step_with_retry(lambda: _get_graph_token(settings), description="Graph token fetch", sleep=sleep)
+    _site_id, drive_id = _step_with_retry(
+        lambda: _resolve_site_and_drive(token, settings), description="site/drive resolution", sleep=sleep
+    )
     folder_id = _get_or_create_folder(token, drive_id, sleep=sleep)
 
     url = f"{GRAPH_BASE}/drives/{drive_id}/items/{folder_id}:/{quote(filename, safe='')}:/content?@microsoft.graph.conflictBehavior=replace"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
 
-    last_error = None
-    for attempt, backoff in enumerate((0, *_RETRY_BACKOFF_SECONDS)):
-        if backoff:
-            sleep(backoff)
-        try:
-            resp = httpx.put(url, headers=headers, content=xlsx_bytes, timeout=_TIMEOUT_SECONDS)
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_error = str(exc)
-            logger.warning("officer_publisher: PUT attempt %d transport error: %s", attempt + 1, exc)
-            continue
-        if resp.status_code in (200, 201):
-            item = resp.json()
-            if (item.get("parentReference") or {}).get("id") != folder_id:
-                raise OfficerPublishError(
-                    f"published item's parentReference.id {item.get('parentReference', {}).get('id')!r} "
-                    f"!= expected folder id {folder_id!r} — refusing to trust the write"
-                )
-            return item["webUrl"]
-        if not _is_retryable(resp):
-            raise OfficerPublishError(f"publish PUT failed: {resp.status_code} {resp.text}")
-        last_error = f"{resp.status_code} {resp.text}"
-        retry_after = _retry_after_seconds(resp)
-        if retry_after is not None:
-            sleep(retry_after)
-        logger.warning("officer_publisher: PUT attempt %d retryable failure: %s", attempt + 1, last_error)
-
-    raise OfficerPublishError(f"publish failed after {len(_RETRY_BACKOFF_SECONDS) + 1} attempts — last error: {last_error}")
+    resp = _call_with_retry(
+        lambda: httpx.put(url, headers=headers, content=xlsx_bytes, timeout=_TIMEOUT_SECONDS),
+        description="publish PUT", sleep=sleep,
+    )
+    if resp.status_code not in (200, 201):
+        raise OfficerPublishError(f"publish PUT failed: {resp.status_code} {resp.text}")
+    item = resp.json()
+    if (item.get("parentReference") or {}).get("id") != folder_id:
+        raise OfficerPublishError(
+            f"published item's parentReference.id {item.get('parentReference', {}).get('id')!r} "
+            f"!= expected folder id {folder_id!r} — refusing to trust the write"
+        )
+    return item["webUrl"]

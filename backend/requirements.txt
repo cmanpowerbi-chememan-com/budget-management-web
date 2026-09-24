@@ -12,11 +12,12 @@ pytest==9.0.3
 httpx==0.28.1
 python-multipart==0.0.32
 # openpyxl: RUNTIME dep (PRD #34, 2026-09-24) — jobs.officer_review builds
-# the officer-review xlsx every Friday, and the upcoming web "ดาวน์โหลด
-# Excel" export button will use the same writer (app.budget_xlsx). Also
-# still exercised by tests/tests_data_sync/test_sap_actuals_parity.py (SAP
-# .xlsx export) — missing here made CI exit 2 on collection ("No module
-# named 'openpyxl'") from 2026-07-31, so no test ran at all.
+# the officer-review xlsx every Friday, and the web "ดาวน์โหลด Excel" export
+# button (GET /budget/export, issue #35, app.budget_export) uses the same
+# writer (app.budget_xlsx). Also still exercised by
+# tests/tests_data_sync/test_sap_actuals_parity.py (SAP .xlsx export) —
+# missing here made CI exit 2 on collection ("No module named 'openpyxl'")
+# from 2026-07-31, so no test ran at all.
 openpyxl==3.1.5
 # cryptography: TRANSITIVE only (msal -> PyJWT[crypto]), pinned here purely as
 # a security FLOOR. pip-audit during the 2026-08-22 security gate flagged the

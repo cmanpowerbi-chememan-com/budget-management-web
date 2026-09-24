@@ -23,7 +23,7 @@ Three independent sources, compared at cents:
 Any FAIL means: no publish, no mail (the caller, `jobs.officer_review`,
 enforces that — this module only reports).
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 from io import BytesIO
@@ -37,10 +37,17 @@ from app.officer_workbook import (
     GL_COL,
     TOPIC_GROUP_NAMES,
     TOPIC_SHEETS,
+    UNKNOWN_DEPT,
     BuildResult,
     q,
 )
 from app.sap import DOC_NUMBER_PATTERN, HIDE_DOCUMENT_SQL, SAP_ACTUALS_SQL
+
+# SPEC-2 fix round 2026-09-24: the sheet-1 row key across all three sources
+# is now (department LABEL, cost_center, gl_account) — a row mislabelled
+# under the wrong ฝ่าย (see officer_workbook F2/F3/SPEC-1) must FAIL the
+# gate, not publish green just because its (cc, gl) still matched.
+Sheet1Key = tuple[str, str, str]
 
 CENT = Decimal("0.01")
 ZERO = Decimal("0.00")
@@ -84,13 +91,32 @@ class _TopicRow:
     months: tuple[Decimal, ...]
 
 
-def _load_file_side(xlsx_bytes: bytes) -> tuple[dict[tuple[str, str], _Sheet1Row], dict[str, list[_TopicRow]]]:
+@dataclass
+class _FileSheet1Result:
+    rows: dict[Sheet1Key, _Sheet1Row]
+    failures: list[str]
+    grand_total_year: Decimal
+    grand_board_total: Decimal
+    grand_sap_total: Decimal
+
+
+def _load_file_side(xlsx_bytes: bytes) -> tuple[_FileSheet1Result, dict[str, list[_TopicRow]]]:
+    """C-F4: the FILE side must never silently collapse a duplicated sheet-1
+    row — a duplicate key is a FAIL naming that key, and the FILE grand
+    totals are summed over EVERY data row actually read (Excel's own
+    SUBTOTAL(9) would sum a duplicate row twice too), never over a deduped
+    dict. SPEC-2: the sheet-1 key includes the department LABEL (column A),
+    not just (cost_center, gl_account)."""
     wb = load_workbook(BytesIO(xlsx_bytes))
     sheet1_name = wb.sheetnames[0]
     ws1 = wb[sheet1_name]
 
-    sheet1: dict[tuple[str, str], _Sheet1Row] = {}
+    sheet1: dict[Sheet1Key, _Sheet1Row] = {}
+    failures: list[str] = []
+    grand_total = grand_board = grand_sap = ZERO
+    row_keys: list[Sheet1Key] = []
     for r in range(5, ws1.max_row + 1):
+        dept = ws1.cell(row=r, column=1).value
         cc = ws1.cell(row=r, column=4).value
         gl = ws1.cell(row=r, column=6).value
         if not cc and not gl:
@@ -99,7 +125,26 @@ def _load_file_side(xlsx_bytes: bytes) -> tuple[dict[tuple[str, str], _Sheet1Row
         total_year = _dec(ws1.cell(row=r, column=FIRST_NUM_COL + 12).value)
         board_total = _dec(ws1.cell(row=r, column=FIRST_NUM_COL + 13).value)
         sap_total = _dec(ws1.cell(row=r, column=FIRST_NUM_COL + 14).value)
-        sheet1[(str(cc), str(gl))] = _Sheet1Row(months=months, total_year=total_year, board_total_year=board_total, sap_total_year=sap_total)
+        # C-F4: accumulate the grand totals over EVERY data row read — a
+        # duplicate row's amounts still count (Excel's own row-3 SUBTOTAL(9)
+        # would sum it too), never only over the deduped `sheet1` dict below.
+        grand_total += total_year
+        grand_board += board_total
+        grand_sap += sap_total
+        key: Sheet1Key = (str(dept or ""), str(cc), str(gl))
+        row_keys.append(key)
+        if key not in sheet1:
+            sheet1[key] = _Sheet1Row(months=months, total_year=total_year, board_total_year=board_total, sap_total_year=sap_total)
+
+    # C-F4: multiset (Counter) of every row key read — ANY key appearing
+    # more than once is a FAIL naming that key, never silently collapsed.
+    for key, count in Counter(row_keys).items():
+        if count > 1:
+            failures.append(f"FILE duplicate sheet-1 row {key} (appears {count} times)")
+
+    file_result = _FileSheet1Result(
+        rows=sheet1, failures=failures, grand_total_year=grand_total, grand_board_total=grand_board, grand_sap_total=grand_sap,
+    )
 
     topics: dict[str, list[_TopicRow]] = {}
     for group, _swatch in TOPIC_SHEETS:
@@ -122,13 +167,13 @@ def _load_file_side(xlsx_bytes: bytes) -> tuple[dict[tuple[str, str], _Sheet1Row
             months = tuple(_dec(ws.cell(row=r, column=total_col + 1 + i).value) for i in range(12))
             rows_.append(_TopicRow(cost_center=str(cc), gl_account=str(gl), total_year=total, months=months))
         topics[group] = rows_
-    return sheet1, topics
+    return file_result, topics
 
 
 # ---------------------------------------------------------------------------
 # WEB side (from the already-built `BuildResult` — no re-fetch)
 # ---------------------------------------------------------------------------
-def _web_sheet1(build: BuildResult) -> dict[tuple[str, str], _Sheet1Row]:
+def _web_sheet1(build: BuildResult) -> dict[Sheet1Key, _Sheet1Row]:
     out = {}
     for key, br in build.web_rows.items():
         months = (
@@ -136,7 +181,12 @@ def _web_sheet1(build: BuildResult) -> dict[tuple[str, str], _Sheet1Row]:
             br.pending.m05, br.pending.m06, br.pending.m07, br.pending.m08,
             br.pending.m09, br.pending.m10, br.pending.m11, br.pending.m12,
         )
-        out[key] = _Sheet1Row(
+        # SPEC-2: the resolved LABEL department (same value written to
+        # sheet-1 column A — `BuildResult.department_by_key`, populated by
+        # `officer_workbook._build_summary_rows`'s shared `_resolve_live_department` chain).
+        dept = build.department_by_key.get(key) or UNKNOWN_DEPT
+        dept_key: Sheet1Key = (dept, key[0], key[1])
+        out[dept_key] = _Sheet1Row(
             months=tuple(_dec(v) for v in months),
             total_year=_dec(br.pending.total_year),
             board_total_year=_dec(br.board.total_year),
@@ -216,7 +266,7 @@ def _fabric_sap_actuals(gold_conn: pyodbc.Connection, board_year: int, hidden: l
 
 def _fabric_reconcile_data(
     fabric_conn: pyodbc.Connection, gold_conn: pyodbc.Connection, planning_year: int,
-) -> tuple[dict[tuple[str, str], _Sheet1Row], dict[str, list[_TopicRow]], list[str]]:
+) -> tuple[dict[Sheet1Key, _Sheet1Row], dict[str, list[_TopicRow]], list[str]]:
     board_year = planning_year - 1
     failures: list[str] = []
 
@@ -242,6 +292,9 @@ def _fabric_reconcile_data(
     master_gl = {code: group for code, group in q(fabric_conn, _FABRIC_GL_GROUP_SQL)}
 
     def live_dept(key: tuple[str, str]) -> str | None:
+        # SPEC-2: FABRIC resolves the LABEL department independently — live
+        # `cc_filler_map` rn=1 first, then the pending snapshot, then the
+        # board snapshot — same 3-step order as `_resolve_live_department`.
         cc = key[0]
         p, b = pending.get(key), board.get(key)
         return cc_dept.get(cc) or (p and p["department"]) or (b and b["department"])
@@ -258,7 +311,8 @@ def _fabric_reconcile_data(
         return p is not None and p["template"] == "ADMIN"
 
     all_keys = set(pending) | set(board) | sap_nonzero
-    sheet1: dict[tuple[str, str], _Sheet1Row] = {}
+    sheet1: dict[Sheet1Key, _Sheet1Row] = {}
+    in_scope_ccgl: set[tuple[str, str]] = set()
     for key in all_keys:
         cc, gl = key
         if gl not in master_gl:
@@ -268,7 +322,9 @@ def _fabric_reconcile_data(
         p, b, s = pending.get(key), board.get(key), sap.get(key)
         if p is None and b is None and key not in sap_nonzero:
             continue
-        sheet1[key] = _Sheet1Row(
+        in_scope_ccgl.add(key)
+        dept_key: Sheet1Key = (live_dept(key) or UNKNOWN_DEPT, cc, gl)
+        sheet1[dept_key] = _Sheet1Row(
             months=tuple(p["months"]) if p else tuple([ZERO] * 12),
             total_year=p["total"] if p else ZERO,
             board_total_year=b["total"] if b else ZERO,
@@ -278,7 +334,7 @@ def _fabric_reconcile_data(
     topics: dict[str, list[_TopicRow]] = defaultdict(list)
     for cc, gl, _detail_id, total_year, *m in q(fabric_conn, _FABRIC_DETAIL_SQL, planning_year):
         key = (cc, gl)
-        if key not in sheet1:
+        if key not in in_scope_ccgl:
             continue
         group = master_gl.get(gl)
         if group not in TOPIC_GROUP_NAMES:
@@ -315,8 +371,27 @@ def _compare_sheet1(file_side: dict, web_side: dict, fabric_side: dict) -> list[
     return failures
 
 
-def _compare_topics(file_topics: dict, web_topics: dict, fabric_topics: dict, sheet1_web: dict) -> list[str]:
+def _line_tuple(r: _TopicRow) -> tuple:
+    return (r.cost_center, r.gl_account, r.total_year, r.months)
+
+
+def _multiset_diff(a: Counter, b: Counter, *, a_label: str, b_label: str) -> str:
+    only_a = list((a - b).elements())[:5]
+    only_b = list((b - a).elements())[:5]
+    return f"{a_label}-only={only_a} {b_label}-only={only_b}"
+
+
+def _compare_topics(file_topics: dict, web_topics: dict, fabric_topics: dict, sheet1_web: dict[Sheet1Key, _Sheet1Row]) -> list[str]:
+    """C-F5/SPEC-3 fix round 2026-09-24: per-sheet count + SUM(รวมปี) (kept,
+    unchanged), PLUS a MULTISET compare of every line's
+    (cost_center, gl_account, total_year, m01..m12) across FILE / WEB /
+    FABRIC — a tampered amount, a shifted month, or a CC rewrite that leaves
+    the count and SUM unchanged now shows up as an unmatched tuple on one
+    side (no layout change — no detail_id column added; the tuple itself
+    names the offending (cc, gl)). PLUS a per-line internal check, on EACH
+    source separately, that sum(m01..m12) == total_year."""
     failures: list[str] = []
+    sheet1_by_ccgl = {(cc, gl): v for (_dept, cc, gl), v in sheet1_web.items()}
     for group, _swatch in TOPIC_SHEETS:
         f_rows = file_topics.get(group, [])
         w_rows = web_topics.get(group, [])
@@ -332,15 +407,30 @@ def _compare_topics(file_topics: dict, web_topics: dict, fabric_topics: dict, sh
         if len(set(sums)) != 1:
             failures.append(f"topic '{group}': SUM(รวมปี) mismatch FILE={sums[0]} WEB={sums[1]} FABRIC={sums[2]}")
 
+        for label, rows_ in (("FILE", f_rows), ("WEB", w_rows), ("FABRIC", fb_rows)):
+            for r in rows_:
+                if sum(r.months, ZERO) != r.total_year:
+                    failures.append(
+                        f"topic '{group}' {label} ({r.cost_center}, {r.gl_account}): "
+                        f"sum(m01..m12)={sum(r.months, ZERO)} != total={r.total_year}"
+                    )
+
+        file_ctr, web_ctr, fabric_ctr = (Counter(_line_tuple(r) for r in rows_) for rows_ in (f_rows, w_rows, fb_rows))
+        if file_ctr != web_ctr:
+            failures.append(f"topic '{group}': FILE != WEB line multiset — {_multiset_diff(file_ctr, web_ctr, a_label='FILE', b_label='WEB')}")
+        if web_ctr != fabric_ctr:
+            failures.append(f"topic '{group}': WEB != FABRIC line multiset — {_multiset_diff(web_ctr, fabric_ctr, a_label='WEB', b_label='FABRIC')}")
+
         # month parity detail-vs-parent (D4: promoted to FAIL, was WARN-only
-        # in the prototype — "PRD says must be equal").
+        # in the prototype — "PRD says must be equal"). WEB detail vs WEB
+        # sheet-1 parent, unchanged by this fix round.
         by_parent: dict[tuple[str, str], list[Decimal]] = defaultdict(lambda: [ZERO] * 12)
         for r in w_rows:
             key = (r.cost_center, r.gl_account)
             for i, v in enumerate(r.months):
                 by_parent[key][i] += v
         for key, summed in by_parent.items():
-            parent = sheet1_web.get(key)
+            parent = sheet1_by_ccgl.get(key)
             if parent is None:
                 continue
             if tuple(summed) != parent.months:
@@ -358,7 +448,9 @@ def reconcile(
     `app.sap`)."""
     failures: list[str] = []
 
-    file_sheet1, file_topics = _load_file_side(xlsx_bytes)
+    file_result, file_topics = _load_file_side(xlsx_bytes)
+    failures.extend(file_result.failures)  # C-F4: FILE-side duplicate sheet-1 rows
+    file_sheet1 = file_result.rows
     web_sheet1 = _web_sheet1(build)
     web_topics = _web_topics(build)
     fabric_sheet1, fabric_topics, fabric_failures = _fabric_reconcile_data(fabric_conn, gold_conn, planning_year)
@@ -367,22 +459,25 @@ def reconcile(
     failures.extend(_compare_sheet1(file_sheet1, web_sheet1, fabric_sheet1))
     failures.extend(_compare_topics(file_topics, web_topics, fabric_topics, web_sheet1))
 
+    # C-F4: FILE grand totals are summed over EVERY data row `_load_file_side`
+    # read (including a duplicate's contribution — the same as Excel's own
+    # SUBTOTAL(9) would), never over the deduped `file_sheet1` dict.
     grand = {
-        "FILE": sum((r.total_year for r in file_sheet1.values()), ZERO),
+        "FILE": file_result.grand_total_year,
         "WEB": sum((r.total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.total_year for r in fabric_sheet1.values()), ZERO),
     }
     if len(set(grand.values())) != 1:
         failures.append(f"grand total_year mismatch: {grand}")
     grand_board = {
-        "FILE": sum((r.board_total_year for r in file_sheet1.values()), ZERO),
+        "FILE": file_result.grand_board_total,
         "WEB": sum((r.board_total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.board_total_year for r in fabric_sheet1.values()), ZERO),
     }
     if len(set(grand_board.values())) != 1:
         failures.append(f"grand board_total mismatch: {grand_board}")
     grand_sap = {
-        "FILE": sum((r.sap_total_year for r in file_sheet1.values()), ZERO),
+        "FILE": file_result.grand_sap_total,
         "WEB": sum((r.sap_total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.sap_total_year for r in fabric_sheet1.values()), ZERO),
     }

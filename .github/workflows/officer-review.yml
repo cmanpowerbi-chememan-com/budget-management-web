@@ -67,6 +67,14 @@ jobs:
     timeout-minutes: 30
     env:
       FISCAL_YEAR: ${{ inputs.fiscal_year || vars.AUTOMATION_FISCAL_YEAR }}
+      # SEC-F6/OPS-6/SPEC-10 fix round 2026-09-24: dispatch inputs + the
+      # event name are passed through `env:` and referenced as quoted shell
+      # vars everywhere below — never inlined as `${{ inputs.* }}` inside a
+      # `run:` script (that pattern lets a free-text input get word-split
+      # into extra args/flags).
+      EXECUTE_INPUT: ${{ inputs.execute }}
+      PROBE_INPUT: ${{ inputs.probe }}
+      EVENT_NAME: ${{ github.event_name }}
 
     steps:
       - name: Checkout code
@@ -78,7 +86,11 @@ jobs:
             echo "::error::No planning fiscal year. Pass the workflow_dispatch input, or set the AUTOMATION_FISCAL_YEAR repo variable for scheduled runs."
             exit 1
           fi
-          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=${{ inputs.execute }}, probe=${{ inputs.probe }})"
+          if [[ ! "$FISCAL_YEAR" =~ ^[0-9]{4}$ ]]; then
+            echo "::error::FISCAL_YEAR ('$FISCAL_YEAR') is not exactly 4 digits — refusing to act on it (SEC-F6: word-splitting / bad-input guard)."
+            exit 1
+          fi
+          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=$EXECUTE_INPUT, probe=$PROBE_INPUT)"
 
       - name: Install ODBC Driver 17 for SQL Server
         run: |
@@ -122,20 +134,26 @@ jobs:
           OFFICER_REVIEW_LIVE: ${{ vars.OFFICER_REVIEW_LIVE }}
           OFFICER_REVIEW_RECIPIENTS: ${{ vars.OFFICER_REVIEW_RECIPIENTS }}
         run: |
-          ARGS="--fiscal-year $FISCAL_YEAR"
           case "${OFFICER_REVIEW_LIVE,,}" in
             true|1|yes|on|y|t) LIVE_ON=true ;;
             *) LIVE_ON=false ;;
           esac
-          if [ "${{ inputs.execute }}" = "true" ] || { [ "$LIVE_ON" = "true" ] && [ "${{ github.event_name }}" = "schedule" ]; }; then
+          # SEC-F6/OPS-6/SPEC-10: quoted shell vars only (never an inlined
+          # `${{ inputs.* }}` in this script — see the `env:` block above),
+          # and the CLI args are built as a bash ARRAY, never a word-split
+          # string, so a free-text fiscal_year can never inject extra flags.
+          if [ "$EXECUTE_INPUT" = "true" ] || { [ "$LIVE_ON" = "true" ] && [ "$EVENT_NAME" = "schedule" ]; }; then
             export DRY_RUN=false
-            ARGS="$ARGS --execute"
             MODE=REAL
-            if [ "${{ inputs.execute }}" = "true" ]; then REASON="manual execute input"; else REASON="schedule variable OFFICER_REVIEW_LIVE=on"; fi
+            if [ "$EXECUTE_INPUT" = "true" ]; then REASON="manual execute input"; else REASON="schedule variable OFFICER_REVIEW_LIVE=on"; fi
           else
             export DRY_RUN=true
             MODE=PREVIEW
             REASON="neither manual execute nor (schedule AND OFFICER_REVIEW_LIVE=on)"
           fi
-          echo "MODE: $MODE — reason: $REASON | execute=${{ inputs.execute }}, OFFICER_REVIEW_LIVE=$OFFICER_REVIEW_LIVE (parsed=$LIVE_ON), DRY_RUN=$DRY_RUN, event=${{ github.event_name }}"
-          python -m jobs.officer_review $ARGS
+          echo "MODE: $MODE — reason: $REASON | execute=$EXECUTE_INPUT, OFFICER_REVIEW_LIVE=$OFFICER_REVIEW_LIVE (parsed=$LIVE_ON), DRY_RUN=$DRY_RUN, event=$EVENT_NAME"
+          ARGS=(--fiscal-year "$FISCAL_YEAR")
+          if [ "$MODE" = "REAL" ]; then
+            ARGS+=(--execute)
+          fi
+          python -m jobs.officer_review "${ARGS[@]}"

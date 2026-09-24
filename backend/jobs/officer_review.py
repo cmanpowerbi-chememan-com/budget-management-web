@@ -26,7 +26,9 @@ import os
 import re
 import time
 from collections.abc import Callable
+from datetime import datetime
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -38,13 +40,48 @@ from app.officer_notify import notify_officer_review
 from app.officer_publisher import OFFICER_FOLDER_NAME, OfficerPublishError, publish_officer_workbook
 from app.officer_reconcile import ReconcileResult, reconcile
 from app.officer_workbook import BuildResult, build_officer_workbook
+from app.sap import clear_sap_caches
 from jobs.common import add_common_args, configure_logging, is_dry_run
-from jobs.probe_graph_permissions import TokenDecodeError, decode_jwt_payload
+from jobs.probe_graph_permissions import decode_jwt_payload
 
 logger = logging.getLogger("jobs.officer_review")
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_RECIPIENT_DOMAIN_SUFFIX = "@chememan.com"
 _DEFAULT_RETRY_DELAY_SECONDS = 300.0
+BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
+
+# OPS-2/SEC-F2/SPEC-6/SEC-F1/OPS-8 fix round 2026-09-24: every log record
+# this job process emits goes through this filter, installed on the ROOT
+# handlers right after `configure_logging()` — catches `app.notifications`'s
+# own `sent to=%s cc=%s` INFO/WARNING lines too (zero-edit there) without
+# needing to know every logger name that might ever print an address.
+_EMAIL_REDACT_RE = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
+
+
+class _EmailRedactingLogFilter(logging.Filter):
+    """Redacts every email-like substring in a formatted log message to
+    `<email>`. Rewrites `record.msg` with the ALREADY-FORMATTED (`%`-args
+    applied) text and clears `record.args`, so the redaction survives
+    whatever the handler's formatter does next — a record is never dropped,
+    only its text is cleaned."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        redacted = _EMAIL_REDACT_RE.sub("<email>", message)
+        if redacted != message:
+            record.msg = redacted
+            record.args = ()
+        return True
+
+
+def install_email_redaction() -> None:
+    """Attach `_EmailRedactingLogFilter` to every handler currently on the
+    root logger. Call ONCE, right after `configure_logging()` — that is the
+    call that creates the root `StreamHandler` this filter attaches to."""
+    filt = _EmailRedactingLogFilter()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(filt)
 
 
 class OfficerConfigError(RuntimeError):
@@ -53,15 +90,23 @@ class OfficerConfigError(RuntimeError):
     instead of an obscure pyodbc failure with `SERVER=None`."""
 
 
-def parse_recipients(raw: str) -> list[str]:
+def parse_recipients(raw: str) -> tuple[list[str], int]:
     """Comma/semicolon-separated, trimmed, de-duplicated (case-insensitive),
-    basic email-shape checked. An entry that fails the shape check is
-    dropped with a WARNING (never crashes the parse — one bad entry must not
-    take the whole run down)."""
+    basic email-shape checked, AND restricted to the company domain (SEC-F5,
+    owner decision: company domain only) — `@chememan.com`, case-insensitive.
+    An entry failing either check is DROPPED with a WARNING (never crashes
+    the parse — one bad entry must not take the whole run down); a
+    duplicate is silently deduplicated, not counted as dropped.
+
+    Returns `(valid_recipients, dropped_count)` — OPS-7: the caller MUST
+    treat `dropped_count > 0` as a FAIL on a REAL run (before publishing,
+    never a silent partial recipient list) and report both counts even on a
+    PREVIEW run."""
     if not raw:
-        return []
+        return [], 0
     seen: set[str] = set()
     out: list[str] = []
+    dropped = 0
     for part in re.split(r"[,;]", raw):
         addr = part.strip()
         if not addr:
@@ -69,12 +114,13 @@ def parse_recipients(raw: str) -> list[str]:
         key = addr.lower()
         if key in seen:
             continue
-        if not _EMAIL_RE.match(addr):
-            logger.warning("officer_review: OFFICER_REVIEW_RECIPIENTS entry does not look like an email — dropped")
+        if not _EMAIL_RE.match(addr) or not key.endswith(_RECIPIENT_DOMAIN_SUFFIX):
+            logger.warning("officer_review: OFFICER_REVIEW_RECIPIENTS entry dropped — not a valid %s address", _RECIPIENT_DOMAIN_SUFFIX)
+            dropped += 1
             continue
         seen.add(key)
         out.append(addr)
-    return out
+    return out, dropped
 
 
 def _ensure_gold_configured(settings: Settings) -> None:
@@ -84,7 +130,30 @@ def _ensure_gold_configured(settings: Settings) -> None:
         )
 
 
+def check_fy_sanity(planning_year: int, *, now: datetime | None = None) -> str | None:
+    """OPS-10: a mistyped or bumped `AUTOMATION_FISCAL_YEAR` (shared with the
+    ARMED reminders workflow) must FAIL loud BEFORE any read — combined with
+    D6 (an empty scope still publishes+mails), a wrong year would otherwise
+    produce a green REAL run that quietly stops updating the real year's
+    file and starts publishing an empty one for the wrong year. A "planning
+    fiscal year" can only legitimately mean the current Bangkok year or the
+    next one. Returns an error message, or `None` when the year is sane."""
+    today = (now or datetime.now(BANGKOK_TZ)).astimezone(BANGKOK_TZ)
+    if planning_year not in (today.year, today.year + 1):
+        return (
+            f"fiscal_year={planning_year} is neither the current Bangkok year ({today.year}) "
+            f"nor next year ({today.year + 1}) — refusing to read, in case AUTOMATION_FISCAL_YEAR is wrong"
+        )
+    return None
+
+
 def _build_and_reconcile(fabric_conn, gold_conn, planning_year: int, settings: Settings) -> tuple[BuildResult, ReconcileResult]:
+    # C-F1/SPEC-5/OPS-5: ONE SAP snapshot per ATTEMPT, fresh across attempts
+    # — without this, the D5 retry (300s later) reused the SAME cached SAP
+    # figures the WEB side saw on attempt 1 while the FABRIC side always
+    # read gold fresh, so a SAP load landing mid-run failed BOTH attempts
+    # instead of the one honest transient mismatch D5 exists to absorb.
+    clear_sap_caches()
     build = build_officer_workbook(fabric_conn, gold_conn, planning_year=planning_year, settings=settings)
     if build.xlsx_bytes is None:
         return build, ReconcileResult(ok=False, failures=["build produced no bytes"])
@@ -154,8 +223,9 @@ def run_probe(settings: Settings) -> int:
             else:
                 print(f"FAIL: Graph token missing role {role}")
                 ok = False
-    except (notifications.NotificationError, TokenDecodeError) as exc:
-        print(f"FAIL: Graph token/role check — {exc}")
+    except Exception as exc:  # noqa: BLE001 — OPS-9: any exception (httpx transport error, malformed token
+        # response, ...) FAILs this ONE check and the probe still runs every remaining check
+        print(f"FAIL: Graph token/role check — {type(exc).__name__}: {exc}")
         ok = False
 
     if token is not None:
@@ -182,9 +252,17 @@ def run_probe(settings: Settings) -> int:
 
 def run_build(
     *, planning_year: int, dry_run: bool, settings: Settings, out_path: str | None,
-    recipients: list[str], sleep: Callable[[float], None] = time.sleep,
+    recipients: list[str], recipients_dropped: int = 0, sleep: Callable[[float], None] = time.sleep,
     retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,
 ) -> int:
+    # OPS-10: fail loud on a wrong planning year BEFORE any read — a
+    # mistyped/bumped AUTOMATION_FISCAL_YEAR must never quietly publish an
+    # empty (or wrong-year) file every week.
+    fy_error = check_fy_sanity(planning_year)
+    if fy_error:
+        print(f"MODE: FAIL — {fy_error}")
+        return 1
+
     _ensure_gold_configured(settings)
 
     with get_fabric_conn(settings) as fabric_conn, get_gold_conn(settings) as gold_conn:
@@ -199,6 +277,14 @@ def run_build(
         f"fy_total={build.grand_total_year:.2f} board_total={build.grand_board_total:.2f} "
         f"sap_total={build.grand_sap_total:.2f} lines_per_topic={build.lines_per_topic}"
     )
+    # SPEC-8: PDPA/illegal-char WARN entries are only ever coordinates
+    # (sheet!cell), never values (by construction — see officer_workbook.py)
+    # — surface them so someone can actually find and fix the cell, capped
+    # at 20 lines + the total count.
+    if build.warnings:
+        for w in build.warnings[:20]:
+            logger.warning("officer_review CONTROL WARN: %s", w)
+        print(f"WARNINGS: {len(build.warnings)} total (showing up to 20 in the log)")
     if not ok:
         for f in all_failures[:20]:
             logger.error("officer_review CONTROL FAIL: %s", f)
@@ -216,6 +302,13 @@ def run_build(
 
     if not recipients:
         print("MAIL FAIL: no valid OFFICER_REVIEW_RECIPIENTS — refusing to publish on a REAL run")
+        return 1
+    if recipients_dropped:
+        # SEC-F5/OPS-7 (owner decision: company domain only, strict on a
+        # REAL run): a misconfigured or external entry must never silently
+        # mail fewer people than configured, or leak budget totals outside
+        # chememan.com.
+        print(f"MAIL FAIL: {recipients_dropped} configured OFFICER_REVIEW_RECIPIENTS entr(ies) were dropped (invalid or non-@chememan.com) — refusing to publish on a REAL run")
         return 1
 
     try:
@@ -249,6 +342,7 @@ def run_build(
 
 def main() -> int:
     configure_logging()
+    install_email_redaction()  # OPS-2/SEC-F2/SPEC-6: right after configure_logging(), per its own contract
     parser = argparse.ArgumentParser(description="Weekly officer-review workbook robot (PRD #34)")
     add_common_args(parser)
     parser.add_argument("--probe", action="store_true", help="read-only permission check only; no build, no write")
@@ -259,14 +353,19 @@ def main() -> int:
     dry_run = is_dry_run(args)
     logger.info("starting officer_review fiscal_year=%s dry_run=%s probe=%s", args.fiscal_year, dry_run, args.probe)
 
-    if args.probe:
-        return run_probe(settings)
-
-    recipients = parse_recipients(os.getenv("OFFICER_REVIEW_RECIPIENTS", ""))
+    # OPS-9: `run_probe` is now inside the SAME try/except as build mode —
+    # an unexpected exception (httpx transport error, KeyError, ...) that
+    # escapes an individual probe check's own try/except (or `get_settings`
+    # itself) exits loud (2) instead of an unhandled traceback.
     try:
+        if args.probe:
+            return run_probe(settings)
+
+        recipients, dropped = parse_recipients(os.getenv("OFFICER_REVIEW_RECIPIENTS", ""))
+        print(f"RECIPIENTS: valid={len(recipients)} dropped={dropped}")
         return run_build(
             planning_year=args.fiscal_year, dry_run=dry_run, settings=settings,
-            out_path=args.out, recipients=recipients,
+            out_path=args.out, recipients=recipients, recipients_dropped=dropped,
         )
     except Exception:  # noqa: BLE001 — unexpected exception -> loud, exit 2, never a silent partial run
         logger.exception("officer_review: unexpected exception")

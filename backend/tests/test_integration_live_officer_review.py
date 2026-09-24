@@ -15,17 +15,19 @@ Skipped by default (`pytest.ini`: `addopts = -m "not integration"`). Run:
 """
 import contextlib
 import os
+from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
 
 import pytest
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
-from app.budget_xlsx import FIRST_NUM_COL
+from app.budget_xlsx import FIRST_NUM_COL, SummaryRow, workbook_bytes, write_summary_sheet
 from app.config import get_settings
-from app.officer_reconcile import reconcile
-from app.officer_workbook import build_officer_workbook
+from app.officer_reconcile import _Sheet1Row, _TopicRow, _compare_sheet1, _compare_topics, _load_file_side, reconcile
+from app.officer_workbook import TopicRow, _write_topic_sheets, build_officer_workbook
 
 FISCAL_YEAR = int(os.environ.get("AUTOMATION_FISCAL_YEAR", "2027"))
 
@@ -163,3 +165,121 @@ def test_negative_control_tampered_or_missing_row_fails_reconcile():
 
             delete_result = reconcile(deleted_bytes, build, fabric_conn, gold_conn, planning_year=FISCAL_YEAR)
             assert not delete_result.ok, "deleting a data row must FAIL the reconcile (row-key-set mismatch)"
+            assert any(str(target_key) in f or (target_key[0] in f and target_key[1] in f) for f in delete_result.failures), (
+                f"delete FAIL messages did not name the deleted key {target_key}: {delete_result.failures[:10]}"
+            )
+
+
+def _topic_total_col(ws) -> int:
+    headers = [ws.cell(row=4, column=c).value for c in range(1, ws.max_column + 1)]
+    return next(i for i, h in enumerate(headers, start=1) if isinstance(h, str) and h.startswith("รวมปี "))
+
+
+@pytest.mark.integration
+def test_negative_controls_topic_and_department_synthetic():
+    """C-F6 fix round 2026-09-24: the ABOVE negative control never proves the
+    gate can fail on a topic sheet, a department-label mismatch, or a
+    duplicated sheet-1 row — and is vacuous whenever today's live scope
+    happens to have no eligible row for those branches (F6: "vacuous for
+    most scope branches on current live data"). This test builds its OWN
+    tiny workbook with the REAL writer functions (`write_summary_sheet` /
+    `_write_topic_sheets` — never a hand-rolled xlsx), so all four branches
+    below are NEVER vacuous, whatever live data looks like this week.
+
+    Still `@pytest.mark.integration` per D15 (kept in the SAME file, the
+    owner's "no other test files" instruction) — but this one is fully
+    self-contained (no DB, no live connection) since it tests the
+    reconcile's own comparison functions directly against a synthetic
+    baseline it builds and controls itself. Never publishes/mails (the
+    publisher/notifier are never even imported here)."""
+    planning_year = FISCAL_YEAR
+    as_of = datetime(planning_year, 1, 15, 9, 0, tzinfo=timezone.utc)
+    dept, cc, gl = "SYN01", "SYNCC01", "6210100999"
+    months = (100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+    summary_row = SummaryRow(
+        cost_center=cc, gl_account=gl, department=dept, division="SYN DIV", c_level="SYN CLEVEL",
+        cc_name="Synthetic CC", gl_name="Synthetic GL", gl_group="Entertainment", side="SGA",
+        status_label="อนุมัติแล้ว", months=months, total_year=100.0, board_total_year=90.0,
+        sap_total_year=80.0, remark="", detail_lines=(),
+    )
+    topic_row = TopicRow(
+        department=dept, division="SYN DIV", cost_center=cc, cc_name="Synthetic CC",
+        gl_account=gl, gl_name="Synthetic GL", side="SGA", status_label="อนุมัติแล้ว",
+        topic_vals=["ลูกค้า", "เลี้ยงรับรอง"], total_year=100.0, months=months,
+        sort_key=(dept, cc, 0, gl, 1),
+    )
+
+    def _build_bytes() -> bytes:
+        wb = Workbook()
+        ws1 = wb.active
+        write_summary_sheet(
+            ws1, [summary_row], planning_year=planning_year, as_of=as_of,
+            scope_label="synthetic", n_departments=1, sap_watermark=None,
+        )
+        _write_topic_sheets(wb, {"Entertainment": [topic_row]}, planning_year, as_of, None)
+        return workbook_bytes(wb)
+
+    baseline_bytes = _build_bytes()
+    key = (dept, cc, gl)
+    months_dec = tuple(Decimal(str(v)).quantize(Decimal("0.01")) for v in months)
+    web_sheet1 = {
+        key: _Sheet1Row(months=months_dec, total_year=Decimal("100.00"), board_total_year=Decimal("90.00"), sap_total_year=Decimal("80.00"))
+    }
+    fabric_sheet1 = dict(web_sheet1)
+    web_topics = {"Entertainment": [_TopicRow(cost_center=cc, gl_account=gl, total_year=Decimal("100.00"), months=months_dec)]}
+    fabric_topics = {"Entertainment": [_TopicRow(cost_center=cc, gl_account=gl, total_year=Decimal("100.00"), months=months_dec)]}
+
+    # --- sanity: baseline reconciles clean at the compare-function level ---
+    file_result, file_topics = _load_file_side(baseline_bytes)
+    assert not file_result.failures, f"synthetic baseline FILE side unexpectedly flagged: {file_result.failures}"
+    assert _compare_sheet1(file_result.rows, web_sheet1, fabric_sheet1) == []
+    assert _compare_topics(file_topics, web_topics, fabric_topics, web_sheet1) == []
+
+    # --- (a) tamper a topic-sheet month cell +0.01 (in the SAVED bytes) ---
+    wb_a = load_workbook(BytesIO(baseline_bytes))
+    ws_a = wb_a["Entertainment"]
+    total_col_a = _topic_total_col(ws_a)
+    month1_cell = ws_a.cell(row=5, column=total_col_a + 1)
+    month1_cell.value = float(month1_cell.value or 0.0) + 0.01
+    buf_a = BytesIO()
+    wb_a.save(buf_a)
+    _, file_topics_a = _load_file_side(buf_a.getvalue())
+    failures_a = _compare_topics(file_topics_a, web_topics, fabric_topics, web_sheet1)
+    assert failures_a, "tampering a topic-sheet month cell by +0.01 must FAIL the topic reconcile"
+    assert any(cc in f and gl in f for f in failures_a), f"topic-tamper FAIL messages did not name the key ({cc}, {gl}): {failures_a}"
+
+    # --- (b) duplicate a sheet-1 data row (same key, copied to a new row) ---
+    wb_b = load_workbook(BytesIO(baseline_bytes))
+    ws1_b = wb_b[wb_b.sheetnames[0]]
+    for col in range(1, ws1_b.max_column + 1):
+        ws1_b.cell(row=6, column=col).value = ws1_b.cell(row=5, column=col).value
+    buf_b = BytesIO()
+    wb_b.save(buf_b)
+    file_result_b, _ = _load_file_side(buf_b.getvalue())
+    assert file_result_b.failures, "duplicating a sheet-1 data row must FAIL (C-F4)"
+    assert any(dept in f and cc in f and gl in f for f in file_result_b.failures), (
+        f"duplicate-row FAIL messages did not name the key {key}: {file_result_b.failures}"
+    )
+
+    # --- (c) change one sheet-1 ฝ่าย (department) label ---
+    wb_c = load_workbook(BytesIO(baseline_bytes))
+    ws1_c = wb_c[wb_c.sheetnames[0]]
+    ws1_c.cell(row=5, column=1).value = "OTHERDEPT"
+    buf_c = BytesIO()
+    wb_c.save(buf_c)
+    file_result_c, _ = _load_file_side(buf_c.getvalue())
+    failures_c = _compare_sheet1(file_result_c.rows, web_sheet1, fabric_sheet1)
+    assert failures_c, "changing the sheet-1 ฝ่าย label must FAIL the reconcile (SPEC-2)"
+    assert any("OTHERDEPT" in f for f in failures_c), f"department-tamper FAIL messages did not name the changed label: {failures_c}"
+
+    # --- (d) delete the topic-sheet line entirely ---
+    wb_d = load_workbook(BytesIO(baseline_bytes))
+    ws_d = wb_d["Entertainment"]
+    ws_d.delete_rows(5, 1)
+    buf_d = BytesIO()
+    wb_d.save(buf_d)
+    _, file_topics_d = _load_file_side(buf_d.getvalue())
+    failures_d = _compare_topics(file_topics_d, web_topics, fabric_topics, web_sheet1)
+    assert failures_d, "deleting a topic-sheet line must FAIL the reconcile"
+    assert any("Entertainment" in f for f in failures_d), f"topic-delete FAIL messages did not name the sheet: {failures_d}"
