@@ -226,13 +226,17 @@ def run_build(
     print("PUBLISHED: file overwritten in SharePoint (officer review/)")
     logger.info("officer_review: published webUrl=%s", web_url)
 
-    results = notify_officer_review(
-        recipients, web_url=web_url, as_of=build.as_of, planning_year=planning_year,
-        n_departments=build.n_departments, fy_total=build.grand_total_year,
-        board_total=build.grand_board_total, sap_total=build.grand_sap_total,
-        sap_watermark=build.sap_watermark, lines_per_topic=build.lines_per_topic,
-        dry_run=False, settings=settings,
-    )
+    try:
+        results = notify_officer_review(
+            recipients, web_url=web_url, as_of=build.as_of, planning_year=planning_year,
+            n_departments=build.n_departments, fy_total=build.grand_total_year,
+            board_total=build.grand_board_total, sap_total=build.grand_sap_total,
+            sap_watermark=build.sap_watermark, lines_per_topic=build.lines_per_topic,
+            dry_run=False, settings=settings,
+        )
+    except notifications.NotificationError as exc:
+        print(f"MAIL FAIL: send raised — {exc} — file already published, re-run is idempotent")
+        return 1
     failed = [r for r in results if not r.sent]
     print(f"MAIL: sent={len(results) - len(failed)}/{len(results)} recipients")
     if failed:
