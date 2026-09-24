@@ -3,8 +3,9 @@
 Date: 2026-09-24
 
 Status: Accepted (jakkaritw, 2026-09-24, PRD issue #34). Implemented 2026-09-24 (backend, TDD via a
-live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`). Fix round
-applied same day (gate finding round, see "Hardening added in the 2026-09-24 fix round" below).
+live-DB reconcile property, not yet deployed — schedule inert until pushed to `main`). Two fix
+rounds applied same day (gate finding round, see "Hardening added in the 2026-09-24 fix round"
+below; re-verify fix round 2, see "Fix round 2" below).
 
 ## Context
 
@@ -68,7 +69,7 @@ read-back control runs on the SAVED xlsx bytes (`load_workbook` of what was actu
 the in-memory workbook, so it checks exactly what would be published (fix round 2026-09-24).
 
 **Hardening added in the 2026-09-24 fix round (same day, before first push).** A gate review found
-6 findings worth a same-day fix, folded into this ADR rather than a separate one:
+4 findings worth a same-day fix, folded into this ADR rather than a separate one:
 - **Recipient domain allow-list (SEC-F5, owner decision: company domain only).** `OFFICER_REVIEW_RECIPIENTS`
   entries must end in `@chememan.com` (case-insensitive); a non-matching or malformed entry is
   dropped. A REAL run FAILs BEFORE publishing if anything was dropped (never a silent partial
@@ -91,6 +92,31 @@ the in-memory workbook, so it checks exactly what would be published (fix round 
   type for a value starting with `=`/`+`/`-`/`@`/tab/CR (never lets openpyxl or Excel treat a typed
   remark as a formula) and strips XML-illegal control characters before assignment (a stripped cell
   is a WARN, coordinate only — a pasted control character must never crash the weekly build).
+
+**Fix round 2 (re-verify of the round above, same day 2026-09-24).** A read-only re-verify of the
+first fix round found 9 further issues (mostly LOW, one MED — a first-publish bug the gate and the
+first fix round both missed). Two of them change this ADR's own rules:
+
+- **Public-repo logging rule.** This repository is PUBLIC — every GitHub Actions run's log is
+  world-readable, dry-run/preview runs included. Nothing this job process prints or logs may contain
+  a money amount, a department/division/person name, an email address, or arbitrary cell TEXT.
+  Allowed: counts, control ids, PASS/FAIL, cost-center + GL codes, sheet!cell coordinates, fiscal
+  year, SAP watermark date, exception TYPE names. This tightens the existing log-redaction rule
+  above (which only covered email addresses) — the reconcile's own FAIL messages, the job's SUMMARY
+  line, and every `print()` (now converted to `logger` calls so the redaction filter actually
+  reaches them) were rewritten to this rule. Money and department detail stay in the mail body and
+  the published workbook only, exactly where the officers already expect to read them.
+- **`OFFICER_REVIEW_RECIPIENTS` is a secret, not a variable.** Moved from a repo VARIABLE (shown in
+  plain text on every Actions run page) to a repo SECRET (masked) in
+  `.github/workflows/officer-review.yml` — the same public-repo reasoning as above.  `OFFICER_REVIEW_LIVE`
+  stays a variable; it only ever holds `true`/`false`.
+- **OPS-10 residual (accepted, not a bug).** The fiscal-year sanity gate (below) only rejects a year
+  outside {current Bangkok year, next year}. Moving `AUTOMATION_FISCAL_YEAR` forward to next year
+  WITHIN that window — e.g. bumping it from 2027 to 2028 while FY2027 departments are still mid
+  approval — still passes the sanity check and can publish a legitimately empty file (0 in-scope
+  departments for 2028 yet) with a green run. This is D6's "empty scope still publishes" behavior
+  working as designed, not a new gap; flagged here so a future reader does not mistake a genuinely
+  empty FY2028 file for a broken run.
 
 **`--probe`** (`python -m jobs.officer_review --fiscal-year <Y> --probe`, `--fiscal-year` is always
 required, even for the probe) is the first-slice read-only check: Fabric read, gold read, Graph
@@ -125,8 +151,9 @@ the kill switch — no commit, no redeploy.
 
 **Credentials.** The CI service principal (`FABRIC_AAD_*` secrets) now also needs
 `GOLD_SQL_SERVER` / `GOLD_SQL_DATABASE` secrets and Viewer on the DW gold workspace — **neither
-existed as of this change** (confirmed via `gh secret list` / `gh variable list`, 2026-09-24). See
-`--probe` below.
+existed as of this change** (confirmed via `gh secret list` / `gh variable list`, 2026-09-24).
+`OFFICER_REVIEW_RECIPIENTS` is also a required secret (fix round 2 — see above; NOT a repo
+variable). Only `OFFICER_REVIEW_LIVE` stays a repo variable. See `--probe` below.
 
 ## Considered Options
 

@@ -21,6 +21,7 @@ This is an explicit, owner-approved exception to the 2026-08-10 rule "ทุก�
 The web app's attachment guard (limited to `เอกสาร ฝ่าย/`) is unchanged.
 """
 import logging
+import math
 import re
 import time
 from collections.abc import Callable
@@ -76,13 +77,23 @@ def officer_filename(planning_year: int) -> str:
 
 
 def _retry_after_seconds(resp: httpx.Response) -> float | None:
+    """N7 fix round 2026-09-24: `float()` happily parses `"nan"`/`"inf"`/
+    `"-5"` without raising `ValueError` — a malformed or hostile
+    `Retry-After` header used to reach `time.sleep` unvalidated (`nan`
+    crashes it, `-5`/`-inf` are meaningless as a wait). Any non-finite or
+    negative value is treated the SAME as a missing header — ignored, so the
+    caller falls back to its own fixed backoff step (still capped at
+    `_RETRY_AFTER_CAP_SECONDS` for a legitimate large value)."""
     raw = resp.headers.get("Retry-After")
     if raw is None:
         return None
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return value
 
 
 def _is_retryable(resp: httpx.Response) -> bool:
@@ -185,7 +196,13 @@ def _get_or_create_folder(token: str, drive_id: str, *, sleep: Callable[[float],
             resp = create_resp
         else:
             raise OfficerPublishError(f"could not create '{OFFICER_FOLDER_NAME}' folder: {create_resp.status_code} {create_resp.text}")
-    if resp.status_code != 200:
+    # N1 fix round 2026-09-24: a 201 Created from the POST above is success,
+    # not a failure — the code used to fall through to this check, see it was
+    # not exactly 200, and raise `OfficerPublishError` on the VERY FIRST real
+    # publish (the folder never exists before then, so this branch always ran
+    # on week 1). `create_resp` (200 or 201) is a valid DriveItem body either
+    # way — same shape the GET below returns.
+    if resp.status_code not in (200, 201):
         raise OfficerPublishError(f"could not resolve '{OFFICER_FOLDER_NAME}' folder: {resp.status_code} {resp.text}")
 
     item = resp.json()

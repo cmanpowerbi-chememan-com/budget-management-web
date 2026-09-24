@@ -15,12 +15,13 @@
 # GOLD_SQL_DATABASE, FABRIC_AAD_CLIENT_ID, FABRIC_AAD_CLIENT_SECRET,
 # FABRIC_AAD_TENANT_ID (GOLD_SQL_* did not exist as repo secrets at the time
 # this workflow was written — jakkaritw must add them before the schedule or
-# any real run can succeed; see the ADR).
+# any real run can succeed; see the ADR), OFFICER_REVIEW_RECIPIENTS
+# (comma/semicolon-separated email list — a SECRET, not a variable, because
+# this repo is PUBLIC and repo variables are shown in plain text on every
+# Actions run page; a REAL run with none configured FAILs before publishing,
+# never sends nothing silently — fix round 2026-09-24, R3).
 # Required vars: AUTOMATION_FISCAL_YEAR (shared with budget-automations.yml),
-# OFFICER_REVIEW_LIVE (kill switch, unset/false = schedule stays PREVIEW),
-# OFFICER_REVIEW_RECIPIENTS (comma/semicolon-separated email list — a REAL
-# run with none configured FAILs before publishing, never sends nothing
-# silently).
+# OFFICER_REVIEW_LIVE (kill switch, unset/false = schedule stays PREVIEW).
 #
 # This workflow is DELIBERATELY separate from budget-automations.yml (PRD
 # story 29) — reminders are ARMED for real sends 30 Sep-15 Oct 2026, and this
@@ -132,7 +133,12 @@ jobs:
           ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
           ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
           OFFICER_REVIEW_LIVE: ${{ vars.OFFICER_REVIEW_LIVE }}
-          OFFICER_REVIEW_RECIPIENTS: ${{ vars.OFFICER_REVIEW_RECIPIENTS }}
+          # R3 fix round 2026-09-24: `secrets.`, not `vars.` — this repo is
+          # PUBLIC, and a repo VARIABLE's value is shown in plain text on
+          # every Actions run page (preview runs included); a SECRET is
+          # masked. `OFFICER_REVIEW_LIVE` stays a var — it only ever holds
+          # true/false, never an address list.
+          OFFICER_REVIEW_RECIPIENTS: ${{ secrets.OFFICER_REVIEW_RECIPIENTS }}
         run: |
           case "${OFFICER_REVIEW_LIVE,,}" in
             true|1|yes|on|y|t) LIVE_ON=true ;;

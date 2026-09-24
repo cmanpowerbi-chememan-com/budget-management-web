@@ -175,7 +175,6 @@ def _topic_total_col(ws) -> int:
     return next(i for i, h in enumerate(headers, start=1) if isinstance(h, str) and h.startswith("รวมปี "))
 
 
-@pytest.mark.integration
 def test_negative_controls_topic_and_department_synthetic():
     """C-F6 fix round 2026-09-24: the ABOVE negative control never proves the
     gate can fail on a topic sheet, a department-label mismatch, or a
@@ -186,10 +185,15 @@ def test_negative_controls_topic_and_department_synthetic():
     `_write_topic_sheets` — never a hand-rolled xlsx), so all four branches
     below are NEVER vacuous, whatever live data looks like this week.
 
-    Still `@pytest.mark.integration` per D15 (kept in the SAME file, the
-    owner's "no other test files" instruction) — but this one is fully
-    self-contained (no DB, no live connection) since it tests the
-    reconcile's own comparison functions directly against a synthetic
+    Fix round 2 (R7/C-F6/N8, 2026-09-24): NOT `@pytest.mark.integration`
+    anymore — it never touched a DB or a live connection to begin with (D15
+    kept the marker on it anyway, "belt and braces"), which meant it was
+    silently skipped by the default `pytest tests -m "not integration"` run
+    AND by CI (neither ever calls `-m integration`), so this test never
+    actually ran anywhere. Kept in this SAME file (owner's "no other test
+    files" instruction, D15) — self-contained (no DB, no live connection,
+    nothing imported here needs env/credentials at import time), it tests
+    the reconcile's own comparison functions directly against a synthetic
     baseline it builds and controls itself. Never publishes/mails (the
     publisher/notifier are never even imported here)."""
     planning_year = FISCAL_YEAR
@@ -258,8 +262,11 @@ def test_negative_controls_topic_and_department_synthetic():
     wb_b.save(buf_b)
     file_result_b, _ = _load_file_side(buf_b.getvalue())
     assert file_result_b.failures, "duplicating a sheet-1 data row must FAIL (C-F4)"
-    assert any(dept in f and cc in f and gl in f for f in file_result_b.failures), (
-        f"duplicate-row FAIL messages did not name the key {key}: {file_result_b.failures}"
+    # R2/N4 fix round 2026-09-24: the FAIL message names (cc, gl) only — never
+    # the department label — because this repo is public and its CI logs are
+    # world-readable.
+    assert any(cc in f and gl in f for f in file_result_b.failures), (
+        f"duplicate-row FAIL messages did not name the (cc, gl) key ({cc}, {gl}): {file_result_b.failures}"
     )
 
     # --- (c) change one sheet-1 ฝ่าย (department) label ---
@@ -271,7 +278,12 @@ def test_negative_controls_topic_and_department_synthetic():
     file_result_c, _ = _load_file_side(buf_c.getvalue())
     failures_c = _compare_sheet1(file_result_c.rows, web_sheet1, fabric_sheet1)
     assert failures_c, "changing the sheet-1 ฝ่าย label must FAIL the reconcile (SPEC-2)"
-    assert any("OTHERDEPT" in f for f in failures_c), f"department-tamper FAIL messages did not name the changed label: {failures_c}"
+    # R2/N4 fix round 2026-09-24: the row identity is now (cc, gl) — the
+    # message says WHICH field differs ("department label differs") without
+    # ever printing "OTHERDEPT" (a department-label VALUE) into a public log.
+    assert any("department label differs" in f and cc in f and gl in f for f in failures_c), (
+        f"department-tamper FAIL messages did not name the (cc, gl) key + 'department label differs': {failures_c}"
+    )
 
     # --- (d) delete the topic-sheet line entirely ---
     wb_d = load_workbook(BytesIO(baseline_bytes))
@@ -282,4 +294,8 @@ def test_negative_controls_topic_and_department_synthetic():
     _, file_topics_d = _load_file_side(buf_d.getvalue())
     failures_d = _compare_topics(file_topics_d, web_topics, fabric_topics, web_sheet1)
     assert failures_d, "deleting a topic-sheet line must FAIL the reconcile"
-    assert any("Entertainment" in f for f in failures_d), f"topic-delete FAIL messages did not name the sheet: {failures_d}"
+    # R7/C-F6/N8: assert the (cc, gl) key itself is named (not just the sheet
+    # name) — the line-multiset diff is the FAIL that carries it.
+    assert any(cc in f and gl in f for f in failures_d), (
+        f"topic-delete FAIL messages did not name the (cc, gl) key ({cc}, {gl}): {failures_d}"
+    )

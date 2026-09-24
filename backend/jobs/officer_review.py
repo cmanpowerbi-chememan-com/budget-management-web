@@ -75,13 +75,37 @@ class _EmailRedactingLogFilter(logging.Filter):
         return True
 
 
+# N3 fix round 2026-09-24: `_EmailRedactingLogFilter` only ever rewrites
+# `record.getMessage()` — it never touches a TRACEBACK, so `logger.exception`
+# (or any `exc_info=True` call, anywhere in this process) could still print
+# an email address raw via `formatException`/`formatStack`. This formatter
+# re-runs the SAME redaction regex on that text too, so redaction is a
+# property of what actually reaches the (public) log stream, not of which
+# call site remembered to avoid `logger.exception`. Mirrors
+# `jobs.common.configure_logging`'s format string (that module is on the
+# zero-edit list, so it is repeated here rather than imported as a private).
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+
+class _RedactingFormatter(logging.Formatter):
+    def formatException(self, ei) -> str:
+        return _EMAIL_REDACT_RE.sub("<email>", super().formatException(ei))
+
+    def formatStack(self, stack_info: str) -> str:
+        return _EMAIL_REDACT_RE.sub("<email>", super().formatStack(stack_info))
+
+
 def install_email_redaction() -> None:
-    """Attach `_EmailRedactingLogFilter` to every handler currently on the
-    root logger. Call ONCE, right after `configure_logging()` — that is the
-    call that creates the root `StreamHandler` this filter attaches to."""
+    """Attach `_EmailRedactingLogFilter` (message redaction) AND swap in
+    `_RedactingFormatter` (traceback redaction, N3) on every handler
+    currently on the root logger. Call ONCE, right after
+    `configure_logging()` — that is the call that creates the root
+    `StreamHandler` these attach to."""
     filt = _EmailRedactingLogFilter()
+    formatter = _RedactingFormatter(_LOG_FORMAT)
     for handler in logging.getLogger().handlers:
         handler.addFilter(filt)
+        handler.setFormatter(formatter)
 
 
 class OfficerConfigError(RuntimeError):
@@ -186,7 +210,20 @@ def _build_with_retry(
 
 def run_probe(settings: Settings) -> int:
     """Read-only permission check. No build, no write, no mail. Exit 0 only
-    when every check PASSes."""
+    when every check PASSes.
+
+    R2/N3 fix round 2026-09-24: every PASS/FAIL line below goes through
+    `logger` (not `print`), so it is redacted the same way everything else
+    this process emits is (`install_email_redaction`, called once by
+    `main()` before this ever runs). The Fabric/gold read failures still log
+    the underlying exception message — pyodbc errors, never Graph, so no
+    `resp.text` risk. The two Graph-resolution checks below log ONLY
+    `type(exc).__name__`: `app.attachments`/`app.notifications` (both on the
+    zero-edit list) build their exception TEXT as
+    `f"... {resp.status_code} {resp.text}"`, so printing that text here
+    would leak whatever Graph put in the response body into this (public
+    repo's) CI log — only the one FAIL below that has a bare `resp` of its
+    own prints a real status code."""
     ok = True
 
     try:
@@ -195,9 +232,9 @@ def run_probe(settings: Settings) -> int:
             cursor.execute("SELECT 1")
             cursor.fetchall()
             cursor.close()
-        print("PASS: Fabric SQL DB read (SELECT 1)")
+        logger.info("PASS: Fabric SQL DB read (SELECT 1)")
     except Exception as exc:  # noqa: BLE001 — probe reports every failure, never crashes mid-checklist
-        print(f"FAIL: Fabric SQL DB read — {exc}")
+        logger.error("FAIL: Fabric SQL DB read — %s: %s", type(exc).__name__, exc)
         ok = False
 
     try:
@@ -207,9 +244,9 @@ def run_probe(settings: Settings) -> int:
             cursor.execute("SELECT TOP 1 1 FROM gold.fact_gl_trans")
             cursor.fetchall()
             cursor.close()
-        print("PASS: gold warehouse read (SELECT TOP 1 FROM gold.fact_gl_trans)")
+        logger.info("PASS: gold warehouse read (SELECT TOP 1 FROM gold.fact_gl_trans)")
     except Exception as exc:  # noqa: BLE001
-        print(f"FAIL: gold warehouse read — {exc}")
+        logger.error("FAIL: gold warehouse read — %s: %s", type(exc).__name__, exc)
         ok = False
 
     token = None
@@ -219,32 +256,35 @@ def run_probe(settings: Settings) -> int:
         roles = set(payload.get("roles") or [])
         for role in ("Sites.ReadWrite.All", "Mail.Send"):
             if role in roles:
-                print(f"PASS: Graph token carries role {role}")
+                logger.info("PASS: Graph token carries role %s", role)
             else:
-                print(f"FAIL: Graph token missing role {role}")
+                logger.error("FAIL: Graph token missing role %s", role)
                 ok = False
     except Exception as exc:  # noqa: BLE001 — OPS-9: any exception (httpx transport error, malformed token
-        # response, ...) FAILs this ONE check and the probe still runs every remaining check
-        print(f"FAIL: Graph token/role check — {type(exc).__name__}: {exc}")
+        # response, ...) FAILs this ONE check and the probe still runs every remaining check.
+        # Type name only — see docstring (no Graph resp.text on a public log).
+        logger.error("FAIL: Graph token/role check — %s", type(exc).__name__)
         ok = False
 
     if token is not None:
         try:
             _site_id, drive_id = _resolve_site_and_drive(token, settings)
-            print("PASS: resolved SharePoint site + drive")
+            logger.info("PASS: resolved SharePoint site + drive")
             resp = httpx.get(
                 f"{GRAPH_BASE}/drives/{drive_id}/root:/{quote(OFFICER_FOLDER_NAME, safe='')}",
                 headers={"Authorization": f"Bearer {token}"}, timeout=30,
             )
             if resp.status_code == 200:
-                print(f"PASS: '{OFFICER_FOLDER_NAME}' folder already exists")
+                logger.info("PASS: '%s' folder already exists", OFFICER_FOLDER_NAME)
             elif resp.status_code == 404:
-                print(f"PASS: '{OFFICER_FOLDER_NAME}' folder does not exist yet — will be created on first real publish")
+                logger.info("PASS: '%s' folder does not exist yet — will be created on first real publish", OFFICER_FOLDER_NAME)
             else:
-                print(f"FAIL: unexpected status resolving '{OFFICER_FOLDER_NAME}' folder: {resp.status_code}")
+                # This FAIL owns its own `resp` (a plain httpx call this
+                # module made itself) — status code only, per the docstring.
+                logger.error("FAIL: unexpected status resolving '%s' folder: %s", OFFICER_FOLDER_NAME, resp.status_code)
                 ok = False
-        except Exception as exc:  # noqa: BLE001
-            print(f"FAIL: site/drive/folder resolution — {exc}")
+        except Exception as exc:  # noqa: BLE001 — type name only, see docstring (no Graph resp.text)
+            logger.error("FAIL: site/drive/folder resolution — %s", type(exc).__name__)
             ok = False
 
     return 0 if ok else 1
@@ -260,7 +300,7 @@ def run_build(
     # empty (or wrong-year) file every week.
     fy_error = check_fy_sanity(planning_year)
     if fy_error:
-        print(f"MODE: FAIL — {fy_error}")
+        logger.error("MODE: FAIL — %s", fy_error)
         return 1
 
     _ensure_gold_configured(settings)
@@ -271,11 +311,16 @@ def run_build(
         )
 
     all_failures = build.failures + recon.failures
-    print(f"CONTROL: attempts={attempts} ok={ok} failures={len(all_failures)} warnings={len(build.warnings)}")
-    print(
-        f"SUMMARY: fy={planning_year} n_departments={build.n_departments} "
-        f"fy_total={build.grand_total_year:.2f} board_total={build.grand_board_total:.2f} "
-        f"sap_total={build.grand_sap_total:.2f} lines_per_topic={build.lines_per_topic}"
+    logger.info("CONTROL: attempts=%d ok=%s failures=%d warnings=%d", attempts, ok, len(all_failures), len(build.warnings))
+    # R2/N4 fix round 2026-09-24: no money (fy_total/board_total/sap_total)
+    # in the SUMMARY line — this repo is public and its CI logs are
+    # world-readable; the totals stay in the mail body and the workbook
+    # itself (see D12), never in a log line. `sheet1_rows` is the row-key
+    # count (`build.row_keys`), i.e. the same de-duplicated set the reconcile
+    # gate keys on.
+    logger.info(
+        "SUMMARY: fy=%s n_departments=%s sheet1_rows=%s lines_per_topic=%s",
+        planning_year, build.n_departments, len(build.row_keys), build.lines_per_topic,
     )
     # SPEC-8: PDPA/illegal-char WARN entries are only ever coordinates
     # (sheet!cell), never values (by construction — see officer_workbook.py)
@@ -284,39 +329,44 @@ def run_build(
     if build.warnings:
         for w in build.warnings[:20]:
             logger.warning("officer_review CONTROL WARN: %s", w)
-        print(f"WARNINGS: {len(build.warnings)} total (showing up to 20 in the log)")
+        logger.info("WARNINGS: %d total (showing up to 20 in the log)", len(build.warnings))
     if not ok:
         for f in all_failures[:20]:
             logger.error("officer_review CONTROL FAIL: %s", f)
-        print("MODE: FAIL — reconcile did not pass after retry; no publish, no mail")
+        logger.error("MODE: FAIL — reconcile did not pass after retry; no publish, no mail")
         return 1
 
     if out_path:
         with open(out_path, "wb") as fh:
             fh.write(build.xlsx_bytes)
-        print(f"OUT: wrote {len(build.xlsx_bytes)} bytes to {out_path}")
+        logger.info("OUT: wrote %d bytes to %s", len(build.xlsx_bytes), out_path)
 
     if dry_run:
-        print("MODE: PREVIEW — would publish + mail (no Graph write, no mail sent)")
+        logger.info("MODE: PREVIEW — would publish + mail (no Graph write, no mail sent)")
         return 0
 
     if not recipients:
-        print("MAIL FAIL: no valid OFFICER_REVIEW_RECIPIENTS — refusing to publish on a REAL run")
+        logger.error("MAIL FAIL: no valid OFFICER_REVIEW_RECIPIENTS — refusing to publish on a REAL run")
         return 1
     if recipients_dropped:
         # SEC-F5/OPS-7 (owner decision: company domain only, strict on a
         # REAL run): a misconfigured or external entry must never silently
         # mail fewer people than configured, or leak budget totals outside
         # chememan.com.
-        print(f"MAIL FAIL: {recipients_dropped} configured OFFICER_REVIEW_RECIPIENTS entr(ies) were dropped (invalid or non-@chememan.com) — refusing to publish on a REAL run")
+        logger.error(
+            "MAIL FAIL: %d configured OFFICER_REVIEW_RECIPIENTS entr(ies) were dropped "
+            "(invalid or non-@chememan.com) — refusing to publish on a REAL run", recipients_dropped,
+        )
         return 1
 
     try:
         web_url = publish_officer_workbook(build.xlsx_bytes, planning_year=planning_year, settings=settings, sleep=sleep)
     except OfficerPublishError as exc:
-        print(f"PUBLISH FAIL: {exc}")
+        # R2/N3: type + redacted message, routed through the same logger
+        # (and `_RedactingFormatter`) as everything else — never a bare print().
+        logger.error("PUBLISH FAIL: type=%s message=%s", type(exc).__name__, exc)
         return 1
-    print("PUBLISHED: file overwritten in SharePoint (officer review/)")
+    logger.info("PUBLISHED: file overwritten in SharePoint (officer review/)")
     logger.info("officer_review: published webUrl=%s", web_url)
 
     try:
@@ -328,15 +378,18 @@ def run_build(
             dry_run=False, settings=settings,
         )
     except notifications.NotificationError as exc:
-        print(f"MAIL FAIL: send raised — {exc} — file already published, re-run is idempotent")
+        logger.error(
+            "MAIL FAIL: send raised — type=%s message=%s — file already published, re-run is idempotent",
+            type(exc).__name__, exc,
+        )
         return 1
     failed = [r for r in results if not r.sent]
-    print(f"MAIL: sent={len(results) - len(failed)}/{len(results)} recipients")
+    logger.info("MAIL: sent=%d/%d recipients", len(results) - len(failed), len(results))
     if failed:
-        print("MAIL FAIL: at least one send did not succeed — file already published, re-run is idempotent")
+        logger.error("MAIL FAIL: at least one send did not succeed — file already published, re-run is idempotent")
         return 1
 
-    print("MODE: REAL — published and mailed")
+    logger.info("MODE: REAL — published and mailed")
     return 0
 
 
@@ -349,27 +402,33 @@ def main() -> int:
     parser.add_argument("--out", type=str, default=None, help="local path to also write the built xlsx bytes to (never passed in CI)")
     args = parser.parse_args()
 
-    settings = get_settings()
-    dry_run = is_dry_run(args)
-    logger.info("starting officer_review fiscal_year=%s dry_run=%s probe=%s", args.fiscal_year, dry_run, args.probe)
-
-    # OPS-9: `run_probe` is now inside the SAME try/except as build mode —
-    # an unexpected exception (httpx transport error, KeyError, ...) that
-    # escapes an individual probe check's own try/except (or `get_settings`
-    # itself) exits loud (2) instead of an unhandled traceback.
+    # OPS-9 fix round 2026-09-24: `get_settings()` now runs INSIDE the try —
+    # it used to run BEFORE the try began, so a bad/missing env var escaped
+    # as a raw, unredacted traceback with Python's default exit code (1)
+    # instead of this job's own loud, type+message contract. `run_probe` was
+    # already inside the same try (an unexpected exception escaping an
+    # individual probe check's own try/except used to exit loud unhandled —
+    # now caught here too). A settings failure on `--probe` exits 1 (matches
+    # every other probe FAIL); anywhere else it is an "unexpected" failure
+    # and exits 2, same as any other exception caught here.
     try:
+        settings = get_settings()
+        dry_run = is_dry_run(args)
+        logger.info("starting officer_review fiscal_year=%s dry_run=%s probe=%s", args.fiscal_year, dry_run, args.probe)
+
         if args.probe:
             return run_probe(settings)
 
         recipients, dropped = parse_recipients(os.getenv("OFFICER_REVIEW_RECIPIENTS", ""))
-        print(f"RECIPIENTS: valid={len(recipients)} dropped={dropped}")
+        logger.info("RECIPIENTS: valid=%d dropped=%d", len(recipients), dropped)
         return run_build(
             planning_year=args.fiscal_year, dry_run=dry_run, settings=settings,
             out_path=args.out, recipients=recipients, recipients_dropped=dropped,
         )
-    except Exception:  # noqa: BLE001 — unexpected exception -> loud, exit 2, never a silent partial run
-        logger.exception("officer_review: unexpected exception")
-        return 2
+    except Exception as exc:  # noqa: BLE001 — unexpected exception -> loud, type+message (never a raw
+        # traceback — see `_RedactingFormatter`), never a silent partial run.
+        logger.error("officer_review: unexpected exception type=%s message=%s", type(exc).__name__, exc)
+        return 1 if args.probe else 2
 
 
 if __name__ == "__main__":

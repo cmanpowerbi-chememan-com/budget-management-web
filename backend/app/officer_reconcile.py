@@ -30,6 +30,7 @@ from io import BytesIO
 
 import pyodbc
 from openpyxl import load_workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 from app.budget_xlsx import FIRST_NUM_COL
 from app.officer_workbook import (
@@ -56,6 +57,21 @@ _MAX_FAILURES_LOGGED = 50
 
 def _dec(v) -> Decimal:
     return ZERO if v is None else Decimal(str(round(float(v), 2))).quantize(CENT)
+
+
+def _clean_dept(dept: str | None) -> str:
+    """R4/N5 fix round 2026-09-24: `app.budget_xlsx._write_text_cell` strips
+    XML-illegal control characters (e.g. `\\x0b`) before writing ANY text
+    cell — so a department label containing one always comes back CLEAN on
+    the FILE side. WEB and FABRIC never go through that writer, so without
+    this same strip a department name with a stray control character in the
+    master data FAILed the gate on every single run (row-key set FILE !=
+    WEB), even though nothing was actually wrong. Reuses
+    `openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE` directly — never edits
+    `app.budget_xlsx` (out of scope this round)."""
+    if not dept:
+        return dept or ""
+    return ILLEGAL_CHARACTERS_RE.sub("", dept)
 
 
 class FabricReconcileError(RuntimeError):
@@ -138,9 +154,13 @@ def _load_file_side(xlsx_bytes: bytes) -> tuple[_FileSheet1Result, dict[str, lis
 
     # C-F4: multiset (Counter) of every row key read — ANY key appearing
     # more than once is a FAIL naming that key, never silently collapsed.
+    # R2/N4 fix round 2026-09-24: name the (cc, gl) pair only — this repo is
+    # public and its CI logs are world-readable, so a department LABEL (part
+    # of the internal `Sheet1Key`) must never appear in a FAIL message.
     for key, count in Counter(row_keys).items():
+        _dept, cc, gl = key
         if count > 1:
-            failures.append(f"FILE duplicate sheet-1 row {key} (appears {count} times)")
+            failures.append(f"FILE duplicate sheet-1 row (cc={cc}, gl={gl}) (appears {count} times)")
 
     file_result = _FileSheet1Result(
         rows=sheet1, failures=failures, grand_total_year=grand_total, grand_board_total=grand_board, grand_sap_total=grand_sap,
@@ -184,7 +204,9 @@ def _web_sheet1(build: BuildResult) -> dict[Sheet1Key, _Sheet1Row]:
         # SPEC-2: the resolved LABEL department (same value written to
         # sheet-1 column A — `BuildResult.department_by_key`, populated by
         # `officer_workbook._build_summary_rows`'s shared `_resolve_live_department` chain).
-        dept = build.department_by_key.get(key) or UNKNOWN_DEPT
+        # R4/N5: normalised with the SAME illegal-character strip the FILE
+        # side always went through (via the writer) — see `_clean_dept`.
+        dept = _clean_dept(build.department_by_key.get(key) or UNKNOWN_DEPT)
         dept_key: Sheet1Key = (dept, key[0], key[1])
         out[dept_key] = _Sheet1Row(
             months=tuple(_dec(v) for v in months),
@@ -323,7 +345,8 @@ def _fabric_reconcile_data(
         if p is None and b is None and key not in sap_nonzero:
             continue
         in_scope_ccgl.add(key)
-        dept_key: Sheet1Key = (live_dept(key) or UNKNOWN_DEPT, cc, gl)
+        # R4/N5: same normalisation as the WEB side — see `_clean_dept`.
+        dept_key: Sheet1Key = (_clean_dept(live_dept(key) or UNKNOWN_DEPT), cc, gl)
         sheet1[dept_key] = _Sheet1Row(
             months=tuple(p["months"]) if p else tuple([ZERO] * 12),
             total_year=p["total"] if p else ZERO,
@@ -347,24 +370,54 @@ def _fabric_reconcile_data(
 # ---------------------------------------------------------------------------
 # Compare
 # ---------------------------------------------------------------------------
+def _by_ccgl(side: dict[Sheet1Key, _Sheet1Row]) -> dict[tuple[str, str], tuple[str, _Sheet1Row]]:
+    """(cost_center, gl_account) -> (department LABEL, row) — the reporting
+    view of a sheet-1 side. Exactly one entry per (cc, gl) on the WEB/FABRIC
+    sides by construction; on FILE, two rows differing ONLY by department
+    label collide here (last one wins) — that is fine, because such a row is
+    always ALSO a `Sheet1Key`-level duplicate the FILE-side Counter check
+    already caught (same (cc, gl), so `row_keys` counts it twice)."""
+    return {(cc, gl): (dept, row) for (dept, cc, gl), row in side.items()}
+
+
 def _compare_sheet1(file_side: dict, web_side: dict, fabric_side: dict) -> list[str]:
+    """R2/N4 fix round 2026-09-24: this repo is public and its CI logs are
+    world-readable — no FAIL message below may print a department name or a
+    money value. The row identity for reporting is (cost_center, gl_account)
+    only; a department-label disagreement between sources is its OWN named
+    check ("department label differs"), never spelled out as text."""
     failures: list[str] = []
-    file_keys, web_keys, fabric_keys = set(file_side), set(web_side), set(fabric_side)
+    file_by_ccgl, web_by_ccgl, fabric_by_ccgl = _by_ccgl(file_side), _by_ccgl(web_side), _by_ccgl(fabric_side)
+    file_keys, web_keys, fabric_keys = set(file_by_ccgl), set(web_by_ccgl), set(fabric_by_ccgl)
+
     if file_keys != web_keys:
-        failures.append(f"sheet-1 row-key set FILE != WEB: file-only={sorted(file_keys - web_keys)[:10]} web-only={sorted(web_keys - file_keys)[:10]}")
+        only_file, only_web = sorted(file_keys - web_keys)[:5], sorted(web_keys - file_keys)[:5]
+        failures.append(
+            f"sheet-1 (cc, gl) row-key set FILE != WEB: {len(file_keys - web_keys)} file-only "
+            f"(e.g. {only_file}), {len(web_keys - file_keys)} web-only (e.g. {only_web})"
+        )
     if web_keys != fabric_keys:
-        failures.append(f"sheet-1 row-key set WEB != FABRIC: web-only={sorted(web_keys - fabric_keys)[:10]} fabric-only={sorted(fabric_keys - web_keys)[:10]}")
+        only_web, only_fabric = sorted(web_keys - fabric_keys)[:5], sorted(fabric_keys - web_keys)[:5]
+        failures.append(
+            f"sheet-1 (cc, gl) row-key set WEB != FABRIC: {len(web_keys - fabric_keys)} web-only "
+            f"(e.g. {only_web}), {len(fabric_keys - web_keys)} fabric-only (e.g. {only_fabric})"
+        )
 
     for key in sorted(file_keys & web_keys & fabric_keys):
-        f, w, fb = file_side[key], web_side[key], fabric_side[key]
+        f_dept, f = file_by_ccgl[key]
+        w_dept, w = web_by_ccgl[key]
+        fb_dept, fb = fabric_by_ccgl[key]
+        if not (f_dept == w_dept == fb_dept):
+            failures.append(f"{key}: department label differs")
         if not (f.months == w.months == fb.months):
-            failures.append(f"{key}: months mismatch FILE={f.months} WEB={w.months} FABRIC={fb.months}")
+            diff_months = [f"m{i + 1:02d}" for i in range(12) if not (f.months[i] == w.months[i] == fb.months[i])]
+            failures.append(f"{key}: {', '.join(diff_months)} differs")
         if not (f.total_year == w.total_year == fb.total_year):
-            failures.append(f"{key}: total_year mismatch FILE={f.total_year} WEB={w.total_year} FABRIC={fb.total_year}")
+            failures.append(f"{key}: total_year differs")
         if not (f.board_total_year == w.board_total_year == fb.board_total_year):
-            failures.append(f"{key}: board_total mismatch FILE={f.board_total_year} WEB={w.board_total_year} FABRIC={fb.board_total_year}")
+            failures.append(f"{key}: board_total differs")
         if not (f.sap_total_year == w.sap_total_year == fb.sap_total_year):
-            failures.append(f"{key}: sap_total mismatch FILE={f.sap_total_year} WEB={w.sap_total_year} FABRIC={fb.sap_total_year}")
+            failures.append(f"{key}: sap_total differs")
         if len(failures) > _MAX_FAILURES_LOGGED:
             failures.append("... (further sheet-1 mismatches truncated)")
             break
@@ -376,8 +429,12 @@ def _line_tuple(r: _TopicRow) -> tuple:
 
 
 def _multiset_diff(a: Counter, b: Counter, *, a_label: str, b_label: str) -> str:
-    only_a = list((a - b).elements())[:5]
-    only_b = list((b - a).elements())[:5]
+    """R2/N4: report only the (cost_center, gl_account) of each unmatched
+    line — never the full `_line_tuple` (which carries `total_year` and the
+    12 months, i.e. money), because this repo is public and its CI logs are
+    world-readable."""
+    only_a = [(t[0], t[1]) for t in list((a - b).elements())[:5]]
+    only_b = [(t[0], t[1]) for t in list((b - a).elements())[:5]]
     return f"{a_label}-only={only_a} {b_label}-only={only_b}"
 
 
@@ -405,14 +462,14 @@ def _compare_topics(file_topics: dict, web_topics: dict, fabric_topics: dict, sh
             sum((r.total_year for r in fb_rows), ZERO),
         )
         if len(set(sums)) != 1:
-            failures.append(f"topic '{group}': SUM(รวมปี) mismatch FILE={sums[0]} WEB={sums[1]} FABRIC={sums[2]}")
+            # R2/N4: no totals in the message — this repo is public.
+            failures.append(f"topic '{group}': SUM(รวมปี) mismatch across FILE/WEB/FABRIC")
 
         for label, rows_ in (("FILE", f_rows), ("WEB", w_rows), ("FABRIC", fb_rows)):
             for r in rows_:
                 if sum(r.months, ZERO) != r.total_year:
                     failures.append(
-                        f"topic '{group}' {label} ({r.cost_center}, {r.gl_account}): "
-                        f"sum(m01..m12)={sum(r.months, ZERO)} != total={r.total_year}"
+                        f"topic '{group}' {label} ({r.cost_center}, {r.gl_account}): sum(m01..m12) != total_year"
                     )
 
         file_ctr, web_ctr, fabric_ctr = (Counter(_line_tuple(r) for r in rows_) for rows_ in (f_rows, w_rows, fb_rows))
@@ -434,7 +491,8 @@ def _compare_topics(file_topics: dict, web_topics: dict, fabric_topics: dict, sh
             if parent is None:
                 continue
             if tuple(summed) != parent.months:
-                failures.append(f"topic '{group}' {key}: detail month sum {tuple(summed)} != parent sheet-1 months {parent.months}")
+                # R2/N4: no month values in the message — this repo is public.
+                failures.append(f"topic '{group}' {key}: detail month sum != parent sheet-1 months")
     return failures
 
 
@@ -462,26 +520,28 @@ def reconcile(
     # C-F4: FILE grand totals are summed over EVERY data row `_load_file_side`
     # read (including a duplicate's contribution — the same as Excel's own
     # SUBTOTAL(9) would), never over the deduped `file_sheet1` dict.
+    # R2/N4 fix round 2026-09-24: compare the grand totals, but never print
+    # them — this repo is public and its CI logs are world-readable.
     grand = {
         "FILE": file_result.grand_total_year,
         "WEB": sum((r.total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.total_year for r in fabric_sheet1.values()), ZERO),
     }
     if len(set(grand.values())) != 1:
-        failures.append(f"grand total_year mismatch: {grand}")
+        failures.append("grand total_year mismatch across FILE/WEB/FABRIC")
     grand_board = {
         "FILE": file_result.grand_board_total,
         "WEB": sum((r.board_total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.board_total_year for r in fabric_sheet1.values()), ZERO),
     }
     if len(set(grand_board.values())) != 1:
-        failures.append(f"grand board_total mismatch: {grand_board}")
+        failures.append("grand board_total mismatch across FILE/WEB/FABRIC")
     grand_sap = {
         "FILE": file_result.grand_sap_total,
         "WEB": sum((r.sap_total_year for r in web_sheet1.values()), ZERO),
         "FABRIC": sum((r.sap_total_year for r in fabric_sheet1.values()), ZERO),
     }
     if len(set(grand_sap.values())) != 1:
-        failures.append(f"grand sap_total mismatch: {grand_sap}")
+        failures.append("grand sap_total mismatch across FILE/WEB/FABRIC")
 
     return ReconcileResult(ok=not failures, failures=failures)

@@ -35,7 +35,7 @@ the master-GL drop — those rules are reused, not copied (issue #34 story 32).
 
 Everything BudgetRow does not carry (CC name, live GL name/group, live
 division/c_level, department status) is read here via the module's OWN
-read-only SQL (`_q`, D10) — logged as builder-only enrichment, never
+read-only SQL (`_q`, D10) — treated as builder-only enrichment, never
 reconciled against the web (jakkaritw's decisions D1-D17, brief 2026-09-24).
 """
 import dataclasses
@@ -62,7 +62,6 @@ from app.budget_xlsx import (
     ADMIN_TEMPLATE_STATUS_KEY,
     SummaryRow,
     UnknownStatusError,
-    _sheet1_headers,
     _write_text_cell,
     resolve_status_label,
     tint50,
@@ -742,6 +741,43 @@ _TOPIC_TINT_VALUE_HEX: dict[str, str] = {
     "Lease & Rental": "E6EEF5",
 }
 
+# R8/SPEC-4 fix round 2026-09-24: LITERAL expected header text, written out
+# independently of `app.budget_xlsx._sheet1_headers` and of this SAME
+# module's own `COMMON_HEADERS`/`TRAVEL_FIELDS`/`TOPIC_META_FIELDS` (the
+# constants `_write_topic_sheets` — the PAINTER — actually uses). SPEC-4's
+# own complaint was exactly this: the read-back control used to import the
+# painter's own tables, so a header RENAME in those tables moved the paint
+# and the check together and still published green. These lists must never
+# import from, or be derived from, the writer's tables above.
+_EXPECTED_SHEET1_HEADERS_STATIC = [
+    "ฝ่าย", "สายงาน", "C-Level", "Cost Center", "ชื่อ Cost Center", "GL", "ชื่อ GL", "กลุ่ม GL", "COST/SGA", "สถานะฝ่าย",
+    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+]
+_EXPECTED_COMMON_HEADERS = ["ฝ่าย", "สายงาน", "Cost Center", "ชื่อ Cost Center", "GL", "ชื่อ GL", "COST/SGA", "สถานะฝ่าย"]
+_EXPECTED_TOPIC_META_HEADERS: dict[str, list[str]] = {
+    "Professional & Legal Fee": ["Project", "รายละเอียด"],
+    "Entertainment": ["ประเภทการรับรอง", "รายละเอียด"],
+    "Training & Seminar": ["หลักสูตรอบรม", "Method"],
+    "Public Relation & Donation": ["รายละเอียด"],
+    "Lease & Rental": ["ประเภทรถ", "ทะเบียนรถ", "สถานที่ใช้งาน", "กิจกรรม"],
+}
+_EXPECTED_TRAVEL_HEADERS = [
+    "ทริป", "ชื่อผู้เดินทาง", "ประเทศปลายทาง", "Project", "วัตถุประสงค์การเดินทาง", "จำนวนวัน", "เดือนที่เดินทาง", "รายละเอียด", "รายการ",
+]
+_EXPECTED_MONTH_HEADERS_TH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+
+
+def _expected_sheet1_headers(planning_year: int) -> list[str]:
+    board_year = planning_year - 1
+    return _EXPECTED_SHEET1_HEADERS_STATIC + [
+        f"รวมปี {planning_year}", f"งบอนุมัติ {board_year}", f"ใช้จริง SAP {board_year} (YTD)", "Remark", "รายละเอียด",
+    ]
+
+
+def _expected_topic_headers(group: str, planning_year: int) -> list[str]:
+    topic = _EXPECTED_TRAVEL_HEADERS if group == "Travelling Expense" else _EXPECTED_TOPIC_META_HEADERS[group]
+    return _EXPECTED_COMMON_HEADERS + topic + [f"รวมปี {planning_year}"] + _EXPECTED_MONTH_HEADERS_TH
+
 
 def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta: dict[str, SheetMeta]) -> list[str]:
     """SPEC-4: restore the prototype's runtime layout read-back controls
@@ -750,10 +786,15 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
     empty-sheet note). Called on the SAVED bytes only (SEC-F7 — the caller
     passes `load_workbook(BytesIO(xlsx_bytes))`, never the in-memory `wb`).
 
-    The header TEXT itself is the one check reused from the writers' own
-    header-construction (both already treat it as the ONE shared truth,
-    D17) — a documented, accepted limit; every tint/colour value below is a
-    hardcoded literal, independent of the code that painted it."""
+    R8/SPEC-4 fix round 2026-09-24: the header TEXT is now checked against
+    LITERAL expected lists declared independently in this module
+    (`_expected_sheet1_headers`/`_expected_topic_headers`) — it no longer
+    reuses `app.budget_xlsx._sheet1_headers` or this module's own
+    `COMMON_HEADERS`/`TRAVEL_FIELDS`/`TOPIC_META_FIELDS` (the writer's own
+    tables), so a header rename in either writer FAILs this check instead of
+    moving the paint and the check together. Every tint/colour value below
+    was already a hardcoded literal, independent of the code that painted
+    it."""
     failures: list[str] = []
 
     expected_sheets = [sheet1_name] + [g for g, _ in TOPIC_SHEETS]
@@ -763,17 +804,17 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
 
     ws1 = wb[sheet1_name]
 
-    # -- row-4 headers per sheet, exactly --
-    expected_sheet1_headers = _sheet1_headers(planning_year)
+    # -- row-4 headers per sheet, exactly — against LITERAL expected text
+    # (R8/SPEC-4: `_expected_sheet1_headers`/`_expected_topic_headers`
+    # above, never the writer's own `_sheet1_headers`/`COMMON_HEADERS`/
+    # `TRAVEL_FIELDS`/`TOPIC_META_FIELDS`).
+    expected_sheet1_headers = _expected_sheet1_headers(planning_year)
     actual_sheet1_headers = [ws1.cell(row=4, column=c).value for c in range(1, len(expected_sheet1_headers) + 1)]
     if actual_sheet1_headers != expected_sheet1_headers:
         failures.append(f"{sheet1_name}: row-4 headers mismatch: expected {expected_sheet1_headers} got {actual_sheet1_headers}")
     for group, meta in sheet_meta.items():
         ws = wb[group]
-        topic_headers = list(TRAVEL_FIELDS) if group == "Travelling Expense" else list(TOPIC_META_FIELDS[group])
-        expected_headers = COMMON_HEADERS + topic_headers + [f"รวมปี {planning_year}"] + [
-            "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-        ]
+        expected_headers = _expected_topic_headers(group, planning_year)
         actual_headers = [ws.cell(row=4, column=c).value for c in range(1, len(expected_headers) + 1)]
         if actual_headers != expected_headers:
             failures.append(f"{group}: row-4 headers mismatch: expected {expected_headers} got {actual_headers}")
@@ -798,7 +839,12 @@ def _check_layout(wb: Workbook, planning_year: int, sheet1_name: str, sheet_meta
         for row in ws.iter_rows():
             for cell in row:
                 if cell.data_type == "f" and (ws.title, cell.coordinate) not in allowed:
-                    failures.append(f"unexpected formula outside row-3 SUBTOTAL at {ws.title}!{cell.coordinate}: {cell.value}")
+                    # N6 fix round 2026-09-24: coordinate ONLY — this guard
+                    # tripping means the formula-injection guard (SEC-F3)
+                    # regressed, so `cell.value` here could be user-typed
+                    # free text; this repo is public, so the cell TEXT must
+                    # never reach the FAIL message, only where to look.
+                    failures.append(f"unexpected formula outside row-3 SUBTOTAL at {ws.title}!{cell.coordinate}")
     for (sheet, coord), expected_formula in allowed.items():
         cell = wb[sheet][coord]
         if cell.data_type != "f" or cell.value != expected_formula:
