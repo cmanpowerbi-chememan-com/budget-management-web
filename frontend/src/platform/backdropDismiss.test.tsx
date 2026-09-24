@@ -39,6 +39,19 @@ describe('useBackdropDismiss', () => {
     expect(onDismiss).not.toHaveBeenCalled()
   })
 
+  it('does not dismiss the REVERSE drag — press on the backdrop, release inside the child, click lands on the backdrop', () => {
+    const onDismiss = vi.fn()
+    render(<Harness onDismiss={onDismiss} />)
+    const backdrop = screen.getByTestId('backdrop')
+    const inner = screen.getByTestId('inner')
+
+    fireEvent.mouseDown(backdrop)
+    fireEvent.mouseUp(inner)
+    fireEvent.click(backdrop)
+
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
+
   it('does not dismiss a click that starts and ends inside the child', () => {
     const onDismiss = vi.fn()
     render(<Harness onDismiss={onDismiss} />)

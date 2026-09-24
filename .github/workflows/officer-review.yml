@@ -1,0 +1,141 @@
+# Officer Review Weekly — PRD #34 (issue #34).
+#
+# Purpose: every Friday 07:10 Bangkok time, build the officer-review budget
+# workbook from live production data, gate it on the file=web=Fabric
+# reconcile, and — only on a live run — overwrite ONE file in the
+# `officer review/` SharePoint folder and mail the budget officers a link.
+# A FAILed reconcile publishes nothing and mails nothing (see
+# backend/app/officer_reconcile.py + backend/jobs/officer_review.py).
+#
+# KILL SWITCH: delete the repo variable OFFICER_REVIEW_LIVE, or set it to
+# false — no commit, no redeploy. That takes the SCHEDULE back to a preview
+# only; a human can still reach a real run via workflow_dispatch `execute`.
+#
+# Required secrets: FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE, GOLD_SQL_SERVER,
+# GOLD_SQL_DATABASE, FABRIC_AAD_CLIENT_ID, FABRIC_AAD_CLIENT_SECRET,
+# FABRIC_AAD_TENANT_ID (GOLD_SQL_* did not exist as repo secrets at the time
+# this workflow was written — jakkaritw must add them before the schedule or
+# any real run can succeed; see the ADR).
+# Required vars: AUTOMATION_FISCAL_YEAR (shared with budget-automations.yml),
+# OFFICER_REVIEW_LIVE (kill switch, unset/false = schedule stays PREVIEW),
+# OFFICER_REVIEW_RECIPIENTS (comma/semicolon-separated email list — a REAL
+# run with none configured FAILs before publishing, never sends nothing
+# silently).
+#
+# This workflow is DELIBERATELY separate from budget-automations.yml (PRD
+# story 29) — reminders are ARMED for real sends 30 Sep-15 Oct 2026, and this
+# robot's gates (OFFICER_REVIEW_LIVE) must never be coupled to that one's
+# (REMINDERS_LIVE / NOTIFICATIONS_DRY_RUN).
+#
+# NOTE: a GitHub `schedule:` trigger only fires from the default branch AFTER
+# this file is pushed to main — nothing runs until that push is approved and
+# lands. GitHub Actions cron also carries an accepted ~5-30 minute latency
+# and can occasionally drop a scheduled run under platform load; a manual
+# workflow_dispatch is the fallback for either case.
+name: Officer Review Weekly
+
+on:
+  schedule:
+    - cron: "10 0 * * 5"  # Friday 00:10 UTC = Friday 07:10 Bangkok (UTC+7)
+  workflow_dispatch:
+    inputs:
+      fiscal_year:
+        description: "Planning fiscal year (blank -> falls back to the AUTOMATION_FISCAL_YEAR repo variable)"
+        required: false
+        type: string
+      execute:
+        description: "Actually publish + mail (unchecked = dry-run preview only, unless OFFICER_REVIEW_LIVE is on for a scheduled run)"
+        required: false
+        type: boolean
+        default: false
+      probe:
+        description: "Run the read-only permission probe only (Fabric/gold read, Graph token roles, site/drive/folder resolution) — no build, no write"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: officer-review
+  cancel-in-progress: false
+
+jobs:
+  officer-review:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      FISCAL_YEAR: ${{ inputs.fiscal_year || vars.AUTOMATION_FISCAL_YEAR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve fiscal year (fail loudly rather than act on the wrong year)
+        run: |
+          if [ -z "$FISCAL_YEAR" ]; then
+            echo "::error::No planning fiscal year. Pass the workflow_dispatch input, or set the AUTOMATION_FISCAL_YEAR repo variable for scheduled runs."
+            exit 1
+          fi
+          echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=${{ inputs.execute }}, probe=${{ inputs.probe }})"
+
+      - name: Install ODBC Driver 17 for SQL Server
+        run: |
+          sudo apt-get update -qq
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: "Probe: permissions + connectivity (read-only)"
+        if: inputs.probe == true
+        working-directory: backend
+        env:
+          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
+          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
+          GOLD_SQL_SERVER: ${{ secrets.GOLD_SQL_SERVER }}
+          GOLD_SQL_DATABASE: ${{ secrets.GOLD_SQL_DATABASE }}
+          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
+        run: python -m jobs.officer_review --fiscal-year "$FISCAL_YEAR" --probe
+
+      - name: Build + reconcile + (real run only) publish and mail
+        if: inputs.probe != true
+        working-directory: backend
+        env:
+          FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
+          FABRIC_SQL_DATABASE: ${{ secrets.FABRIC_SQL_DATABASE }}
+          GOLD_SQL_SERVER: ${{ secrets.GOLD_SQL_SERVER }}
+          GOLD_SQL_DATABASE: ${{ secrets.GOLD_SQL_DATABASE }}
+          ENTRA_CLIENT_ID: ${{ secrets.FABRIC_AAD_CLIENT_ID }}
+          ENTRA_CLIENT_SECRET: ${{ secrets.FABRIC_AAD_CLIENT_SECRET }}
+          ENTRA_TENANT_ID: ${{ secrets.FABRIC_AAD_TENANT_ID }}
+          OFFICER_REVIEW_LIVE: ${{ vars.OFFICER_REVIEW_LIVE }}
+          OFFICER_REVIEW_RECIPIENTS: ${{ vars.OFFICER_REVIEW_RECIPIENTS }}
+        run: |
+          ARGS="--fiscal-year $FISCAL_YEAR"
+          case "${OFFICER_REVIEW_LIVE,,}" in
+            true|1|yes|on|y|t) LIVE_ON=true ;;
+            *) LIVE_ON=false ;;
+          esac
+          if [ "${{ inputs.execute }}" = "true" ] || { [ "$LIVE_ON" = "true" ] && [ "${{ github.event_name }}" = "schedule" ]; }; then
+            export DRY_RUN=false
+            ARGS="$ARGS --execute"
+            MODE=REAL
+            if [ "${{ inputs.execute }}" = "true" ]; then REASON="manual execute input"; else REASON="schedule variable OFFICER_REVIEW_LIVE=on"; fi
+          else
+            export DRY_RUN=true
+            MODE=PREVIEW
+            REASON="neither manual execute nor (schedule AND OFFICER_REVIEW_LIVE=on)"
+          fi
+          echo "MODE: $MODE — reason: $REASON | execute=${{ inputs.execute }}, OFFICER_REVIEW_LIVE=$OFFICER_REVIEW_LIVE (parsed=$LIVE_ON), DRY_RUN=$DRY_RUN, event=${{ github.event_name }}"
+          python -m jobs.officer_review $ARGS

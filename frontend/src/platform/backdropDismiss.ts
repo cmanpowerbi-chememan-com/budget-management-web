@@ -2,26 +2,29 @@ import { useRef, type MouseEventHandler } from 'react'
 
 export interface BackdropDismissHandlers {
   onMouseDown: MouseEventHandler<HTMLElement>
+  onMouseUp: MouseEventHandler<HTMLElement>
   onClick: MouseEventHandler<HTMLElement>
 }
 
-/** Guards a `.modal-backdrop`'s dismiss-on-click against the drag-release
- * misclick (jakkaritw, prd report 2026-09-24): a naive
+/** Guards a `.modal-backdrop`'s dismiss-on-click against a drag that crosses
+ * the modal/backdrop boundary (jakkaritw, prd report 2026-09-24): a naive
  * `onClick={(e) => e.target === e.currentTarget && onDismiss()}` also fires
- * when the user presses the mouse INSIDE the modal (e.g. drag-selecting text
- * in an input) and releases over the dim backdrop — the browser dispatches
- * `click` on the nearest common ancestor of the mousedown/mouseup targets,
- * which is the backdrop itself, so `target === currentTarget` passes even
- * though the user never intended to dismiss anything. Same bug in reverse
- * (press on the backdrop, release inside the modal) also satisfies that
- * check. Every caller of this hook used to lose typed data this way.
+ * when the user presses the mouse on one side of that boundary and releases
+ * on the other (e.g. drag-selecting text in an input and overshooting past
+ * the modal edge, or pressing in the dim margin and dragging onto a field) —
+ * the browser dispatches `click` on the nearest common ancestor of the
+ * mousedown/mouseup targets, which is the backdrop itself, so
+ * `target === currentTarget` passes even though the user never intended to
+ * dismiss anything. BOTH drag directions trigger this the same way. Every
+ * caller of this hook used to lose typed data this way.
  *
- * Fix: remember on `mousedown` whether the PRESS itself started on the
- * backdrop; a `click` only dismisses when BOTH the press and the click
- * landed on the backdrop, with nothing in between. An ordinary click (press
- * and release on the same spot, no drag) always satisfies this, so normal
- * backdrop-dismiss is unchanged — only the drag-across-the-edge case is
- * blocked. The flag resets after every click so a later, genuine backdrop
+ * Fix: dismiss only when the PRESS, the RELEASE, and the resulting `click`
+ * ALL land on the backdrop itself, with nothing in between — `mousedown`
+ * seeds the flag, `mouseup` can only narrow it (never re-set it), so a
+ * release on the other side of the boundary — in EITHER direction — clears
+ * it before `click` ever runs. An ordinary click (press and release on the
+ * same spot, no drag) always satisfies this, so normal backdrop-dismiss is
+ * unchanged. The flag resets after every click so a later, genuine backdrop
  * click still works. */
 export function useBackdropDismiss(onDismiss: () => void): BackdropDismissHandlers {
   const pressedBackdrop = useRef(false)
@@ -30,10 +33,13 @@ export function useBackdropDismiss(onDismiss: () => void): BackdropDismissHandle
     onMouseDown: (e) => {
       pressedBackdrop.current = e.target === e.currentTarget
     },
+    onMouseUp: (e) => {
+      pressedBackdrop.current = pressedBackdrop.current && e.target === e.currentTarget
+    },
     onClick: (e) => {
-      const pressStartedOnBackdrop = pressedBackdrop.current
+      const pressAndReleaseOnBackdrop = pressedBackdrop.current
       pressedBackdrop.current = false
-      if (pressStartedOnBackdrop && e.target === e.currentTarget) onDismiss()
+      if (pressAndReleaseOnBackdrop && e.target === e.currentTarget) onDismiss()
     },
   }
 }

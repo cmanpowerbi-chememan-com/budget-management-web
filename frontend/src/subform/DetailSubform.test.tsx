@@ -1123,6 +1123,30 @@ describe('DetailSubform', () => {
       expect(screen.getByTestId('detail-subform')).toBeInTheDocument()
     })
 
+    it('does not close on the REVERSE drag either — press on the backdrop, release inside the modal, click lands on the backdrop', async () => {
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
+      const onClose = vi.fn()
+      render(
+        <DetailSubform
+          costCenter="CC1"
+          glAccount="5211900030"
+          glGroup="Entertainment"
+          glName={null}
+          fiscalYear={2027}
+          onClose={onClose}
+          onSaved={vi.fn()}
+        />,
+      )
+      await waitFor(() => expect(screen.getByText(/ยังไม่มีรายการ/)).toBeInTheDocument())
+
+      fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(screen.getByTestId('detail-subform'))
+      fireEvent.click(backdrop())
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByTestId('detail-subform')).toBeInTheDocument()
+    })
+
     it('a press and click that both land on the backdrop close it (clean backdrop click still works)', async () => {
       vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([])
       const onClose = vi.fn()
