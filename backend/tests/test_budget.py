@@ -353,7 +353,7 @@ def test_budget_export_empty_grid_yields_header_only_workbook_no_leaked_rows(cli
 # character used to crash the endpoint with an uncaught IllegalCharacterError
 # (500) rather than a clean 200 — fixed in `build_export_workbook` (see
 # test_budget_export.py's dedicated unit test for the exact stripped value).
-@pytest.mark.parametrize("illegal_char", ["\x0b", "￿"])
+@pytest.mark.parametrize("illegal_char", ["\x0b", "\uffff"])
 def test_budget_export_department_with_illegal_xml_chars_returns_200_not_500(client, illegal_char):
     _override_auth("filler@chememan.com")
     fake_scope = Scope(email="filler@chememan.com", is_admin=False, role="filler", fill_cost_centers=["CC1"], see_cost_centers=["CC1"])

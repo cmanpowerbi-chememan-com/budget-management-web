@@ -198,8 +198,16 @@ def test_free_text_starting_with_injection_prefixes_stays_plain_text(prefix):
     ws = load_workbook(BytesIO(xlsx_bytes)).active
     remark_cell = ws.cell(row=5, column=LAST_NUM_COL + 1)
     detail_cell = ws.cell(row=5, column=LAST_NUM_COL + 2)
-    assert remark_cell.value == prefix
-    assert detail_cell.value == prefix
+    # A lone '\r' round-trips through the saved XML as '\n' on some XML
+    # parser backends (observed on the Linux CI runner's lxml build, not on
+    # Windows) — XML 1.0's own end-of-line normalization (spec section
+    # 2.11), not an injection failure. Normalize CR->LF before comparing so
+    # this stays platform-independent; every OTHER prefix is compared
+    # byte-for-byte, unnormalized, and the security assertions below
+    # (still a plain string, never a formula) apply to every case as-is.
+    normalize = lambda s: s.replace("\r", "\n")  # noqa: E731
+    assert normalize(remark_cell.value) == normalize(prefix)
+    assert normalize(detail_cell.value) == normalize(prefix)
     assert remark_cell.data_type == "s"
     assert detail_cell.data_type == "s"
 
@@ -305,7 +313,7 @@ def test_sanitize_department_also_replaces_dots():
 # C1 block \x80-\x9f the plain regex does not reach) categories are dropped.
 def test_sanitize_department_replaces_del_and_drops_format_and_control_categories():
     assert sanitize_department_for_filename("A\x7fB") == "A_B"
-    assert sanitize_department_for_filename("A‮B") == "A_B"  # Cf: right-to-left override
+    assert sanitize_department_for_filename("A\u202eB") == "A_B"  # Cf: right-to-left override
     assert sanitize_department_for_filename("A\x80B") == "A_B"  # Cc: C1 control block
 
 
@@ -431,34 +439,52 @@ def test_gl_name_and_group_prefer_the_master_over_the_row_layers():
 # its two same-CC GLs happen to agree on BOTH gl_group order AND gl_account
 # order, so it would pass even with a wrong key.
 # ---------------------------------------------------------------------------
-def test_build_export_summary_rows_sort_key_isolates_c_level_and_gl_group():
-    # Same CC "AA_CC": GL-code order DISAGREES with GL-GROUP order — under
-    # the PRD key, GL "...010" (group "Alpha") must come BEFORE GL "...030"
-    # (group "Zulu") despite having the LARGER gl_account string.
-    alpha_row = BudgetRow(
-        cost_center="AA_CC", gl_account="5215000010", department="Dept",
+def test_build_export_summary_rows_sort_key_isolates_every_level():
+    """Item 5 (gate fix round 3): the round-2 fixture let c_level and
+    division AGREE with each other (both pointed the same CC first), and
+    let side and gl_group AGREE too (both same-CC rows were COST) — so a
+    mutant dropping/swapping either pair could still pass by accident. This
+    fixture makes every adjacent pair in the key DISAGREE, killing:
+    drop c_level only, swap c_level/division, drop side, side placed after
+    gl_group, and gl_name substituted for gl_group.
+
+    CC "ZZ_CC": c_level "A_Level" (sorts FIRST) but division "Z_Div"
+    (sorts LAST) — must still sort FIRST overall (c_level outranks
+    division). CC "AA_CC": the opposite pairing (c_level "Z_Level" /
+    division "A_Div") — must sort SECOND despite its division sorting
+    first. Within "AA_CC", 3 rows whose side/gl_group/gl_name all disagree
+    with each other: P (COST, group "Alpha", name "Zulu Name"), Q (COST,
+    group "Zulu", name "Alpha Name"), R (SGA, group "Beta", name "Beta
+    Name") — correct order is P, Q, R (side groups COST before SGA; within
+    COST, gl_group "Alpha" < "Zulu"); every named mutant produces some
+    OTHER order.
+    """
+    zz_row = BudgetRow(
+        cost_center="ZZ_CC", gl_account="5299999999", department="Dept",
         pending=PendingLayer(total_year=1.0), board=BoardLayer(), sap=SapLayer(),
     )
-    zulu_row = BudgetRow(
-        cost_center="AA_CC", gl_account="5211800030", department="Dept",
+    p_row = BudgetRow(  # COST, group "Alpha", name "Zulu Name"
+        cost_center="AA_CC", gl_account="5215000010", department="Dept",
         pending=PendingLayer(total_year=2.0), board=BoardLayer(), sap=SapLayer(),
     )
-    # A second CC "ZZ_CC" whose c_level/division sort BEFORE "AA_CC"'s, even
-    # though "ZZ_CC" > "AA_CC" as a plain string — proves c_level/division
-    # outrank cost_center rather than merely tie-breaking it.
-    other_cc_row = BudgetRow(
-        cost_center="ZZ_CC", gl_account="6000000000", department="Dept",
+    q_row = BudgetRow(  # COST, group "Zulu", name "Alpha Name"
+        cost_center="AA_CC", gl_account="5211800030", department="Dept",
         pending=PendingLayer(total_year=3.0), board=BoardLayer(), sap=SapLayer(),
+    )
+    r_row = BudgetRow(  # SGA, group "Beta", name "Beta Name"
+        cost_center="AA_CC", gl_account="6100000000", department="Dept",
+        pending=PendingLayer(total_year=4.0), board=BoardLayer(), sap=SapLayer(),
     )
 
     cc_dims = {
-        "AA_CC": {"department": "Dept", "division": "Z_Div", "c_level": "Z_Level"},
-        "ZZ_CC": {"department": "Dept", "division": "A_Div", "c_level": "A_Level"},
+        "ZZ_CC": {"department": "Dept", "division": "Z_Div", "c_level": "A_Level"},
+        "AA_CC": {"department": "Dept", "division": "A_Div", "c_level": "Z_Level"},
     }
     gl_master = [
-        {"gl_code": "5215000010", "gl_name": "Alpha GL", "gl_group": "Alpha"},
-        {"gl_code": "5211800030", "gl_name": "Zulu GL", "gl_group": "Zulu"},
-        {"gl_code": "6000000000", "gl_name": "Other GL", "gl_group": "Beta"},
+        {"gl_code": "5299999999", "gl_name": "ZZ Name", "gl_group": "ZZGroup"},
+        {"gl_code": "5215000010", "gl_name": "Zulu Name", "gl_group": "Alpha"},
+        {"gl_code": "5211800030", "gl_name": "Alpha Name", "gl_group": "Zulu"},
+        {"gl_code": "6100000000", "gl_name": "Beta Name", "gl_group": "Beta"},
     ]
 
     with patch("app.budget_export.fetch_cc_dims", return_value=cc_dims), patch(
@@ -467,11 +493,16 @@ def test_build_export_summary_rows_sort_key_isolates_c_level_and_gl_group():
         "app.budget_export.fetch_gl_accounts", return_value=gl_master
     ):
         result = build_export_summary_rows(
-            MagicMock(), [alpha_row, zulu_row, other_cc_row], planning_year=2027, department="Dept",
+            MagicMock(), [zz_row, p_row, q_row, r_row], planning_year=2027, department="Dept",
         )
 
     order = [(r.cost_center, r.gl_account) for r in result]
-    assert order == [("ZZ_CC", "6000000000"), ("AA_CC", "5215000010"), ("AA_CC", "5211800030")]
+    assert order == [
+        ("ZZ_CC", "5299999999"),
+        ("AA_CC", "5215000010"),  # P
+        ("AA_CC", "5211800030"),  # Q
+        ("AA_CC", "6100000000"),  # R
+    ]
 
 
 # ---------------------------------------------------------------------------

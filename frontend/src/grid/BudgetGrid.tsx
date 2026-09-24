@@ -171,6 +171,11 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     // flashes an unfiltered (department=null) load in between.
     setDepartment(null)
     setDeptResolved(false)
+    // Gate fix round 3, item 3: an old-hat `loadGrid` fetch may still be in
+    // flight (e.g. the toggle fires mid-load) — bump the sequence NOW so
+    // that response, whenever it settles, is dropped as stale rather than
+    // landing under the NEW hat's (department=null, then re-resolved) view.
+    loadSeqRef.current += 1
   }
 
   // Reference data (GL master + department hierarchy) loads once, then
@@ -309,7 +314,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   function handleApprovalChanged() {
     loadPendingApprovals()
     loadLockedDepartments()
-    loadGrid()
+    loadGridRef.current()
   }
 
   /** Latest-request guard (gate fix round 2, item A): `loadGrid` fires again
@@ -340,6 +345,34 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     }
   }
 
+  // Latest-CLOSURE guard (gate fix round 3, item 1 — a HIGH regression the
+  // round-2 seq guard introduced): `loadGrid` is a plain function redefined
+  // every render, closing over THAT render's year/department. The seq
+  // guard above only orders RESPONSES against each other — it says nothing
+  // about which render's `loadGrid` a DEFERRED completion handler
+  // (`persistRow`'s 409 branch, `refreshAfterLockChange`,
+  // `handleApprovalChanged`, `handleSpecialSaved`, `handleDeleteRow`'s 409
+  // branch — none of them run inside the grid-load effect itself) is still
+  // holding from back when it started. If the ฝ่าย switches while one of
+  // those is in flight, its own stale closure still calls the OLD
+  // `loadGrid` (old year/department baked in) — and because it only
+  // *starts* fetching later than the legitimate reload, it claims a HIGHER
+  // seq number and wins, so the stale ฝ่าย's rows land under the NEW
+  // heading. `loadGridRef` is synced on every render (no deps array — same
+  // pattern as `refreshAfterLockChangeRef` below) so it always points at
+  // the FRESHEST `loadGrid`; every one of those deferred call sites goes
+  // through `loadGridRef.current()` instead of calling `loadGrid()`
+  // directly. `loadGrid` itself, and the grid-load effect that calls it
+  // directly, are UNCHANGED — do NOT make `loadGrid` read
+  // department/year from refs instead: `departmentRef`/`adminViewEnabledRef`
+  // below are synced by effects declared AFTER the grid-load effect, so
+  // `loadGrid` reading them would lag one render behind the effect that
+  // calls it.
+  const loadGridRef = useRef(loadGrid)
+  useEffect(() => {
+    loadGridRef.current = loadGrid
+  })
+
   /** `onSaved` for DetailSubform / TripManager — a special-GL detail line or
    * a trip's manual line lazily creates the (CC, GL)'s `pending_budget`
    * parent row on ITS OWN first successful write (see `handleAddTransaction`
@@ -349,7 +382,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * successful write (never on a failed save or a plain close). */
   function handleSpecialSaved() {
     setDataVersion((v) => v + 1)
-    loadGrid()
+    loadGridRef.current()
   }
 
   useEffect(() => {
@@ -426,7 +459,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * discovered via a refused write). */
   function refreshAfterLockChange() {
     setDataVersion((v) => v + 1)
-    loadGrid()
+    loadGridRef.current()
     loadLockedDepartments()
   }
 
@@ -454,7 +487,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           ...prev,
           [key]: { kind: 'error', text: 'ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง' },
         }))
-        await loadGrid()
+        await loadGridRef.current()
         return
       }
       // UAT-34: a department can be locked by someone ELSE's Submit between
@@ -665,7 +698,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       setRows((prev) => prev.filter((r) => rowKey(r.cost_center, r.gl_account) !== key))
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        await loadGrid()
+        await loadGridRef.current()
         return
       }
       // Issue #13, decision H: department-locked refused the same way as a
