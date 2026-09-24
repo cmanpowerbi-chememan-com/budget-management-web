@@ -173,7 +173,8 @@ describe('AttachmentsModal', () => {
   // cross-element press/release — which the old `e.target === e.currentTarget`
   // check couldn't tell apart from a real backdrop click, silently closing
   // the modal. Fixed by `useBackdropDismiss` (src/platform/backdropDismiss.ts),
-  // which only dismisses when the PRESS also started on the backdrop itself.
+  // which only dismisses when the PRESS and the RELEASE both land on the
+  // backdrop itself.
   describe('backdrop drag-release guard (bug fix 2026-09-24)', () => {
     function backdrop(): HTMLElement {
       const el = document.querySelector('.modal-backdrop')
@@ -202,6 +203,7 @@ describe('AttachmentsModal', () => {
       await waitFor(() => expect(screen.getByText(/ยังไม่มีไฟล์/)).toBeInTheDocument())
 
       fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
       fireEvent.click(backdrop())
 
       expect(onClose).toHaveBeenCalledTimes(1)

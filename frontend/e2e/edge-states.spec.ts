@@ -192,4 +192,44 @@ test.describe('edge states', () => {
     await page.getByTestId('confirm-cancel').click()
     await expect(page.getByTestId('trip-manager')).toBeVisible()
   })
+
+  test('4.9 a REVERSE drag — press starting on the backdrop, release inside Trip Manager — also does not close it (08003e1 fix on top of 4.8)', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_TRAVEL_PERDIEM_COST, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-TRV-1' })]],
+      tripsQueue: [[]],
+      detailLinesQueue: [[]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+
+    await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
+    const card = page.getByTestId('trip-card-new-0')
+    const projectInput = card.getByLabel('project new-0')
+    await projectInput.fill('โครงการทดสอบลากย้อนกลับ')
+
+    // The reverse of 4.8's drag: mousedown OUTSIDE the modal, on the dim
+    // backdrop, then drag INTO the Project input and release there. `click`
+    // still lands on the backdrop (same common-ancestor rule as 4.8), but
+    // `onMouseUp` narrows the press flag to false because the release landed
+    // inside the modal, not on the backdrop — so this direction never even
+    // reaches `onCancel` (08003e1's mouseup narrowing, on top of c61f144's
+    // forward-drag fix from 4.8).
+    const modalBox = await page.getByTestId('trip-manager').boundingBox()
+    const inputBox = await projectInput.boundingBox()
+    if (!modalBox || !inputBox) throw new Error('trip-manager or project input has no bounding box')
+    const dragY = inputBox.y + inputBox.height / 2
+    await page.mouse.move(modalBox.x - 8, dragY)
+    await page.mouse.down()
+    await page.mouse.move(inputBox.x + 20, dragY, { steps: 12 })
+    await page.mouse.up()
+
+    // Still open, and the typed Project survived — nothing was lost, and no
+    // confirm was even asked (the click never reached onCancel).
+    await expect(page.getByTestId('trip-manager')).toBeVisible()
+    await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
+    await expect(projectInput).toHaveValue('โครงการทดสอบลากย้อนกลับ')
+  })
 })

@@ -150,7 +150,7 @@ describe('ConfirmDialog', () => {
   // check couldn't tell apart from a real backdrop click, silently resolving
   // the confirm as `false`. Fixed by `useBackdropDismiss`
   // (src/platform/backdropDismiss.ts), which only dismisses when the PRESS
-  // also started on the backdrop itself.
+  // and the RELEASE both land on the backdrop itself.
   describe('backdrop drag-release guard (bug fix 2026-09-24)', () => {
     function backdrop(): HTMLElement {
       const el = document.querySelector('.modal-backdrop')
@@ -188,6 +188,7 @@ describe('ConfirmDialog', () => {
       })
 
       fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
       fireEvent.click(backdrop())
       await act(async () => {})
 

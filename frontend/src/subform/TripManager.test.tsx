@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import * as referenceApi from '../api/reference'
@@ -1756,6 +1756,7 @@ describe('TripManager', () => {
       await waitFor(() => expect(screen.getByText(/ยังไม่มีทริป/)).toBeInTheDocument())
 
       fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
       fireEvent.click(backdrop())
 
       expect(confirmSpy).not.toHaveBeenCalled()
@@ -1773,9 +1774,11 @@ describe('TripManager', () => {
       fireEvent.change(screen.getByLabelText('days existing-10'), { target: { value: '9' } })
 
       fireEvent.mouseDown(backdrop())
+      fireEvent.mouseUp(backdrop())
       fireEvent.click(backdrop())
 
       expect(confirmSpy).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      await act(async () => {}) // flush onCancel's awaited confirmDialog() continuation before asserting the decline branch
       expect(onClose).not.toHaveBeenCalled()
       expect(screen.getByTestId('trip-manager')).toBeInTheDocument()
       confirmSpy.mockRestore()
@@ -1793,6 +1796,7 @@ describe('TripManager', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
       expect(confirmSpy).toHaveBeenCalledWith('มีข้อมูลที่ยังไม่บันทึก ต้องการปิดโดยไม่บันทึก?')
+      await act(async () => {}) // flush onCancel's awaited confirmDialog() continuation before asserting the decline branch
       expect(onClose).not.toHaveBeenCalled()
       confirmSpy.mockRestore()
     })

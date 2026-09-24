@@ -15,17 +15,23 @@ export interface BackdropDismissHandlers {
  * the browser dispatches `click` on the nearest common ancestor of the
  * mousedown/mouseup targets, which is the backdrop itself, so
  * `target === currentTarget` passes even though the user never intended to
- * dismiss anything. BOTH drag directions trigger this the same way. Every
- * caller of this hook used to lose typed data this way.
+ * dismiss anything. BOTH drag directions trigger this the same way.
+ * TripManager and DetailSubform callers used to lose typed data this way;
+ * ConfirmDialog silently resolved `false` instead of leaving the question
+ * open, and AttachmentsModal (no text fields to lose) just closed early.
  *
  * Fix: dismiss only when the PRESS, the RELEASE, and the resulting `click`
- * ALL land on the backdrop itself, with nothing in between — `mousedown`
- * seeds the flag, `mouseup` can only narrow it (never re-set it), so a
- * release on the other side of the boundary — in EITHER direction — clears
- * it before `click` ever runs. An ordinary click (press and release on the
- * same spot, no drag) always satisfies this, so normal backdrop-dismiss is
- * unchanged. The flag resets after every click so a later, genuine backdrop
- * click still works. */
+ * ALL land on the backdrop itself — `mousedown` seeds the flag, `mouseup`
+ * can only narrow it (never re-set it), so a release on the other side of
+ * the boundary — in EITHER direction — clears it before `click` ever runs.
+ * An ordinary click (press and release on the same spot, no drag) always
+ * satisfies this, so normal backdrop-dismiss is unchanged. Accepted
+ * limitation: only the press and release POINTS are checked, not the path
+ * between them, so a drag that starts on the backdrop, crosses into the
+ * modal, and comes back out to the backdrop before releasing still
+ * dismisses. The flag resets after every click so a stale press left by an
+ * earlier click can't make a later, unrelated bare click (no new mousedown)
+ * dismiss on its own. */
 export function useBackdropDismiss(onDismiss: () => void): BackdropDismissHandlers {
   const pressedBackdrop = useRef(false)
 

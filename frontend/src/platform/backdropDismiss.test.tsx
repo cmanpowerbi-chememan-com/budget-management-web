@@ -22,6 +22,7 @@ describe('useBackdropDismiss', () => {
     const backdrop = screen.getByTestId('backdrop')
 
     fireEvent.mouseDown(backdrop)
+    fireEvent.mouseUp(backdrop)
     fireEvent.click(backdrop)
 
     expect(onDismiss).toHaveBeenCalledTimes(1)
@@ -63,18 +64,17 @@ describe('useBackdropDismiss', () => {
     expect(onDismiss).not.toHaveBeenCalled()
   })
 
-  it('resets the flag after every click — a later genuine backdrop click still works after a blocked drag', () => {
+  it('resets the flag after every click — a later bare click on the backdrop (no new press) does not dismiss again', () => {
     const onDismiss = vi.fn()
     render(<Harness onDismiss={onDismiss} />)
     const backdrop = screen.getByTestId('backdrop')
-    const inner = screen.getByTestId('inner')
-
-    fireEvent.mouseDown(inner)
-    fireEvent.click(backdrop) // blocked drag
-    expect(onDismiss).not.toHaveBeenCalled()
 
     fireEvent.mouseDown(backdrop)
-    fireEvent.click(backdrop) // genuine click afterwards
+    fireEvent.mouseUp(backdrop)
+    fireEvent.click(backdrop) // genuine dismiss
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(backdrop) // bare click, no new mousedown/mouseup
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 })
