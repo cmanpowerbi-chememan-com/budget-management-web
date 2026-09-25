@@ -1,11 +1,13 @@
 # Officer Review Weekly — PRD #34 (issue #34).
 #
-# Purpose: every Friday 07:10 Bangkok time, build the officer-review budget
-# workbook from live production data, gate it on the file=web=Fabric
-# reconcile, and — only on a live run — overwrite ONE file in the
-# `officer review/` SharePoint folder and mail the budget officers a link.
-# A FAILed reconcile publishes nothing and mails nothing (see
-# backend/app/officer_reconcile.py + backend/jobs/officer_review.py).
+# Purpose: every Friday 04:40 Bangkok time (PRD #36 — moved from 07:10 to
+# absorb GitHub's own scheduling lag; see the schedule note below), build the
+# officer-review budget workbook from live production data, gate it on the
+# file=web=Fabric reconcile, and — only on a live run — overwrite ONE file in
+# the `officer review/` SharePoint folder and mail the budget officers ONE
+# link mail (To the first recipient, cc the rest). A FAILed reconcile
+# publishes nothing and mails nothing (see backend/app/officer_reconcile.py +
+# backend/jobs/officer_review.py).
 #
 # KILL SWITCH: delete the repo variable OFFICER_REVIEW_LIVE, or set it to
 # false — no commit, no redeploy. That takes the SCHEDULE back to a preview
@@ -30,14 +32,20 @@
 #
 # NOTE: a GitHub `schedule:` trigger only fires from the default branch AFTER
 # this file is pushed to main — nothing runs until that push is approved and
-# lands. GitHub Actions cron also carries an accepted ~5-30 minute latency
-# and can occasionally drop a scheduled run under platform load; a manual
-# workflow_dispatch is the fallback for either case.
+# lands. GitHub Actions delays scheduled runs under platform load — this
+# repo's own 55-day history (nightly automation workflow, 2026-08-01 to
+# 2026-09-24) shows a median start lag of about 2 hours (p90 about 3 hours,
+# max about 8 hours), with 0 of those runs dropped; this workflow's own first
+# scheduled run (2026-09-25) started 4 h 39 min late. PRD #36 moved the cron
+# from Friday 07:10 to Friday 04:40 Bangkok specifically to absorb that lag
+# and still usually land before the working day starts — it is not
+# guaranteed before 07:10 on every run. A manual workflow_dispatch starts
+# within seconds and is the fallback for a late or dropped run.
 name: Officer Review Weekly
 
 on:
   schedule:
-    - cron: "10 0 * * 5"  # Friday 00:10 UTC = Friday 07:10 Bangkok (UTC+7)
+    - cron: "40 21 * * 4"  # Thursday 21:40 UTC = Friday 04:40 Bangkok (UTC+7) — PRD #36
   workflow_dispatch:
     inputs:
       fiscal_year:

@@ -413,11 +413,21 @@ def run_build(
             type(exc).__name__,
         )
         return 1
+    # 2026-09-25 (#36): `notify_officer_review` now sends ONE combined mail
+    # (To the first recipient, cc the rest) instead of one call per
+    # recipient, so `results` is always a single-element list on a REAL run
+    # (checked non-empty above via the `if not recipients` guard). The log
+    # line reports message count + recipient count, never any address.
     failed = [r for r in results if not r.sent]
-    logger.info("MAIL: sent=%d/%d recipients", len(results) - len(failed), len(results))
     if failed:
-        logger.error("MAIL FAIL: at least one send did not succeed — file already published, re-run is idempotent")
+        logger.error("MAIL: FAIL (%s)", failed[0].detail or "unknown")
+        logger.error("MAIL FAIL: send did not succeed — file already published, re-run is idempotent")
         return 1
+    n_recipients = len(recipients)
+    logger.info(
+        "MAIL: sent=%d/%d message to %d recipients (to=1, cc=%d)",
+        len(results), len(results), n_recipients, max(n_recipients - 1, 0),
+    )
 
     logger.info("MODE: REAL — published and mailed")
     return 0

@@ -81,28 +81,31 @@ def notify_officer_review(
     dry_run: bool,
     settings: Settings | None = None,
 ) -> list[NotificationResult]:
-    """One `send_mail` call PER recipient — the seam supports exactly one To
-    address (D12). The caller (`jobs.officer_review`) must treat ANY
-    `sent=False` result on a REAL run as a job FAIL: the file is already
+    """ONE `send_mail` call for the whole recipient list (2026-09-25: was one
+    call per recipient) — To = `recipients[0]`, cc = the rest, deduplicated
+    case-insensitively and with the To address itself excluded from cc.
+    `recipients` is already validated/deduplicated by the caller
+    (`jobs.officer_review.parse_recipients`); this function dedupes again
+    defensively so a future caller change can never put the same address in
+    both To and cc. Returns a single-element list so the caller's existing
+    `[r for r in results if not r.sent]` shape keeps working unchanged.
+
+    `send_mail`'s `cc` argument is dropped entirely (not just filtered) when
+    `Settings.notifications_redirect_all_to` is set (`app.notifications`,
+    zero-edit) — non-prod environments running with that redirect only ever
+    see the To address, never the cc list. That is the existing redirect
+    behaviour for every notifier in this codebase, not something new here.
+
+    A `NotificationError` (from `send_mail` itself), a raw `httpx.HTTPError`
+    (a transport failure `send_mail` can let escape), a bare `ValueError`
+    (e.g. a non-finite `Retry-After` header) or an `OverflowError` (an
+    absurdly large `Retry-After` reaching `time.sleep`) all make this ONE
+    call fail — with a single combined mail there is no "other recipients"
+    to keep trying, so the caller (`jobs.officer_review.run_build`) treats
+    any `sent=False` on a REAL run as a job FAIL: the file is already
     published at that point, but a re-run is idempotent (the same file is
     simply overwritten again next time). Recipient addresses are never
-    logged here — only the count, by the caller.
-
-    OPS-3 fix round 2026-09-24: a per-recipient failure — `send_mail`'s own
-    `NotificationError`, OR a raw `httpx.HTTPError` a transport failure can
-    raise straight through it — no longer aborts the remaining recipients.
-    Every recipient is always attempted; a failed one comes back as
-    `NotificationResult(sent=False, ...)` instead of propagating.
-
-    L1 fix round 4 (finding 2): `app.notifications` (zero-edit) can also let
-    a bare `ValueError` (e.g. a non-finite `Retry-After` header, see
-    `officer_publisher._retry_after_seconds`'s sibling problem) or an
-    `OverflowError` (an absurdly large `Retry-After` reaching `time.sleep`)
-    escape from underneath `send_mail` — both are now caught per recipient
-    too, same as `NotificationError`/`httpx.HTTPError`, so one hostile
-    header on one recipient's send can never abort the rest. The caller
-    (`jobs.officer_review.run_build`) already exits 1 on a REAL run when any
-    `NotificationResult.sent` is `False`."""
+    logged here — only the count, by the caller."""
     settings = settings or get_settings()
     subject = build_subject(planning_year, as_of)
     body = build_body_html(
@@ -110,11 +113,20 @@ def notify_officer_review(
         fy_total=fy_total, board_total=board_total, sap_total=sap_total, sap_watermark=sap_watermark,
         lines_per_topic=lines_per_topic,
     )
-    results: list[NotificationResult] = []
-    for to in recipients:
-        try:
-            results.append(send_mail(to, subject, body, dry_run=dry_run, settings=settings))
-        except (notifications.NotificationError, httpx.HTTPError, ValueError, OverflowError) as exc:
-            logger.warning("officer_notify: send failed for one recipient (%s) — continuing with the rest", type(exc).__name__)
-            results.append(NotificationResult(sent=False, to_email=to, subject=subject, dry_run=dry_run, detail=type(exc).__name__))
-    return results
+    if not recipients:
+        return []
+    to_email = recipients[0]
+    seen = {to_email.lower()}
+    cc: list[str] = []
+    for addr in recipients[1:]:
+        key = addr.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cc.append(addr)
+    try:
+        result = send_mail(to_email, subject, body, cc=cc or None, dry_run=dry_run, settings=settings)
+    except (notifications.NotificationError, httpx.HTTPError, ValueError, OverflowError) as exc:
+        logger.warning("officer_notify: send failed (%s)", type(exc).__name__)
+        result = NotificationResult(sent=False, to_email=to_email, subject=subject, dry_run=dry_run, detail=type(exc).__name__)
+    return [result]

@@ -7,7 +7,9 @@ live-DB reconcile property, not yet deployed — schedule inert until pushed to 
 rounds applied same day (gate finding round, see "Hardening added in the 2026-09-24 fix round"
 below; two further re-verify rounds — commit history holds their per-finding notes), plus a
 same-day LOW-severity fix round 4 (public-log hardening, a config-error exit code, and defence-in-
-depth checks on malformed Graph responses / malformed rows — no design change).
+depth checks on malformed Graph responses / malformed rows — no design change). 2026-09-25 (PRD
+#36): schedule moved to Friday 04:40 Bangkok (was 07:10) and the notifier changed to one combined
+mail instead of one per recipient — see "Schedule + kill switch" and "Notifier" below.
 
 ## Context
 
@@ -140,16 +142,27 @@ the 2026-08-10 rule, scoped to `officer review/` and this robot only.**
 
 **Notifier.** Thai HTML mail built in `backend/app/officer_notify.py` (not inside
 `notifications.py` — that module is not edited by this change), sent via the existing
-`app.notifications.send_mail` seam, one call per recipient in `OFFICER_REVIEW_RECIPIENTS` (a repo
-secret — see "Credentials" below, comma/semicolon-separated). Link only, no attachment.
+`app.notifications.send_mail` seam. 2026-09-25 (#36): ONE combined mail per run — To the first
+address in `OFFICER_REVIEW_RECIPIENTS`, cc the rest (deduplicated, To address excluded from cc) —
+was one `send_mail` call per recipient before this change. `send_mail`'s `cc` argument is dropped
+entirely when `Settings.notifications_redirect_all_to` is set (`app.notifications`, zero-edit): a
+non-prod environment running with that redirect sees only the To address, matching every other
+notifier in this codebase. `OFFICER_REVIEW_RECIPIENTS` is a repo secret (see "Credentials" below,
+comma/semicolon-separated). Link only, no attachment.
 
 **Schedule + kill switch.** A new, separate workflow (`.github/workflows/officer-review.yml`),
-`cron: "10 0 * * 5"` (Friday 07:10 Bangkok) + `workflow_dispatch`. Real publish+mail requires the
-repo variable `OFFICER_REVIEW_LIVE=true` **on a scheduled run**, or a manual dispatch with
-`execute=true` — deliberately NOT coupled to `budget-automations.yml`'s `REMINDERS_LIVE` /
-`NOTIFICATIONS_DRY_RUN` (PRD story 29: reminders are armed for real sends 30 Sep-15 Oct 2026, and
-this robot must never be able to disturb that). Deleting the variable, or setting it to false, is
-the kill switch — no commit, no redeploy.
+`cron: "40 21 * * 4"` (Thursday 21:40 UTC = Friday 04:40 Bangkok) + `workflow_dispatch`. 2026-09-25
+(#36): moved from Friday 07:10 Bangkok to 04:40 to absorb this repo's own observed GitHub Actions
+scheduling lag (55-day history on the nightly automation workflow: median about 2 hours late, p90
+about 3 hours, max about 8 hours, 0 of those runs dropped; this workflow's own first scheduled run
+started 4 h 39 min late) and to run after the daily SAP load lands (about 04:00 Bangkok), so the
+SAP YTD column is no less fresh than at the old time — the file is not guaranteed to land before
+07:10 on every run. A manual `workflow_dispatch` starts within seconds and is the fallback for a
+late or missing Friday run. Real publish+mail requires the repo variable `OFFICER_REVIEW_LIVE=true`
+**on a scheduled run**, or a manual dispatch with `execute=true` — deliberately NOT coupled to
+`budget-automations.yml`'s `REMINDERS_LIVE` / `NOTIFICATIONS_DRY_RUN` (PRD story 29: reminders are
+armed for real sends 30 Sep-15 Oct 2026, and this robot must never be able to disturb that).
+Deleting the variable, or setting it to false, is the kill switch — no commit, no redeploy.
 
 **Credentials.** The CI service principal (`FABRIC_AAD_*` secrets) now also needs
 `GOLD_SQL_SERVER` / `GOLD_SQL_DATABASE` secrets and Viewer on the DW gold workspace — **neither
