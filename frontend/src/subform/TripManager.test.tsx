@@ -543,6 +543,58 @@ describe('TripManager', () => {
     expect(subformApi.updateTrip).not.toHaveBeenCalled()
   })
 
+  // Bug: amounts typed into transport/accommodation for some months, then
+  // those months were unticked — the cells hid ("—") but the stored amount
+  // never cleared, so the row total kept the hidden money and it was saved to
+  // the DB. Untick must now zero both manual lines for that month immediately.
+  describe('unticking a travel month zeroes the manual lines for that month (issue: hidden money kept on save)', () => {
+    it('untick a month with a saved value — row total drops immediately, and save PUTs 0 for that month', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()]) // travel_months: ['02', '03']
+      vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+        detailLine({ detail_id: 5, gl_account: '5210400030', m02: 1000, m03: 500, total_year: 1500 }),
+      ])
+      vi.mocked(subformApi.saveDetailLine).mockResolvedValue(
+        detailLine({ detail_id: 5, gl_account: '5210400030', m02: 0, m03: 500, total_year: 500 }),
+      )
+      // Unticking a month edits the trip header too (travel_months), so
+      // save-all also PUTs the trip itself — mock it alongside the line save.
+      vi.mocked(subformApi.updateTrip).mockResolvedValue(tripState({ trip_id: 10, side: 'COST', travel_months: ['03'] }))
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      const accommodationRow = screen.getByText('ค่าที่พัก').closest('tr') as HTMLElement
+      expect(within(accommodationRow).getByText('1,500.00')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Feb' })) // untick m02
+
+      expect(within(accommodationRow).getByText('500.00')).toBeInTheDocument() // dropped by exactly the m02 value
+      expect(screen.queryByLabelText('accommodation m02 existing-10')).not.toBeInTheDocument() // month now inactive
+
+      fireEvent.click(saveAllButton())
+
+      await waitFor(() => expect(subformApi.saveDetailLine).toHaveBeenCalledTimes(1))
+      const payload = vi.mocked(subformApi.saveDetailLine).mock.calls[0][0]
+      expect(payload.detail_id).toBe(5)
+      expect(payload.m02).toBe(0)
+      expect(payload.m03).toBe(500) // untouched active month keeps its value
+    })
+
+    it('untick a month where both manual lines are already 0 — save sends no manual-line request for that card', async () => {
+      vi.mocked(subformApi.fetchTrips).mockResolvedValue([tripItem()]) // travel_months: ['02', '03']
+      mockNoManualLines()
+      vi.mocked(subformApi.updateTrip).mockResolvedValue(tripState())
+      render(<TripManager costCenter="CC1" fiscalYear={2027} lockedSide={LOCKED_COST} onClose={vi.fn()} onSaved={vi.fn()} />)
+      await waitFor(() => expect(screen.getByTestId('trip-card-existing-10')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Feb' })) // untick m02 — travel_months still has '03'
+
+      fireEvent.click(saveAllButton())
+
+      await waitFor(() => expect(subformApi.updateTrip).toHaveBeenCalled()) // trip header itself changed
+      expect(subformApi.saveDetailLine).not.toHaveBeenCalled() // no manual line was ever non-zero — nothing to write
+    })
+  })
+
   describe('traveler + destination dropdowns (2026-07-17; traveler → searchable combobox 2026-08-04)', () => {
     function mockCreateOk() {
       vi.mocked(subformApi.createTrip).mockResolvedValue(tripState())

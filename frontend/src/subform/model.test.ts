@@ -27,6 +27,7 @@ import {
   manualTravelTypeForGl,
   resolveTravelerDisplay,
   validateTripDraft,
+  zeroManualMonth,
   type DetailFieldSpec,
 } from './model'
 
@@ -608,5 +609,61 @@ describe('manual line draft helpers', () => {
     expect(payload.trip_id).toBe(10)
     expect(payload.gl_account).toBe('5210400020')
     expect(payload.m02).toBe(500)
+  })
+})
+
+// Bug: amounts typed into transport/accommodation for some months, then those
+// months unticked in the travel-month picker. The month cells hid (rendered
+// "—") but the stored amount never cleared, so the row total kept summing all
+// 12 months regardless of which ones were visible, and the hidden money got
+// saved. `zeroManualMonth` is the fix: untick must zero the month in BOTH
+// manual lines immediately, not just hide the input.
+describe('zeroManualMonth — untick a travel month zeroes it in every manual line', () => {
+  function manualWith(transport: number, accommodation: number) {
+    const transportDraft = blankManualLineDraft()
+    transportDraft.months.m07 = transport
+    const accommodationDraft = blankManualLineDraft()
+    accommodationDraft.months.m07 = accommodation
+    return { transport: transportDraft, accommodation: accommodationDraft }
+  }
+
+  it('zeroes the month in both lines and reports both as changed when both held a value', () => {
+    const manual = manualWith(1000, 1000)
+    const { manual: next, changedTypes } = zeroManualMonth(manual, 'm07')
+    expect(next.transport.months.m07).toBe(0)
+    expect(next.accommodation.months.m07).toBe(0)
+    expect([...changedTypes].sort()).toEqual(['accommodation', 'transport'])
+  })
+
+  it('reports only the type that actually held a non-zero value; the untouched line keeps its exact object', () => {
+    const manual = manualWith(1000, 0)
+    const { manual: next, changedTypes } = zeroManualMonth(manual, 'm07')
+    expect(next.transport.months.m07).toBe(0)
+    expect(changedTypes).toEqual(['transport'])
+    expect(next.accommodation).toBe(manual.accommodation)
+  })
+
+  it('changes nothing when both lines were already 0 in that month — caller must not mark either dirty', () => {
+    const manual = manualWith(0, 0)
+    const { manual: next, changedTypes } = zeroManualMonth(manual, 'm07')
+    expect(changedTypes).toEqual([])
+    expect(next.transport).toBe(manual.transport)
+    expect(next.accommodation).toBe(manual.accommodation)
+  })
+
+  it('only touches the requested month — other months on the changed line are untouched', () => {
+    const manual = manualWith(1000, 0)
+    manual.transport.months.m08 = 250
+    const { manual: next } = zeroManualMonth(manual, 'm07')
+    expect(next.transport.months.m07).toBe(0)
+    expect(next.transport.months.m08).toBe(250)
+  })
+
+  it('treats a missing/undefined month value as 0 (consistent with manualLineTotal\'s "|| 0") — not a change', () => {
+    const manual = manualWith(0, 0)
+    delete (manual.transport.months as Partial<typeof manual.transport.months>).m07
+    const { manual: next, changedTypes } = zeroManualMonth(manual, 'm07')
+    expect(changedTypes).toEqual([])
+    expect(next.transport).toBe(manual.transport)
   })
 })

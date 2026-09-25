@@ -1458,6 +1458,79 @@ def _rehome_trip_detail_lines(conn: pyodbc.Connection, trip_id: int, old_gl: str
         cursor.close()
 
 
+# Manual (never auto-calc) travel detail GLs eligible for month-zeroing when a
+# Filler unticks a travel month (trip hidden-month fix) — transport +
+# accommodation of BOTH sides. Per-diem is excluded on purpose: it is
+# DERIVED, not user-entered (ADR-0015) — `_upsert_trip_detail_line` already
+# re-derives it from the current `travel_months` on every save, so an
+# untick already zeroes it for free.
+_MANUAL_TRAVEL_GLS: tuple[str, ...] = tuple(
+    gl for travel_type, side_to_gl in TRAVEL_GL_BY_TYPE_SIDE.items()
+    if travel_type != "per_diem"
+    for gl in side_to_gl.values()
+)
+
+
+def _zero_manual_lines_outside_travel_months(
+    conn: pyodbc.Connection, trip_id: int, travel_months: list[str],
+) -> set[str]:
+    """Untick a travel month on a trip: the transport/accommodation amount
+    already entered for that month used to stay in the DB (and summed into
+    the parent cell) even though the frontend hid it — the untick was
+    screen-only. This zeroes that month for real, scoped to THIS trip's own
+    manual (`is_auto_calc = 0`) transport/accommodation lines only; per-diem
+    and every other trip/GL are never read or written here.
+
+    Deliberately does NOT bump `_updated_at`/`_user`: the frontend's
+    `saveAll` saves the trip first, then PUTs the dirty manual lines using
+    the `expected_updated_at` it loaded BEFORE this save ran — bumping the
+    version here would make that follow-up PUT lose the row-grain
+    optimistic lock and fail with a stale-conflict 409. Same precedent as
+    `_rehome_trip_detail_lines` above, which re-homes a side-flip's manual
+    lines without touching `_updated_at` either.
+
+    Returns the set of gl_accounts actually changed, so the caller only
+    recomputes the parent cells that need it."""
+    placeholders = ", ".join("?" for _ in _MANUAL_TRAVEL_GLS)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT detail_id, gl_account, {', '.join(MONTH_COLUMNS)} "
+            "FROM budget.pending_budget_detail "
+            f"WHERE trip_id = ? AND is_auto_calc = 0 AND gl_account IN ({placeholders})",
+            trip_id, *_MANUAL_TRAVEL_GLS,
+        )
+        rows = cursor.fetchall()
+
+        changed_gls: set[str] = set()
+        for row in rows:
+            detail_id, gl_account = row[0], row[1]
+            months = dict(zip(MONTH_COLUMNS, (_num(v) for v in row[2:])))
+            months_to_zero = [
+                col for col in MONTH_COLUMNS if col[1:] not in travel_months and months[col] != 0
+            ]
+            if not months_to_zero:
+                continue  # already 0 in every non-travel month — nothing to write
+            for col in months_to_zero:
+                months[col] = 0.0
+            total_year = round(sum(months.values()), 2)
+            set_clause = ", ".join(f"{col} = ?" for col in months_to_zero)
+            cursor.execute(
+                f"UPDATE budget.pending_budget_detail SET {set_clause}, total_year = ? "
+                "WHERE detail_id = ? AND trip_id = ? AND is_auto_calc = 0",
+                *([0.0] * len(months_to_zero)), total_year, detail_id, trip_id,
+            )
+            if cursor.rowcount != 1:
+                raise RowConflictError(
+                    f"trip {trip_id} detail line {detail_id} was changed by someone else "
+                    "while clearing its non-travel months — reload and retry"
+                )
+            changed_gls.add(gl_account)
+    finally:
+        cursor.close()
+    return changed_gls
+
+
 def _delete_trip_detail_line(conn: pyodbc.Connection, trip_id: int, gl_account: str) -> None:
     """Remove the stale per-diem line under the OLD side's GL when a trip's
     `side` flips COST<->SGA on update. `side` determines the GL account
@@ -1720,6 +1793,16 @@ def _save_one_trip(conn: pyodbc.Connection, trip: TripInput, user_email: str, sc
             _recompute_parent_cell(conn, trip.cost_center, old_type_gl, trip.fiscal_year, old_type_dims, user_email, now)
             new_type_dims = _derive_dim_snapshot(conn, trip.cost_center, new_type_gl)
             _recompute_parent_cell(conn, trip.cost_center, new_type_gl, trip.fiscal_year, new_type_dims, user_email, now)
+
+    # Trip hidden-month fix: an unticked travel month must zero that month on
+    # the manual (transport/accommodation) lines too, not just hide it on
+    # screen. Runs AFTER the side-flip re-home above so it always looks at
+    # lines already sitting on the CURRENT side's GL. On a brand-new trip
+    # (CREATE) the SELECT inside finds no rows yet — a no-op.
+    changed_manual_gls = _zero_manual_lines_outside_travel_months(conn, trip_id, trip.travel_months)
+    for changed_gl in changed_manual_gls:
+        changed_dims = _derive_dim_snapshot(conn, trip.cost_center, changed_gl)
+        _recompute_parent_cell(conn, trip.cost_center, changed_gl, trip.fiscal_year, changed_dims, user_email, now)
 
     conn.commit()
 

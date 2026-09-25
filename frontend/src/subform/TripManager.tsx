@@ -28,6 +28,7 @@ import {
   resolveTravelerDisplay,
   shouldWriteManualLine,
   validateTripDraft,
+  zeroManualMonth,
   type ManualLineDraft,
   type TripDraft,
   type TripSide,
@@ -529,12 +530,31 @@ export function TripManager({
     setCards((prev) => prev.map((c) => (c.localId === localId ? { ...c, draft: updater(c.draft), dirty: true } : c)))
   }
 
+  /** Ticking a month off must zero it in BOTH manual lines in the SAME
+   * update that removes it from `travel_months` — otherwise the amount
+   * stays saved behind a hidden "—" cell while `manualLineTotal` (summed
+   * over all 12 months) keeps counting it, and that hidden amount reaches
+   * the DB on the next save invisibly. Ticking a month ON never touches the manual lines — a
+   * re-ticked month simply shows 0, which is accepted. */
   function toggleMonth(localId: string, month: string) {
-    updateTripField(localId, (d) => {
-      const has = d.travel_months.includes(month)
-      const travel_months = has ? d.travel_months.filter((m) => m !== month) : [...d.travel_months, month].sort()
-      return { ...d, travel_months }
-    })
+    const monthKey = `m${month}` as MonthKey
+    setCards((prev) =>
+      prev.map((c) => {
+        if (c.localId !== localId) return c
+        const wasOn = c.draft.travel_months.includes(month)
+        const travel_months = wasOn ? c.draft.travel_months.filter((m) => m !== month) : [...c.draft.travel_months, month].sort()
+        const draft = { ...c.draft, travel_months }
+        if (!wasOn) return { ...c, draft, dirty: true }
+
+        const { manual, changedTypes } = zeroManualMonth(c.manual, monthKey)
+        if (changedTypes.length === 0) return { ...c, draft, dirty: true }
+        const manualDirty = { ...c.manualDirty }
+        changedTypes.forEach((type) => {
+          manualDirty[type] = true
+        })
+        return { ...c, draft, dirty: true, manual, manualDirty }
+      }),
+    )
   }
 
   function setManualMonth(localId: string, type: Exclude<TravelExpenseType, 'per_diem'>, month: MonthKey, value: number) {

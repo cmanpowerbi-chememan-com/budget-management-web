@@ -1533,6 +1533,289 @@ def test_trip_side_flip_deletes_old_gl_line_and_recomputes_old_gl_parent_cell():
     assert any("6210400010" in args for args in new_gl_inserts)  # SGA per-diem GL — the NEW side
 
 
+# ---------------------------------------------------------------------------
+# Trip hidden-month fix — unticking a travel month must zero that month on the
+# manual (transport/accommodation) lines in the DB too, not just hide it on
+# screen (the parent cell must stop summing it). Per-diem is untouched: it
+# is re-derived from travel_months on every save (ADR-0015), so an untick
+# already zeroes it for free.
+# ---------------------------------------------------------------------------
+
+def _is_zero_helper_update(sql: str) -> bool:
+    """Identifies `_zero_manual_lines_outside_travel_months`'s own UPDATE
+    uniquely — `_upsert_trip_detail_line`'s UPDATE also sets month columns
+    (starting at m01) but always also sets `_updated_at`/`is_auto_calc`,
+    which the helper's UPDATE never does."""
+    s = sql.strip()
+    return s.startswith("UPDATE budget.pending_budget_detail SET m") and "_updated_at" not in s
+
+
+def _is_parent_table_write(sql: str) -> bool:
+    """A write to `budget.pending_budget` (the parent cell), never
+    `pending_budget_detail` — same distinction as
+    `test_detail_line_commit_happens_after_parent_cell_recompute_not_before`
+    above: the atomic recompute UPDATE embeds a `pending_budget_detail` SUM
+    subquery in its own SET clause, so a plain substring check for
+    "pending_budget_detail" would wrongly exclude it too — must distinguish
+    by the statement's own PREFIX (which table it writes), not by what it
+    merely references."""
+    s = sql.strip()
+    is_detail = s.startswith("INSERT INTO budget.pending_budget_detail") or s.startswith("UPDATE budget.pending_budget_detail")
+    return (s.startswith("INSERT INTO budget.pending_budget") or s.startswith("UPDATE budget.pending_budget")) and not is_detail
+
+
+def test_trip_update_zeros_untouched_month_on_manual_line_keeps_travel_month():
+    """(a) Removing a travel month the accommodation line still holds a
+    value in: exactly one UPDATE for that detail_id, SET contains only that
+    month + total_year, total_year = the kept months' sum, the still-
+    selected travel month is untouched, and the write never bumps
+    `_updated_at`/`_user`."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    one_off = iter([
+        ("Somchai", "Manager"),      # 1 traveler lookup
+        (500, None, None),            # 2 per_diem_rate
+        ("CC1", "COST", 2027),         # 3 old trip lookup -> side unchanged (COST)
+        ("deptA", "divA", "clA"),       # 4 cc_dims for department-lock check
+        None,                            # 5 department-lock check -> not locked
+        _OPEN_DEADLINE,                  # 6 deadline check -> open
+        (999,),                           # 7 existing per-diem detail line -> UPDATE branch
+    ])
+    dims_cycle = itertools.cycle(
+        [("Travelling Expense", "Travelling Expense - Test", None), ("deptA", "divA", "clA")]
+    )
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    # accommodation line (COST side, unchanged): m03=1000 (kept travel month), m07=500 (dropped)
+    cursor.fetchall.return_value = [
+        (55, "5210400030", 0, 0, 1000, 0, 0, 0, 500, 0, 0, 0, 0, 0),
+    ]
+
+    scope = _scope()
+    trip = _trip(
+        trip_id=1, side="COST", days=10, country_group=1, travel_months=["03"], remark="Business trip",
+        expected_updated_at=STALE,
+    )
+    results = save_trip(conn, [trip], "filler@chememan.com", scope)
+    assert results[0].ok is True
+
+    executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
+    zero_calls = [(sql, args) for sql, args in executed if sql.strip().startswith("UPDATE budget.pending_budget_detail SET m07")]
+    assert len(zero_calls) == 1, "expected exactly one UPDATE zeroing m07 on the accommodation line"
+    sql, args = zero_calls[0]
+    assert "m03" not in sql, "the still-selected travel month (m03) must not be touched"
+    assert "_updated_at" not in sql and "_user" not in sql, "must not bump the row's optimistic-lock version"
+    assert args == (0.0, 1000.0, 55, 1)  # m07=0, total_year=1000 (m03 kept), detail_id=55, trip_id=1
+
+    parent_writes = [args for sql, args in executed if _is_parent_table_write(sql)]
+    assert any("5210400030" in a for a in parent_writes), "accommodation parent cell must be recomputed"
+    assert not any("5210400020" in a for a in parent_writes), "transport parent cell was never touched, must not be recomputed"
+
+
+def test_trip_update_manual_line_already_zero_outside_travel_month_no_write():
+    """(b) A manual line already 0 in every non-travel month -> the helper
+    must issue no UPDATE at all and trigger no extra parent-cell recompute."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    one_off = iter([
+        ("Somchai", "Manager"),
+        (500, None, None),
+        ("CC1", "COST", 2027),
+        ("deptA", "divA", "clA"),
+        None,
+        _OPEN_DEADLINE,
+        (999,),
+    ])
+    dims_cycle = itertools.cycle(
+        [("Travelling Expense", "Travelling Expense - Test", None), ("deptA", "divA", "clA")]
+    )
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    # accommodation line already 0 outside the kept travel month (m03)
+    cursor.fetchall.return_value = [
+        (55, "5210400030", 0, 0, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    ]
+
+    scope = _scope()
+    trip = _trip(
+        trip_id=1, side="COST", days=10, country_group=1, travel_months=["03"], remark="Business trip",
+        expected_updated_at=STALE,
+    )
+    results = save_trip(conn, [trip], "filler@chememan.com", scope)
+    assert results[0].ok is True
+
+    executed = [(c.args[0], c.args[1:]) for c in cursor.execute.call_args_list]
+    assert not any(_is_zero_helper_update(sql) for sql, _ in executed), (
+        "no month value needed zeroing — the helper must not write anything"
+    )
+    parent_writes = [args for sql, args in executed if _is_parent_table_write(sql)]
+    assert not any("5210400030" in a for a in parent_writes), (
+        "accommodation parent cell was never changed, must not be recomputed"
+    )
+
+
+def test_zero_manual_lines_select_scoped_to_trip_manual_gls_only():
+    """(c) The SELECT behind the fix must never reach outside THIS trip's
+    own manual (`is_auto_calc = 0`) transport/accommodation lines — never
+    per-diem (DERIVED, never a stored Filler value), never another trip's
+    rows, never a non-travel detail line."""
+    from app.write_model import _zero_manual_lines_outside_travel_months
+
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.return_value = []
+
+    changed = _zero_manual_lines_outside_travel_months(conn, trip_id=42, travel_months=["03"])
+    assert changed == set()
+
+    select_call = cursor.execute.call_args_list[0]
+    sql, params = select_call.args[0], select_call.args[1:]
+    assert "is_auto_calc = 0" in sql
+    assert "trip_id = ?" in sql
+    assert 42 in params
+    manual_gls = {"5210400020", "6210400020", "5210400030", "6210400030"}
+    per_diem_gls = {"5210400010", "6210400010"}
+    assert manual_gls.issubset(set(params))
+    assert not per_diem_gls & set(params), "per-diem GLs must never be in the eligible-GL filter"
+
+
+def test_trip_zero_manual_lines_rowcount_conflict_raises_no_commit_no_partial_write():
+    """(d) A concurrent change to the manual line between the SELECT and the
+    zero-out UPDATE (rowcount != 1) must abort the WHOLE trip save — never a
+    silent partial write. `_run_per_item` rolls back before returning the
+    per-item conflict result, so nothing from this save ever commits."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    one_off = iter([
+        ("Somchai", "Manager"),
+        (500, None, None),
+        ("CC1", "COST", 2027),
+        ("deptA", "divA", "clA"),
+        None,
+        _OPEN_DEADLINE,
+        (999,),
+    ])
+    dims_cycle = itertools.cycle(
+        [("Travelling Expense", "Travelling Expense - Test", None), ("deptA", "divA", "clA")]
+    )
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.fetchall.return_value = [
+        (55, "5210400030", 0, 0, 1000, 0, 0, 0, 500, 0, 0, 0, 0, 0),
+    ]
+
+    def _execute_side_effect(sql, *params):
+        cursor.rowcount = 0 if sql.strip().startswith("UPDATE budget.pending_budget_detail SET m07") else 1
+        return None
+
+    cursor.execute.side_effect = _execute_side_effect
+
+    scope = _scope()
+    trip = _trip(
+        trip_id=1, side="COST", days=10, country_group=1, travel_months=["03"], remark="Business trip",
+        expected_updated_at=STALE,
+    )
+    results = save_trip(conn, [trip], "filler@chememan.com", scope)
+
+    assert results[0].ok is False
+    assert results[0].error == "conflict"
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called_once()
+
+
+def test_trip_side_flip_and_removed_month_zeroes_the_new_side_gl_before_commit():
+    """(e)+(f): the zero-out step must run AFTER the side-flip re-home (so
+    it always looks at the CURRENT side's GL) and BEFORE conn.commit(); when
+    a side flip and a dropped travel month land in the same save, the
+    untouched month must be zeroed on the NEW side's GL, not the old one."""
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    one_off = iter([
+        ("Somchai", "Manager"),        # 1 traveler lookup
+        (500, None, None),              # 2 per_diem_rate
+        ("CC1", "COST", 2027),           # 3 OLD trip lookup -> old side was COST
+        ("deptA", "divA", "clA"),         # 4 cc_dims lookup for department-lock check
+        None,                              # 5 department-lock check -> not locked
+        _OPEN_DEADLINE,                     # 6 deadline check -> open
+        None,                                # 7 existing per-diem line under NEW (SGA) gl -> none, INSERT
+    ])
+    dims_cycle = itertools.cycle([("Bank Charge", "Bank Charge Fee", None), ("deptA", "divA", "clA")])
+
+    def _fetchone_side_effect():
+        try:
+            return next(one_off)
+        except StopIteration:
+            return next(dims_cycle)
+
+    cursor.fetchone.side_effect = _fetchone_side_effect
+    cursor.rowcount = 1
+    # After the side-flip re-home already moved this manual accommodation
+    # line onto the NEW (SGA) gl, it still holds a value (500) in "07",
+    # which the incoming save no longer selects (travel_months=["03"], the
+    # _trip() factory default) — must be zeroed on THIS (new) gl.
+    cursor.fetchall.return_value = [
+        (77, "6210400030", 0, 0, 1000, 0, 0, 0, 500, 0, 0, 0, 0, 0),
+    ]
+
+    scope = _scope()
+    results = save_trip(
+        conn, [_trip(trip_id=1, side="SGA", days=10, country_group=1, expected_updated_at=STALE)],
+        "filler@chememan.com", scope,
+    )
+    assert results[0].ok is True
+
+    calls = list(conn.mock_calls)
+
+    def _index_of(pred) -> int:
+        for i, call in enumerate(calls):
+            name, args = call[0], call[1]
+            if name.endswith("execute") and args and pred(args[0], args[1:]):
+                return i
+        raise AssertionError("expected call not found")
+
+    rehome_idx = _index_of(
+        lambda sql, args: sql.strip().startswith("UPDATE budget.pending_budget_detail SET gl_account")
+        and args[:2] == ("6210400030", 1) and args[2] == "5210400030"
+    )
+    zero_idx = _index_of(lambda sql, args: sql.strip().startswith("UPDATE budget.pending_budget_detail SET m07"))
+    commit_idx = next(i for i, call in enumerate(calls) if call[0] == "commit")
+
+    assert rehome_idx < zero_idx < commit_idx, "zero-out must run after the side-flip re-home and before commit"
+
+    zero_args = next(
+        c.args[1:] for c in cursor.execute.call_args_list
+        if c.args[0].strip().startswith("UPDATE budget.pending_budget_detail SET m07")
+    )
+    assert zero_args == (0.0, 1000.0, 77, 1)  # m07=0, total_year=1000 (m03 kept), detail_id=77, trip_id=1
+
+    parent_writes = [c.args[1:] for c in cursor.execute.call_args_list if _is_parent_table_write(c.args[0])]
+    assert any("6210400030" in a for a in parent_writes), "the NEW (SGA) accommodation parent cell must be recomputed"
+
+
 def test_trip_create_rejected_when_deadline_has_passed_no_db_write():
     conn = MagicMock()
     cursor = conn.cursor.return_value

@@ -504,6 +504,29 @@ export function manualLineTotal(draft: ManualLineDraft): number {
   return MONTH_KEYS.reduce((sum, m) => sum + (draft.months[m] || 0), 0)
 }
 
+/** Pure fix for the "untick a travel month, hidden money stays saved" bug:
+ * `manualLineTotal` sums all 12 months regardless of `travel_months`, so a
+ * month hidden by `isTripMonthActive` (rendered "—") still counted toward
+ * the total if it was never actually cleared. The caller (`toggleMonth`)
+ * must zero that month in EVERY manual line the moment it is unticked, in
+ * the SAME state update that removes the month — this only computes the
+ * next `manual` map and reports which types actually changed, so the caller
+ * can mark `manualDirty` precisely (never on a line that was already 0). */
+export function zeroManualMonth(
+  manual: Record<Exclude<TravelExpenseType, 'per_diem'>, ManualLineDraft>,
+  monthKey: MonthKey,
+): { manual: Record<Exclude<TravelExpenseType, 'per_diem'>, ManualLineDraft>; changedTypes: Exclude<TravelExpenseType, 'per_diem'>[] } {
+  const changedTypes: Exclude<TravelExpenseType, 'per_diem'>[] = []
+  const next = { ...manual }
+  for (const type of MANUAL_TRAVEL_TYPES) {
+    const line = manual[type]
+    if ((line.months[monthKey] || 0) === 0) continue
+    changedTypes.push(type)
+    next[type] = { ...line, months: { ...line.months, [monthKey]: 0 } }
+  }
+  return { manual: next, changedTypes }
+}
+
 /** Decides whether `saveAll` writes ONE manual line, given its `dirty` flag
  * (`TripCardState.manualDirty[type]`, set by `setManualMonth`):
  * - NEW line (`detail_id === null`): write only when dirty AND non-zero —
