@@ -1,11 +1,12 @@
 # Current Phase (2026-09-24)
 
-## "ดาวน์โหลด Excel" button, issue #35 (2026-09-24, backend + frontend, TDD at 3 agreed seams, committed locally, NOT pushed, awaits jakkaritw deploy approval)
+## "ดาวน์โหลด Excel" button, issue #35 — LIVE on prd 2026-09-25 (rev 0000064, image `budget-web:5cc872c`)
 - [x] **Why:** fillers, approvers and the budget officers need the grid they see (selected FY + ฝ่าย) as Excel; layout = the owner-approved 1-sheet prototype (`playdata/excel-export-preview/`).
 - [x] **Backend:** `GET /budget/export` (`routers/budget.py`) reuses `resolve_scope` + `get_budget_grid` with the same params (department required, one ฝ่าย per file) + server-side `admitRows` mirror; `app/budget_export.py` enriches rows (CC name, division/C-Level, master-first GL name/group, Thai ฝ่าย status, special-GL detail text) and builds the workbook through the shared `app.budget_xlsx.write_summary_sheet` (its #35 hunks — `render_detail_line`, `_write_text_cell` formula guard — landed in the PRD #34 commit c8b763f by agreement). Control chars stripped from the ฝ่าย; filename never matches `approved_budget_YYYY.xlsx`; 502 contract kept.
 - [x] **Frontend:** "ดาวน์โหลด Excel" toolbar button (disabled while exporting/loading/error/no rows), `apiFetchBlob` + `filenameFromContentDisposition` (RFC 5987) sharing `apiFetch`'s 401 handling, blob + object-URL save, Thai error banner.
-- [x] **Gate:** combined 06+07+08 (REQUEST_CHANGES -> fix round -> all green); live read-only reconcile through the real code path matched the grid for every approved ฝ่าย.
-- [ ] **Deploy** — needs jakkaritw approval.
+- [x] **Gate:** combined 06+07+08, then 4 fix rounds (363437a, f4c8577 shared XLSX_ILLEGAL_TEXT_RE, 8e85cb4, 70316c7 stale-closure reloads via `loadGridRef`, a081bae `!deptResolved` gate + stale-Add check) -> final re-verify APPROVE WITH SUGGESTIONS; live read-only reconcile through the real code path matched the grid for every approved ฝ่าย.
+- [x] **Deploy** (jakkaritw approved 2026-09-25): side branch `deploy/excel-export-35` = the then-live `a262554` + the #35 commits + `budget_xlsx.py` (no officer-robot code) -> image `budget-web:5cc872c` (ACR cm31) -> stg rev 0000103 and prd rev 0000064, `verify_deploy_landed` 9/9 on both. Rollback = `budget-web:a262554`.
+- [ ] **Follow-up** — tracker `grid-stale-sibling-loaders`: pre-existing grid races on a mid-save ฝ่าย/year switch (screen-only, server data correct).
 
 ## Officer-review robot, PRD #34 — production port + weekly schedule (2026-09-24, backend + workflow, TDD via live reconcile, committed locally 08003e1+f1c342d+c8b763f + fix round 2 (this commit), NOT pushed, awaits jakkaritw deploy approval)
 - [x] **Why:** budget officers (Nipaporn, Waraporn) reviewed the FY budget of approved departments off a hand-run prototype on the developer's own machine. This ports it to a scheduled backend robot: build -> file=web=Fabric reconcile gate -> publish to SharePoint -> mail a link, every Friday 07:10 Bangkok, dry-run by default.
