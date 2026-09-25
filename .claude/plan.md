@@ -1,4 +1,11 @@
-# Current Phase (2026-09-24)
+# Current Phase (2026-09-25)
+
+## Trip Manager: unticked travel month keeps hidden money — FIXED, LIVE on prd 2026-09-25 (rev 0000065, image `budget-web:10a2c58`)
+- [x] **Why:** unticking a travel month only hid that month's transport/accommodation inputs ("—"); the amount stayed, the row total (all 12 months) kept it, and it was saved to the DB, so the grid and exports showed money in a month with no travel. Found by jakkaritw on prd; the one affected line was cleaned by hand in the UI.
+- [x] **Fix** (main `b37843f`): frontend `zeroManualMonth` + `toggleMonth` zero the unticked month in both manual lines and mark dirty only lines that held a value; backend `_zero_manual_lines_outside_travel_months` zeroes non-travel months on that trip's own manual lines at trip save (manual GLs, `is_auto_calc = 0`, per-row rowcount check, no `_updated_at` bump, parent recompute for changed GLs only).
+- [x] **Gate:** 06/07/08 APPROVE (+ suggestions fixed); backend 1328, vitest 963, raw `next build` OK.
+- [x] **Deploy** (jakkaritw approved 2026-09-25): side branch `deploy/trip-hidden-month-fix` = live `5cc872c` + cherry-pick -> `10a2c58` (delta = the 6 fix files only; no officer-robot code) -> stg rev 0000104 and prd rev 0000065, `verify_deploy_landed` 9/9 both. Read-only control snapshot before/after identical, 0 unexpected changes. Rollback = `budget-web:5cc872c`.
+- [ ] **Follow-up** — tracker `next-npm-audit-vulns`: pre-existing npm audit findings on `next`, found by the 07 lens (static export, triage first).
 
 ## "ดาวน์โหลด Excel" button, issue #35 — LIVE on prd 2026-09-25 (rev 0000064, image `budget-web:5cc872c`)
 - [x] **Why:** fillers, approvers and the budget officers need the grid they see (selected FY + ฝ่าย) as Excel; layout = the owner-approved 1-sheet prototype (`playdata/excel-export-preview/`).
