@@ -2448,6 +2448,181 @@ describe('BudgetGrid', () => {
       expect(screen.queryByTestId('pending-cell-CC1-5211800030-m01')).not.toBeInTheDocument()
     })
 
+    // Item F3 (gate fix round 4, LOW — introduced by routing deferred
+    // reloads through the fresh `loadGridRef`): a 409 reload deferred from
+    // `persistRow` can fire WHILE the admin department list is still
+    // loading (department=null, deptResolved=false, mid hat-toggle
+    // transition) — `loadGrid` only checked `hasNoScope`, so that deferred
+    // call fetched `{department: undefined, adminViewEnabled: true}`, a
+    // COMPANY-WIDE admin fetch, and its rows would flash under the
+    // "— เลือกฝ่าย —" (no ฝ่าย selected) picker until the real ฝ่าย resolved.
+    it('T4: a deferred 409 reload mid hat-toggle never fires a company-wide (department=undefined) fetch', async () => {
+      const dualRoleScope: ScopeState = { ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['CC1'], seeCostCenters: ['CC1'] }
+      let resolveAdminDepartments: (rows: Awaited<ReturnType<typeof budgetApi.fetchDepartments>>) => void = () => {}
+      vi.mocked(budgetApi.fetchDepartments).mockImplementation((adminViewEnabled?: boolean) =>
+        adminViewEnabled
+          ? new Promise((resolve) => { resolveAdminDepartments = resolve })
+          : Promise.resolve([{ cost_center: 'CC1', department: 'Accounting', division: 'Digital Technology Division', c_level: 'CTO' }]),
+      )
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030', { department: 'Accounting' })])
+      vi.mocked(budgetApi.saveRow).mockRejectedValue(new ApiError(409, 'conflict'))
+
+      render(<BudgetGrid scope={dualRoleScope} initialFilter={{ dept: null, year: 2027 }} />)
+      const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+      fireEvent.change(input, { target: { value: '900' } })
+      fireEvent.blur(input) // persistRow starts -> saveRow rejects 409 (async, in flight)
+
+      fireEvent.click(screen.getByTestId('admin-mode-checkbox')) // toggle admin ON -> deptResolved=false
+
+      let resolveAdminGrid: (rows: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolveAdminGrid = resolve }),
+      )
+
+      // Let the pending 409 rejection process WHILE the admin department
+      // list is still loading (deptResolved=false) — its deferred reload
+      // must never reach `fetchBudgetGrid` with department=undefined.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalledWith(
+        expect.objectContaining({ department: undefined, adminViewEnabled: true }),
+      )
+
+      // The new hat's own department list resolves — the grid-load effect
+      // (not the dropped deferred reload) fetches the REAL admin-wide ฝ่าย.
+      resolveAdminDepartments([{ cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' }])
+      await waitFor(() =>
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledWith(expect.objectContaining({ department: 'Warehouse' })),
+      )
+      resolveAdminGrid([makeRow('CC2', '5211800030', { department: 'Warehouse' })])
+
+      await waitFor(() => expect(screen.getByTestId('pending-cell-CC2-5211800030-m01')).toBeInTheDocument())
+      expect(screen.queryByTestId('pending-cell-CC1-5211800030-m01')).not.toBeInTheDocument()
+      expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalledWith(
+        expect.objectContaining({ department: undefined, adminViewEnabled: true }),
+      )
+    })
+
+    // Item F2 (gate fix round 4, MED, pre-existing — "file matches screen"):
+    // `handleAddTransaction` awaits `saveRow`, then appends the new row and
+    // filters with `admitRows([...prev, newRow], department)` using the
+    // PRE-await `department` closure. If the ฝ่าย/year changes while that
+    // save is in flight, `newRow.department` (== the ORIGINAL, stale
+    // department) always matches the STALE closure's `department` too, so
+    // `admitRows` always admits it — injecting a foreign-ฝ่าย/year row
+    // into whatever the CURRENT (different) grid happens to be, which then
+    // gets exported too.
+    // A DIFFERENT GL than the one `pendingFetchQueue`'s Accounting row
+    // already uses (5211800030) — `validateNewTransaction` silently refuses
+    // to add a (Cost Center, GL) pair that already exists on screen, which
+    // would otherwise block `handleAddTransaction`/`saveRow` from ever
+    // being reached in these tests.
+    const NEW_GL_REF = [...GL_REF, { gl_code: '6210900010', gl_group: 'SGA expenses', gl_name: 'Office SGA', is_special: false }]
+
+    function openAddFormAndFillCC1Gl(): void {
+      fireEvent.click(screen.getByRole('button', { name: /เพิ่ม transaction/i }))
+      fireEvent.focus(screen.getByLabelText('Cost Center'))
+      fireEvent.click(screen.getByRole('option', { name: 'CC1' }))
+      fireEvent.focus(screen.getByLabelText('GL Code'))
+      fireEvent.click(screen.getByRole('option', { name: /6210900010/ }))
+    }
+
+    const SAVED_NEW_ROW_ACCOUNTING = {
+      cost_center: 'CC1', gl_account: '6210900010', fiscal_year: 2027,
+      m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+      total_year: 0, remark: null, template: 'USER', gl_name: 'Office SGA', gl_group: 'SGA expenses',
+      c_level: null, division: null, department: 'Accounting', updated_at: '2026-01-01T00:00:00Z',
+      editable: true, lock_reason: 'none' as const,
+    }
+
+    it('F2 T3: an Add in flight with a ฝ่าย switch is dropped when the switch\'s own reload settles FIRST', async () => {
+      const scope = twoDeptFixture()
+      const calls = pendingFetchQueue()
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(NEW_GL_REF)
+      let resolveSave: (value: Awaited<ReturnType<typeof budgetApi.saveRow>>) => void = () => {}
+      vi.mocked(budgetApi.saveRow).mockImplementation(() => new Promise((resolve) => { resolveSave = resolve }))
+
+      render(<BudgetGrid scope={scope} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(1))
+      calls[0].resolve() // initial mount, Accounting
+      await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+
+      openAddFormAndFillCC1Gl()
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' })) // handleAddTransaction -> saveRow in flight
+
+      switchDepartment('Warehouse')
+      await waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(2))
+      calls[1].resolve() // the legit Warehouse reload settles FIRST
+      await waitFor(() => expect(screen.getByTestId('pending-cell-CC2-5211800030-m01')).toBeInTheDocument())
+
+      // The Add's save resolves LAST — must be a no-op on the CURRENT
+      // (Warehouse) grid, never inject the Accounting row under it.
+      resolveSave(SAVED_NEW_ROW_ACCOUNTING)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(screen.getByTestId('pending-cell-CC2-5211800030-m01')).toBeInTheDocument()
+      expect(screen.queryByTestId('pending-cell-CC1-6210900010-m01')).not.toBeInTheDocument()
+      await waitFor(() => expect(exportButton()).not.toBeDisabled())
+      fireEvent.click(exportButton())
+      await waitFor(() =>
+        expect(vi.mocked(budgetApi.downloadBudgetExport)).toHaveBeenCalledWith(expect.objectContaining({ department: 'Warehouse' })),
+      )
+    })
+
+    // NOTE (investigated, not written as a second "settle order" test):
+    // the OTHER order — the Add's save resolving WHILE the legit switch
+    // reload is still pending — is not independently observable here.
+    // `GridTable` only renders when `!loading` (`loadGrid` sets
+    // `loading=true` for the WHOLE reload), so nothing from either state is
+    // visible until a load settles; and once the legit reload's OWN
+    // `setRows(admitRows(data, department))` finally runs, it's a full
+    // array REPLACEMENT (not a functional `prev =>` update), which erases
+    // any earlier stale append unconditionally, fix or no fix. T3 (below)
+    // is the one order where the two are independently distinguishable,
+    // and is the real-world repro shape (a save's own reload settling
+    // after the user has already moved on).
+    it('F2: an Add in flight with a YEAR switch is dropped, never appended into the NEW year\'s grid', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(NEW_GL_REF)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([]) // initial mount, year 2027
+      let resolve2026: (rows: BudgetRow[]) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid).mockImplementationOnce(
+        () => new Promise((resolve) => { resolve2026 = resolve }),
+      )
+      let resolveSave: (value: Awaited<ReturnType<typeof budgetApi.saveRow>>) => void = () => {}
+      vi.mocked(budgetApi.saveRow).mockImplementation(() => new Promise((resolve) => { resolveSave = resolve }))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+
+      openAddFormAndFillCC1Gl()
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' })) // year 2027 captured, saveRow in flight
+
+      fireEvent.change(screen.getByLabelText('ปีฐาน (SAP/Approved · Pending = ปีถัดไป)'), { target: { value: '2026' } })
+      resolve2026([makeRow('CC1', '5211800030', { department: 'Solution Delivery' })])
+      await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-5211800030-m01')).toBeInTheDocument())
+      const rowsBeforeSaveSettles = screen.getAllByRole('row').length
+
+      resolveSave({ ...SAVED_NEW_ROW_ACCOUNTING, fiscal_year: 2027, department: 'Solution Delivery' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      // Still exactly one row (the 2026 one already on screen) — the
+      // stale 2027 add was never appended into the 2026 grid.
+      expect(screen.getAllByRole('row').length).toBe(rowsBeforeSaveSettles)
+    })
+
+    it('F2 regression guard: a same-ฝ่าย/same-year Add still appends normally', async () => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(NEW_GL_REF)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({ ...SAVED_NEW_ROW_ACCOUNTING, department: 'Solution Delivery' })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await screen.findByRole('button', { name: /เพิ่ม transaction/i })
+
+      openAddFormAndFillCC1Gl()
+      fireEvent.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+      await waitFor(() => expect(screen.getByTestId('pending-cell-CC1-6210900010-m01')).toBeInTheDocument())
+    })
+
     // Item 5 (gate fix round): the actual download mechanics — object-URL
     // anchor creation/click/revoke and the server file name reaching
     // `anchor.download` — not just that the API call happened.

@@ -328,7 +328,23 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
    * its fetch settles is allowed to touch `rows`/`error`/`loading` — an
    * out-of-order (or simply superseded) response is dropped entirely. */
   async function loadGrid() {
-    if (hasNoScope) return
+    // Gate fix round 4, item F3: `deptResolved` gates the grid-load
+    // EFFECT's own call (`if (!deptResolved) return` below), but a
+    // DEFERRED reload (via `loadGridRef.current()` — persistRow's 409
+    // branch, `refreshAfterLockChange`, etc.) can fire mid hat-toggle,
+    // while `department` is `null` and the admin department list is still
+    // loading (`deptResolved=false`). Without this check that deferred
+    // call fetched `{department: undefined, adminViewEnabled: true}` — a
+    // COMPANY-WIDE admin fetch — flashing mixed rows under the
+    // "— เลือกฝ่าย —" (no ฝ่าย selected) picker until the real ฝ่าย resolves.
+    // The toggle already bumps `loadSeqRef` and the grid-load effect
+    // re-fires once `deptResolved` flips back true, so bailing out here
+    // loses nothing: no fetch is skipped, only DEFERRED early. Safe to
+    // return before touching `loading`/`error`/`seq` at all — nothing set
+    // by THIS call could ever be left stuck, and the fetch-failure/no-scope
+    // fallbacks both still set `deptResolved=true` (with `department=null`)
+    // so a broken department list never blocks this permanently.
+    if (hasNoScope || !deptResolved) return
     const seq = ++loadSeqRef.current
     setLoading(true)
     setError(null)
@@ -599,7 +615,38 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       return { ok: true }
     }
     try {
+      const requestedYear = year
+      const requestedDepartment = department
+      const requestedAdminViewEnabled = adminViewEnabled
       const saved = await saveRow(buildNewRowPayload(costCenter, glAccount, year))
+
+      // Gate fix round 4, item F2 (MED, pre-existing — "file matches
+      // screen"): `handleAddTransaction` is a plain closure redefined every
+      // render, so `year`/`department`/`adminViewEnabled` captured above
+      // are whatever they were when THIS save STARTED. If the user has
+      // since switched ฝ่าย/year/hat while it was in flight, appending
+      // `newRow` (built below) via `admitRows([...prev, newRow],
+      // department)` used that SAME stale `department` for the admission
+      // check — which ALWAYS matches `newRow.department` (both come from
+      // the ORIGINAL request) — so the row got admitted into whatever the
+      // CURRENT (now different) grid happened to be showing, injecting a
+      // foreign ฝ่าย/year row under the wrong heading (exportable too).
+      // Refs (synced every render, same pattern as `loadGridRef`) give the
+      // FRESH values to compare against; a mismatch means the save
+      // succeeded server-side but no longer belongs on THIS screen — not
+      // an error (the save DID work), so no error message; the CURRENT
+      // grid's own load already reflects the server, so it is left
+      // untouched — at most the SAME "saved elsewhere" notice the
+      // `!admitted` branch below already uses for the analogous case.
+      if (
+        requestedYear !== yearRef.current ||
+        requestedDepartment !== departmentRef.current ||
+        requestedAdminViewEnabled !== adminViewEnabledRef.current
+      ) {
+        publishNotice(`บันทึกไปที่ฝ่าย "${saved.department ?? '-'}" แล้ว สลับฝ่ายเพื่อดู`)
+        return { ok: true }
+      }
+
       const months = Object.fromEntries(
         (['m01', 'm02', 'm03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10', 'm11', 'm12'] as MonthKey[]).map((m) => [
           m,
@@ -752,6 +799,16 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // elsewhere in this app once produced ~240 status calls per grid by
   // accident; this must never repeat that).
   const departmentRef = useRef(department)
+  // Gate fix round 4, item F2: same "read the FRESH value after an await"
+  // need as `departmentRef`/`adminViewEnabledRef` just below, for
+  // `handleAddTransaction`'s post-`saveRow` staleness check (see its own
+  // comment). Reading these refs from an async continuation AFTER an
+  // `await` is always safe regardless of effect declaration order —
+  // unlike `loadGrid` (which runs INSIDE an effect and is order-sensitive,
+  // per round 3's note above `loadGridRef`), by the time an `await`
+  // resumes, every effect for every intervening render has already
+  // committed.
+  const yearRef = useRef(year)
   const lockedDepartmentsRef = useRef(lockedDepartments)
   // Gate 06/07/08 HIGH-1 (2026-09-17): `refreshAfterLockChange` (and the
   // `loadGrid`/`loadLockedDepartments` it calls) is a plain function
@@ -773,6 +830,9 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   useEffect(() => {
     departmentRef.current = department
   }, [department])
+  useEffect(() => {
+    yearRef.current = year
+  }, [year])
   useEffect(() => {
     lockedDepartmentsRef.current = lockedDepartments
   }, [lockedDepartments])
