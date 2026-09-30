@@ -186,13 +186,13 @@ test.describe('live stack (real backend + real Fabric SQL DB)', () => {
       await m01.fill('1500')
       await m01.blur()
       expect((await saveResp).ok()).toBeTruthy()
-      await expect(m01).toHaveValue('1500')
+      await expect(m01).toHaveValue('1,500')
 
       // -- (e) reload: the value must survive — proof of the DB round-trip -
       const reloadedGrid = budgetGridResponse(page, dept)
       await page.reload()
       expect((await reloadedGrid).ok()).toBeTruthy()
-      await expect(page.getByTestId(`pending-input-${cc}-${gl}-m01`)).toHaveValue('1500')
+      await expect(page.getByTestId(`pending-input-${cc}-${gl}-m01`)).toHaveValue('1,500')
 
       // -- (f) Submit via the real button; the real chain starts -----------
       const chip = page.getByTestId('approval-status-chip')

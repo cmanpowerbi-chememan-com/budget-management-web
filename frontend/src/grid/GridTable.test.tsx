@@ -592,6 +592,37 @@ describe('GridTable', () => {
       // whole grid) — still floors correctly for the untouched columns.
       getMonthCols(table).forEach((col) => expect(parseInt(col.style.width, 10)).toBeGreaterThanOrEqual(98))
     })
+
+    it('never ratchets the month column wider on every rows change (issue #37: .month-input is width:100% of its column)', () => {
+      // The Pending input fills its month column (global.css .month-input), so
+      // its own box is the column minus the td's 2x10px padding. If the fit
+      // pass measured that box, each rows change (every save) would set the
+      // column to (col - 20 + 32) = col + 12: a feedback loop capped only by
+      // the 800px clamp. Model the layout exactly: a month input reports the
+      // CURRENT month col width minus padding; read-only pills stay text-sized.
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        let width = 0
+        if (this.classList?.contains('month-input')) {
+          const col = this.closest('table')!.querySelector('col.m-col:not(.total-year-col)') as HTMLElement
+          width = parseInt(col.style.width, 10) - 20
+        } else if (this.classList?.contains('month-value')) {
+          width = this.textContent!.length * 4
+        }
+        return { width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => undefined }
+      })
+      const makeRows = () => [
+        makeRow({ cost_center: 'CC1', gl_account: '5211800030', editable: true }),
+        makeRow({ cost_center: 'CC1', gl_account: '6211800030', editable: true }),
+      ]
+      const { rerender } = render(<GridTable rows={makeRows()} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      const monthWidths = () => getMonthCols(getTable('side-section-COST')).map((col) => col.style.width)
+      const first = monthWidths()
+      for (let save = 0; save < 5; save++) {
+        rerender(<GridTable rows={makeRows()} glRef={GL_REF} onCommitMonth={vi.fn()} />)
+      }
+      expect(monthWidths()).toEqual(first)
+      expect(first.every((width) => width === '98px')).toBe(true)
+    })
   })
 
   describe('column resize & reset (UI-parity point 8c)', () => {
@@ -1350,7 +1381,7 @@ describe('GridTable', () => {
     it('never touches the Approved or Pending cell of the same month', () => {
       render(<GridTable rows={[janToMarRow]} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       expect(screen.getByTestId('board-value-CC1-5211800030-m04')).toHaveTextContent('4,000')
-      expect(screen.getByTestId('pending-input-CC1-5211800030-m04')).toHaveValue('7000')
+      expect(screen.getByTestId('pending-input-CC1-5211800030-m04')).toHaveValue('7,000')
     })
 
     it('labels the SAP grand total with no coverage caveat at all — the mask is gone', () => {

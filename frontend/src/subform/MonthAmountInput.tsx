@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { pendingAmountNoticeTh, roundPendingAmount, sanitizeMonthInput } from '../grid/model'
+import { applyAmountKeystroke } from '../grid/amountInput'
+import { groupAmountText, parseAmountDraft, pendingAmountNoticeTh, roundPendingAmount } from '../grid/model'
 import { publishNotice } from '../platform/notice'
 
 export interface MonthAmountInputProps {
@@ -13,8 +14,10 @@ export interface MonthAmountInputProps {
 
 /** Draft-string-then-commit money input — same shape as `grid/MonthCell.tsx`'s
  * editable input (bug-subform-no-decimals, 2026-08-19): local string state
- * while typing (sanitized via the shared `sanitizeMonthInput`), parsed to a
- * number and committed on blur, and re-synced whenever the SERVER-derived
+ * while typing (digits-only + thousands-comma grouped via the shared
+ * `applyAmountKeystroke`/`formatAmountDraft`, issue #37 jakkaritw
+ * 2026-09-30, so "25000" reads "25,000" as it is typed), parsed to a number
+ * (`parseAmountDraft` drops the commas) and committed on blur, and re-synced whenever the SERVER-derived
  * `value` genuinely changes underneath a save or a 409-conflict refetch (the
  * same row/card key across a re-render means the SAME component instance —
  * an uncontrolled `draft` would otherwise never notice the external update).
@@ -40,13 +43,13 @@ export interface MonthAmountInputProps {
  * `setDraft` entirely — nothing to race), while a genuine later external
  * change (save/refetch) still resyncs correctly, deterministically. */
 export function MonthAmountInput({ value, onCommit, ariaLabel, className, disabled, testId }: MonthAmountInputProps) {
-  const [draft, setDraft] = useState(String(value))
+  const [draft, setDraft] = useState(() => groupAmountText(value))
   const lastSyncedValue = useRef(value)
 
   useEffect(() => {
     if (value !== lastSyncedValue.current) {
       lastSyncedValue.current = value
-      setDraft(String(value))
+      setDraft(groupAmountText(value))
     }
   }, [value])
 
@@ -59,13 +62,14 @@ export function MonthAmountInput({ value, onCommit, ariaLabel, className, disabl
       data-testid={testId}
       value={draft}
       disabled={disabled}
-      onChange={(e) => setDraft(sanitizeMonthInput(e.target.value))}
+      onChange={(e) => setDraft(applyAmountKeystroke(e.currentTarget))}
       onBlur={() => {
-        const n = Number(draft)
-        // A bad partial input (e.g. a lone "." left after sanitizing) must
+        // Belt-and-braces: an unparseable draft (e.g. an emptied cell) must
         // never reach onCommit as NaN — NaN !== value is always true, which
         // would fire an invalid commit regardless of the current value.
-        const typed = draft === '' || Number.isNaN(n) ? 0 : n
+        // `parseAmountDraft` also drops the display commas (issue #37,
+        // jakkaritw 2026-09-30) — and ONLY the commas, never "." or "-".
+        const typed = parseAmountDraft(draft)
         // jakkaritw 2026-08-19: round to the nearest 100 (half-up) and clamp
         // to the 100,000,000 cap ON COMMIT — same rule/placement as
         // `grid/MonthCell.tsx`'s editable input (this component IS the
@@ -76,7 +80,7 @@ export function MonthAmountInput({ value, onCommit, ariaLabel, className, disabl
         // a toast says what was corrected too (see `MonthCell`'s copy of this
         // block for why it is keyed on typed-vs-parsed).
         const parsed = roundPendingAmount(typed)
-        setDraft(String(parsed))
+        setDraft(groupAmountText(parsed))
         const notice = pendingAmountNoticeTh(typed, parsed)
         if (notice) publishNotice(notice)
         if (parsed !== value) onCommit(parsed)

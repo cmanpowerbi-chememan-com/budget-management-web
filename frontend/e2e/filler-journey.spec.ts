@@ -85,7 +85,7 @@ test.describe('filler journey', () => {
 
     // 3-layer block for the COST row: SAP (read-only), Approved (read-only), Pending (editable).
     // Displayed amounts carry two decimals in all three layers (commit 9110837);
-    // the editable Pending INPUT still holds the raw value, hence '200' below.
+    // the editable Pending INPUT holds a whole-baht value grouped with commas from 1,000 up (issue #37), hence '200' below.
     await expect(page.getByTestId(`sap-value-${CC}-${GL_OFFICE_COST}-m01`)).toHaveText('100.00')
     await expect(page.getByTestId(`board-value-${CC}-${GL_OFFICE_COST}-m01`)).toHaveText('—')
     await expect(page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)).toHaveValue('200')
@@ -124,11 +124,95 @@ test.describe('filler journey', () => {
     })
 
     // The cell the user edited shows the server's own m01...
-    await expect(m01).toHaveValue('1500')
+    await expect(m01).toHaveValue('1,500')
     // ...and a month the user NEVER touched (m02) also flips to the
     // server's value — proof the whole row was replaced by the server
     // response (mergeSavedRow), not a locally-recomputed total.
     await expect(page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m02`)).toHaveValue('777')
+  })
+
+  // jakkaritw, 2026-09-30, issue #37: Pending money inputs group digits with
+  // commas while typing. jsdom cannot prove the caret survives React's
+  // controlled-input rewrite in a real browser, so this drives real Chromium
+  // keystrokes and reads the live caret. Nothing is saved (no blur).
+  test('1.3b a Pending cell shows thousands commas live and keeps the caret where the user is typing', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 1234 }, pendingUpdatedAt: 'PEND-TOKEN-1' })]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+
+    const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
+    const caret = () => m01.evaluate((el) => (el as HTMLInputElement).selectionStart)
+    await expect(m01).toHaveValue('1,234') // a stored amount is grouped on load
+
+    await m01.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('5') // the 5th digit: 1,234 -> 12,345, caret stays at the end
+    await expect(m01).toHaveValue('12,345')
+    expect(await caret()).toBe(6)
+
+    await page.keyboard.press('Home')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.type('9') // mid-number: caret stays right after the typed 9, not thrown to the end
+    await expect(m01).toHaveValue('192,345')
+    expect(await caret()).toBe(2)
+
+    await page.keyboard.press('End')
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft') // caret right AFTER the comma: 192,|345
+    await page.keyboard.press('Backspace') // deletes the comma; it regroups and the caret moves left past it
+    await expect(m01).toHaveValue('192,345')
+    expect(await caret()).toBe(3)
+    await page.keyboard.press('Backspace') // the next Backspace deletes the digit the user meant
+    await expect(m01).toHaveValue('19,345')
+    expect(await caret()).toBe(2)
+
+    // A mid-number insert that MOVES the comma ("19,|345" + 7 -> raw "19,7345" ->
+    // "197,345"): the only step whose caret a missing restore would lose (the
+    // inserts above were already correctly grouped, so React never rewrote them).
+    await page.keyboard.press('Home')
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
+    await page.keyboard.type('7')
+    await expect(m01).toHaveValue('197,345')
+    expect(await caret()).toBe(3)
+  })
+
+  // Regression for the month-column ratchet: the Pending input is width:100% of
+  // its column, and a column fit that measured the input itself widened every
+  // month column on each save (149px -> 175px -> 201px ...). Real layout only —
+  // jsdom reports no geometry — so this drives real Chromium through 4 saves of same-width amounts (a shorter
+  // figure may legitimately shrink the column; only growth is the bug).
+  test('1.3c saving Pending cells repeatedly never widens the month columns', async ({ page }) => {
+    const echo = (m01: number, token: string) =>
+      ok({
+        cost_center: CC, gl_account: GL_OFFICE_COST, fiscal_year: PLANNING_YEAR,
+        m01, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: m01,
+        remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: token,
+      })
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 500 }, pendingUpdatedAt: 'PEND-0' })]],
+      saveRowQueue: [echo(100, 'PEND-1'), echo(200, 'PEND-2'), echo(300, 'PEND-3'), echo(400, 'PEND-4')],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+
+    const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
+    const monthColWidth = () =>
+      page.locator('table.data-table col.m-col:not(.total-year-col)').first().evaluate((el) => (el as HTMLElement).style.width)
+    await expect(m01).toHaveValue('500')
+    const before = await monthColWidth()
+
+    for (const [i, amount] of ['100', '200', '300', '400'].entries()) {
+      await m01.fill(amount)
+      await m01.blur()
+      await expect.poll(() => world.captured.saveRowBodies.length).toBe(i + 1)
+      await expect(m01).toHaveValue(amount)
+    }
+    expect(await monthColWidth()).toBe(before)
   })
 
   test('1.4 a 409 conflict shows the Thai message, refetches the grid, and REVERTS to the refetched server value', async ({ page }) => {
@@ -344,6 +428,33 @@ test.describe('filler journey', () => {
     const savedCard = page.getByTestId('trip-card-existing-501')
     await expect(savedCard).toContainText('เฉลี่ยจากเซิร์ฟเวอร์')
     await expect(savedCard).toContainText('6,000')
+  })
+
+  // Issue #37: grouping adds commas, so "25,000" is one glyph wider than HEAD's
+  // "25000". The Trip Manager month input (.exp-detail-input) is a fixed width,
+  // not its column, so a common 5-digit amount clipped its leading digit.
+  // Geometry only exists in a real browser.
+  test('1.8b Trip Manager manual-line month input shows a grouped 5-digit amount without clipping', async ({ page }) => {
+    const world = fillerWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_TRAVEL_PERDIEM_COST, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-TRV-1' })]],
+      tripsQueue: [[]],
+      detailLinesQueue: [[]],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
+    await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
+    const card = page.getByTestId('trip-card-new-0')
+    await card.getByRole('button', { name: 'Mar', exact: true }).click()
+
+    const input = card.getByLabel('transport m03 new-0')
+    for (const [typed, shown] of [['25000', '25,000'], ['99999', '99,999'], ['10000', '10,000']]) {
+      await input.fill(typed)
+      await expect(input).toHaveValue(shown)
+      const { scrollWidth, clientWidth } = await input.evaluate((el: HTMLInputElement) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+      expect(scrollWidth, `${shown} is clipped: scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth)
+    }
   })
 
   test('1.9 Submit confirms with a summary, posts the payload, and the status chip flips to รออนุมัติ ขั้น 1', async ({ page }) => {

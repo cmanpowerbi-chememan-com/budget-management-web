@@ -523,7 +523,7 @@ describe('DetailSubform', () => {
 
       const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
       fireEvent.change(input, { target: { value: '51000.50' } })
-      expect(input.value).toBe('5100050')
+      expect(input.value).toBe('5,100,050')
     })
 
     it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 123, digits only)', async () => {
@@ -569,7 +569,7 @@ describe('DetailSubform', () => {
       const input = screen.getByLabelText('m01 existing-1') as HTMLInputElement
       expect(input.value).toBe('100')
       fireEvent.change(input, { target: { value: '5000' } }) // uncommitted, never blurred
-      expect(input.value).toBe('5000')
+      expect(input.value).toBe('5,000')
 
       fireEvent.change(screen.getByLabelText('ประเภทการรับรอง'), { target: { value: 'Customer' } })
       fireEvent.change(screen.getByLabelText('รายละเอียด'), { target: { value: 'lunch' } })

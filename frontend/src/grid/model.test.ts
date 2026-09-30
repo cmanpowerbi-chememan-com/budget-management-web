@@ -18,11 +18,13 @@ import {
   emptyGridMessage,
   filterRows,
   fitColumnWidth,
+  formatAmountDraft,
   formatChipDate,
   formatThb,
   freezeOffsets,
   fullRowColSpan,
   glMetaFor,
+  groupAmountText,
   groupAndSortBySide,
   groupChipClass,
   hasStoredColumnWidthsOverride,
@@ -39,6 +41,7 @@ import {
   MONTH_LABELS,
   noFillCostCentersAddReasonTh,
   nowMonthKey,
+  parseAmountDraft,
   persistColumnWidths,
   pendingAmountNoticeTh,
   roundPendingAmount,
@@ -216,6 +219,111 @@ describe('sanitizeMonthInput', () => {
 
   it('does not round or clamp — that is the commit-time job of roundPendingAmount', () => {
     expect(sanitizeMonthInput('123456789')).toBe('123456789')
+  })
+})
+
+// jakkaritw, 2026-09-30, issue #37: Pending money inputs show thousands commas
+// while typing. Three pure helpers, one behaviour each; the components only
+// wire them to the DOM.
+describe('formatAmountDraft — live thousands grouping + caret (issue #37)', () => {
+  it.each([
+    // [digits typed, expected grouped text] — grouping for 1..12 digits
+    ['1', '1'],
+    ['12', '12'],
+    ['123', '123'],
+    ['1234', '1,234'],
+    ['12345', '12,345'],
+    ['123456', '123,456'],
+    ['1234567', '1,234,567'],
+    ['12345678', '12,345,678'],
+    ['123456789', '123,456,789'],
+    ['1234567890', '1,234,567,890'],
+    ['12345678901', '12,345,678,901'],
+    ['123456789012', '123,456,789,012'],
+  ])('groups %s -> %s', (digits, text) => {
+    expect(formatAmountDraft(digits, digits.length).text).toBe(text)
+  })
+
+  it.each([
+    // [raw text, raw caret, expected text, expected caret]
+    ['25000', 5, '25,000', 6], // typed the last 0: comma appears, caret stays after the typed digit
+    ['9999', 4, '9,999', 5], // 999 -> 9,999 crosses a group boundary
+    ['1,9234,500', 3, '19,234,500', 2], // inserted a digit mid-group; caret follows the digit, before the new comma
+    ['25000', 2, '25,000', 2], // Backspace deleted the comma of "25,|000": caret moves left past it
+    ['0025000', 7, '25,000', 6], // leading zeros dropped and subtracted from the caret count
+    ['000', 3, '0', 1], // all zeros collapse to a single 0
+    ['', 0, '', 0], // empty stays empty
+    ['25,a000', 4, '25,000', 2], // a rejected letter does not shift the caret
+    ['25,000', 6, '25,000', 6], // paste of an already-grouped amount
+  ])('raw %j caret %i -> %j caret %i', (raw, caret, text, expectedCaret) => {
+    expect(formatAmountDraft(raw, caret)).toEqual({ text, caret: expectedCaret })
+  })
+
+  it('puts the caret BEFORE a comma that follows the counted digit', () => {
+    // "1234" with the caret after the 1st digit -> "1,234", caret 1 (before the comma), not 2
+    expect(formatAmountDraft('1234', 1)).toEqual({ text: '1,234', caret: 1 })
+  })
+
+  it('puts the caret at 0 when no digit is left of it', () => {
+    expect(formatAmountDraft('1234', 0)).toEqual({ text: '1,234', caret: 0 })
+    expect(formatAmountDraft('0012', 1)).toEqual({ text: '12', caret: 0 }) // the one zero left of the caret is a removed leading zero
+  })
+
+  it('shows more than 9 digits grouped — the 100,000,000 cap is a commit-time rule, never a keystroke clamp', () => {
+    expect(formatAmountDraft('1000000000', 10).text).toBe('1,000,000,000')
+  })
+
+  it('does not round per keystroke — 1,234 stays reachable', () => {
+    expect(formatAmountDraft('1234', 4).text).toBe('1,234')
+  })
+
+  it('keeps stripping "." and "-" exactly like sanitizeMonthInput: a pasted "1,234.50" becomes 123450 (pre-existing paste trap, documented not fixed)', () => {
+    expect(formatAmountDraft('1,234.50', 8)).toEqual({ text: '123,450', caret: 7 })
+    expect(formatAmountDraft('51000.50', 8).text).toBe('5,100,050')
+    expect(formatAmountDraft('-50', 3).text).toBe('50')
+  })
+
+  it('handles a huge paste in linear time', () => {
+    const raw = '9'.repeat(200_000)
+    const started = performance.now()
+    const { text, caret } = formatAmountDraft(raw, raw.length)
+    expect(performance.now() - started).toBeLessThan(500)
+    expect(text.length).toBe(200_000 + 66_666)
+    expect(caret).toBe(text.length)
+  })
+})
+
+describe('groupAmountText — non-keystroke display of a number (issue #37)', () => {
+  it.each([
+    [0, '0'], // stays 0, NOT the read-only formatter's em-dash
+    [500, '500'],
+    [46400, '46,400'],
+    [1234567, '1,234,567'],
+    [100_000_000, '100,000,000'],
+    [999.25, '999.25'], // legacy fractional server value: never rounded, never .00
+    [1234.25, '1,234.25'],
+    [-1500, '-1,500'],
+    [-999.5, '-999.5'],
+    [1e21, '1e+21'], // exponent notation is returned untouched
+  ])('%s -> %s', (value, text) => {
+    expect(groupAmountText(value)).toBe(text)
+  })
+})
+
+describe('parseAmountDraft — commit-path parse of the shown text (issue #37)', () => {
+  it.each([
+    ['46,400', 46400],
+    ['1,234.25', 1234.25], // "." is NOT stripped at parse time: a legacy fractional value must not become 123425
+    ['999.25', 999.25],
+    ['', 0],
+    ['abc', 0],
+    ['.', 0],
+    ['-1,500', -1500], // "-" is NOT stripped at parse time: the sign must not flip
+    ['0', 0],
+    ['100,000,000', 100_000_000],
+    ['25000', 25000],
+  ])('%j -> %s', (text, value) => {
+    expect(parseAmountDraft(text)).toBe(value)
   })
 })
 

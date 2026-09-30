@@ -1521,9 +1521,9 @@ describe('TripManager', () => {
 
         const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
         fireEvent.change(input, { target: { value: '1479' } })
-        expect(input.value).toBe('1479') // unrounded while typing
+        expect(input.value).toBe('1,479') // unrounded while typing
         fireEvent.blur(input)
-        expect(input.value).toBe('1500')
+        expect(input.value).toBe('1,500')
 
         fireEvent.click(saveAllButton())
 
@@ -1539,7 +1539,7 @@ describe('TripManager', () => {
 
         const input = screen.getByLabelText('transport m02 existing-10') as HTMLInputElement
         fireEvent.change(input, { target: { value: '1500.50' } })
-        expect(input.value).toBe('150050')
+        expect(input.value).toBe('150,050')
       })
 
       it('sanitizes multi-dot / letters / minus while typing (1.2.3 -> 123, digits only)', async () => {

@@ -160,9 +160,104 @@ export const COLUMN_WIDTHS_STORAGE_KEY = 'budgetGridColWidths'
  * 100 after the 3rd digit).
  *
  * The ONE sanitizer for every money input in the app (grid `MonthCell` +
- * the special-GL subforms' and Trip Manager's shared `MonthAmountInput`). */
+ * the special-GL subforms' and Trip Manager's shared `MonthAmountInput`).
+ * Since issue #37 (jakkaritw, 2026-09-30) it is the digit filter INSIDE
+ * `formatAmountDraft` below, which is what the inputs call on every keystroke
+ * — the inputs now SHOW thousands commas ("25,000") but the digits that count
+ * are still exactly the ones this function keeps. It stays exported and
+ * unchanged so "which characters are ever valid" has one definition. */
 export function sanitizeMonthInput(raw: string): string {
   return raw.replace(/[^0-9]/g, '')
+}
+
+/** Groups a run of digits in threes with "," in ONE linear pass, and reports
+ * where the caret lands after the `caretAfterDigits`-th digit (before any
+ * comma that follows it; 0 -> 0). Deliberately a loop and NOT the classic
+ * `/\B(?=(\d{3})+(?!\d))/g` lookahead: that regex re-scans the tail from every
+ * position (quadratic), and a huge paste into a money cell would freeze the tab. */
+function groupThrees(digits: string, caretAfterDigits: number): { text: string; caret: number } {
+  const parts: string[] = []
+  let length = 0
+  let caret = 0
+  for (let i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 === 0) {
+      parts.push(',')
+      length++
+    }
+    parts.push(digits[i])
+    length++
+    if (i + 1 === caretAfterDigits) caret = length
+  }
+  return { text: parts.join(''), caret }
+}
+
+/** The keystroke formatter for every Pending money input (jakkaritw,
+ * 2026-09-30, issue #37: "25000" must read "25,000" WHILE typing).
+ *
+ * `raw` is what the browser reports after a keystroke/paste/deletion and
+ * `caret` its `selectionStart`. Returns the text to display — digits only
+ * (via `sanitizeMonthInput`), leading zeros dropped (all zeros -> a single
+ * "0"; empty stays empty), grouped in threes — and where the caret belongs in
+ * that text. Caret rule: count the digits LEFT of the raw caret, subtract the
+ * leading zeros that were removed from the left of it, and put the caret right
+ * after that many digits (before a comma that follows them). One rule gives
+ * the right caret for typing at the end, typing mid-number, crossing a group
+ * boundary (999 -> 9,999) and Backspace over a comma ("25,|000" -> "25000"
+ * with the caret at 2 -> "25,000", caret 2: the next Backspace then deletes
+ * the digit the user meant).
+ *
+ * Deliberately does NOT round or clamp: rounding to 100 and the 100,000,000
+ * cap are commit-time rules (`roundPendingAmount`) — clamping here would make
+ * "1,234" unreachable. It also keeps `sanitizeMonthInput`'s existing
+ * behaviour of dropping "." and "-", so a pasted "1,234.50" still becomes
+ * 123450 (a pre-existing paste trap, out of scope for #37 — documented in the
+ * tests as current behaviour, not fixed here).
+ *
+ * Because leading zeros vanish from the display ("0" + "7" -> "7", "00" ->
+ * "0"), a caret-relative keystroke right after one can land differently than
+ * it did when the zeros stayed visible. That is intended (issue #37 story 10):
+ * the number committed is always the number the box shows, never a hidden zero
+ * plus a digit. */
+export function formatAmountDraft(raw: string, caret: number): { text: string; caret: number } {
+  const digits = sanitizeMonthInput(raw)
+  const end = Math.min(Math.max(caret, 0), raw.length)
+  let digitsLeft = 0
+  for (let i = 0; i < end; i++) {
+    const code = raw.charCodeAt(i)
+    if (code >= 48 && code <= 57) digitsLeft++
+  }
+  let leadingZeros = 0
+  while (leadingZeros < digits.length && digits[leadingZeros] === '0') leadingZeros++
+  const significant = leadingZeros > 0 && leadingZeros === digits.length ? '0' : digits.slice(leadingZeros)
+  const removedLeftOfCaret = digits.length - significant.length
+  return groupThrees(significant, Math.max(0, digitsLeft - removedLeftOfCaret))
+}
+
+/** Text for a money input showing a number that did NOT come from a keystroke
+ * (first render, resync after a save/409 refetch, the redraw after a blur
+ * commit). Starts from `String(value)` — exactly what the inputs showed before
+ * issue #37 — and only inserts commas into the integer digits, so nothing is
+ * ever rounded, no ".00" is appended (a Pending input is whole-baht) and a
+ * LEGACY fractional server value re-displays as-is: 999.25 -> "999.25",
+ * 1234.25 -> "1,234.25". 0 stays "0" (NOT `formatThb`'s em-dash: the field
+ * must hold an editable value). Anything that is not `-?digits(.digits)?`
+ * (exponent notation for absurd values) is returned untouched. */
+export function groupAmountText(value: number): string {
+  const plain = String(value)
+  const match = /^(-?)(\d+)(\.\d+)?$/.exec(plain)
+  if (!match) return plain
+  return match[1] + groupThrees(match[2], 0).text + (match[3] ?? '')
+}
+
+/** Commit-path parse of what a money input is showing. Removes ONLY the
+ * thousands separator "," and then `Number()` — never "." or "-": a legacy
+ * stored value can be fractional or negative, and stripping "." would turn
+ * "1,234.25" into 123425 (100x) while stripping "-" would flip a sign. Today's
+ * rule is kept: empty or unparseable -> 0, so a bad partial draft can never
+ * reach `onCommit` as NaN. */
+export function parseAmountDraft(text: string): number {
+  const n = Number(text.replace(/,/g, ''))
+  return text === '' || Number.isNaN(n) ? 0 : n
 }
 
 /** jakkaritw, 2026-08-19: every Pending amount rounds to the nearest 100

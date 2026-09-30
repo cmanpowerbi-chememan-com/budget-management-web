@@ -1,4 +1,14 @@
-# Current Phase (2026-09-25)
+# Current Phase (2026-10-01)
+
+## Pending money inputs show thousands commas while typing, issue #37 (2026-10-01, frontend only, TDD, committed locally, NOT pushed, NOT deployed)
+- [x] **Why:** user issue log OMS-004 — editable Pending cells showed raw digits (`1234500`) next to the grouped SAP/Approved figures, so large amounts were hard to read. Owner decisions 2026-09-30: live grouping while typing; every Pending money input (grid, special-GL subform, Trip Manager manual lines); never append `.00`.
+- [x] **Build:** `grid/model.ts` `formatAmountDraft` (keystroke: digits only, leading zeros dropped, grouped in one linear pass, caret after the N-th digit), `groupAmountText` (server value: `String(v)` + commas in the integer part, so a legacy `999.25` still shows as-is), `parseAmountDraft` (strips ONLY `,` before `Number()` — `Number("25,000")` is NaN and the old guard would have committed 0); NEW `grid/amountInput.ts` `applyAmountKeystroke` writes value + caret inside onChange (a layout-effect restore loses the caret on same-text keystrokes); `MonthCell` + `MonthAmountInput` wired. Committed numbers and toasts unchanged (differential fuzz vs HEAD).
+- [x] **Review fixes:** column-fit ratchet — the `width:100%` `.month-input` was measured by `measureMoneyColumnWidths`, widening every month column ~26px per save; the selector now excludes `.month-input`. Trip `.exp-detail-input` 56 → 64px (grouped 5-digit amounts clipped).
+- [x] **Gate:** 5-lens adversarial review + skeptic verify + combined 06/07/08 APPROVE_WITH_SUGGESTIONS; vitest 1044, raw `next build` OK, oxlint OK, full mocked Playwright 57/57; real-keyboard checks in Chromium and Edge.
+- [x] **Accepted limitations:** forward-Delete right before a comma is a no-op; native Ctrl+Z/Ctrl+Y stop working after the first comma; pre-existing paste trap unchanged (`1,234.50` pasted → 123450) — follow-up candidate.
+- [ ] **Owner decision:** the 100,000,000 cap clips WHILE typing in a default-width month column (fits after save) and in the Trip input — A keep / B widen the month floor 98 → ~126px + Trip input ~96px / C measure live.
+- [ ] **Visual sign-off** — screenshots 01–06 in `.scratch/pending-input-thousands-comma/`.
+- [ ] **Deploy** — needs jakkaritw approval; manual Edge + touch/IME smoke first.
 
 ## Trip Manager: unticked travel month keeps hidden money — FIXED, LIVE on prd 2026-09-25 (rev 0000065, image `budget-web:10a2c58`)
 - [x] **Why:** unticking a travel month only hid that month's transport/accommodation inputs ("—"); the amount stayed, the row total (all 12 months) kept it, and it was saved to the DB, so the grid and exports showed money in a month with no travel. Found by jakkaritw on prd; the one affected line was cleaned by hand in the UI.

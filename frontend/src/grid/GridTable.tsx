@@ -205,7 +205,14 @@ function measureColumnWidths(container: HTMLElement | null): ColumnWidths {
  * be half-shown), so reading it straight back via `getBoundingClientRect`
  * gives exactly the width needed to stop the overflow, with no parallel
  * off-screen markup to keep in sync with whatever the real totals turn out
- * to be. */
+ * to be.
+ *
+ * The editable Pending `.month-input` is deliberately NOT measured (issue #37):
+ * it is `width:100%` of its column, so its box IS the column minus padding —
+ * measuring it feeds the column's own width back into the fit and ratchets the
+ * column +12px on every rows change. The column is sized by the read-only
+ * pills and the subtotal/grand-total text instead, which always include every
+ * row's figure (a subtotal is at least as wide as any one row in it). */
 function measureMoneyColumnWidths(container: HTMLElement | null): MoneyColumnWidths {
   const floors: MoneyColumnWidths = { month: MONTH_COLUMN_WIDTH_FLOOR, totalYear: TOTAL_YEAR_COLUMN_WIDTH_FLOOR }
   if (!container) return floors
@@ -218,8 +225,8 @@ function measureMoneyColumnWidths(container: HTMLElement | null): MoneyColumnWid
     return max
   }
   return {
-    month: Math.max(MONTH_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.month-cell:not(.total-year-cell) .month-value'))),
-    totalYear: Math.max(TOTAL_YEAR_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.total-year-cell .month-value'))),
+    month: Math.max(MONTH_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.month-cell:not(.total-year-cell) .month-value:not(.month-input)'))),
+    totalYear: Math.max(TOTAL_YEAR_COLUMN_WIDTH_FLOOR, fitColumnWidth(maxWidth('td.total-year-cell .month-value:not(.month-input)'))),
   }
 }
 
@@ -988,7 +995,9 @@ export function GridTable({
     // column's box never changes a `.month-value` span's OWN natural
     // width, so a follow-up run of this same effect (if it re-fired) would
     // compute the identical number and React bails out on the unchanged
-    // primitive, with no risk of a resize loop.
+    // primitive, with no risk of a resize loop. That holds only because the
+    // width:100% `.month-input` is excluded from the measure (a `width:100%`
+    // box tracks its column — see `measureMoneyColumnWidths`).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, glRef])
 

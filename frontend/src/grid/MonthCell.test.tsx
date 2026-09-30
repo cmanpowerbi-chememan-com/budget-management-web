@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NoticeToasts } from '../platform/NoticeToasts'
 import { MonthCell } from './MonthCell'
@@ -51,7 +52,7 @@ describe('MonthCell', () => {
     render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
     const input = screen.getByRole('textbox') as HTMLInputElement
     fireEvent.change(input, { target: { value: '100.5' } })
-    expect(input.value).toBe('1005')
+    expect(input.value).toBe('1,005')
   })
 
   it('strips every dot when multiple are typed (1.2.3 -> 123, digits only)', () => {
@@ -143,9 +144,9 @@ describe('MonthCell', () => {
       fireEvent.change(input, { target: { value: '123' } })
       expect(input.value).toBe('123')
       fireEvent.change(input, { target: { value: '1234' } })
-      expect(input.value).toBe('1234') // the 4th digit is still reachable — a per-keystroke round would have collapsed this to 100
+      expect(input.value).toBe('1,234') // the 4th digit is still reachable — a per-keystroke round would have collapsed this to 100
       fireEvent.blur(input)
-      expect(input.value).toBe('1200')
+      expect(input.value).toBe('1,200')
       expect(onCommit).toHaveBeenCalledWith(1200)
     })
 
@@ -164,7 +165,7 @@ describe('MonthCell', () => {
       const input = screen.getByRole('textbox') as HTMLInputElement
       fireEvent.change(input, { target: { value: '100000060' } })
       fireEvent.blur(input)
-      expect(input.value).toBe('100000000')
+      expect(input.value).toBe('100,000,000')
       expect(onCommit).toHaveBeenCalledWith(100_000_000)
     })
   })
@@ -201,6 +202,28 @@ describe('MonthCell', () => {
       expect(screen.getByRole('status')).toHaveTextContent('ระบบบันทึกเป็น 0 (กรอกได้ตั้งแต่ 100 ขึ้นไป)')
     })
 
+    it('announces a rounded amount typed with a thousands comma (1,234 -> 1,200)', () => {
+      const onCommit = vi.fn()
+      render(
+        <>
+          <MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />
+          <NoticeToasts />
+        </>,
+      )
+      const input = screen.getByRole('textbox')
+      fireEvent.change(input, { target: { value: '1234' } })
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(1200)
+      expect(screen.getByRole('status')).toHaveTextContent('กรอก 1,234 · ระบบปรับเป็น 1,200 (ปัดเศษเป็นหลักร้อย)')
+    })
+
+    it('announces the 100,000,000 cap with the typed amount grouped', () => {
+      const input = renderCellWithToasts(0)
+      fireEvent.change(input, { target: { value: '1000000000' } })
+      fireEvent.blur(input)
+      expect(screen.getByRole('status')).toHaveTextContent('กรอก 1,000,000,000 ซึ่งเกินเพดาน 100 ล้านต่อช่อง · ระบบบันทึกเป็น 100,000,000')
+    })
+
     it('stays silent when the typed amount was already valid', () => {
       const input = renderCellWithToasts(0)
       fireEvent.change(input, { target: { value: '1200' } })
@@ -221,6 +244,168 @@ describe('MonthCell', () => {
       fireEvent.blur(input)
       expect(onCommit).not.toHaveBeenCalled()
       expect(screen.getByRole('status')).toHaveTextContent('ระบบปรับเป็น 100')
+    })
+  })
+
+  // jakkaritw, 2026-09-30, issue #37: every editable Pending money input shows
+  // thousands commas WHILE typing. Only the text in the box changes — the
+  // number handed to onCommit and the toast wording are exactly as before.
+  describe('thousands commas in the input (issue #37)', () => {
+    it('shows a stored amount grouped on first render', () => {
+      render(<MonthCell value={46400} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('46,400')
+    })
+
+    it('groups live as the user types and commits the PLAIN number on blur', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '25000' } })
+      expect(input.value).toBe('25,000')
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(25000)
+      expect(input.value).toBe('25,000') // stays grouped after leaving the cell
+    })
+
+    it('the blur redraw after the round-to-100 correction is grouped too (1,234 -> 1,200)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '1234' } })
+      expect(input.value).toBe('1,234') // rounding is still commit-time only
+      fireEvent.blur(input)
+      expect(input.value).toBe('1,200')
+      expect(onCommit).toHaveBeenCalledWith(1200)
+    })
+
+    it('accepts a pasted grouped amount ("25,000" -> 25000)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '25,000' } })
+      expect(input.value).toBe('25,000')
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(25000)
+    })
+
+    it('drops accidental leading zeros from the display (0025000 -> 25,000)', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '0025000' } })
+      expect(input.value).toBe('25,000')
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenCalledWith(25000)
+    })
+
+    it('an emptied cell stays empty while typing and becomes 0 on blur', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={1500} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '' } })
+      expect(input.value).toBe('')
+      fireEvent.blur(input)
+      expect(input.value).toBe('0')
+      expect(onCommit).toHaveBeenCalledWith(0)
+    })
+
+    it('shows the 100,000,000 cap grouped, and does not clamp per keystroke', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={0} editable={true} onCommit={onCommit} label="Jan pending" />)
+      const input = screen.getByRole('textbox') as HTMLInputElement
+      fireEvent.change(input, { target: { value: '1000000000' } })
+      expect(input.value).toBe('1,000,000,000') // beyond the cap, shown as typed
+      fireEvent.blur(input)
+      expect(input.value).toBe('100,000,000')
+      expect(onCommit).toHaveBeenCalledWith(100_000_000)
+    })
+
+    it('re-syncs to grouped text when the SERVER-derived value changes', () => {
+      const { rerender } = render(<MonthCell value={500} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+      rerender(<MonthCell value={1234500} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+      expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('1,234,500')
+    })
+
+    it('an untouched grouped cell blurs without committing', () => {
+      const onCommit = vi.fn()
+      render(<MonthCell value={46400} editable={true} onCommit={onCommit} label="Jan pending" />)
+      fireEvent.blur(screen.getByRole('textbox'))
+      expect(onCommit).not.toHaveBeenCalled()
+    })
+
+    describe('legacy fractional server value 999.25 (behaviour identical to before #37)', () => {
+      beforeEach(() => vi.useFakeTimers())
+      afterEach(() => vi.useRealTimers())
+
+      it('re-displays as-is (no rounding, no .00) and blur commits 1000 with the same toast', () => {
+        const onCommit = vi.fn()
+        render(
+          <>
+            <MonthCell value={999.25} editable={true} onCommit={onCommit} label="Jan pending" />
+            <NoticeToasts />
+          </>,
+        )
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        expect(input.value).toBe('999.25')
+        fireEvent.blur(input)
+        expect(onCommit).toHaveBeenCalledWith(1000)
+        expect(input.value).toBe('1,000')
+        expect(screen.getByRole('status')).toHaveTextContent('กรอก 999 · ระบบปรับเป็น 1,000 (ปัดเศษเป็นหลักร้อย)')
+      })
+
+      it('groups a fractional legacy value without touching the decimals, and parses it back correctly (1,234.25 -> 1,200)', () => {
+        const onCommit = vi.fn()
+        render(<MonthCell value={1234.25} editable={true} onCommit={onCommit} label="Jan pending" />)
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        expect(input.value).toBe('1,234.25')
+        fireEvent.blur(input)
+        expect(onCommit).toHaveBeenCalledWith(1200)
+      })
+    })
+
+    describe('caret (real keystrokes via user-event)', () => {
+      it('stays right after the typed digits when typing mid-number (no comma moves)', async () => {
+        const user = userEvent.setup()
+        render(<MonthCell value={1234} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        await user.type(input, '50', { initialSelectionStart: 1, initialSelectionEnd: 1 })
+        // "1|,234" + "5" + "0" -> 150,234 with the caret after the 0 that was just typed
+        expect(input.value).toBe('150,234')
+        expect(input.selectionStart).toBe(3)
+      })
+
+      it('keeps the caret right after a digit typed mid-number when the comma moves (1,234 -> 19,234)', async () => {
+        const user = userEvent.setup()
+        render(<MonthCell value={1234} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        // caret sits right AFTER the comma ("1,|234"); the typed 9 makes the raw text
+        // "1,9234", which regroups to "19,234" — the comma moves, so without the
+        // explicit caret restore the browser would throw the caret to the end.
+        await user.type(input, '9', { initialSelectionStart: 2, initialSelectionEnd: 2 })
+        expect(input.value).toBe('19,234')
+        expect(input.selectionStart).toBe(2)
+      })
+
+      it('keeps the caret after the last digit when a typed digit adds a new group (999 -> 9,999)', async () => {
+        const user = userEvent.setup()
+        render(<MonthCell value={999} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        await user.type(input, '9')
+        expect(input.value).toBe('9,999')
+        expect(input.selectionStart).toBe(5)
+      })
+
+      it('Backspace right after a comma moves the caret left past it, and the next Backspace deletes the digit', async () => {
+        const user = userEvent.setup()
+        render(<MonthCell value={25000} editable={true} onCommit={vi.fn()} label="Jan pending" />)
+        const input = screen.getByRole('textbox') as HTMLInputElement
+        await user.type(input, '{Backspace}', { initialSelectionStart: 3, initialSelectionEnd: 3 })
+        expect(input.value).toBe('25,000')
+        expect(input.selectionStart).toBe(2)
+        await user.keyboard('{Backspace}')
+        expect(input.value).toBe('2,000')
+        expect(input.selectionStart).toBe(1)
+      })
     })
   })
 

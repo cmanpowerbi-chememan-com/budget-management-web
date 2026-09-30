@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { publishNotice } from '../platform/notice'
-import { formatThb, pendingAmountNoticeTh, roundPendingAmount, sanitizeMonthInput } from './model'
+import { applyAmountKeystroke } from './amountInput'
+import { formatThb, groupAmountText, parseAmountDraft, pendingAmountNoticeTh, roundPendingAmount } from './model'
 
 export interface MonthCellProps {
   value: number
@@ -18,9 +19,16 @@ export interface MonthCellProps {
 
 /** One month's amount, editable or read-only. Pure display + one commit
  * callback — the parent (`GridTable`/`BudgetGrid`) owns save/conflict
- * handling; this component never calls the API. */
+ * handling; this component never calls the API.
+ *
+ * jakkaritw, 2026-09-30, issue #37: the editable input shows thousands commas
+ * WHILE typing ("25000" -> "25,000"). `draft` is therefore the GROUPED text;
+ * every keystroke goes through `applyAmountKeystroke` (digits only, grouped,
+ * caret kept), every non-keystroke redraw through `groupAmountText`, and the
+ * commit path reads it back with `parseAmountDraft`. What `onCommit` receives
+ * and what the toast says are unchanged — only the text in the box is new. */
 export function MonthCell({ value, editable, onCommit, label, disabledReason, testId }: MonthCellProps) {
-  const [draft, setDraft] = useState(String(value))
+  const [draft, setDraft] = useState(() => groupAmountText(value))
   const lastSyncedValue = useRef(value)
 
   // Re-sync the displayed draft whenever the SERVER-derived value GENUINELY
@@ -47,7 +55,7 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
   useEffect(() => {
     if (value !== lastSyncedValue.current) {
       lastSyncedValue.current = value
-      setDraft(String(value))
+      setDraft(groupAmountText(value))
     }
   }, [value])
 
@@ -68,19 +76,20 @@ export function MonthCell({ value, editable, onCommit, label, disabledReason, te
       aria-label={label}
       data-testid={testId}
       value={draft}
-      onChange={(e) => setDraft(sanitizeMonthInput(e.target.value))}
+      onChange={(e) => setDraft(applyAmountKeystroke(e.currentTarget))}
       onBlur={() => {
-        const n = Number(draft)
-        // A bad partial input (e.g. a lone "." left after sanitizing) must
+        // Belt-and-braces: an unparseable draft (e.g. an emptied cell) must
         // never reach onCommit as NaN — NaN !== value is always true, which
         // would fire an invalid commit regardless of the current value.
-        const typed = draft === '' || Number.isNaN(n) ? 0 : n
+        // `parseAmountDraft` also drops the display commas (issue #37,
+        // jakkaritw 2026-09-30) — and ONLY the commas, never "." or "-".
+        const typed = parseAmountDraft(draft)
         // jakkaritw 2026-08-19: round to the nearest 100 (half-up) and clamp
         // to the 100,000,000 cap ON COMMIT, never per keystroke (typing 1234
         // must stay reachable, not collapse to 100 after the 3rd digit). The
         // field always redraws to the CORRECTED number.
         const parsed = roundPendingAmount(typed)
-        setDraft(String(parsed))
+        setDraft(groupAmountText(parsed))
         // ...and since 2026-08-29 a toast also SAYS what was corrected — the
         // redrawn number alone was too easy to miss. Keyed on typed-vs-parsed,
         // NOT on parsed-vs-value: retyping 146 over a cell that already holds

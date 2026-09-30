@@ -1293,8 +1293,10 @@ select:focus-visible {
 }
 /* Status column: 180px fits the longest nowrap status label
    (PENDING · รออนุมัติ ≈ 153px + 2×10px cell padding); hints wrap inside it
-   (see .special-hint/.reference-hint below). Month column: 98px = the 78px
-   .month-input + 2×10px cell padding, so editable cells never overflow. */
+   (see .special-hint/.reference-hint below). Month column: 98px floor = 78px of
+   .month-input (width:100% of the column, issue #37) + 2×10px cell padding. The
+   input is NOT measured by the column fit (GridTable `measureMoneyColumnWidths`)
+   — it tracks the column, so measuring it would widen the column on every save. */
 .data-table col.status-col {
   width: 180px;
 }
@@ -2007,8 +2009,8 @@ th.total-year-col {
    its own value for below (width/padding/border/background/font-weight) —
    those input-specific declarations come later in the file so they win the
    cascade on equal specificity; min-width/text-align/font-family/font-size
-   are harmless to share since the input's own explicit width (78px) already
-   exceeds this min-width. */
+   are harmless to share since the input fills its month column (width:100%,
+   98px floor minus padding = 78px), which already exceeds this min-width. */
 .month-value {
   /* Sans, not mono, at the base table-cell size (issue #30, 2026-09-19,
      jakkaritw's post-review correction — reverses the PRD's earlier
@@ -2079,7 +2081,18 @@ th.total-year-col {
   opacity: 0.6;
 }
 .month-input {
-  width: 78px;
+  /* 100% of the month column, not a fixed 78px (jakkaritw, 2026-09-30, issue
+     #37): the input now shows thousands commas, so a legal 100,000,000 reads
+     "100,000,000" (11 chars, ~90px of text) and clipped inside a 78px box.
+     The month column is sized to fit the widest read-only money TEXT in it
+     (`moneyColWidths`, floor 98px; the input itself is excluded from that
+     measure, it would feed its own width back and ratchet the column), so
+     filling it keeps the default 98 - 2x10px padding = 78px and grows once a
+     long amount is SAVED and shows up in a pill or subtotal — same idea as
+     `.detail-input.month-input` (2026-09-19). While a 9-digit amount is still
+     being typed in a default-width column it can clip (known limit: a wider
+     default column is a layout call for the owner, not made here). */
+  width: 100%;
   padding: 5px 7px;
   border: 1px solid var(--line);
   /* var(--r-cell) — see .month-value above; kept in sync so the editable
@@ -2839,7 +2852,12 @@ th.total-year-col {
   font-weight: 600;
 }
 .exp-detail-input {
-  width: 56px;
+  /* 64px, not 56px (issue #37, 2026-09-30): the month input now shows thousands
+     commas, so the common 5-digit "25,000" is 6 glyphs, not HEAD's 5 — at 56px
+     (42px of text) it clipped its leading digit; 64px (50px of text) holds
+     "10,000"-"99,999" and "250,000". The table already scrolls sideways inside
+     .trip-exp-scroll, so the +8px per month is absorbed there. */
+  width: 64px;
   padding: 4px 6px;
   border: 1px solid var(--line);
   border-radius: var(--r);
