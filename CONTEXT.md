@@ -116,6 +116,14 @@ mail per person listing every ฝ่าย waiting on them, **repeating indefini
 submitted yet and stops when the cycle closes.
 _Avoid_: calling either one "escalation" — a reminder never moves a budget.
 
+### Deadline reminder
+The nudge to every Filler whose ฝ่าย has not been submitted yet (never submitted, or sent
+back by a reject), cc their direct manager: one mail per person listing every such ฝ่าย, at
+most once every 7 days, and only between the year's reminder date and its submission
+deadline. It stops for good once the deadline passes, and it is never sent for a Muted
+สายงาน. It does not extend or enforce the deadline — it only reminds.
+_Avoid_: "เมลเตือนทุก 7 วัน" on its own — the Turn reminder is weekly too; name which one.
+
 ### Muted สายงาน (ปิดแจ้งเตือน)
 A สายงาน whose ฝ่าย receive **no Deadline reminder**, set on request of the budget owners
 (first use 2026-09-30: สายงาน `Chief Commercial Officer` and `Commercial`, asked by the

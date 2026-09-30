@@ -1030,7 +1030,7 @@ Closes the "filler-path blocked-hint asymmetry" flagged above. jakkaritw's decis
 
 Completed milestones — one line each. Detail lives in git history.
 
-- Mute deadline reminders per สายงาน (2026-09-30) — repo variable `REMINDER_MUTED_DIVISIONS` (`;`/newline-separated `dbo.cc_filler_map.division`), Phase B only, applied in `_run_deadline_reminders` + `setup/preview_reminder_audience.py`; blank = no change; no deploy needed (job runs from `main` on Actions). Variable NOT yet set.
+- Mute deadline reminders per สายงาน (2026-09-30) — repo variable `REMINDER_MUTED_DIVISIONS` (`;`/newline-separated `dbo.cc_filler_map.division`), Phase B only, applied in `_run_deadline_reminders` + `setup/preview_reminder_audience.py`; blank = no change; no container deploy, but live only after BOTH a push to `main` (the job runs from `main` on Actions) AND the variable is set. Turn reminders + event mails + web fill/submit/approve untouched (verified 2026-09-30, ADR-0027 "turn reminders never stop" kept). Not pushed, variable NOT yet set.
 
 - Docs consolidation (PR #1 / commit 3800e32, 2026-06-14) — CLAUDE.md slimmed (~1300→305 lines, points to CONTEXT/ADR/reference); README rewritten onboarding (~619→182); project-context deduped; reference payload → `docs/reference/` (approval-workflow, budget-templates, data-platform-map, data-sources, gl-master); stale Azure SQL/Streamlit/ACR scrubbed.
 - Fabric SQL migration code path (ADR-0017) — sync_employees + daily workflow on Fabric SP; Azure SQL helper archived.
