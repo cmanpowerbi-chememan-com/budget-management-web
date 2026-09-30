@@ -4,7 +4,8 @@
 # per-diem by accident.
 # NOTE (2026-08-01, ADR-0027): the 30-day auto-escalate step was REMOVED —
 # a stuck step is now advanced only by a human admin step-override
-# (POST /approval/override-step); the 7-day turn reminders below never stop.
+# (POST /approval/override-step); the 7-day turn reminders below never stop
+# (except for a muted สายงาน, see MUTE below).
 # GO-LIVE (2026-07-31 email-notify revamp, plan/email-notify-revamp.md §6):
 #   1. [DONE 2026-08-01] budget.reminder_log created on the shared DB.
 #   2. [DONE 2026-08-01] staging on budget-web:80b0e1c; manual dry-run run

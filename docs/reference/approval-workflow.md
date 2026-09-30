@@ -36,7 +36,8 @@ L3/L4 Submit → approver1 (managerempcode ตรงๆ) → นิภาพร 
 - A stuck step is released by an **admin step-override** (position 1 only, one step at a time,
   never straight to `APPROVED`, notifies the submitter + cc's the skipped approver); the old
   30-day auto-escalate is **deleted** and turn reminders now repeat forever — **ADR-0027**
-  (supersedes ADR-0006's escalation clause).
+  (supersedes ADR-0006's escalation clause) — except for a **Muted สายงาน**, whose ฝ่าย get no
+  reminder of either kind (ADR-0027 amendment 2026-09-30).
 - Editing a number never changes status (in-flight PENDING locked; APPROVED admin-editable) —
   **ADR-0013**.
 - Approval happens **inline on the main budget page** (`รออนุมัติ` badge + step-gated inline
@@ -137,6 +138,10 @@ cc is skipped when it cannot be resolved or equals the To address; a cc failure 
 the main send. Turn reminders anchor on the turn-start timestamp (`_current_step_started_at`)
 and repeat every 7 days **with no end** until the approver acts (ADR-0027 — the 30-day
 auto-escalate that used to share this anchor is deleted).
+**Muted สายงาน (2026-09-30):** a ฝ่าย whose สายงาน is listed in the repo variable
+`REMINDER_MUTED_DIVISIONS` gets neither the deadline reminder nor the turn reminder (every
+step, budget-team steps 2/3 included); event mails still fire. See CONTEXT.md "Muted สายงาน"
+and the ADR-0027 amendment.
 Reminder cadence is tracked per PERSON (sentinel `'*'` in `budget.reminder_log.department`,
 §7.2) — a ฝ่าย that goes pending mid-week rides the person's next 7-day round; event mails
 always fire instantly. Bulk sends are paced (`REMINDER_SEND_DELAY_SECONDS`), capped per phase

@@ -500,6 +500,21 @@ def _map_conn(rows):
 
 CC_ROWS = [("Comm 1", "Commercial"), ("Comm 2", "Commercial"), ("Acct", "Finance"), ("Mixed", "Commercial"), ("Mixed", "Finance")]
 
+# Every division / ฝ่าย name the mute tests feed in, plus '@' for emails. The
+# repo is PUBLIC and Actions logs are world-readable: drop_muted_departments
+# may log COUNTS only. Compared case-insensitively because the old log line
+# printed the CASEFOLDED setting ('commercial'), which a case-sensitive check
+# would have missed.
+_NAMES_THAT_MUST_NEVER_BE_LOGGED = (
+    "commercial", "finance", "typo division", "comm 1", "comm 2", "acct", "mixed", "@",
+)
+
+
+def _assert_no_names_logged(caplog):
+    text = caplog.text.casefold()
+    for forbidden in _NAMES_THAT_MUST_NEVER_BE_LOGGED:
+        assert forbidden not in text, f"a name/email leaked into the job log: {forbidden!r}"
+
 
 def test_drop_muted_blank_setting_is_unchanged_and_runs_no_query():
     conn = MagicMock()
@@ -508,19 +523,38 @@ def test_drop_muted_blank_setting_is_unchanged_and_runs_no_query():
     conn.cursor.assert_not_called()
 
 
-def test_drop_muted_removes_departments_any_row_muted_and_logs_names_only(caplog):
+def test_drop_muted_removes_departments_any_row_muted_and_logs_counts_only(caplog):
     with _mute_settings("commercial"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
         kept = drop_muted_departments(_map_conn(CC_ROWS), ["Acct", "Comm 1", "Comm 2", "Mixed"])
     assert kept == ["Acct"]  # 'Mixed' has one muted row -> muted
-    assert "Comm 1" in caplog.text and "skipped 3" in caplog.text
-    assert "@" not in caplog.text
+    assert [r.getMessage() for r in caplog.records] == [
+        "deadline reminders: mute active: 1 division name(s) configured, 3 department(s) skipped"
+    ]
+    _assert_no_names_logged(caplog)
 
 
-def test_drop_muted_warns_when_division_matches_nothing(caplog):
+def test_drop_muted_warns_with_counts_only_when_division_matches_nothing(caplog):
     with _mute_settings("Commercial;Typo Division"), caplog.at_level(logging.WARNING, logger="jobs.send_reminders"):
         drop_muted_departments(_map_conn(CC_ROWS), ["Acct"])
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1 and "typo division" in warnings[0].getMessage()
+    assert [w.getMessage() for w in warnings] == [
+        "deadline reminders: 1 of 2 configured division name(s) match no row in dbo.cc_filler_map; "
+        "mute partly ineffective, check spelling locally with setup/preview_reminder_audience.py"
+    ]
+    _assert_no_names_logged(caplog)
+
+
+@pytest.mark.parametrize("map_department,departments,expected", [
+    # Phase A's names come from the approval_status SNAPSHOT: padded / lower-case
+    # variants of a muted ฝ่าย must still be muted; an unrelated one is kept exactly as given.
+    ("Comm 1", ["Comm 1 ", "comm 1", "Acct", "acct "], ["Acct", "acct "]),
+    ("COMM 1  ", ["comm 1"], []),  # ...and a padded / upper-case name in the master matches too
+], ids=["snapshot-variants", "master-variants"])
+def test_drop_muted_matches_department_names_ignoring_case_and_padding(map_department, departments, expected, caplog):
+    rows = [(map_department, "Commercial"), ("Acct", "Finance")]
+    with _mute_settings("Commercial"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+        assert drop_muted_departments(_map_conn(rows), departments) == expected  # originals, input order
+    _assert_no_names_logged(caplog)
 
 
 def test_deadline_muted_filler_not_mailed_and_mixed_filler_gets_only_unmuted():
@@ -574,7 +608,9 @@ def test_turn_approver_with_only_muted_departments_gets_no_mail_and_no_log(caplo
     m_notify.assert_not_called()
     m_log.assert_not_called()  # no reminder_log row
     m_last.assert_not_called()  # muted rows never reach the per-person gate
-    assert "turn reminders: muted" in caplog.text  # the log line names the turn phase
+    # the log line names the turn phase and carries counts only (2 muted rows, 1 division configured)
+    assert "turn reminders: mute active: 1 division name(s) configured, 2 department(s) skipped" in caplog.text
+    _assert_no_names_logged(caplog)
 
 
 @pytest.mark.parametrize("acct_age_days,expected_items", [
@@ -605,7 +641,7 @@ def test_turn_mixed_approver_muted_row_neither_triggers_nor_rides_along(acct_age
 @pytest.mark.parametrize("status,step_started_kwarg,approver_empcode", [
     (PENDING_APPROVER2, "approver1_actioned_at", NIPAPORN_EMPCODE),
     (PENDING_APPROVER3, "approver2_actioned_at", WARAPORN_EMPCODE),
-], ids=["step2-nipaporn", "step3-waraporn"])
+], ids=["step2", "step3"])  # ids reach public CI logs on failure: no person names
 def test_turn_mute_also_applies_at_the_budget_team_steps_2_and_3(status, step_started_kwarg, approver_empcode):
     step_started = {step_started_kwarg: NOW - timedelta(days=10)}
     p_rows, p_last, p_log, p_notify = _patch_turn_phase()
@@ -620,6 +656,19 @@ def test_turn_mute_also_applies_at_the_budget_team_steps_2_and_3(status, step_st
     assert sent == 1
     assert m_notify.call_args.kwargs["approver_empcode"] == approver_empcode
     assert m_notify.call_args.kwargs["items"] == [("Acct", 2027, 10)]
+
+
+def test_turn_mute_matches_snapshot_names_ignoring_case_and_padding():
+    """Phase A reads ฝ่าย names from the approval_status SNAPSHOT: 'Comm 1 '
+    and 'comm 1' are the muted 'Comm 1' and must not leak into the mail."""
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last, p_log, p_notify as m_notify:
+        m_rows.return_value = [_pending_row("Comm 1 "), _pending_row("comm 1"), _pending_row("Acct")]
+        sent = _run_turn_reminders(
+            _map_conn(CC_ROWS), 2027, dry_run=False, notifications_dry_run=True, now=NOW, interval_minutes=TURN_INTERVAL,
+        )
+    assert sent == 1
+    assert m_notify.call_args.kwargs["items"] == [("Acct", 2027, 8)]  # the original name, muted variants gone
 
 
 def test_turn_muted_only_approver_does_not_use_up_the_send_cap(caplog):
@@ -678,12 +727,14 @@ def test_turn_mute_added_after_a_reminder_keeps_the_persons_cadence():
     assert m_notify.call_args_list[1].kwargs["items"] == [("Acct", 2027, 15)]
 
 
-def test_drop_muted_log_line_names_the_phase(caplog):
-    with _mute_settings("Commercial"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+def test_drop_muted_log_lines_name_the_phase(caplog):
+    with _mute_settings("Commercial;Typo Division"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
         drop_muted_departments(_map_conn(CC_ROWS), ["Comm 1"], phase=TURN_REMINDER_TYPE)
         drop_muted_departments(_map_conn(CC_ROWS), ["Comm 2"])  # default phase = deadline
-    assert "turn reminders: muted" in caplog.text
-    assert "deadline reminders: muted" in caplog.text
+    for phase in ("turn", "deadline"):
+        assert f"{phase} reminders: mute active" in caplog.text  # the INFO line
+        assert f"{phase} reminders: 1 of 2 configured" in caplog.text  # the spelling WARNING
+    _assert_no_names_logged(caplog)
 
 
 def test_drop_muted_empty_input_runs_no_query_and_no_typo_warning(caplog):
@@ -692,6 +743,37 @@ def test_drop_muted_empty_input_runs_no_query_and_no_typo_warning(caplog):
         assert drop_muted_departments(conn, []) == []
     conn.cursor.assert_not_called()  # nothing to filter -> nothing to look up
     assert not caplog.records  # ...and no spelling WARNING about a lookup that never ran
+
+
+# Fail-closed contract: a DB error in the mute SELECT must abort the phase —
+# no mail, no reminder_log row; the next nightly run retries. (If it fell back
+# to "nothing muted" it would mail a muted สายงาน.)
+
+def _db_down_conn():
+    conn = MagicMock()
+    conn.cursor.return_value.execute.side_effect = RuntimeError("db down")
+    return conn
+
+
+def test_turn_fails_closed_when_the_mute_lookup_raises():
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last, p_log as m_log, p_notify as m_notify:
+        m_rows.return_value = [_pending_row("Comm 1")]  # non-empty, else the lookup never runs
+        with pytest.raises(RuntimeError, match="db down"):
+            _run_turn_reminders(_db_down_conn(), 2027, False, True, NOW, interval_minutes=TURN_INTERVAL)
+    m_notify.assert_not_called()
+    m_log.assert_not_called()
+
+
+def test_deadline_fails_closed_when_the_mute_lookup_raises():
+    patches = _patch_deadline_phase()
+    with patches[0], patches[1] as m_depts, patches[2], patches[3], patches[4], \
+            patches[5] as m_log, patches[6] as m_notify, _mute_settings("Commercial"):
+        m_depts.return_value = ["Comm 1"]  # non-empty, else the lookup never runs
+        with pytest.raises(RuntimeError, match="db down"):
+            _run_deadline_reminders(_db_down_conn(), 2027, False, True, TODAY)
+    m_notify.assert_not_called()
+    m_log.assert_not_called()
 
 
 def test_deadline_distinct_fillers_get_one_mail_each():

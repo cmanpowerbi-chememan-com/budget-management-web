@@ -350,14 +350,34 @@ def parse_muted_divisions(raw: str | None) -> set[str]:
     return {p.strip().casefold() for p in raw.replace("\r", "\n").replace(";", "\n").split("\n") if p.strip()}
 
 
+def _fold(name: object) -> str:
+    """Match key for a สายงาน / ฝ่าย name: trimmed + case-folded."""
+    return str(name).strip().casefold()
+
+
 def drop_muted_departments(conn, departments: list[str], *, phase: str = DEADLINE_REMINDER_TYPE) -> list[str]:
     """Removes every department whose สายงาน is muted — serves BOTH phases
-    (`phase` only labels the log line: Phase A passes TURN_REMINDER_TYPE, the
+    (`phase` only labels the log lines: Phase A passes TURN_REMINDER_TYPE, the
     deadline phase and the preview keep the default). A department is muted
-    if ANY of its dbo.cc_filler_map rows has a muted division. Blank setting
-    or empty input = input returned untouched, zero queries. Logs department
-    NAMES + count only (public Actions logs: no emails/money); WARNs when a
-    configured division matches no row (typo/rename guard)."""
+    if ANY of its dbo.cc_filler_map rows has a muted division.
+
+    Departments match trimmed and case-insensitively: Phase A's names come
+    from the budget.approval_status snapshot, which can differ in case or
+    padding from the map ('Comm 1 ' / 'comm 1' must not leak). Kept
+    departments come back exactly as given, in input order.
+
+    Blank setting or empty input = input returned untouched, zero queries —
+    so the spelling WARNING below only runs when there is something to filter.
+
+    Raises on a DB error BY DESIGN (fail-closed): that run sends no mail,
+    logs nothing to reminder_log, and the next nightly run retries. Never
+    swallow it — falling back to "nothing muted" would mail a muted สายงาน.
+
+    Logs COUNTS only, never a division/ฝ่าย name, person or email (this repo
+    is PUBLIC, Actions logs are world-readable): an INFO line when departments
+    were skipped, and a WARNING when configured division names match no row
+    (typo/rename guard — the owner checks the spelling locally with
+    setup/preview_reminder_audience.py)."""
     muted = parse_muted_divisions(get_settings().reminder_muted_divisions)
     if not muted or not departments:
         return departments
@@ -370,17 +390,21 @@ def drop_muted_departments(conn, departments: list[str], *, phase: str = DEADLIN
         rows = cursor.fetchall()
     finally:
         cursor.close()
-    seen_divisions = {str(div).strip().casefold() for _, div in rows}
-    for name in sorted(muted - seen_divisions):
-        logger.warning("muted division %r matches no row in dbo.cc_filler_map — check spelling (mute has no effect)", name)
-    muted_departments = {dept for dept, div in rows if str(div).strip().casefold() in muted}
-    skipped = [d for d in departments if d in muted_departments]
-    if skipped:
-        logger.info(
-            "%s reminders: muted สายงาน %s — skipped %d department(s): %s",
-            phase, sorted(muted), len(skipped), skipped,
+    unmatched = muted - {_fold(div) for _, div in rows}
+    if unmatched:
+        logger.warning(
+            "%s reminders: %d of %d configured division name(s) match no row in dbo.cc_filler_map; "
+            "mute partly ineffective, check spelling locally with setup/preview_reminder_audience.py",
+            phase, len(unmatched), len(muted),
         )
-    return [d for d in departments if d not in muted_departments]
+    muted_departments = {_fold(dept) for dept, div in rows if _fold(div) in muted}
+    kept = [d for d in departments if _fold(d) not in muted_departments]
+    if len(kept) < len(departments):
+        logger.info(
+            "%s reminders: mute active: %d division name(s) configured, %d department(s) skipped",
+            phase, len(muted), len(departments) - len(kept),
+        )
+    return kept
 
 
 def _find_fillers(conn, department: str) -> list[str]:
