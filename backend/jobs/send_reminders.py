@@ -335,6 +335,45 @@ def _find_still_not_submitted_departments(conn, fiscal_year: int) -> list[str]:
     return [row[0] for row in rows]
 
 
+def parse_muted_divisions(raw: str | None) -> set[str]:
+    """`REMINDER_MUTED_DIVISIONS` -> casefolded division names. Separators are
+    ';' and newlines ONLY — org names contain commas (e.g. 'People Care (TK,KK)')."""
+    if not raw:
+        return set()
+    return {p.strip().casefold() for p in raw.replace("\r", "\n").replace(";", "\n").split("\n") if p.strip()}
+
+
+def drop_muted_departments(conn, departments: list[str]) -> list[str]:
+    """Removes every department whose สายงาน is muted (Phase B only). A
+    department is muted if ANY of its dbo.cc_filler_map rows has a muted
+    division. Blank setting = input returned untouched, zero queries. Logs
+    department NAMES + count only (public Actions logs: no emails/money);
+    WARNs when a configured division matches no row (typo/rename guard)."""
+    muted = parse_muted_divisions(get_settings().reminder_muted_divisions)
+    if not muted:
+        return departments
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT DISTINCT department, division FROM dbo.cc_filler_map "
+            "WHERE department IS NOT NULL AND division IS NOT NULL"
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+    seen_divisions = {str(div).strip().casefold() for _, div in rows}
+    for name in sorted(muted - seen_divisions):
+        logger.warning("muted division %r matches no row in dbo.cc_filler_map — check spelling (mute has no effect)", name)
+    muted_departments = {dept for dept, div in rows if str(div).strip().casefold() in muted}
+    skipped = [d for d in departments if d in muted_departments]
+    if skipped:
+        logger.info(
+            "deadline reminders: muted สายงาน %s — skipped %d department(s): %s",
+            sorted(muted), len(skipped), skipped,
+        )
+    return [d for d in departments if d not in muted_departments]
+
+
 def _find_fillers(conn, department: str) -> list[str]:
     """Every Filler email mapped to this department in `dbo.cc_filler_map`
     (ADR-0019 Filler-set source of truth)."""
@@ -390,7 +429,7 @@ def _run_deadline_reminders(
         logger.info("fiscal_year=%s: deadline_date %s has passed — deadline reminders stopped", fiscal_year, deadline_date)
         return 0
 
-    departments = _find_still_not_submitted_departments(conn, fiscal_year)
+    departments = drop_muted_departments(conn, _find_still_not_submitted_departments(conn, fiscal_year))
     if not departments:
         logger.info("fiscal_year=%s: 0 still-not-submitted department(s) — nothing to remind", fiscal_year)
         return 0

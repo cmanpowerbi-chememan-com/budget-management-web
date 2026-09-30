@@ -68,6 +68,20 @@ The department grouping of a Cost Center. Single source = file 09's `Cost Center
 (equals the cost-center master's `ฝ่าย`). Drives Fill-scope. Distinct from สายงาน
 (division) and from a CC's `Description` (its own name).
 
+### สายงาน (division)
+The grouping of ฝ่าย one level up: C-Level › สายงาน › ฝ่าย › Cost Center. Example: C-Level
+`Chief Commercial Officer` › สายงาน `Commercial` › ฝ่าย `Commercial Market 1` › 2 CCs. Many
+สายงาน carry the same name as their C-Level or as their only ฝ่าย (สายงาน `Chief Commercial
+Officer` holds only ฝ่าย `Chief Commercial Officer`), so a bare name like "Commercial" must be
+checked against the master before it is read as a ฝ่าย or a สายงาน.
+_Avoid_: "ฝ่าย Commercial" when the สายงาน is meant — no ฝ่าย is literally named "Commercial".
+
+### C-Level
+The top grouping above สายงาน — the executive a set of สายงาน reports to (e.g. `Chief
+Commercial Officer` holds สายงาน Chief Commercial Officer, Commercial, Domestic Supply and
+International Supply Chain). Used for sorting and reporting; it carries no approval role of
+its own.
+
 ### Admin
 A small allowlist of budget-dept users (checked against `ADMIN_EMAILS`). Sees ALL Cost
 Centers as a role overlay sitting OUTSIDE the file-09 map. **The admin check runs BEFORE the
@@ -101,6 +115,14 @@ mail per person listing every ฝ่าย waiting on them, **repeating indefini
 (ADR-0027). Distinct from the **Deadline reminder**, which goes to Fillers who have not
 submitted yet and stops when the cycle closes.
 _Avoid_: calling either one "escalation" — a reminder never moves a budget.
+
+### Muted สายงาน (ปิดแจ้งเตือน)
+A สายงาน whose ฝ่าย receive **no Deadline reminder**, set on request of the budget owners
+(first use 2026-09-30: สายงาน `Chief Commercial Officer` and `Commercial`, asked by the
+budget team). Stays muted until someone removes it — it is not tied to one fiscal year.
+Turn reminders and the submit/approve/reject mails of a muted สายงาน still go out: those only
+happen after the ฝ่าย has submitted on its own.
+_Avoid_: "muted ฝ่าย" — muting is decided per สายงาน, and every ฝ่าย under it follows.
 
 ### Step override
 An Admin advancing a stuck approval **one step** without being its frozen approver

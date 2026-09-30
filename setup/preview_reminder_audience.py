@@ -52,6 +52,7 @@ from jobs.send_reminders import (  # noqa: E402
     _naive,
     _resolve_approver1_cc_email,
     _resolve_interval_minutes,
+    drop_muted_departments,
 )
 
 MINUTES_PER_DAY = 24 * 60
@@ -124,6 +125,7 @@ def _classify_excluded_departments(
     eligible_departments: list[str],
     status_by_department: dict[str, str],
     no_filler_departments: list[str],
+    muted_departments: list[str] | None = None,
 ) -> dict[str, list[str]]:
     """Buckets every department that would NOT be mailed, by reason -- the
     "who is NOT reminded" half, which the job itself never has to answer
@@ -138,6 +140,7 @@ def _classify_excluded_departments(
         "already submitted, awaiting approval": [],
         "already approved": [],
         "no Filler mapped": sorted(no_filler_departments),
+        "muted สายงาน": sorted(muted_departments or []),
         "unexpected status (needs review)": [],
     }
     for department in all_departments:
@@ -307,7 +310,7 @@ def _print_exclusions(buckets: dict[str, list[str]]) -> None:
     total_excluded = sum(len(v) for v in buckets.values())
     print(f"Departments that would NOT be mailed -- {total_excluded} department(s), by reason")
     print("-" * _RULE_WIDTH)
-    for reason in ("already submitted, awaiting approval", "already approved", "no Filler mapped"):
+    for reason in ("already submitted, awaiting approval", "already approved", "no Filler mapped", "muted สายงาน"):
         depts = buckets[reason]
         print(f"{reason} ({len(depts)}):")
         print(f"    {', '.join(depts) if depts else '(none)'}")
@@ -435,7 +438,9 @@ def main() -> int:
         )
 
         eligible_departments = _find_still_not_submitted_departments(conn, fiscal_year)
-        by_filler, no_filler_departments = _group_by_filler(conn, eligible_departments)
+        mailable_departments = drop_muted_departments(conn, eligible_departments)
+        muted_departments = [d for d in eligible_departments if d not in set(mailable_departments)]
+        by_filler, no_filler_departments = _group_by_filler(conn, mailable_departments)
         recipients, already_clear = _build_recipients(
             conn, fiscal_year, by_filler, reminder_date, deadline_date, interval_days,
         )
@@ -445,6 +450,7 @@ def main() -> int:
         status_by_department = _fetch_department_statuses(conn, fiscal_year)
         buckets = _classify_excluded_departments(
             all_departments, eligible_departments, status_by_department, no_filler_departments,
+            muted_departments,
         )
         _print_exclusions(buckets)
 

@@ -170,6 +170,13 @@ class Settings(BaseSettings):
     # value in production.
     reminder_interval_minutes: int = 10080
 
+    # Deadline-reminder mute (jobs/send_reminders.py Phase B ONLY): สายงาน
+    # (dbo.cc_filler_map.division) names whose departments get NO deadline
+    # reminder. Separate with ';' or newlines (NOT commas — org names contain
+    # them). Blank = nobody muted. Set via the REMINDER_MUTED_DIVISIONS repo
+    # variable, no deploy needed.
+    reminder_muted_divisions: str = ""
+
     # Convenience-only deep-link base (ADR-0016) — placeholder default OK,
     # flagged: the React+FastAPI app is not deployed yet (CLAUDE.md), so this
     # is the intended production domain, not a live URL today.

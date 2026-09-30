@@ -1030,6 +1030,8 @@ Closes the "filler-path blocked-hint asymmetry" flagged above. jakkaritw's decis
 
 Completed milestones — one line each. Detail lives in git history.
 
+- Mute deadline reminders per สายงาน (2026-09-30) — repo variable `REMINDER_MUTED_DIVISIONS` (`;`/newline-separated `dbo.cc_filler_map.division`), Phase B only, applied in `_run_deadline_reminders` + `setup/preview_reminder_audience.py`; blank = no change; no deploy needed (job runs from `main` on Actions). Variable NOT yet set.
+
 - Docs consolidation (PR #1 / commit 3800e32, 2026-06-14) — CLAUDE.md slimmed (~1300→305 lines, points to CONTEXT/ADR/reference); README rewritten onboarding (~619→182); project-context deduped; reference payload → `docs/reference/` (approval-workflow, budget-templates, data-platform-map, data-sources, gl-master); stale Azure SQL/Streamlit/ACR scrubbed.
 - Fabric SQL migration code path (ADR-0017) — sync_employees + daily workflow on Fabric SP; Azure SQL helper archived.
 - 0007 Orgcode↔CostCenter frontend fix — CC multi-select, API-wired list/save/delete, Lakehouse cost-center reference. Code-review fixes applied (409 on dup, event delegation/XSS, stale handlers removed).

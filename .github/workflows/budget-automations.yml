@@ -88,6 +88,11 @@
 #     delete it) — no commit, no redeploy, takes effect on the very next
 #     run. That turns off (d) only; a human can still reach (b)/(c)
 #     manually with the execute_reminders checkbox.
+#     MUTE A สายงาน: repo variable REMINDER_MUTED_DIVISIONS = division names
+#     (dbo.cc_filler_map.division) separated by ';' or newlines, e.g.
+#     'Chief Commercial Officer;Commercial'. Their departments get no
+#     DEADLINE reminder (turn reminders + event mails unaffected). Blank/
+#     unset = nobody muted. No commit or deploy needed.
 #     execute_auto_submit is entirely independent of (a)/(b)/(c)/(d) — set
 #     it on its own to make A11 write for real while reminders stays a
 #     preview, and vice versa. Auto-submit has NO variable gate and NO
@@ -289,6 +294,8 @@ jobs:
           # not live: a scheduled run stays a preview exactly as before this
           # variable existed.
           REMINDERS_LIVE: ${{ vars.REMINDERS_LIVE }}
+          # Deadline-reminder mute list (';'-separated สายงาน names, see header).
+          REMINDER_MUTED_DIVISIONS: ${{ vars.REMINDER_MUTED_DIVISIONS }}
         run: |
           ARGS="--fiscal-year $FISCAL_YEAR"
           # GATE 3 (issue #29 prep): same case-insensitive spelling-match

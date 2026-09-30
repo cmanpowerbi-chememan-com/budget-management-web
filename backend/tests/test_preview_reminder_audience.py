@@ -119,6 +119,23 @@ def test_classify_treats_rejected_as_eligible_not_excluded():
     assert buckets["already approved"] == []
 
 
+def test_classify_puts_muted_departments_in_their_own_bucket():
+    buckets = _classify_excluded_departments(
+        all_departments=["Commercial Market 1", "Legal"],
+        eligible_departments=["Commercial Market 1", "Legal"],
+        status_by_department={},
+        no_filler_departments=[],
+        muted_departments=["Commercial Market 1"],
+    )
+    assert buckets["muted สายงาน"] == ["Commercial Market 1"]
+    assert buckets["no Filler mapped"] == []
+
+
+def test_classify_muted_bucket_empty_by_default():
+    buckets = _classify_excluded_departments(["A"], ["A"], {}, [])
+    assert buckets["muted สายงาน"] == []
+
+
 def test_classify_flags_an_unexpected_status_instead_of_dropping_it():
     buckets = _classify_excluded_departments(
         all_departments=["Weird"],

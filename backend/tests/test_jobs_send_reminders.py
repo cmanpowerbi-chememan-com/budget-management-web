@@ -8,6 +8,8 @@ import logging
 from datetime import date, datetime, timedelta
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+
 from app.approval import NIPAPORN_EMPCODE, PENDING_APPROVER1, PENDING_APPROVER2
 from app.notifications import NotificationResult
 from jobs.send_reminders import (
@@ -22,6 +24,8 @@ from jobs.send_reminders import (
     _resolve_approver1_cc_email,
     _run_deadline_reminders,
     _run_turn_reminders,
+    drop_muted_departments,
+    parse_muted_divisions,
     run,
 )
 
@@ -463,6 +467,92 @@ def test_deadline_groups_all_departments_into_one_mail_per_filler():
     )
     m_log.assert_called_once()
     assert m_log.call_args.args[1:5] == (DEADLINE_REMINDER_TYPE, PERSON_SENTINEL, 2027, "alice@chememan.com")
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Commercial;Chief Commercial Officer", {"commercial", "chief commercial officer"}),
+    ("Commercial\nChief Commercial Officer\r\n", {"commercial", "chief commercial officer"}),
+    ("  COMMERCIAL  ;; ; ", {"commercial"}),
+    ("People Care (TK,KK)", {"people care (tk,kk)"}),  # comma NOT a separator
+    ("", set()),
+    (None, set()),
+    ("  ;\n ", set()),
+])
+def test_parse_muted_divisions(raw, expected):
+    assert parse_muted_divisions(raw) == expected
+
+
+def _mute_settings(raw):
+    return patch("jobs.send_reminders.get_settings", return_value=MagicMock(reminder_muted_divisions=raw))
+
+
+def _map_conn(rows):
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = rows
+    return conn
+
+
+CC_ROWS = [("Comm 1", "Commercial"), ("Comm 2", "Commercial"), ("Acct", "Finance"), ("Mixed", "Commercial"), ("Mixed", "Finance")]
+
+
+def test_drop_muted_blank_setting_is_unchanged_and_runs_no_query():
+    conn = MagicMock()
+    with _mute_settings(""):
+        assert drop_muted_departments(conn, ["Acct", "Comm 1"]) == ["Acct", "Comm 1"]
+    conn.cursor.assert_not_called()
+
+
+def test_drop_muted_removes_departments_any_row_muted_and_logs_names_only(caplog):
+    with _mute_settings("commercial"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+        kept = drop_muted_departments(_map_conn(CC_ROWS), ["Acct", "Comm 1", "Comm 2", "Mixed"])
+    assert kept == ["Acct"]  # 'Mixed' has one muted row -> muted
+    assert "Comm 1" in caplog.text and "skipped 3" in caplog.text
+    assert "@" not in caplog.text
+
+
+def test_drop_muted_warns_when_division_matches_nothing(caplog):
+    with _mute_settings("Commercial;Typo Division"), caplog.at_level(logging.WARNING, logger="jobs.send_reminders"):
+        drop_muted_departments(_map_conn(CC_ROWS), ["Acct"])
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "typo division" in warnings[0].getMessage()
+
+
+def test_deadline_muted_filler_not_mailed_and_mixed_filler_gets_only_unmuted():
+    patches = _patch_deadline_phase()
+    fillers = {"Comm 1": ["muted@chememan.com", "mixed@chememan.com"], "Acct": ["mixed@chememan.com"]}
+    with patches[0], patches[1] as m_depts, patches[2] as m_fillers, patches[3], patches[4], \
+            patches[5], patches[6] as m_notify, _mute_settings("Commercial"):
+        m_depts.return_value = ["Acct", "Comm 1"]
+        m_fillers.side_effect = lambda conn, dept: fillers[dept]
+        with patch("jobs.send_reminders.drop_muted_departments", side_effect=lambda c, d: [x for x in d if x != "Comm 1"]):
+            sent = _run_deadline_reminders(
+                MagicMock(), 2027, dry_run=False, notifications_dry_run=True, today=TODAY, sleep=MagicMock(),
+            )
+    assert sent == 1
+    m_notify.assert_called_once()
+    assert m_notify.call_args.args[0] == "mixed@chememan.com"
+    assert m_notify.call_args.args[1] == ["Acct"]
+
+
+def test_deadline_mute_end_to_end_through_real_helper():
+    patches = _patch_deadline_phase()
+    conn = _map_conn(CC_ROWS)
+    with patches[0], patches[1] as m_depts, patches[2] as m_fillers, patches[3], patches[4], \
+            patches[5], patches[6] as m_notify, _mute_settings("Commercial"):
+        m_depts.return_value = ["Acct", "Comm 1", "Comm 2"]
+        m_fillers.side_effect = lambda c, dept: ["a@chememan.com"]
+        sent = _run_deadline_reminders(conn, 2027, dry_run=False, notifications_dry_run=True, today=TODAY)
+    assert sent == 1
+    assert m_notify.call_args.args[1] == ["Acct"]
+
+
+def test_turn_phase_ignores_the_mute():
+    with _mute_settings("Commercial"), patch("jobs.send_reminders.drop_muted_departments") as m_drop:
+        patches = _patch_turn_phase()
+        with patches[0] as m_rows, patches[1], patches[2], patches[3]:
+            m_rows.return_value = []
+            _run_turn_reminders(MagicMock(), 2027, dry_run=False, notifications_dry_run=True, now=NOW)
+    m_drop.assert_not_called()
 
 
 def test_deadline_distinct_fillers_get_one_mail_each():
