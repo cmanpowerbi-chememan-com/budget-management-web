@@ -7,6 +7,9 @@ ADR-0006 (everything else in ADR-0006 — chain resolution, snapshot-at-submit, 
 fallback, self-skip/dedup, reject semantics, the state machine — stands unchanged)
 Relates to: ADR-0008 (approval unit = ฝ่าย), ADR-0012 (admin overlay), ADR-0013 (only
 submit/approve/reject move status), plan/email-notify-revamp.md (the 7-day reminder engine)
+Amended 2026-09-30: Turn reminders skip the ฝ่าย of a **Muted สายงาน** — see "Amendment —
+muted สายงาน get no reminders" at the end. "Turn reminders never stop" still holds for every
+other ฝ่าย.
 
 ## Context
 
@@ -74,3 +77,22 @@ against a hard 31 Oct cycle close.
   that anchor, so the "two clocks can never drift" concern from the email revamp disappears.
 - Positions 2 and 3 have no override at all. If Nipaporn and Waraporn are both unavailable, a
   budget waits — deliberate: that is the review the whole control exists for.
+
+## Amendment — muted สายงาน get no reminders (2026-09-30)
+
+Turn reminders never stop — **except for a ฝ่าย whose สายงาน is muted**. On 2026-09-30, the
+morning the first wave of Deadline reminders went out, the budget team asked to stop reminder
+mail for สายงาน `Chief Commercial Officer` and `Commercial`. jakkaritw decided to mute BOTH
+weekly mails for those สายงาน: the Deadline reminder to their Fillers and the Turn reminder to
+their approvers, at every step — the budget-dept steps 2 and 3 included. The muted list is a
+repo-level setting that holds until someone removes it; it is not tied to a fiscal year.
+
+What does not change for a muted ฝ่าย: filling, saving, submitting, approving, rejecting and
+the admin step-override all work as before, under the same deadline; every one-time event mail
+still goes out (the "your turn" mail at submit and at each step, approved, rejected,
+override); the approver's in-app pending badge still shows.
+
+Consequence: the residual risk accepted above — "an unnoticed stuck ฝ่าย stays stuck" — is
+larger for a muted ฝ่าย, because after the one-time "your turn" mail there is no automatic
+signal at all. Accepted knowingly: the budget team chases muted สายงาน by hand, and the muted
+list should be reviewed before each cycle's reminder window.

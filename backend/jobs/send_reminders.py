@@ -11,7 +11,10 @@ their pending items is ≥7 days old (turn_start from
 days FOREVER until the approver acts (ADR-0027: no end date, no cap, no cc
 escalation). The mail CONTENT is always ALL departments waiting
 on them, including ones younger than 7 days (spec §7.1: "ลิสต์ทุกฝ่ายที่รอ
-เขาอยู่") — the 7-day gate throttles the person, not the row.
+เขาอยู่") — the 7-day gate throttles the person, not the row. Departments of
+a muted สายงาน (`REMINDER_MUTED_DIVISIONS`) are dropped BEFORE grouping, same
+rule as Phase B (ADR-0027 amendment): they neither make an approver due nor
+appear in the mail.
 
 Phase B — DEADLINE reminders: ONE mail per FILLER listing every
 still-not-submitted department they Fill (NO approval_status row = DRAFT,
@@ -201,6 +204,10 @@ def _run_turn_reminders(
 ) -> int:
     interval_minutes = _resolve_interval_minutes(interval_minutes)
     rows = fetch_pending_rows(conn, fiscal_year)
+    # Muted สายงาน drop out BEFORE grouping: a muted ฝ่าย can neither make its
+    # approver due (gate below) nor ride along in the mail content.
+    kept = set(drop_muted_departments(conn, [row["department"] for row in rows], phase=TURN_REMINDER_TYPE))
+    rows = [row for row in rows if row["department"] in kept]
     # empcode -> [(department, days_pending, minutes_pending)]. days_pending
     # is display-only (mail content "ค้างมา X วัน", unchanged by this cadence
     # setting); minutes_pending drives the due-gate below.
@@ -343,14 +350,16 @@ def parse_muted_divisions(raw: str | None) -> set[str]:
     return {p.strip().casefold() for p in raw.replace("\r", "\n").replace(";", "\n").split("\n") if p.strip()}
 
 
-def drop_muted_departments(conn, departments: list[str]) -> list[str]:
-    """Removes every department whose สายงาน is muted (Phase B only). A
-    department is muted if ANY of its dbo.cc_filler_map rows has a muted
-    division. Blank setting = input returned untouched, zero queries. Logs
-    department NAMES + count only (public Actions logs: no emails/money);
-    WARNs when a configured division matches no row (typo/rename guard)."""
+def drop_muted_departments(conn, departments: list[str], *, phase: str = DEADLINE_REMINDER_TYPE) -> list[str]:
+    """Removes every department whose สายงาน is muted — serves BOTH phases
+    (`phase` only labels the log line: Phase A passes TURN_REMINDER_TYPE, the
+    deadline phase and the preview keep the default). A department is muted
+    if ANY of its dbo.cc_filler_map rows has a muted division. Blank setting
+    or empty input = input returned untouched, zero queries. Logs department
+    NAMES + count only (public Actions logs: no emails/money); WARNs when a
+    configured division matches no row (typo/rename guard)."""
     muted = parse_muted_divisions(get_settings().reminder_muted_divisions)
-    if not muted:
+    if not muted or not departments:
         return departments
     cursor = conn.cursor()
     try:
@@ -368,8 +377,8 @@ def drop_muted_departments(conn, departments: list[str]) -> list[str]:
     skipped = [d for d in departments if d in muted_departments]
     if skipped:
         logger.info(
-            "deadline reminders: muted สายงาน %s — skipped %d department(s): %s",
-            sorted(muted), len(skipped), skipped,
+            "%s reminders: muted สายงาน %s — skipped %d department(s): %s",
+            phase, sorted(muted), len(skipped), skipped,
         )
     return [d for d in departments if d not in muted_departments]
 

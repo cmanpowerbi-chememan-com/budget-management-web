@@ -10,7 +10,13 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from app.approval import NIPAPORN_EMPCODE, PENDING_APPROVER1, PENDING_APPROVER2
+from app.approval import (
+    NIPAPORN_EMPCODE,
+    PENDING_APPROVER1,
+    PENDING_APPROVER2,
+    PENDING_APPROVER3,
+    WARAPORN_EMPCODE,
+)
 from app.notifications import NotificationResult
 from jobs.send_reminders import (
     DEADLINE_REMINDER_TYPE,
@@ -546,13 +552,146 @@ def test_deadline_mute_end_to_end_through_real_helper():
     assert m_notify.call_args.args[1] == ["Acct"]
 
 
-def test_turn_phase_ignores_the_mute():
-    with _mute_settings("Commercial"), patch("jobs.send_reminders.drop_muted_departments") as m_drop:
-        patches = _patch_turn_phase()
-        with patches[0] as m_rows, patches[1], patches[2], patches[3]:
-            m_rows.return_value = []
-            _run_turn_reminders(MagicMock(), 2027, dry_run=False, notifications_dry_run=True, now=NOW)
-    m_drop.assert_not_called()
+# Turn phase (Phase A) honours the same mute, at every approval step.
+# `_mute_settings` returns a bare MagicMock, so `reminder_interval_minutes` is
+# not an int and the turn age gate would raise TypeError -> every muted turn
+# test passes the interval explicitly.
+TURN_INTERVAL = 10080
+
+
+def test_turn_approver_with_only_muted_departments_gets_no_mail_and_no_log(caplog):
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last as m_last, p_log as m_log, p_notify as m_notify, \
+            caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+        m_rows.return_value = [
+            _pending_row("Comm 1", approver1_empcode="201", submitted_at=NOW - timedelta(days=30)),
+            _pending_row("Comm 2", approver1_empcode="201", submitted_at=NOW - timedelta(days=9)),
+        ]
+        sent = _run_turn_reminders(
+            _map_conn(CC_ROWS), 2027, dry_run=False, notifications_dry_run=True, now=NOW, interval_minutes=TURN_INTERVAL,
+        )
+    assert sent == 0
+    m_notify.assert_not_called()
+    m_log.assert_not_called()  # no reminder_log row
+    m_last.assert_not_called()  # muted rows never reach the per-person gate
+    assert "turn reminders: muted" in caplog.text  # the log line names the turn phase
+
+
+@pytest.mark.parametrize("acct_age_days,expected_items", [
+    (2, None),  # only the MUTED row is >= 7 days -> approver not due at all
+    (8, [("Acct", 2027, 8)]),  # unmuted row due -> mail lists ONLY the unmuted row
+])
+def test_turn_mixed_approver_muted_row_neither_triggers_nor_rides_along(acct_age_days, expected_items):
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last as m_last, p_log as m_log, p_notify as m_notify:
+        m_rows.return_value = [
+            _pending_row("Comm 1", submitted_at=NOW - timedelta(days=20)),
+            _pending_row("Acct", submitted_at=NOW - timedelta(days=acct_age_days)),
+        ]
+        sent = _run_turn_reminders(
+            _map_conn(CC_ROWS), 2027, dry_run=False, notifications_dry_run=True, now=NOW, interval_minutes=TURN_INTERVAL,
+        )
+    if expected_items is None:
+        assert sent == 0
+        m_notify.assert_not_called()
+        m_last.assert_not_called()  # a muted row must not even cause the cadence read
+        m_log.assert_not_called()
+    else:
+        assert sent == 1
+        assert m_notify.call_args.kwargs["items"] == expected_items
+        m_log.assert_called_once()
+
+
+@pytest.mark.parametrize("status,step_started_kwarg,approver_empcode", [
+    (PENDING_APPROVER2, "approver1_actioned_at", NIPAPORN_EMPCODE),
+    (PENDING_APPROVER3, "approver2_actioned_at", WARAPORN_EMPCODE),
+], ids=["step2-nipaporn", "step3-waraporn"])
+def test_turn_mute_also_applies_at_the_budget_team_steps_2_and_3(status, step_started_kwarg, approver_empcode):
+    step_started = {step_started_kwarg: NOW - timedelta(days=10)}
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last, p_log, p_notify as m_notify:
+        m_rows.return_value = [
+            _pending_row("Comm 1", status, **step_started),
+            _pending_row("Acct", status, **step_started),
+        ]
+        sent = _run_turn_reminders(
+            _map_conn(CC_ROWS), 2027, dry_run=False, notifications_dry_run=True, now=NOW, interval_minutes=TURN_INTERVAL,
+        )
+    assert sent == 1
+    assert m_notify.call_args.kwargs["approver_empcode"] == approver_empcode
+    assert m_notify.call_args.kwargs["items"] == [("Acct", 2027, 10)]
+
+
+def test_turn_muted_only_approver_does_not_use_up_the_send_cap(caplog):
+    """A muted-only approver is never 'due': no cap slot, not in attempted,
+    not in capped — the next (unmuted) approver still gets their mail."""
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings("Commercial"), p_rows as m_rows, p_last, p_log, p_notify as m_notify, \
+            caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+        m_rows.return_value = [
+            _pending_row("Comm 1", approver1_empcode="201", submitted_at=NOW - timedelta(days=30)),  # muted-only, listed first
+            _pending_row("Acct", approver1_empcode="202"),
+        ]
+        sent = _run_turn_reminders(
+            _map_conn(CC_ROWS), 2027, dry_run=False, notifications_dry_run=True, now=NOW,
+            sleep=MagicMock(), max_sends=1, interval_minutes=TURN_INTERVAL,
+        )
+    assert sent == 1
+    assert m_notify.call_args.kwargs["approver_empcode"] == "202"
+    assert "attempted=1 sent=1 failed=0 retried=0 capped=0" in caplog.text
+
+
+def test_turn_blank_mute_keeps_every_row_and_runs_no_query():
+    conn = MagicMock()
+    p_rows, p_last, p_log, p_notify = _patch_turn_phase()
+    with _mute_settings(""), p_rows as m_rows, p_last, p_log, p_notify as m_notify:
+        m_rows.return_value = [_pending_row("Comm 1")]
+        sent = _run_turn_reminders(
+            conn, 2027, dry_run=False, notifications_dry_run=True, now=NOW, interval_minutes=TURN_INTERVAL,
+        )
+    assert sent == 1
+    assert m_notify.call_args.kwargs["items"] == [("Comm 1", 2027, 8)]
+    conn.cursor.assert_not_called()  # blank variable = zero extra queries
+
+
+def test_turn_mute_added_after_a_reminder_keeps_the_persons_cadence():
+    """Muting mid-cycle neither resets nor re-fires the approver's 7-day
+    cadence (reminder_log is per PERSON on '*', never per ฝ่าย): the next
+    round goes out on schedule, listing only the unmuted ฝ่าย."""
+    store: dict[str, datetime] = {}
+    rows = [_pending_row("Comm 1"), _pending_row("Acct")]  # both 8 days old at NOW
+    with patch("jobs.send_reminders.fetch_pending_rows", return_value=rows), \
+            patch("jobs.send_reminders._last_sent_at", side_effect=lambda c, t, d, fy, r: store.get(r)), \
+            patch("jobs.send_reminders._log_reminder", side_effect=lambda c, t, d, fy, r, at: store.__setitem__(r, at)), \
+            patch("jobs.send_reminders.notifications.notify_turn_reminder", return_value=_ok_result()) as m_notify:
+        with _mute_settings(""):
+            first = _run_turn_reminders(MagicMock(), 2027, False, True, NOW, interval_minutes=TURN_INTERVAL)
+        with _mute_settings("Commercial"):
+            same_week = _run_turn_reminders(
+                _map_conn(CC_ROWS), 2027, False, True, NOW + timedelta(days=3), interval_minutes=TURN_INTERVAL,
+            )
+            next_round = _run_turn_reminders(
+                _map_conn(CC_ROWS), 2027, False, True, NOW + timedelta(days=7), interval_minutes=TURN_INTERVAL,
+            )
+    assert (first, same_week, next_round) == (1, 0, 1)  # no burst on the mute, no reset either
+    assert m_notify.call_args_list[0].kwargs["items"] == [("Comm 1", 2027, 8), ("Acct", 2027, 8)]
+    assert m_notify.call_args_list[1].kwargs["items"] == [("Acct", 2027, 15)]
+
+
+def test_drop_muted_log_line_names_the_phase(caplog):
+    with _mute_settings("Commercial"), caplog.at_level(logging.INFO, logger="jobs.send_reminders"):
+        drop_muted_departments(_map_conn(CC_ROWS), ["Comm 1"], phase=TURN_REMINDER_TYPE)
+        drop_muted_departments(_map_conn(CC_ROWS), ["Comm 2"])  # default phase = deadline
+    assert "turn reminders: muted" in caplog.text
+    assert "deadline reminders: muted" in caplog.text
+
+
+def test_drop_muted_empty_input_runs_no_query_and_no_typo_warning(caplog):
+    conn = MagicMock()
+    with _mute_settings("Typo Division"), caplog.at_level(logging.WARNING, logger="jobs.send_reminders"):
+        assert drop_muted_departments(conn, []) == []
+    conn.cursor.assert_not_called()  # nothing to filter -> nothing to look up
+    assert not caplog.records  # ...and no spelling WARNING about a lookup that never ran
 
 
 def test_deadline_distinct_fillers_get_one_mail_each():

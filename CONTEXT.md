@@ -112,8 +112,9 @@ rejects. "Whose turn is it" is always exactly one person: the frozen occupant of
 ### Turn reminder
 The repeat nudge sent to the approver whose Turn has gone unactioned — every 7 days, one
 mail per person listing every ฝ่าย waiting on them, **repeating indefinitely** until they act
-(ADR-0027). Distinct from the **Deadline reminder**, which goes to Fillers who have not
-submitted yet and stops when the cycle closes.
+(ADR-0027) — except for a ฝ่าย of a **Muted สายงาน**, which is never listed. Distinct from the
+**Deadline reminder**, which goes to Fillers who have not submitted yet and stops when the
+cycle closes.
 _Avoid_: calling either one "escalation" — a reminder never moves a budget.
 
 ### Deadline reminder
@@ -125,11 +126,13 @@ deadline. It stops for good once the deadline passes, and it is never sent for a
 _Avoid_: "เมลเตือนทุก 7 วัน" on its own — the Turn reminder is weekly too; name which one.
 
 ### Muted สายงาน (ปิดแจ้งเตือน)
-A สายงาน whose ฝ่าย receive **no Deadline reminder**, set on request of the budget owners
-(first use 2026-09-30: สายงาน `Chief Commercial Officer` and `Commercial`, asked by the
-budget team). Stays muted until someone removes it — it is not tied to one fiscal year.
-Turn reminders and the submit/approve/reject mails of a muted สายงาน still go out: those only
-happen after the ฝ่าย has submitted on its own.
+A สายงาน whose ฝ่าย get **no weekly reminder of either kind**: no Deadline reminder to its
+Fillers and no Turn reminder to its approvers, at every step (the budget team's included).
+Set on request of the budget owners (first use 2026-09-30: สายงาน `Chief Commercial Officer`
+and `Commercial`, asked by the budget team; ADR-0027 amendment). Stays muted until someone
+removes it — it is not tied to one fiscal year. Filling, submitting and approving work as
+normal, and every one-time event mail (the "your turn" mail at submit and at each step,
+approved, rejected, override) still goes out.
 _Avoid_: "muted ฝ่าย" — muting is decided per สายงาน, and every ฝ่าย under it follows.
 
 ### Step override

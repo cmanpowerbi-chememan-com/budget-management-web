@@ -91,8 +91,9 @@
 #     MUTE A สายงาน: repo variable REMINDER_MUTED_DIVISIONS = division names
 #     (dbo.cc_filler_map.division) separated by ';' or newlines, e.g.
 #     'Chief Commercial Officer;Commercial'. Their departments get no
-#     DEADLINE reminder (turn reminders + event mails unaffected). Blank/
-#     unset = nobody muted. No commit or deploy needed.
+#     DEADLINE reminder (Fillers) and no TURN reminder (approvers, every
+#     step); event mails (submit/approve/reject/override) and the web app
+#     are unaffected. Blank/unset = nobody muted. No commit or deploy needed.
 #     execute_auto_submit is entirely independent of (a)/(b)/(c)/(d) — set
 #     it on its own to make A11 write for real while reminders stays a
 #     preview, and vice versa. Auto-submit has NO variable gate and NO
@@ -294,7 +295,7 @@ jobs:
           # not live: a scheduled run stays a preview exactly as before this
           # variable existed.
           REMINDERS_LIVE: ${{ vars.REMINDERS_LIVE }}
-          # Deadline-reminder mute list (';'-separated สายงาน names, see header).
+          # Reminder mute list, deadline + turn reminders (';'-separated สายงาน names, see header).
           REMINDER_MUTED_DIVISIONS: ${{ vars.REMINDER_MUTED_DIVISIONS }}
         run: |
           ARGS="--fiscal-year $FISCAL_YEAR"
