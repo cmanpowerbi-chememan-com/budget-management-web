@@ -3,6 +3,7 @@
  * Trip Manager (per-diem never computed client-side), Submit. Every step
  * asserts a REAL payload, DOM value, or captured request param — never just
  * "page rendered". */
+import { MONTH_COLUMN_WIDTH_FLOOR } from '../src/grid/model'
 import { ENTERTAINMENT_EXTERNAL_VALUES } from '../src/subform/glDropdownConstants'
 import {
   approvalState,
@@ -214,6 +215,37 @@ test.describe('filler journey', () => {
     }
     expect(await monthColWidth()).toBe(before)
   })
+
+  // Owner decision (jakkaritw, 2026-10-01, "option B"): the legal cap 100,000,000
+  // must be fully readable WHILE TYPING, before any save, in a DEFAULT-width month
+  // column (nothing saved yet, so no read-only pill has grown the column). Run in
+  // the stack's own font and with Prompt forced (the self-hosted face real users
+  // get; neither face has tabular figures, so digit widths differ per string).
+  for (const face of ['default stack', 'Prompt forced'] as const) {
+    test(`1.3d typing 100,000,000 into a default-width Pending cell is not clipped before save (${face})`, async ({ page }) => {
+      const world = fillerWorld({
+        budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, pending: { m01: 5 }, pendingUpdatedAt: 'PEND-CAP-1' })]],
+      })
+      await installMocks(page, world)
+      await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+      if (face === 'Prompt forced') await page.addStyleTag({ content: '.month-input { font-family: "Prompt", sans-serif !important; }' })
+      await page.evaluate(() => document.fonts.ready)
+
+      const m01 = page.getByTestId(`pending-input-${CC}-${GL_OFFICE_COST}-m01`)
+      // Precondition: the month column is at its default floor, so "default-width" cannot pass by fixture luck.
+      const monthColWidth = await page.locator('table.data-table col.m-col:not(.total-year-col)').first().evaluate((el) => (el as HTMLElement).style.width)
+      expect(monthColWidth).toBe(`${MONTH_COLUMN_WIDTH_FLOOR}px`)
+      for (const [typed, shown] of [['88888888', '88,888,888'], ['99999999', '99,999,999'], ['100000000', '100,000,000'], ['8888888', '8,888,888']]) {
+        await m01.click()
+        await page.keyboard.press('Control+A')
+        await page.keyboard.press('Delete')
+        await page.keyboard.type(typed) // key by key, never blurred
+        await expect(m01).toHaveValue(shown)
+        const { scrollWidth, clientWidth } = await m01.evaluate((el: HTMLInputElement) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+        expect(scrollWidth, `${shown} is clipped while typing: scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth)
+      }
+    })
+  }
 
   test('1.4 a 409 conflict shows the Thai message, refetches the grid, and REVERTS to the refetched server value', async ({ page }) => {
     const world = fillerWorld({
@@ -456,6 +488,72 @@ test.describe('filler journey', () => {
       expect(scrollWidth, `${shown} is clipped: scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth)
     }
   })
+
+  // Owner decision 2026-10-01 ("option B"): the cap 100,000,000 must be fully
+  // readable in the Trip Manager manual-line input too, checked while typed
+  // key by key (it is a fixed-width input, so saving never grows it — what
+  // fits while typing also fits after blur). Default font stack and Prompt
+  // forced.
+  for (const face of ['default stack', 'Prompt forced'] as const) {
+    test(`1.8c Trip Manager manual-line input shows 100,000,000 without clipping (${face})`, async ({ page }) => {
+      const world = fillerWorld({
+        budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_TRAVEL_PERDIEM_COST, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-TRV-2' })]],
+        tripsQueue: [[]],
+        detailLinesQueue: [[]],
+      })
+      await installMocks(page, world)
+
+      await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+      if (face === 'Prompt forced') await page.addStyleTag({ content: '.exp-detail-input { font-family: "Prompt", sans-serif !important; }' })
+      await page.evaluate(() => document.fonts.ready)
+      await page.getByTestId(`open-subform-${CC}-${GL_TRAVEL_PERDIEM_COST}`).click()
+      await page.getByRole('button', { name: '+ เพิ่มทริป' }).click()
+      const card = page.getByTestId('trip-card-new-0')
+      await card.getByRole('button', { name: 'Mar', exact: true }).click()
+
+      const input = card.getByLabel('transport m03 new-0')
+      for (const [typed, shown] of [['88888888', '88,888,888'], ['99999999', '99,999,999'], ['100000000', '100,000,000'], ['8888888', '8,888,888']]) {
+        await input.click()
+        await page.keyboard.press('Control+A')
+        await page.keyboard.press('Delete')
+        await page.keyboard.type(typed)
+        await expect(input).toHaveValue(shown)
+        const { scrollWidth, clientWidth } = await input.evaluate((el: HTMLInputElement) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+        expect(scrollWidth, `${shown} is clipped: scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth)
+      }
+    })
+  }
+
+  // Owner decision 2026-10-01 ("option B") also covers the special-GL subform: on a
+  // NEW line the month input must show 100,000,000 while typing (no blur, so the
+  // monthly-total row has not widened the column yet).
+  for (const face of ['default stack', 'Prompt forced'] as const) {
+    test(`1.6b subform new-line month input shows 100,000,000 while typing without clipping (${face})`, async ({ page }) => {
+      const world = fillerWorld({
+        budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_ENTERTAIN_EXT, pending: { m01: 0 }, pendingUpdatedAt: 'PEND-ENT-3' })]],
+        detailLinesQueue: [[]],
+      })
+      await installMocks(page, world)
+
+      await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+      if (face === 'Prompt forced') await page.addStyleTag({ content: '.detail-input.month-input { font-family: "Prompt", sans-serif !important; }' })
+      await page.evaluate(() => document.fonts.ready)
+      await page.getByTestId(`open-subform-${CC}-${GL_ENTERTAIN_EXT}`).click()
+      await expect(page.getByTestId('detail-subform')).toBeVisible()
+      await page.getByRole('button', { name: '+ เพิ่มรายการ' }).click()
+
+      const input = page.getByLabel('m01 new-0')
+      for (const [typed, shown] of [['88888888', '88,888,888'], ['99999999', '99,999,999'], ['100000000', '100,000,000'], ['8888888', '8,888,888']]) {
+        await input.click()
+        await page.keyboard.press('Control+A')
+        await page.keyboard.press('Delete')
+        await page.keyboard.type(typed) // key by key, never blurred
+        await expect(input).toHaveValue(shown)
+        const { scrollWidth, clientWidth } = await input.evaluate((el: HTMLInputElement) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+        expect(scrollWidth, `${shown} is clipped while typing: scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth)
+      }
+    })
+  }
 
   test('1.9 Submit confirms with a summary, posts the payload, and the status chip flips to รออนุมัติ ขั้น 1', async ({ page }) => {
     const world = fillerWorld({

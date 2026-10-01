@@ -289,7 +289,7 @@ test.describe('theme port — CSS <-> TypeScript mirror lock', () => {
     expect(COLUMN_WIDTH_MEASURE_PADDING, 'model.ts COLUMN_WIDTH_MEASURE_PADDING').toBe(paddingLeftRight + 12)
   })
 
-  test('MONTH_COLUMN_WIDTH_FLOOR / TOTAL_YEAR_COLUMN_WIDTH_FLOOR mirror the CSS rule they document (98px/112px)', async ({ page }) => {
+  test('MONTH_COLUMN_WIDTH_FLOOR / TOTAL_YEAR_COLUMN_WIDTH_FLOOR mirror the CSS rule they document (114px/128px)', async ({ page }) => {
     // Two reasons this reads the parsed CSSOM rule rather than any rendered
     // element: (1) the REAL rendered <col> takes its width from an inline
     // style (GridTable.tsx's moneyColWidths, a fit-to-content pass) which
@@ -298,7 +298,7 @@ test.describe('theme port — CSS <-> TypeScript mirror lock', () => {
     // fixture amounts, not the CSS<->TS relationship it exists to lock; (2)
     // model.ts's own doc comment on these constants says a <col> element's
     // computed style is UA-inconsistent, which is confirmed empirically
-    // here too (a detached <col> probe measured 700px, not 98px, in this
+    // here too (a detached <col> probe measured 700px, not 114px, in this
     // exact Chromium build) — the parsed stylesheet rule is the one place
     // this value is unambiguous.
     await gotoGrid(page)

@@ -428,7 +428,7 @@ export function fitColumnWidth(rawTextWidth: number): number {
 }
 
 /** Money-column (12 months + รวมทั้งปี) floor widths — mirror
- * `.data-table col.m-col`/`col.total-year-col` in global.css (98px/112px).
+ * `.data-table col.m-col`/`col.total-year-col` in global.css (114px/128px).
  * `GridTable.tsx`'s money-column fit-to-content pass (`measureMoneyColumnWidths`)
  * never shrinks a column below these, only grows one to fit an outsized
  * total (2026-08-20 bug, jakkaritw: a grand-total figure like
@@ -440,8 +440,11 @@ export function fitColumnWidth(rawTextWidth: number): number {
  * `getComputedStyle`, so a live read would trade one hand-copied number for
  * a new source of flakiness — the same tradeoff `DEFAULT_COLUMN_WIDTHS`
  * already makes for the identity columns' pre-measurement placeholder. */
-export const MONTH_COLUMN_WIDTH_FLOOR = 98
-export const TOTAL_YEAR_COLUMN_WIDTH_FLOOR = 112
+/** 114 = 94px input box (widest of "100,000,000"/"99,999,999"/"88,888,888" in
+ * 12.5px Prompt = 92px, +2px safety) + 2x10px cell padding, so the legal cap
+ * 100,000,000 is readable while typing in a default-width column (2026-10-01). */
+export const MONTH_COLUMN_WIDTH_FLOOR = 114
+export const TOTAL_YEAR_COLUMN_WIDTH_FLOOR = 128
 
 export interface MoneyColumnWidths {
   month: number

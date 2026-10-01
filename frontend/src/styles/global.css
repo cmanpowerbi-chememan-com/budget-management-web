@@ -1293,20 +1293,23 @@ select:focus-visible {
 }
 /* Status column: 180px fits the longest nowrap status label
    (PENDING · รออนุมัติ ≈ 153px + 2×10px cell padding); hints wrap inside it
-   (see .special-hint/.reference-hint below). Month column: 98px floor = 78px of
-   .month-input (width:100% of the column, issue #37) + 2×10px cell padding. The
+   (see .special-hint/.reference-hint below). Month column: 114px floor = 94px of
+   .month-input (width:100% of the column, issue #37) + 2×10px cell padding;
+   94px holds "100,000,000" (92px in 12.5px Prompt) while typing. Mirrors
+   MONTH_COLUMN_WIDTH_FLOOR in grid/model.ts — change both together. The
    input is NOT measured by the column fit (GridTable `measureMoneyColumnWidths`)
    — it tracks the column, so measuring it would widen the column on every save. */
 .data-table col.status-col {
   width: 180px;
 }
 .data-table col.m-col {
-  width: 98px;
+  width: 114px;
 }
-/* Year-total column (before Jan) — slightly wider than a month col: yearly
-   sums run 1-2 digits longer than any single month. */
+/* Year-total column (before Jan) — wider than a month col (114px): yearly
+   sums run 1-2 digits longer than any single month. Mirrors
+   TOTAL_YEAR_COLUMN_WIDTH_FLOOR in grid/model.ts — change both together. */
 .data-table col.total-year-col {
-  width: 112px;
+  width: 128px;
 }
 /* Trailing "ลบ" (delete) column (grid-level row delete) — a single icon
    button, so a narrow fixed width is enough; kept visually recessive
@@ -2010,7 +2013,7 @@ th.total-year-col {
    those input-specific declarations come later in the file so they win the
    cascade on equal specificity; min-width/text-align/font-family/font-size
    are harmless to share since the input fills its month column (width:100%,
-   98px floor minus padding = 78px), which already exceeds this min-width. */
+   114px floor minus padding = 94px), which already exceeds this min-width. */
 .month-value {
   /* Sans, not mono, at the base table-cell size (issue #30, 2026-09-19,
      jakkaritw's post-review correction — reverses the PRD's earlier
@@ -2085,13 +2088,13 @@ th.total-year-col {
      #37): the input now shows thousands commas, so a legal 100,000,000 reads
      "100,000,000" (11 chars, ~90px of text) and clipped inside a 78px box.
      The month column is sized to fit the widest read-only money TEXT in it
-     (`moneyColWidths`, floor 98px; the input itself is excluded from that
+     (`moneyColWidths`, floor 114px; the input itself is excluded from that
      measure, it would feed its own width back and ratchet the column), so
-     filling it keeps the default 98 - 2x10px padding = 78px and grows once a
-     long amount is SAVED and shows up in a pill or subtotal — same idea as
-     `.detail-input.month-input` (2026-09-19). While a 9-digit amount is still
-     being typed in a default-width column it can clip (known limit: a wider
-     default column is a layout call for the owner, not made here). */
+     filling it keeps the default 114 - 2x10px padding = 94px, which holds the
+     legal cap "100,000,000" (92px in 12.5px Prompt) while still being typed
+     (owner decision 2026-10-01); the column grows further only once a longer
+     amount is SAVED and shows up in a pill or subtotal — same idea as
+     `.detail-input.month-input` (2026-09-19). */
   width: 100%;
   padding: 5px 7px;
   border: 1px solid var(--line);
@@ -2414,7 +2417,13 @@ th.total-year-col {
   font-size: 12px;
 }
 .detail-input.month-input {
-  min-width: 62px;
+  /* 98px floor (owner decision 2026-10-01, was 62px): a NEW line sits in a
+     column no wider than this until a blur feeds the monthly-total row, so
+     "100,000,000" must fit while typing. Measured box width needed at 12px
+     mono: 89px (default stack / Prompt), 95px for 0.6em-digit fallbacks
+     (Courier New / Menlo); 95 + 2px safety = 97, rounded up to 98. The subform
+     table scrolls sideways inside its modal, so +36px per month is absorbed. */
+  min-width: 98px;
   /* 100%, not a fixed 62px (jakkaritw, 2026-09-19: "ถ้า col ตัวเลข ตัวเลขต้อง
      ไม่ทับ รองรับหลายหน่วยยาวๆ") — the month COLUMN is already sized by the
      MONTHLY TOTAL row's formatThb() text, which is a real text node and is
@@ -2852,12 +2861,14 @@ th.total-year-col {
   font-weight: 600;
 }
 .exp-detail-input {
-  /* 64px, not 56px (issue #37, 2026-09-30): the month input now shows thousands
-     commas, so the common 5-digit "25,000" is 6 glyphs, not HEAD's 5 — at 56px
-     (42px of text) it clipped its leading digit; 64px (50px of text) holds
-     "10,000"-"99,999" and "250,000". The table already scrolls sideways inside
-     .trip-exp-scroll, so the +8px per month is absorbed there. */
-  width: 64px;
+  /* 104px (owner decision 2026-10-01; was 56px at HEAD, 64px in 6ff151e): the
+     input shows thousands commas and the legal cap "100,000,000" must be
+     readable here too. Measured box width needed for it: Consolas 95px (IBM
+     Plex Mono is not self-hosted, so the stack falls back), Prompt 96px,
+     0.6em-digit fallbacks (Menlo / Courier New, e.g. macOS) 102px; 102 + 2px
+     safety = 104. The table already scrolls sideways inside .trip-exp-scroll,
+     so the extra width per month is absorbed there. */
+  width: 104px;
   padding: 4px 6px;
   border: 1px solid var(--line);
   border-radius: var(--r);

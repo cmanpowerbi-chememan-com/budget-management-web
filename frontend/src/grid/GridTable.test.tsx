@@ -542,7 +542,7 @@ describe('GridTable', () => {
       vi.restoreAllMocks()
     })
 
-    it('defaults month/total-year columns to the unchanged CSS floor (98px/112px) when nothing overflows', () => {
+    it('defaults month/total-year columns to the unchanged CSS floor (114px/128px) when nothing overflows', () => {
       // jsdom never lays out real text (every measurement reads 0, same
       // caveat the identity-column fit-to-content tests document above) —
       // this pins the deterministic floor so a real browser's growth (proved
@@ -550,8 +550,8 @@ describe('GridTable', () => {
       // silent regression to a smaller default.
       render(<GridTable rows={bothSidesRows} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       const table = getTable('side-section-COST')
-      expect(getTotalYearCol(table).style.width).toBe('112px')
-      getMonthCols(table).forEach((col) => expect(col.style.width).toBe('98px'))
+      expect(getTotalYearCol(table).style.width).toBe('128px')
+      getMonthCols(table).forEach((col) => expect(col.style.width).toBe('114px'))
     })
 
     it('the grand-total row now wraps its money text in a .month-value span, same as every data-row cell', () => {
@@ -565,7 +565,7 @@ describe('GridTable', () => {
       expect(yearCell.querySelector('span.month-value')).not.toBeNull()
     })
 
-    it('a huge rendered total-year figure grows col.total-year-col beyond the 112px floor (stubbed real-browser geometry)', () => {
+    it('a huge rendered total-year figure grows col.total-year-col beyond the 128px floor (stubbed real-browser geometry)', () => {
       // Simulates what e2e/edge-states.spec.ts 4.7 proves against a real
       // browser: stub every .month-value pill's natural width the way a
       // real font would render it (proportional to its own text length),
@@ -586,11 +586,11 @@ describe('GridTable', () => {
 
       const table = getTable('side-section-COST')
       // "121,394,056,573.90" = 19 chars * 8px = 152px stubbed width; fitColumnWidth
-      // adds the 32px cell-padding allowance -> 184px, well past the 112px floor.
-      expect(parseInt(getTotalYearCol(table).style.width, 10)).toBeGreaterThan(112)
+      // adds the 32px cell-padding allowance -> 184px, well past the 128px floor.
+      expect(parseInt(getTotalYearCol(table).style.width, 10)).toBeGreaterThan(128)
       // Every month col shares ONE width (the widest candidate across the
       // whole grid) — still floors correctly for the untouched columns.
-      getMonthCols(table).forEach((col) => expect(parseInt(col.style.width, 10)).toBeGreaterThanOrEqual(98))
+      getMonthCols(table).forEach((col) => expect(parseInt(col.style.width, 10)).toBeGreaterThanOrEqual(114))
     })
 
     it('never ratchets the month column wider on every rows change (issue #37: .month-input is width:100% of its column)', () => {
@@ -621,7 +621,7 @@ describe('GridTable', () => {
         rerender(<GridTable rows={makeRows()} glRef={GL_REF} onCommitMonth={vi.fn()} />)
       }
       expect(monthWidths()).toEqual(first)
-      expect(first.every((width) => width === '98px')).toBe(true)
+      expect(first.every((width) => width === '114px')).toBe(true)
     })
   })
 
