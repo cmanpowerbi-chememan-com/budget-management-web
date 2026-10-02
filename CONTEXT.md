@@ -314,6 +314,12 @@ only. How a person is matched to their place is not decided yet.
 _Avoid_: "ลูกน้อง" as a synonym — whether a Branch follows the org structure or the reporting
 line is still open.
 
+### Executive view
+The one dashboard C-Levels and AVPs share, each scoped to their own Branch: Requested budget,
+Approved budget and Actual with budget status, summarised per สายงาน › ฝ่าย › GL group and by
+month, plus how each request turned into Actual.
+_Avoid_: a separate "C-Level dashboard" and "AVP dashboard" — it is one view; only the scope differs.
+
 ### Tracking view
 A general user's view of their own ฝ่าย for one fiscal year: Approved budget, Actual, Balance
 and budget status, by month.
