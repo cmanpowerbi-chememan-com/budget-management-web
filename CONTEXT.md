@@ -276,7 +276,8 @@ accepted rather than designed around). Saving is what turns a draft into budget 
 ## Phase-2 BI terms
 
 Language for the Phase-2 dashboards (grilled 2026-10-02). Every view compares the same three
-amounts — Requested budget, Approved budget, Actual — inside one fiscal year.
+amounts — Requested budget, Approved budget, Actual — inside one fiscal year, and every role
+(C-Level, head of สายงาน, general user) can look back 5 fiscal years.
 
 ### Requested budget (ยอดขอ)
 What a ฝ่าย formally asked for in a fiscal year: its Pending budget once it has reached
