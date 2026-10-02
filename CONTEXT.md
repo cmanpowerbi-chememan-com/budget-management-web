@@ -67,6 +67,7 @@ submits each ฝ่าย separately (N units).
 The department grouping of a Cost Center. Single source = file 09's `Cost Center Name`
 (equals the cost-center master's `ฝ่าย`). Drives Fill-scope. Distinct from สายงาน
 (division) and from a CC's `Description` (its own name).
+_Avoid_: "แผนก" — it is used loosely for both ฝ่าย and สายงาน; name the level instead.
 
 ### สายงาน (division)
 The grouping of ฝ่าย one level up: C-Level › สายงาน › ฝ่าย › Cost Center. Example: C-Level
@@ -164,21 +165,22 @@ reintroduce it as a synonym for Step override or Turn reminder.
 Read-only realised spend, read live (read-through) from the central DW gold warehouse
 `cman_dw_wh_gold.gold.fact_gl_trans` (workspace `cman-dw-prod-ws`), pre-aggregated
 DW-side and merged into the page by the backend (ADR-0020 — supersedes the older
-`gold_sap_gl_trans` app-Lakehouse reference). Shown green. Nobody types it.
+`gold_sap_gl_trans` app-Lakehouse reference). Shown blue (since 2026-09-19 — older docs and
+mockups say green; the SAP and Approved colours were swapped then). Nobody types it.
 
 ### Approved budget — code name `board_budget`
 Board-approved budget owned by the budget dept. Arrives as **one Excel file per year**
 (`approved_budget_<year>.xlsx`, year taken from the filename) dropped on SharePoint and
 synced whole-year Replace-by-Year (ADR-0021 — replaces the old in-app `.csv` upload) —
 **web entry/editing disabled entirely** (confirmed 2026-06-12); it goes **straight to
-the DB with NO in-app approval loop**. Shown blue. The UI/sign-off label
+the DB with NO in-app approval loop**. Shown dark green (blue before 2026-09-19). The UI/sign-off label
 stays "Approved · งบ" (stakeholders signed off), but **code, tables and columns use
 `board_budget`** to avoid the back-to-front confusion (this "Approved" never passes the
 in-app workflow). NOT a snapshot of Pending — a separate dataset Budget dept adjusts
 offline from the user-fill data (requested vs granted).
 
 ### Pending budget — code name `pending_budget` (renamed from `working_budget` 2026-06-12)
-User-entered monthly budget (Jan–Dec) per CC × GL. Shown black/dark. The ONLY data that
+User-entered monthly budget (Jan–Dec) per CC × GL. Shown rust-orange. The ONLY data that
 travels the in-app **approval chain** (Submitter L3/L4 → managerempcode → Nipaporn → Waraporn).
 UI/sign-off label stays "Pending · รออนุมัติ"; **code uses `pending_budget`**.
 (ADR-0003/0005/0006/0008 say `working_budget` — same table, old name; ADRs are immutable.)
@@ -270,3 +272,79 @@ data — nothing downstream sees it, and it belongs to no layer (Approved / SAP 
 A draft lives only in the open page: it is **not** persisted anywhere and does **not**
 survive a session expiry, a reload, or a closed tab (ADR-0028 — the loss was priced and
 accepted rather than designed around). Saving is what turns a draft into budget data.
+
+## Phase-2 BI terms
+
+Language for the Phase-2 dashboards (grilled 2026-10-02). Every view compares the same three
+amounts — Requested budget, Approved budget, Actual — inside one fiscal year.
+
+### Requested budget (ยอดขอ)
+What a ฝ่าย formally asked for in a fiscal year: its Pending budget once it has reached
+`APPROVED` — normally at the end of the in-app approval chain, or directly when an Admin
+submits it (ADR-0012) or saves an admin-only GL row (ADR-0024). A request still in the chain,
+or rejected, is not a Requested budget and never reaches BI (ADR-0011).
+_Avoid_: "approved" for this — the chain only makes the request official; the amount granted
+is the **Approved budget** (`board_budget`).
+
+### Actual (ยอดใช้จริง)
+The BI name for **SAP / Actuals**: realised spend for the same Cost Center, GL and month.
+
+### Balance (คงเหลือ)
+Approved budget minus Actual for the same scope and period: what is still left to spend.
+
+### Budget used % and budget status (ภายในงบ · ชนงบ · เกินงบ)
+Budget used % = Actual ÷ Approved budget for the same scope and period; inside a running year
+both sides are year-to-date (Approved months so far vs Actual so far). Status bands:
+**ภายในงบ** below 90 %, **ชนงบ** 90–100 %, **เกินงบ** above 100 %.
+_Avoid_: year-to-date Actual against the full-year Approved budget — fast spending looks safe.
+
+### Fiscal year vs preparation year
+A budget for fiscal year N (Jan–Dec) is prepared during year N−1 and is always compared with
+the Actual of the same fiscal year N: "plan 2026 ⇒ actual 2027" means the FY2027 budget,
+prepared in 2026, against FY2027 Actual. When both years could be meant, label both:
+"งบปี 2027 (จัดทำปี 2026)". (The Phase-1 entry grid deliberately shows the previous year's
+Approved and Actual beside the new Pending — a reference view, not this comparison.)
+
+### Branch (กิ่ง)
+Everything below a person's place in C-Level › สายงาน › ฝ่าย › Cost Center. In BI a C-Level
+sees their whole Branch, summarised per สายงาน and drillable down to Cost Center × GL × month;
+an AVP sees their own สายงาน; a general user only their own ฝ่าย (every ฝ่าย they fill); Admin
+sees the whole company. Wider than the Phase-1 **See-scope**, which reaches one manager level
+only. How a person is matched to their place is not decided yet.
+_Avoid_: "ลูกน้อง" as a synonym — whether a Branch follows the org structure or the reporting
+line is still open.
+
+### Tracking view
+A general user's view of their own ฝ่าย for one fiscal year: Approved budget, Actual, Balance
+and budget status, by month.
+
+### Planning view
+Requested budget vs Approved budget vs Actual over the past 5 fiscal years, used to size the
+next request.
+
+### Subsidiary account mapping
+Admin-maintained table that assigns each subsidiary account code to one of the company's GL
+groups, so a subsidiary's figures can be added to the company's at GL-group level, in THB.
+Needed because subsidiaries do not share the company's GL codes.
+_Avoid_: implying GL-code-level consolidation — subsidiaries are summed at GL group only.
+
+## Flagged ambiguities
+
+- **"approve"** — two different things: (1) an approver releasing a ฝ่าย's request through the
+  in-app chain, which makes it a Requested budget; (2) the board-approved amount, the Approved
+  budget (`board_budget`). A BI "approved" figure always means (2).
+- **"group"** — "ฝ่าย (group)" is an org unit; "each group" in an admin or GL context is a GL
+  group. Write "GL group" whenever the account grouping is meant.
+- **"แผนก"** — used loosely for both ฝ่าย and สายงาน ("4 แผนกใหญ่" under one C-Level are its 4
+  สายงาน). Never use it; name the level.
+- **"AVP"** — in the BI concept, the AVP view means the head of a สายงาน. Some สายงาน are
+  headed by a VP instead; whether they get the same view is open.
+
+## Example dialogue (BI)
+
+> **Dev:** For ฝ่าย A in FY2027 the "approved" figure is 1.0M but their request was 1.2M — bug?
+> **Budget team:** No. 1.2M is the **Requested budget** — the chain approved the *request*.
+> 1.0M is the **Approved budget** the board granted.
+> **Dev:** Actual to September is 720k. Status?
+> **Budget team:** Compare year-to-date: Approved Jan–Sep is 750k, so 96 % is used — **ชนงบ**.
+> The **Balance** for the year is 1.0M − 720k = 280k.
