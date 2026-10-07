@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-10-07T18:52:48+0700",
+  "updated": "2026-10-07T18:54:30+0700",
   "tasks": [
     {
       "id": "push-main-flicker-fix",
-      "state": "doing",
+      "state": "done",
       "created": "2026-10-07T18:52:48+0700",
-      "updated": "2026-10-07T18:52:48+0700",
-      "ai": "jakkaritw 2026-10-07: commit + push this session's work. main was 8 ahead of origin (3 this session 6ac82c1/e7b25ec/2bfbe8a + 5 other-session docs/tracker). Repo PUBLIC: pre-push scan found 1 email + 6 amounts in 6 older ledger entries, not yet on origin; jakkaritw chose redact-in-new-commit (not history rewrite) -> values replaced via task.py with [amount redacted]/[email redacted]; originals REMAIN in history of the 4 unpushed commits (accepted). Then git push origin main.",
+      "updated": "2026-10-07T18:54:30+0700",
+      "ai": "PUSHED 2026-10-07: origin/main ddf9c07..bcf5da2 (9 commits: this session 6ac82c1 fix, e7b25ec plan LIVE, 2bfbe8a ledger, bcf5da2 redaction; other sessions 7131a8b/fec1ed2/b256862/400ce45 docs + 6c6ac61 ledger). Pre-push public-repo scan: 1 email + 6 amounts in 6 older ledger entries (officer-excel-scope-approved-default, excel-export-button, q-corpstrat2-approved-status, remaining-work-sweep-20260920, healthcheck-e2e-20260919, subform-column-fit-content) redacted via task.py; tip tree verified 0 hits; originals remain in history of 6c6ac61/6ac82c1/e7b25ec/2bfbe8a (jakkaritw chose no rewrite). CI run 37617173085 queued on bcf5da2. deploy/flicker-fix branch kept LOCAL only (same as earlier deploy branches).",
       "agent": "claude"
     },
     {
