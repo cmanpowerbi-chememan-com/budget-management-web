@@ -1,14 +1,14 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-10-07T16:34:25+0700",
+  "updated": "2026-10-07T18:26:59+0700",
   "tasks": [
     {
       "id": "deploy-flicker-fix-stg-prd",
       "state": "done",
       "created": "2026-10-07T16:24:36+0700",
-      "updated": "2026-10-07T16:34:24+0700",
-      "ai": "LIVE 2026-10-07: image budget-web:9a97639 (ACR cm34) = branch deploy/flicker-fix (2f3fd55 + frontend of main 6ac82c1; backend==2f3fd55, no officer-review code). STG rev cman-budget-web-stg--0000106 verify_deploy_landed 9/9 16:30; PRD rev cman-budget-web-prd--0000067 (RunningAtMaxScale, 2 replicas) verify 9/9 16:33. Settle-wait (single active revision on new tag) before verify. Rollback = image 2f3fd55 (prd 0000066 / stg 0000105). Keep branch deploy/flicker-fix (only ref to live sha). main 6ac82c1 NOT pushed. Users need one page refresh to load the new JS.",
+      "updated": "2026-10-07T18:26:59+0700",
+      "ai": "LIVE 2026-10-07: image budget-web:9a97639 (ACR cm34) = branch deploy/flicker-fix (2f3fd55 + frontend of main 6ac82c1; backend==2f3fd55, no officer-review code). STG rev cman-budget-web-stg--0000106 verify_deploy_landed 9/9 16:30; PRD rev cman-budget-web-prd--0000067 (RunningAtMaxScale, 2 replicas) verify 9/9 16:33. Settle-wait (single active revision on new tag) before verify. Rollback = image 2f3fd55 (prd 0000066 / stg 0000105). Keep branch deploy/flicker-fix (only ref to live sha). plan.md + ledger LIVE note committed e7b25ec. main 6ac82c1/e7b25ec NOT pushed. Users need one page refresh to load the new JS.",
       "agent": "claude"
     },
     {
