@@ -1,7 +1,7 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-10-07T11:59:11+0700",
+  "updated": "2026-10-07T12:19:37+0700",
   "tasks": [
     {
       "id": "lease-rental-subform-snapshot",
@@ -3788,6 +3788,14 @@
       "created": "2026-09-07T11:55:24+0700",
       "updated": "2026-09-07T11:55:43+0700",
       "ai": "UAT pack rebuilt+revalidated. xlsx sha256 cc0b2f8230aed93d2fcacfc9b46e292872409bea47d7fac606290109058f2ec1 byte-identical x3 runs; md 074a8f58004d2687172ba198551164847450c9ca22ab54df907b1e57107d0738. validate_uat_pack.py 10 PASS 0 FAIL. 54 cases, ids UAT-01..54 contiguous, Run Order permutation 1..54, 0 runs_after violations. fix_list_2 items 1,2,3,4,6,7,8,9,10,11 all verified landed. ITEM 5 WAS NOT ACTUALLY CLOSED: re-audit premise 'trips lock at Approved' is wrong -- app.approval.LOCKED_APPROVAL_STATUSES = PENDING_STATUSES|{APPROVED}, so dept locks at Submit (pos 34) not Approve; write_model._ensure_department_not_locked gates trip save/delete on it and TripManager.tsx wraps cards in disabled fieldset + hides 'บันทึก & ลงบัญชี' when !row.editable. So UAT-52 step 2 (negative days) was unobservable at its new pos 51. FIXED with the pack's own two-state pointer convention (same as UAT-42/UAT-44): UAT-52 preconditions/steps2/expected2/note now point to 'ทำทันทีหลัง UAT-26 ก่อนเริ่ม UAT-32' (Draft window pos 25->34), UAT-26 note carries the mirror 'หยุด — กลับไปทำ UAT-52 ข้อ 2', companion 4.1 now lists 3 back-track points not 2. UAT-52 keeps runs_after UAT-32 + before UAT-40 (step 1 still needs a submitted-not-approved dept). Files: .scratch/uat-prep/cases/W8.json, W3.json, requirement_spec/5_uat/UAT_Test_Script.md. NOT committed, nothing uploaded, no az.",
+      "agent": "claude"
+    },
+    {
+      "id": "uat-47-runorder-fix",
+      "state": "done",
+      "created": "2026-09-07T12:12:23+0700",
+      "updated": "2026-09-07T12:19:22+0700",
+      "ai": "UAT pack run-order inversion FIXED (no commit, per instruction). 4 edits: (1) .scratch/uat-prep/cases/W7.json UAT-47.runs_after += 'UAT-52' (UAT-40's existing 'UAT-47' edge KEPT - removing it moves UAT-40 to 51 and breaks every 'position 52' reference); (2) W6.json UAT-40.note += verbatim UAT-47 pairing signpost as clause 2; (3) W7.json UAT-47 step 7 prefixed with the UAT-44 4b pointer; (4) UAT_Test_Script.md 4.1 lead-in 3->4 return points + 4th sub-bullet (UAT-47/UAT-40 = one set of Approve presses, rows 51-52 filled together). Run order tail now 49 UAT-50 / 50 UAT-52 / 51 UAT-47 / 52 UAT-40 / 53 UAT-49 / 54 UAT-51 - matches auditor; UAT-40 stays at 52 so no renumbering. 54 cases unchanged. Build run 3x byte-identical sha256 743b086d08b9f9be63df7a531d3b56395b9d87b00e547175b9b1760778a1887e; validate_uat_pack.py 10 PASS 0 FAIL. NOTE: validator cannot see a wrongly-directed runs_after edge - green != runnable.",
       "agent": "claude"
     }
   ]

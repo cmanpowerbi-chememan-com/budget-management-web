@@ -1,22 +1,46 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-10-07T12:15:49+0700",
+  "updated": "2026-10-07T16:34:25+0700",
   "tasks": [
+    {
+      "id": "deploy-flicker-fix-stg-prd",
+      "state": "done",
+      "created": "2026-10-07T16:24:36+0700",
+      "updated": "2026-10-07T16:34:24+0700",
+      "ai": "LIVE 2026-10-07: image budget-web:9a97639 (ACR cm34) = branch deploy/flicker-fix (2f3fd55 + frontend of main 6ac82c1; backend==2f3fd55, no officer-review code). STG rev cman-budget-web-stg--0000106 verify_deploy_landed 9/9 16:30; PRD rev cman-budget-web-prd--0000067 (RunningAtMaxScale, 2 replicas) verify 9/9 16:33. Settle-wait (single active revision on new tag) before verify. Rollback = image 2f3fd55 (prd 0000066 / stg 0000105). Keep branch deploy/flicker-fix (only ref to live sha). main 6ac82c1 NOT pushed. Users need one page refresh to load the new JS.",
+      "agent": "claude"
+    },
+    {
+      "id": "approver-actionbar-focus-refresh",
+      "state": "willdo",
+      "created": "2026-10-07T16:24:35+0700",
+      "updated": "2026-10-07T16:24:35+0700",
+      "ai": "FOLLOW-UP of gate MED on 6ac82c1 (jakkaritw 2026-10-07: separate task, after deploy): approver/see-only on a NON-fill ฝ่าย gets no focus-triggered refresh since the reload loop was removed -> ApprovalActionBar stale on tab return (e.g. step-2 approver waiting for step 1). Proposed: on focus/visibility for non-fill + non-admin-wide ฝ่าย refresh ONLY the bar status (1 GET /approval/status, inFlight guard, 0 grid reloads); relax e2e 2.6 to <=1 status call per focus. Server already 409s stale actions (ApprovalActionBar.tsx ~L180).",
+      "agent": "claude"
+    },
+    {
+      "id": "prd-screen-flicker-fix",
+      "state": "done",
+      "created": "2026-10-07T13:13:21+0700",
+      "updated": "2026-10-07T16:34:25+0700",
+      "ai": "DONE + LIVE: fix 6ac82c1 (main, not pushed) deployed as 9a97639 prd rev 0000067 / stg rev 0000106 (verify 9/9 both). Gate combined 06+07+08 APPROVE WITH SUGGESTIONS; LOW test-type fixes applied pre-commit; MED follow-up logged as approver-actionbar-focus-refresh (willdo); LOWs accepted (pre-existing hat-toggle window, transient save-in-flight repaint). Throwaway [DEBUG-flk7] spec deleted; harness kept only in session scratch.",
+      "agent": "claude"
+    },
     {
       "id": "q-ccdept-colg-new-cc-impact",
       "state": "done",
       "created": "2026-10-07T11:59:11+0700",
-      "updated": "2026-10-07T12:15:49+0700",
-      "ai": "VERDICT no impact. Col G (new-CC note for Hold CCs) appeared in cc dept.xlsx v126 2026-10-07, latest v128. DW budget_masters_lib applies an exact-name column_map (6 headers) so col G is dropped at ingest; setup/ccdept_add_filler.py find_columns is first-match so it still picks col A. PROOF read-only (scratchpad probe, lane's own transform fns): v128 cols A-F == v125 (pre-G) row-for-row; transform(v128) == transform(v125) == live dbo.cc_filler_map 486 pairs/209 CC -> next daily sync is a no-op. Context: 15 Hold CCs (14 mapped, 10QC011000 blank); FY2027 pending left on 1 Hold CC (10AT011000, 2 rows); D&A already moved to 10IT013000 with control total unchanged; 7/15 Hold CCs carry board_budget history FY2023-26 -> deleting Hold rows = ghost pending + board per-row orphan skip (D6 amendment). Board file is positional A-N (inserting a col inside A-N unsafe, appending after N ok). No code change, no commit.",
+      "updated": "2026-10-07T12:18:48+0700",
+      "ai": "VERDICT no impact. Col G (new-CC note for Hold CCs) appeared in cc dept.xlsx v126 2026-10-07, latest v128. DW budget_masters_lib applies an exact-name column_map (6 headers) so col G is dropped at ingest; setup/ccdept_add_filler.py find_columns is first-match so it still picks col A. PROOF read-only (scratchpad probe, lane's own transform fns): v128 cols A-F == v125 (pre-G) row-for-row; transform(v128) == transform(v125) == live dbo.cc_filler_map 486 pairs/209 CC -> next daily sync is a no-op. Context: 15 Hold CCs (14 mapped, 10QC011000 blank); FY2027 pending left on 1 Hold CC (10AT011000, 2 rows); D&A already moved to 10IT013000 with control total unchanged; 7/15 Hold CCs carry board_budget history FY2023-26 -> deleting Hold rows = ghost pending + board per-row orphan skip (D6 amendment). Board file is positional A-N (inserting a col inside A-N unsafe, appending after N ok). No code change. Ledger commit 6c6ac61 (local, not pushed).",
       "agent": "claude"
     },
     {
       "id": "prd-screen-flicker-diag",
-      "state": "doing",
+      "state": "done",
       "created": "2026-10-07T11:45:14+0700",
-      "updated": "2026-10-07T11:45:14+0700",
-      "ai": "diagnose prd web screen flicker (jakkaritw report 2026-10-07 'prd web หน้าจอกระพริบเกิดจากอะไร'; symptom detail TBD). phase0 memory: no exact match; nearest = theme FOUC (arch note 07-23), false view-only flash (fixed pre-1fd84d2), grid stale-closure reloads. prd 0000066 = stg 0000105 = image 2f3fd55. next: build read-only loop vs stg (shared DB w/ prd -> NO writes).",
+      "updated": "2026-10-07T14:26:05+0700",
+      "ai": "DONE: root cause confirmed + fixed in 6ac82c1 (see prd-screen-flicker-fix). Throwaway [DEBUG-flk7] harness deleted from repo (scratch copies only).",
       "agent": "claude"
     },
     {
@@ -1764,14 +1788,6 @@
       "created": "2026-09-07T20:03:38+0700",
       "updated": "2026-09-09T21:55:28+0700",
       "ai": "[09-09 17:50, 21fee06] jakkaritw: UAT-29 + UAT-51 = Pass. FINAL TALLY 53 Pass / 0 Fail / 0 Blocked / 1 Evidence (UAT-49 needs only the mobile-open step). All 54 rows filled; validate 10/10. prd state: D&A FY2027 APPROVED (terminal, 415,900), SD FY2027 REJECTED (30,000). LEFTOVER = tracker uat-post-run-reset (reset + revert SIT_IMPERSONATE/APP_ENV/session/ccdept, all jakkaritw-gated) + serve.py test server still running (Chromium).",
-      "agent": "claude"
-    },
-    {
-      "id": "uat-47-runorder-fix",
-      "state": "done",
-      "created": "2026-09-07T12:12:23+0700",
-      "updated": "2026-09-07T12:19:22+0700",
-      "ai": "UAT pack run-order inversion FIXED (no commit, per instruction). 4 edits: (1) .scratch/uat-prep/cases/W7.json UAT-47.runs_after += 'UAT-52' (UAT-40's existing 'UAT-47' edge KEPT - removing it moves UAT-40 to 51 and breaks every 'position 52' reference); (2) W6.json UAT-40.note += verbatim UAT-47 pairing signpost as clause 2; (3) W7.json UAT-47 step 7 prefixed with the UAT-44 4b pointer; (4) UAT_Test_Script.md 4.1 lead-in 3->4 return points + 4th sub-bullet (UAT-47/UAT-40 = one set of Approve presses, rows 51-52 filled together). Run order tail now 49 UAT-50 / 50 UAT-52 / 51 UAT-47 / 52 UAT-40 / 53 UAT-49 / 54 UAT-51 - matches auditor; UAT-40 stays at 52 so no renumbering. 54 cases unchanged. Build run 3x byte-identical sha256 743b086d08b9f9be63df7a531d3b56395b9d87b00e547175b9b1760778a1887e; validate_uat_pack.py 10 PASS 0 FAIL. NOTE: validator cannot see a wrongly-directed runs_after edge - green != runnable.",
       "agent": "claude"
     },
     {
