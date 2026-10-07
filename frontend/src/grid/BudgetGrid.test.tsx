@@ -3003,7 +3003,11 @@ describe('BudgetGrid', () => {
         }
       }
 
-      it('a see-only caller viewing a LOCKED ฝ่าย never revalidates: no GET /approval/status, no grid reload', async () => {
+      // 2026-10-07 MED follow-up (task approver-actionbar-focus-refresh): the early
+      // return above used to leave the ApprovalActionBar blind to a tab return (the
+      // old reload loop was its only refresher). Each tab return now makes exactly
+      // ONE bar-only `GET /approval/status` -- no grid reload, no lock-list reload.
+      it('a see-only caller on a LOCKED ฝ่าย gets exactly ONE bar-only GET /approval/status per tab return (focus + visibilitychange) and never a grid reload', async () => {
         const seeOnlyScope: ScopeState = { ...SCOPE, role: 'see_only', fillCostCenters: [], seeCostCenters: ['CC1'] }
         vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030', { editable: false })])
         // The server's real answer for an approver: nothing locked among THEIR (empty) Fill ฝ่าย.
@@ -3013,12 +3017,123 @@ describe('BudgetGrid', () => {
         render(<BudgetGrid scope={seeOnlyScope} initialFilter={{ dept: null, year: 2027 }} />)
         expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
         // ApprovalActionBar fetches its own status once on mount — settle on that
-        // baseline so the assertions below isolate what focus itself triggers.
+        // baseline so the assertions below isolate what a tab return itself triggers.
         await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+        const tableBefore = gridTable()
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
+        vi.mocked(approvalApi.fetchLockedDepartments).mockClear()
+        vi.mocked(budgetApi.fetchBudgetGrid).mockClear()
+
+        for (let tabReturns = 1; tabReturns <= 3; tabReturns++) {
+          fireFocusAndVisibility(1) // ONE tab return = the focus + visibilitychange pair a browser fires together
+          await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(tabReturns))
+          await tick() // let the bar's in-flight guard release before the next return
+        }
+
+        expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(3)
+        expect(approvalApi.fetchApprovalStatus).toHaveBeenLastCalledWith('Solution Delivery', 2027)
+        expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalled()
+        expect(approvalApi.fetchLockedDepartments).not.toHaveBeenCalled()
+        expect(gridTable()).toBe(tableBefore)
+        expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+      })
+
+      it('a bar-only refresh paints the server\'s NEW verdict (Approve appears) while the grid table node, its rows and the busy state stay untouched', async () => {
+        const seeOnlyScope: ScopeState = { ...SCOPE, role: 'see_only', fillCostCenters: [], seeCostCenters: ['CC1'] }
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030', { editable: false })])
+        vi.mocked(approvalApi.fetchApprovalStatus)
+          .mockResolvedValueOnce(approvalStatus(true)) // step 1 still pending on someone else: no Approve for this approver
+          .mockResolvedValue({ ...approvalStatus(true), can_act: true }) // ...then it becomes this approver's turn
+
+        render(<BudgetGrid scope={seeOnlyScope} initialFilter={{ dept: null, year: 2027 }} />)
+        expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+        await screen.findByTestId('approval-status-chip')
+        expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
+        const tableBefore = gridTable()
+        const rowBefore = screen.getByTestId('txn-CC1-5211800030')
+
+        fireFocusAndVisibility(1)
+
+        expect(await screen.findByTestId('approval-approve-btn')).toBeInTheDocument()
+        expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2)
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1) // the mount load only
+        expect(gridTable()).toBe(tableBefore)
+        expect(screen.getByTestId('txn-CC1-5211800030')).toBe(rowBefore)
+        expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+        expect(screen.getByTestId('budget-grid')).not.toHaveAttribute('aria-busy')
+      })
+
+      it('a bar-only refresh that FAILS keeps the previous bar status on screen — no error panel, no grid reload', async () => {
+        const seeOnlyScope: ScopeState = { ...SCOPE, role: 'see_only', fillCostCenters: [], seeCostCenters: ['CC1'] }
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030', { editable: false })])
+        vi.mocked(approvalApi.fetchApprovalStatus)
+          .mockResolvedValueOnce({ ...approvalStatus(true), can_act: true })
+          .mockRejectedValue(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'))
+
+        render(<BudgetGrid scope={seeOnlyScope} initialFilter={{ dept: null, year: 2027 }} />)
+        await screen.findByTestId('approval-approve-btn')
+
+        fireFocusAndVisibility(1)
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+        await tick()
+
+        expect(screen.getByTestId('approval-approve-btn')).toBeInTheDocument()
+        expect(screen.getByTestId('approval-status-chip')).toBeInTheDocument()
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1)
+      })
+
+      it('a bar-only refresh keeps an open reject panel and the reason being typed', async () => {
+        const seeOnlyScope: ScopeState = { ...SCOPE, role: 'see_only', fillCostCenters: [], seeCostCenters: ['CC1'] }
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030', { editable: false })])
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({ ...approvalStatus(true), can_act: true })
+
+        render(<BudgetGrid scope={seeOnlyScope} initialFilter={{ dept: null, year: 2027 }} />)
+        fireEvent.click(await screen.findByTestId('approval-reject-btn'))
+        fireEvent.change(screen.getByTestId('approval-reject-reason-input'), { target: { value: 'กำลังพิมพ์เหตุผล' } })
+
+        fireFocusAndVisibility(1)
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+        await tick()
+
+        expect(screen.getByTestId('approval-reject-panel')).toBeInTheDocument()
+        expect(screen.getByTestId('approval-reject-reason-input')).toHaveValue('กำลังพิมพ์เหตุผล')
+      })
+
+      // Unchanged paths: a bar-only refresh is for the NON-fill branch only.
+      it('a filler\'s OWN ฝ่าย gets no bar-only refresh: still ONE GET /approval/status per tab return (the lock check), never two', async () => {
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+        vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: ['Solution Delivery'], year_not_open: false })
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true)) // server and tab agree: locked
+
+        render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+        expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+        await waitFor(() => expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeDisabled()) // lock list landed
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)) // the bar's mount fetch
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
+        vi.mocked(approvalApi.fetchLockedDepartments).mockClear()
+        vi.mocked(budgetApi.fetchBudgetGrid).mockClear()
+
+        fireFocusAndVisibility(1)
+        await tick()
+
+        expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1) // revalidate's own check, nothing more
+        expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalled() // converged -> no reload
+        expect(approvalApi.fetchLockedDepartments).not.toHaveBeenCalled()
+      })
+
+      it('an admin-wide view still adds nothing on a tab return: no bar refresh, no revalidation, no grid reload', async () => {
+        const pureAdminScope: ScopeState = { ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: [], seeCostCenters: [] }
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([])
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue({ ...approvalStatus(true), status: 'APPROVED', current_position: null })
+
+        render(<BudgetGrid scope={pureAdminScope} initialFilter={{ dept: null, year: 2027 }} />)
+        await waitFor(() => expect(screen.getByText(/ไม่มีรายการ/)).toBeInTheDocument())
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)) // the bar's mount fetch
         vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
         vi.mocked(budgetApi.fetchBudgetGrid).mockClear()
 
-        fireFocusAndVisibility(3)
+        fireFocusAndVisibility(2)
         await tick()
 
         expect(approvalApi.fetchApprovalStatus).not.toHaveBeenCalled()
@@ -3039,9 +3154,14 @@ describe('BudgetGrid', () => {
         await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
         vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
 
-        fireFocusAndVisibility(1) // Solution Delivery: seen, not filled -> nothing to compare against
+        // Solution Delivery: seen, not filled -> no lock comparison (nothing to compare
+        // against), so no grid reload; only the bar re-reads its own status (MED follow-up).
+        fireFocusAndVisibility(1)
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
         await tick()
-        expect(approvalApi.fetchApprovalStatus).not.toHaveBeenCalled()
+        expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1) // the mount load only
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
 
         switchDepartment('Warehouse')
         expect(await screen.findByTestId('txn-CC2-5211800030')).toBeInTheDocument()

@@ -41,6 +41,7 @@ const BASE_PROPS = {
   department: 'Accounting',
   fiscalYear: 2027,
   dataVersion: 0,
+  statusRefreshKey: 0,
   isFillerOfDept: true,
   adminViewEnabled: false,
   isAdmin: false,
@@ -686,6 +687,161 @@ describe('ApprovalActionBar', () => {
 
       await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument())
       expect(screen.queryByTestId('approval-submit-btn')).not.toBeInTheDocument()
+    })
+  })
+
+  // 2026-10-07 (MED follow-up of the grid flicker fix, task
+  // approver-actionbar-focus-refresh): returning to the tab used to reload the
+  // grid for an approver, which also refreshed this bar as a side effect. That
+  // reload is gone, so BudgetGrid now bumps `statusRefreshKey` instead -- on a
+  // tab return while a ฝ่าย the caller does NOT fill is selected -- and the bar
+  // re-reads ONLY its own status. A dedicated signal (not `dataVersion`): that
+  // one is skipped once can_submit is true (R1), which says nothing about whether
+  // the approver's turn has come.
+  describe('statusRefreshKey refetch (tab return on a ฝ่าย the caller does not fill)', () => {
+    const APPROVER_PROPS = { ...BASE_PROPS, isFillerOfDept: false }
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+    const turnOf = (overrides: Partial<ApprovalStatusState> = {}) =>
+      state({ status: 'PENDING_APPROVER1', current_position: 1, can_submit: false, ...overrides })
+
+    it('refetches the status once per bump and paints the new verdict -- even when can_submit is already true (the dataVersion R1 skip must not apply)', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(state({ status: 'DRAFT', can_submit: true }))
+        .mockResolvedValueOnce(turnOf({ can_act: true }))
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Draft'))
+      expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument()
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+
+      await waitFor(() => expect(screen.getByTestId('approval-approve-btn')).toBeInTheDocument())
+      expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step 1')
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2)
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenLastCalledWith('Accounting', 2027)
+    })
+
+    it('skips its own mount run: a non-zero initial key still makes exactly one GET per mount', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(turnOf())
+      render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={5} />)
+      await screen.findByTestId('approval-status-chip')
+      await tick()
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+    })
+
+    // A browser fires `focus` and `visibilitychange` together on a tab switch ->
+    // BudgetGrid bumps twice. Exactly ONE request may result.
+    it('coalesces bumps that arrive while a refresh is in flight into ONE GET, and refreshes again once it settles', async () => {
+      let settleRefresh: (s: ApprovalStatusState) => void = () => {}
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(turnOf())
+        .mockImplementationOnce(() => new Promise<ApprovalStatusState>((resolve) => { settleRefresh = resolve }))
+        .mockResolvedValue(turnOf({ can_act: true }))
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      await screen.findByTestId('approval-status-chip')
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={2} />) // the paired event, refresh 1 still in flight
+      await tick()
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2)
+
+      settleRefresh(turnOf({ current_approver_name: 'Step Two Approver' }))
+      await waitFor(() => expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step Two Approver'))
+      await tick() // the in-flight guard releases right after the status lands
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={3} />) // the NEXT tab return
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(3))
+      await waitFor(() => expect(screen.getByTestId('approval-approve-btn')).toBeInTheDocument())
+    })
+
+    it('does not start a second GET while the very first load is still in flight (nothing to refresh yet)', async () => {
+      let settleFirst: (s: ApprovalStatusState) => void = () => {}
+      vi.mocked(approvalApi.fetchApprovalStatus).mockImplementationOnce(
+        () => new Promise<ApprovalStatusState>((resolve) => { settleFirst = resolve }),
+      )
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+      await tick()
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+
+      settleFirst(turnOf())
+      await screen.findByTestId('approval-status-chip')
+    })
+
+    // The action's own response carries the freshest status; a refresh GET that
+    // raced it could land AFTER it with the pre-action state and bring Approve back.
+    it('does not refresh while an approve/reject/submit action is in flight', async () => {
+      let settleApprove: (s: ApprovalStatusState) => void = () => {}
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(turnOf({ can_act: true }))
+      vi.mocked(approvalApi.approveDepartment).mockImplementation(
+        () => new Promise<ApprovalStatusState>((resolve) => { settleApprove = resolve }),
+      )
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+      await waitFor(() => expect(screen.getByTestId('approval-approve-btn')).toBeDisabled()) // actionBusy
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+      await tick()
+      expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)
+
+      settleApprove(turnOf({ status: 'PENDING_APPROVER2', current_position: 2, can_act: false }))
+      await waitFor(() => expect(screen.queryByTestId('approval-approve-btn')).not.toBeInTheDocument())
+    })
+
+    // Reuses `load({ keepStatusOnError: true })` -- same contract as the dataVersion refetch (R2).
+    it('a failed refresh keeps the previous status on screen, not the load-error panel', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus)
+        .mockResolvedValueOnce(turnOf({ can_act: true }))
+        .mockRejectedValueOnce(new ApiError(502, 'Server error'))
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      await screen.findByTestId('approval-approve-btn')
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      await tick()
+      expect(screen.getByTestId('approval-approve-btn')).toBeInTheDocument()
+      expect(screen.getByTestId('approval-status-chip')).toHaveTextContent('Step 1')
+      expect(screen.queryByText('Server error')).not.toBeInTheDocument()
+    })
+
+    it('does not clear an action message the user is reading', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(turnOf({ can_act: true }))
+      vi.mocked(approvalApi.approveDepartment).mockRejectedValue(new ApiError(502, 'Approve failed', 'เซิร์ฟเวอร์ขัดข้อง'))
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      fireEvent.click(await screen.findByTestId('approval-approve-btn'))
+      await waitFor(() => expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      await tick()
+      expect(screen.getByTestId('approval-action-message')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง')
+    })
+
+    it('does not reset an open reject panel or the reason being typed', async () => {
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(turnOf({ can_act: true }))
+
+      const { rerender } = render(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={0} />)
+      fireEvent.click(await screen.findByTestId('approval-reject-btn'))
+      fireEvent.change(screen.getByTestId('approval-reject-reason-input'), { target: { value: 'กำลังพิมพ์เหตุผล' } })
+
+      rerender(<ApprovalActionBar {...APPROVER_PROPS} statusRefreshKey={1} />)
+
+      await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(2))
+      await tick()
+      expect(screen.getByTestId('approval-reject-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('approval-reject-reason-input')).toHaveValue('กำลังพิมพ์เหตุผล')
     })
   })
 })

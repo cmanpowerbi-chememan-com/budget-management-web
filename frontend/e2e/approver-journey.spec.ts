@@ -162,7 +162,12 @@ test.describe('approver journey', () => {
   // compared `GET /approval/status.locked` (any ฝ่าย) with `GET /approval/locked-
   // departments` (the caller's OWN Fill ฝ่าย only). An approver fills none, so for
   // a locked ฝ่าย the two never agreed and EVERY tab focus reloaded the whole grid.
-  test('2.6 an approver on a LOCKED ฝ่าย returning to the tab never reloads the grid', async ({ page }) => {
+  //
+  // MED follow-up (2026-10-07, task approver-actionbar-focus-refresh): the loop was
+  // also the only thing refreshing the Approve/Reject bar on a tab return, so a
+  // return now re-reads ONLY the bar's status (<= 1 GET per focus) — and the Approve
+  // control must appear when the server's verdict flipped to this approver's turn.
+  test('2.6 an approver on a LOCKED ฝ่าย returning to the tab never reloads the grid — only the bar re-reads its status, and Approve appears once it is their turn', async ({ page }) => {
     const world = approverWorld({
       budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, editable: false, pending: { m01: 100 }, pendingUpdatedAt: 'PEND-1' })]],
       lockedDepartments: [], // the real answer for an approver: they fill nothing, so nothing of theirs is locked...
@@ -181,11 +186,24 @@ test.describe('approver journey', () => {
     const statusCallsBefore = world.captured.approvalStatusQueries.length
 
     for (let i = 0; i < 3; i++) {
+      const before = world.captured.approvalStatusQueries.length
       await page.evaluate(() => window.dispatchEvent(new Event('focus')))
       await page.waitForTimeout(300) // far longer than a mocked round trip: a revalidation (and its reload) would have landed
+      expect(world.captured.approvalStatusQueries.length - before, `status GETs for tab focus #${i + 1}`).toBeLessThanOrEqual(1)
     }
 
     expect(gridFetches(), 'grid reloads caused by 3 tab focuses').toBe(1)
-    expect(world.captured.approvalStatusQueries.length, 'revalidation requests for a ฝ่าย the approver does not fill').toBe(statusCallsBefore)
+    expect(world.captured.approvalStatusQueries.length - statusCallsBefore, 'bar-only status GETs for 3 tab focuses').toBeLessThanOrEqual(3)
+    await expect(page.getByTestId('approval-approve-btn')).toHaveCount(0) // still step 2 on someone else
+
+    // Meanwhile step 1's approval chain moved: it is now THIS approver's turn.
+    world.approvalStatusByDept[DEPT] = approvalState({
+      department: DEPT, status: 'PENDING_APPROVER2', current_position: 2, current_approver_empcode: '123456', can_act: true, locked: true,
+    })
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await expect(page.getByTestId('approval-approve-btn')).toBeVisible()
+    await expect(page.getByTestId('approval-reject-btn')).toBeVisible()
+    expect(gridFetches(), 'the table survives the bar refresh without a reload').toBe(1)
+    await expect(page.getByTestId(`pending-cell-${CC}-${GL_OFFICE_COST}-m01`)).toBeVisible()
   })
 })

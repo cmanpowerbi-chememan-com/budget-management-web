@@ -870,6 +870,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // through a ref for the same reason as `departmentRef` — the listeners attach
   // once per mount, so they must see the CURRENT picker selection.
   const isFillerOfSelectedDeptRef = useRef(isFillerOfSelectedDept)
+  // 2026-10-07 MED follow-up (task approver-actionbar-focus-refresh): bumped by
+  // `revalidate` below on a tab return over a ฝ่าย the caller does not fill;
+  // ApprovalActionBar refetches its status in place on every change.
+  const [statusRefreshKey, setStatusRefreshKey] = useState(0)
   useEffect(() => {
     departmentRef.current = department
   }, [department])
@@ -901,8 +905,17 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       // agree once it is locked, so every focus reloaded the whole grid, forever.
       // Only a ฝ่าย the caller fills can be compared like with like — and that
       // is the decision-I intent (Issue #13, 2026-09-17): a FILLER's stale tab
-      // locks itself. Return before any request at all.
-      if (!isFillerOfSelectedDeptRef.current) return
+      // locks itself. No request, no grid reload from HERE.
+      // MED follow-up (task approver-actionbar-focus-refresh): that old reload
+      // loop was ALSO the only thing refreshing ApprovalActionBar on a tab
+      // return, so an approver whose turn had come meanwhile saw no Approve
+      // button. Bump `statusRefreshKey`: the bar re-reads ITS OWN status (one
+      // GET, coalesced there across the focus + visibilitychange pair) and the
+      // grid stays untouched. Bar-only: no placeholder, no lock-list reload.
+      if (!isFillerOfSelectedDeptRef.current) {
+        if (departmentRef.current) setStatusRefreshKey((key) => key + 1)
+        return
+      }
       const dept = departmentRef.current
       if (!dept || inFlight) return
       inFlight = true
@@ -1134,6 +1147,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
           department={department}
           fiscalYear={year}
           dataVersion={dataVersion}
+          statusRefreshKey={statusRefreshKey}
           isFillerOfDept={isFillerOfSelectedDept}
           adminViewEnabled={adminViewEnabled}
           isAdmin={scope.isAdmin}

@@ -1,8 +1,16 @@
 {
   "project": "04.budget_management_web",
   "title": "Budget management web",
-  "updated": "2026-10-07T18:54:30+0700",
+  "updated": "2026-10-07T20:24:04+0700",
   "tasks": [
+    {
+      "id": "log-5a81112",
+      "state": "done",
+      "created": "2026-10-07T18:54:32+0700",
+      "updated": "2026-10-07T18:54:32+0700",
+      "agent": "autolog",
+      "ai": "docs(plan): note main pushed with ledger redaction [commit 5a81112]"
+    },
     {
       "id": "push-main-flicker-fix",
       "state": "done",
@@ -21,10 +29,10 @@
     },
     {
       "id": "approver-actionbar-focus-refresh",
-      "state": "willdo",
+      "state": "doing",
       "created": "2026-10-07T16:24:35+0700",
-      "updated": "2026-10-07T16:24:35+0700",
-      "ai": "FOLLOW-UP of gate MED on 6ac82c1 (jakkaritw 2026-10-07: separate task, after deploy): approver/see-only on a NON-fill ฝ่าย gets no focus-triggered refresh since the reload loop was removed -> ApprovalActionBar stale on tab return (e.g. step-2 approver waiting for step 1). Proposed: on focus/visibility for non-fill + non-admin-wide ฝ่าย refresh ONLY the bar status (1 GET /approval/status, inFlight guard, 0 grid reloads); relax e2e 2.6 to <=1 status call per focus. Server already 409s stale actions (ApprovalActionBar.tsx ~L180).",
+      "updated": "2026-10-07T20:24:04+0700",
+      "ai": "IMPLEMENTED + GATED 2026-10-07: BudgetGrid statusRefreshKey bumped from revalidate()'s non-fill early return; ApprovalActionBar effect on [statusRefreshKey] -> load({keepStatusOnError:true}), guards !status / actionBusy / statusRefreshInFlight (coalesces focus+visibilitychange). Tests +8 ApprovalActionBar, BudgetGrid test 10 rewritten +5 new, e2e 2.6 Approve appears after can_act flip. Gate combined 06+07+08 APPROVE WITH SUGGESTIONS (LOWs: no response-order guard in bar load() same class as before; double grid re-render per tab return; no fetch timeout; loadError not cleared by refresh). vitest 1069/1069, next build ok, oxlint 0, playwright 26/26, mutation 7/7. NEXT: commit+push, deploy needs jakkaritw approval.",
       "agent": "claude"
     },
     {
@@ -1804,14 +1812,6 @@
       "created": "2026-09-07T03:36:51+0700",
       "updated": "2026-09-21T00:20:14+0700",
       "ai": "CLOSED as already-done by sweep wf_96c5244e-a2b 2026-09-21, proof in docs/reviews/remaining-work-sweep-2026-09-21.md + -verdicts.json. The UAT round completed and was signed off; the human round was cleared from prd across 5 wipes 09-15 to 09-18.",
-      "agent": "claude"
-    },
-    {
-      "id": "uat-test-script-doc",
-      "state": "done",
-      "created": "2026-09-07T00:31:55+0700",
-      "updated": "2026-09-07T19:58:02+0700",
-      "ai": "[COMMITTED a99cf98 on main, NOT pushed] 21 files: requirement_spec/5_uat/{xlsx, UAT_Test_Script.md, _build/build_uat_test_cases.py, _build/validate_uat_pack.py} + .scratch/uat-prep/{MAP.md, tickets/T5, _T5_brief.md, _fix_list.md, _fix_list_2.md, _sit_cases.txt, _sit_dump.txt, cases/W1-W8.json} + tracker. DELIBERATELY EXCLUDED from the commit (working tree still has 55 unrelated changes from other sessions - mockup deletions, 4_sit xlsx, setup/phase2_harness_dkl.py, db/queries/, docs/manual/, monthly_update/, playdata/, plan/sit/evidence/): only this session's UAT work was staged. Also excluded on purpose: _build/validate_uat_pack.out.txt (regenerated on every run, would churn) and the ~$Budget_UAT_Test_Cases lock file that existed while the workbook was open in Excel. FINAL STATE: 54 cases, validator 10 PASS 0 FAIL re-run independently in the main session, workbook+md byte-identical across 3 builds, UAT-40 at run order 52, 61/61 SIT ids reconciled, 5 mid-round return points signposted both directions, D&A ends Approved / Solution Delivery ends Rejected (editable). PART B STILL BLOCKED BY D7: entry/exit criteria, start+end dates, the sign-off sheet, the two 1-page Thai guides. OTHER OPEN OBLIGATIONS THIS TOUCHES: #ccdept-revert-pornthipp-solution-delivery (must revert pornthipp's SD fill row AFTER the round - the round depends on it), #prd-appenv-uat-revert-after-uat (session lifetime 1h -> 14h). MANUAL PREP BEFORE THE ROUND: create the SharePoint folders 'ekasan fai/Data & Analytic/2027/' and '.../Solution Delivery/2027/' (5 attachment cases are unrunnable without them), upload 1 file into the SD folder for UAT-31, fill the PIC column, and warn suchanyay she cannot edit her own department while SD sits mid-chain.",
       "agent": "claude"
     },
     {

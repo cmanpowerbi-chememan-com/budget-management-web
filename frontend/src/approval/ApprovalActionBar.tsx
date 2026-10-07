@@ -26,6 +26,15 @@ export interface ApprovalActionBarProps {
    * the status IN PLACE -- unlike a department/fiscalYear change, it must
    * NOT reset actionMessage/rejecting/reason (see the effect below). */
   dataVersion: number
+  /** Bumped by the parent when the tab regains focus/visibility while the
+   * selected ฝ่าย is one the caller does NOT fill (an approver / see-only
+   * viewer; 2026-10-07, task approver-actionbar-focus-refresh). The grid no
+   * longer reloads on a tab return for such a ฝ่าย, so this bar must re-read
+   * its own status itself -- ONE in-place refetch, nothing else. A separate
+   * signal from `dataVersion` on purpose: that one is skipped once
+   * `can_submit` is true (R1), which says nothing about whether the
+   * approver's turn has come. */
+  statusRefreshKey: number
   isFillerOfDept: boolean
   adminViewEnabled: boolean
   /** Raw `scope.isAdmin` (NOT the admin-view toggle) — gates the ADR-0027
@@ -52,7 +61,7 @@ function statusToneClass(status: string): string {
  * the server — this component only shows/hides controls and surfaces the
  * server's own error messages. */
 export function ApprovalActionBar({
-  department, fiscalYear, dataVersion, isFillerOfDept, adminViewEnabled, isAdmin, onChanged,
+  department, fiscalYear, dataVersion, statusRefreshKey, isFillerOfDept, adminViewEnabled, isAdmin, onChanged,
 }: ApprovalActionBarProps) {
   const [status, setStatus] = useState<ApprovalStatusState | null>(null)
   const [loading, setLoading] = useState(false)
@@ -136,6 +145,31 @@ export function ApprovalActionBar({
     if (department) load({ keepStatusOnError: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataVersion])
+
+  // 2026-10-07 (MED follow-up of the grid flicker fix, task
+  // approver-actionbar-focus-refresh): BudgetGrid bumps `statusRefreshKey` on a
+  // tab return over a ฝ่าย the caller does not fill, and nothing else refreshes
+  // this bar there (the grid no longer reloads). One in-place refetch, same
+  // contract as the dataVersion effect (keepStatusOnError; actionMessage /
+  // rejecting / reason untouched) but deliberately NOT subject to its R1
+  // `can_submit` skip. It asks only when there is something worth asking:
+  //  - `!status`: the first load is still in flight (or failed and shows Retry).
+  //    This is also what makes the mount run a no-op -- a skip-first ref would
+  //    not survive React StrictMode's dev double-effect;
+  //  - `actionBusy`: an approve/reject/submit is mid-flight and its response
+  //    carries the freshest status -- a racing GET landing after it would
+  //    repaint the pre-action verdict;
+  //  - `statusRefreshInFlight`: a browser fires `focus` AND `visibilitychange`
+  //    on a tab switch (two bumps) -- exactly ONE GET per tab return.
+  const statusRefreshInFlight = useRef(false)
+  useEffect(() => {
+    if (!department || !status || actionBusy || statusRefreshInFlight.current) return
+    statusRefreshInFlight.current = true
+    void load({ keepStatusOnError: true }).finally(() => {
+      statusRefreshInFlight.current = false
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusRefreshKey])
 
   // Issue #32 item 3: the 409 special case is DELETED — `ApiError.message`
   // already carries the shared Thai sentence for a 409 (`messageForStatus`,
