@@ -41,6 +41,14 @@ function rowKey(cc: string, gl: string): string {
   return `${cc}|${gl}`
 }
 
+/** The three inputs that decide WHICH rows `GET /budget` returns — two loads of
+ * the same view show the same ฝ่าย/year/hat, so one may refresh the other in place. */
+interface GridView {
+  year: number
+  department: string | null
+  adminViewEnabled: boolean
+}
+
 function defaultPlanningYear(): number {
   // Pending layer is the NEXT fiscal year relative to "now" (planning
   // year Y+1, per read_model.get_budget_grid's `year` param contract).
@@ -76,6 +84,21 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // Latest-request guard for `loadGrid` (gate fix round 2, item A) — see
   // that function's own doc comment for why this exists.
   const loadSeqRef = useRef(0)
+  // 2026-10-07 (prd report "หน้าจอกระพริบ + เลื่อนขึ้นบนสุด"): the view the rows
+  // in `rows` were LAST successfully loaded for. Every reload used to swap
+  // GridTable for the `.grid-loading` placeholder, unmounting its `.table-wrap`
+  // scroll container (and collapsing the page height), so any reload — a
+  // special-GL subform save, an approval action, a lock revalidation — threw a
+  // filler/approver back to the top. A reload of the SAME view (compared
+  // against this, never against `loading`) now keeps the table mounted and
+  // updates the rows in place; only first load / a year, ฝ่าย or admin-hat
+  // switch still shows the placeholder.
+  const [loadedView, setLoadedView] = useState<GridView | null>(null)
+  // Bumped on every successful row write (save / delete / add). A background
+  // reload that was already in flight when one landed may carry a snapshot OLDER
+  // than that write — applying it would visibly revert the user's save now that
+  // the inputs stay mounted during a reload (see `loadGrid`).
+  const rowWritesRef = useRef(0)
 
   // A9: which special-GL subform (or Trip Manager) is currently open, if
   // any — only one at a time, opened from a special row's "เปิดฟอร์มย่อย" /
@@ -346,12 +369,25 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     // so a broken department list never blocks this permanently.
     if (hasNoScope || !deptResolved) return
     const seq = ++loadSeqRef.current
+    const writesAtStart = rowWritesRef.current
     setLoading(true)
     setError(null)
     try {
       const data = await fetchBudgetGrid({ year, department: department ?? undefined, adminViewEnabled })
       if (seq !== loadSeqRef.current) return
+      // 2026-10-07: a row write (save / delete / add) landed while this request
+      // was in flight, so its snapshot may be OLDER than that write — applying
+      // it would visibly revert the user's save, because the inputs now stay
+      // mounted during a same-view reload. Drop it and fetch once more. The new
+      // call claims the next `seq` (so the `finally` below leaves `loading` to
+      // it) and, like every non-effect reload, goes through `loadGridRef` for
+      // the freshest year/ฝ่าย.
+      if (writesAtStart !== rowWritesRef.current) {
+        loadGridRef.current()
+        return
+      }
       setRows(admitRows(data, department))
+      setLoadedView({ year, department, adminViewEnabled })
     } catch (err) {
       if (seq !== loadSeqRef.current) return
       const message = err instanceof ApiError ? err.message : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
@@ -490,6 +526,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     try {
       const payload = buildSavePayload(optimistic, year)
       const saved = await saveRow(payload)
+      rowWritesRef.current += 1 // an in-flight reload's older snapshot must not revert this (see `loadGrid`)
       setRows((prev) => prev.map((r) => (rowKey(r.cost_center, r.gl_account) === key ? mergeSavedRow(r, saved) : r)))
       setRowMessages((prev) => {
         const next = { ...prev }
@@ -647,6 +684,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         return { ok: true }
       }
 
+      rowWritesRef.current += 1 // same reason as persistRow's success branch
       const months = Object.fromEntries(
         (['m01', 'm02', 'm03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10', 'm11', 'm12'] as MonthKey[]).map((m) => [
           m,
@@ -742,6 +780,7 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         costCenter: row.cost_center, glAccount: row.gl_account, fiscalYear: year,
         expectedUpdatedAt: row.pending.updated_at ?? '',
       })
+      rowWritesRef.current += 1 // same reason as persistRow's success branch
       setRows((prev) => prev.filter((r) => rowKey(r.cost_center, r.gl_account) !== key))
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -827,6 +866,10 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
   // APPROVED ฝ่าย got a spurious mismatch (nothing is ever in
   // `lockedDepartments` for admin-wide) and a reload on every focus.
   const adminViewEnabledRef = useRef(adminViewEnabled)
+  // 2026-10-07 (like-with-like, same class as MED-1 above): read by `revalidate`
+  // through a ref for the same reason as `departmentRef` — the listeners attach
+  // once per mount, so they must see the CURRENT picker selection.
+  const isFillerOfSelectedDeptRef = useRef(isFillerOfSelectedDept)
   useEffect(() => {
     departmentRef.current = department
   }, [department])
@@ -843,10 +886,23 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
     adminViewEnabledRef.current = adminViewEnabled
   }, [adminViewEnabled])
   useEffect(() => {
+    isFillerOfSelectedDeptRef.current = isFillerOfSelectedDept
+  }, [isFillerOfSelectedDept])
+  useEffect(() => {
     if (hasNoScope) return
     let inFlight = false
     async function revalidate() {
       if (adminViewEnabledRef.current) return
+      // 2026-10-07 (prd "หน้าจอกระพริบ + เลื่อนขึ้นบนสุด", approvers/see-only
+      // viewers): `GET /approval/status.locked` answers for ANY ฝ่าย, but
+      // `lockedDepartmentsRef` comes from `GET /approval/locked-departments`,
+      // which is scoped to the caller's OWN Fill ฝ่าย. For a ฝ่าย the caller does
+      // not fill (every approver: `fill_cost_centers = []`) the two can never
+      // agree once it is locked, so every focus reloaded the whole grid, forever.
+      // Only a ฝ่าย the caller fills can be compared like with like — and that
+      // is the decision-I intent (Issue #13, 2026-09-17): a FILLER's stale tab
+      // locks itself. Return before any request at all.
+      if (!isFillerOfSelectedDeptRef.current) return
       const dept = departmentRef.current
       if (!dept || inFlight) return
       inFlight = true
@@ -907,8 +963,21 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
       : null
   const isSapStale = sapFreshness?.isWarn ?? false
 
+  // 2026-10-07: true only when `rows` were loaded for exactly the view on
+  // screen now — the one case where a reload (or a failed reload) may keep the
+  // table mounted. Anything else (first load, year / ฝ่าย / admin-hat switch)
+  // renders exactly as before, so another view's rows never sit under the new
+  // heading (gotcha_grid_stale_closure_reloads).
+  const rowsAreForThisView =
+    loadedView !== null &&
+    loadedView.year === year &&
+    loadedView.department === department &&
+    loadedView.adminViewEnabled === adminViewEnabled
+
   return (
-    <div className={`budget-grid${isFullscreen ? ' is-fullscreen' : ''}`} data-testid="budget-grid">
+    // aria-busy (2026-10-07): the whole grid block is being refreshed — screen
+    // readers hold off announcing it while a same-view reload swaps rows in place.
+    <div className={`budget-grid${isFullscreen ? ' is-fullscreen' : ''}`} data-testid="budget-grid" aria-busy={loading || undefined}>
       <div className="grid-toolbar">
         <YearPicker year={year} onChange={setYear} />
         <DeptPicker
@@ -1036,9 +1105,14 @@ export function BudgetGrid({ scope, initialFilter }: BudgetGridProps) {
         </div>
       )}
 
-      {loading && !error && <div className="grid-loading">กำลังโหลดข้อมูลงบประมาณ…</div>}
+      {/* 2026-10-07 (flicker + scroll-to-top fix): the placeholder replaces the
+          table only when the rows on screen are NOT this view's. A reload of the
+          same view keeps GridTable — and with it `.table-wrap`'s scroll position
+          and the page height — mounted and updates the rows in place; a FAILED
+          same-view reload keeps the rows too, with the error banner above. */}
+      {loading && !error && !rowsAreForThisView && <div className="grid-loading">กำลังโหลดข้อมูลงบประมาณ…</div>}
 
-      {!loading && !error && (
+      {(rowsAreForThisView || (!loading && !error)) && (
         <GridTable
           rows={rows}
           glRef={glRef}

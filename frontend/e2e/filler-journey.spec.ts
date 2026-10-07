@@ -15,6 +15,7 @@ import {
   GL_ENTERTAIN_EXT,
   GL_OFFICE_COST,
   GL_OFFICE_SGA,
+  GL_REF,
   GL_TRAVEL_PERDIEM_COST,
   installMocks,
   makeBudgetRow,
@@ -340,6 +341,81 @@ test.describe('filler journey', () => {
 
     await expect.poll(() => realBudgetFetchCount(world)).toBeGreaterThanOrEqual(2) // onSaved() refetches the grid
     await expect(page.getByTestId(`pending-cell-${CC}-${GL_ENTERTAIN_EXT}-m01`)).toHaveText('5,000.00')
+  })
+
+  // prd report 2026-10-07 "หน้าจอกระพริบ + เลื่อนขึ้นบนสุด": a subform save reloads
+  // the grid, and the reload used to swap the table for the loading placeholder —
+  // destroying the `.table-wrap` scroll box and collapsing the page, so the filler
+  // landed back at the top. Scroll geometry only exists in a real browser (jsdom
+  // cannot see it), so this drives real Chromium.
+  test('1.6c saving the subform while scrolled down keeps the table mounted and both scroll positions (no flicker, no jump to the top)', async ({ page }) => {
+    const synthetic = Array.from({ length: 30 }, (_, i) => `52118${String(i).padStart(5, '0')}`)
+    const gridRows = (entertainmentM01: number, token: string) => [
+      ...synthetic.map((gl, i) => makeBudgetRow({ costCenter: CC, glAccount: gl, pending: { m01: 100 + i }, pendingUpdatedAt: `P-${i}` })),
+      makeBudgetRow({ costCenter: CC, glAccount: GL_ENTERTAIN_EXT, pending: { m01: entertainmentM01 }, pendingUpdatedAt: token }),
+    ]
+    const world = fillerWorld({
+      // The grid hides GLs missing from the master, so the synthetic ones are
+      // added to it. Groups sort alphabetically: 'Advertising…' < 'Entertainment'
+      // puts the special-GL row LAST, deep inside .table-wrap.
+      glAccounts: [
+        ...GL_REF,
+        ...synthetic.map((gl, i) => ({ gl_code: gl, gl_group: 'Advertising Expenses', gl_name: `ค่าใช้จ่ายทดสอบ ${i}`, is_special: false })),
+      ],
+      budgetGridQueue: [gridRows(0, 'PEND-ENT-1'), gridRows(5000, 'PEND-ENT-2')],
+      detailLinesQueue: [[]],
+      saveDetailQueue: [
+        ok({
+          detail_id: 777, cost_center: CC, gl_account: GL_ENTERTAIN_EXT, fiscal_year: PLANNING_YEAR, trip_id: null, gl_group: 'Entertainment',
+          line_label: null,
+          m01: 5000, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+          total_year: 5000, meta_json: { 'ประเภทการรับรอง': 'Customer', 'รายละเอียด': 'lunch with client' }, updated_at: 'DETAIL-TOKEN-1',
+        }),
+      ],
+    })
+    await installMocks(page, world)
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    const opener = page.getByTestId(`open-subform-${CC}-${GL_ENTERTAIN_EXT}`)
+    await opener.scrollIntoViewIfNeeded() // scrolls the grid's own box AND the page, like a filler reaching the last row
+    const scrollPositions = () =>
+      page.evaluate(() => ({ page: Math.round(window.scrollY), box: Math.round(document.querySelector('.table-wrap')!.scrollTop) }))
+    // Marks the live <table> and watches for the loading placeholder: React never
+    // touches an attribute it did not set, so the mark survives only if the
+    // very same node survives the reload.
+    await page.evaluate(() => {
+      document.querySelector('table.data-table')!.setAttribute('data-e2e-keep', '1')
+      const seen = { placeholder: false }
+      ;(window as unknown as { __gridPlaceholder: typeof seen }).__gridPlaceholder = seen
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node instanceof HTMLElement && node.textContent?.includes('กำลังโหลดข้อมูลงบประมาณ')) seen.placeholder = true
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true })
+    })
+
+    await opener.click()
+    await expect(page.getByTestId('detail-subform')).toBeVisible()
+    await page.getByRole('button', { name: '+ เพิ่มรายการ' }).click()
+    await page.getByLabel('ประเภทการรับรอง').selectOption('Customer')
+    await page.getByLabel('รายละเอียด').fill('lunch with client')
+    await page.getByLabel('m01 new-0').fill('5000')
+    const before = await scrollPositions()
+    expect(before.page, 'precondition: the page was scrolled down').toBeGreaterThan(100)
+    expect(before.box, 'precondition: the grid was scrolled inside .table-wrap').toBeGreaterThan(100)
+
+    await page.getByTestId('save-all').click()
+    await expect.poll(() => realBudgetFetchCount(world)).toBeGreaterThanOrEqual(2) // onSaved() refetches the grid
+    await expect(page.getByTestId('detail-subform')).toBeHidden()
+    await expect(page.getByTestId(`pending-cell-${CC}-${GL_ENTERTAIN_EXT}-m01`)).toHaveText('5,000.00') // the refreshed value landed in place
+
+    const after = await scrollPositions()
+    expect(Math.abs(after.page - before.page), `page scroll moved ${before.page} -> ${after.page}`).toBeLessThanOrEqual(2)
+    expect(Math.abs(after.box - before.box), `.table-wrap scroll moved ${before.box} -> ${after.box}`).toBeLessThanOrEqual(2)
+    await expect(page.locator('table.data-table[data-e2e-keep="1"]')).toHaveCount(1) // the same table node, never remounted
+    expect(await page.evaluate(() => (window as unknown as { __gridPlaceholder: { placeholder: boolean } }).__gridPlaceholder.placeholder)).toBe(false)
   })
 
   test('1.7 deleting a detail line confirms, sends the id + lock token, and the grid refetches', async ({ page }) => {

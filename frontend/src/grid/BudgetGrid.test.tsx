@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BudgetRow } from '../api/types'
+import type { ApprovalStatusState, BudgetRow } from '../api/types'
 import type { ScopeState } from '../auth/useScope'
 import { ApiError } from '../api/client'
 import * as approvalApi from '../api/approval'
@@ -8,7 +8,7 @@ import * as budgetApi from '../api/budget'
 import * as referenceApi from '../api/reference'
 import * as subformApi from '../api/subform'
 import { BudgetGrid, SCOPE_ACCESS_CONTACT_EMAIL, SCOPE_ACCESS_SOURCE_FILE } from './BudgetGrid'
-import { blankLayer, makeRow as makeRowFromOverrides } from './testUtils'
+import { blankLayer, makeRow as makeRowFromOverrides, sapLayer } from './testUtils'
 
 vi.mock('../api/budget')
 vi.mock('../api/subform')
@@ -2693,6 +2693,390 @@ describe('BudgetGrid', () => {
 
       await waitFor(() => expect(screen.getAllByRole('alert').at(-1)).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
       expect(exportButton()).not.toBeDisabled()
+    })
+  })
+
+  // Flicker + scroll-to-top fix (2026-10-07, prd report "หน้าจอกระพริบ +
+  // เลื่อนขึ้นบนสุด"): every reload used to swap GridTable for the
+  // `.grid-loading` placeholder, so a SAME-view refresh (subform save,
+  // approval action, lock revalidation) destroyed the `.table-wrap` scroll
+  // container and the user landed at the top. jsdom has no scroll geometry,
+  // so these pin the CAUSE (the table node survives, the placeholder never
+  // appears); e2e/filler-journey + approver-journey pin the symptom itself
+  // in a real browser.
+  describe('same-view refresh keeps the grid mounted (2026-10-07 flicker + scroll-to-top fix)', () => {
+    const LOADING_TEXT = 'กำลังโหลดข้อมูลงบประมาณ…'
+    const YEAR_PICKER_LABEL = 'ปีฐาน (SAP/Approved · Pending = ปีถัดไป)'
+    const twoDeptScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC1', 'CC2'], seeCostCenters: ['CC1', 'CC2'] }
+    const twoDepartments = [
+      ...DEPARTMENTS,
+      { cost_center: 'CC2', department: 'Warehouse', division: 'Digital Technology Division', c_level: 'CTO' },
+    ]
+
+    /** `GET /approval/status` — `locked` is the only field revalidation reads. A
+     * filler whose tab still believes the ฝ่าย is open (`lockedDepartments`
+     * empty) therefore sees a mismatch on focus and reloads the grid once. */
+    function approvalStatus(locked: boolean): ApprovalStatusState {
+      return {
+        department: 'Solution Delivery', fiscal_year: 2027, status: locked ? 'PENDING_APPROVER1' : 'DRAFT',
+        submitter_empcode: null, submitter_email: null, submitted_at: null, approver1_empcode: null,
+        approver1_actioned_at: null, approver2_actioned_at: null, approver3_actioned_at: null,
+        reject_reason: null, rejected_by_empcode: null, updated_at: null, current_position: locked ? 1 : null,
+        current_approver_empcode: null, current_approver_name: null, can_act: false, notification_warning: null,
+        is_post_deadline: false, can_submit: false, submit_blocked_reason: null, locked,
+      }
+    }
+
+    function sapRow(m01: number, overrides: Partial<BudgetRow> = {}): BudgetRow {
+      return makeRow('CC1', '5211800030', { sap: sapLayer({ m01 }), ...overrides })
+    }
+
+    function pendingRow(m01: number, updatedAt: string): BudgetRow {
+      return makeRow('CC1', '5211800030', { pending: { ...makeRow('x', 'y').pending, m01, total_year: m01, updated_at: updatedAt } })
+    }
+
+    const gridTable = () => document.querySelector('table.data-table')
+    const downloadButton = () => screen.getByRole('button', { name: 'ดาวน์โหลด Excel' })
+    const sapCell = () => screen.getByTestId('sap-value-CC1-5211800030-m01')
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+    /** A refresh that stays in flight until the test resolves it. */
+    function pendingRefresh() {
+      const handle = { resolve: (_rows: BudgetRow[]) => {} }
+      const promise = new Promise<BudgetRow[]>((resolve) => { handle.resolve = resolve })
+      return { handle, promise }
+    }
+
+    beforeEach(() => {
+      vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue(GL_REF)
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(DEPARTMENTS)
+    })
+
+    it('a lock-revalidation refresh keeps the SAME table node, never shows the loading placeholder, marks the grid busy, and paints the refreshed values in place', async () => {
+      const refresh = pendingRefresh()
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([sapRow(100)]).mockReturnValueOnce(refresh.promise)
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(sapCell()).toHaveTextContent('100'))
+      const tableBefore = gridTable()
+      expect(tableBefore).not.toBeNull()
+      expect(screen.getByTestId('budget-grid')).not.toHaveAttribute('aria-busy')
+
+      fireEvent(window, new Event('focus')) // server says locked, this tab says open -> one same-view reload
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(downloadButton()).toBeDisabled()) // `loading` is now true in the DOM
+
+      expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+      expect(gridTable()).toBe(tableBefore)
+      expect(screen.getByTestId('budget-grid')).toHaveAttribute('aria-busy', 'true')
+      expect(sapCell()).toHaveTextContent('100') // old values stay readable while refreshing
+
+      refresh.handle.resolve([sapRow(250)])
+      await waitFor(() => expect(sapCell()).toHaveTextContent('250'))
+      expect(gridTable()).toBe(tableBefore)
+      expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+      expect(screen.getByTestId('budget-grid')).not.toHaveAttribute('aria-busy')
+    })
+
+    // The reported trigger itself (T1): a special-GL subform save calls
+    // `onSaved` -> `handleSpecialSaved` -> reload. Driven through the REAL
+    // DetailSubform (a delete is its lightest `onSaved` path — the modal stays
+    // open, nothing else needs filling in).
+    it('a special-GL subform save (onSaved) refreshes the grid in place — same table node, no placeholder', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      try {
+        const refresh = pendingRefresh()
+        vi.mocked(budgetApi.fetchGlAccounts).mockResolvedValue([
+          { gl_code: '5211900030', gl_group: 'Entertainment', gl_name: 'Ent COST', is_special: true },
+        ])
+        const specialRow = (m01: number) => makeRow('CC1', '5211900030', { sap: sapLayer({ m01 }) })
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([specialRow(100)]).mockReturnValueOnce(refresh.promise)
+        vi.mocked(subformApi.fetchDetailLines).mockResolvedValue([
+          {
+            detail_id: 1, cost_center: 'CC1', gl_account: '5211900030', fiscal_year: 2027, trip_id: null, gl_group: 'Entertainment',
+            line_label: null, m01: 0, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+            total_year: 0, meta_json: null, updated_at: '2026-02-01T00:00:00',
+          },
+        ])
+        vi.mocked(subformApi.deleteDetailLine).mockResolvedValue({ ok: true })
+
+        render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+        fireEvent.click(await screen.findByTestId('open-subform-CC1-5211900030'))
+        await waitFor(() => expect(screen.getByTestId('detail-row-existing-1')).toBeInTheDocument())
+        const tableBefore = gridTable()
+        expect(tableBefore).not.toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'ลบรายการ' })) // -> deleteDetailLine ok -> onSaved()
+        await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+        await waitFor(() => expect(downloadButton()).toBeDisabled())
+
+        expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+        expect(gridTable()).toBe(tableBefore)
+
+        refresh.handle.resolve([specialRow(250)])
+        await waitFor(() => expect(screen.getByTestId('sap-value-CC1-5211900030-m01')).toHaveTextContent('250'))
+        expect(gridTable()).toBe(tableBefore)
+      } finally {
+        confirmSpy.mockRestore()
+      }
+    })
+
+    // The view switches below must stay EXACTLY as before the fix: only a refresh
+    // of the rows already on screen may keep the table mounted — rows of another
+    // ฝ่าย / year / hat must never sit under the new selection (the HIGH bug
+    // class gotcha_grid_stale_closure_reloads is about).
+    it('a ฝ่าย switch still shows the loading placeholder and never the previous ฝ่าย\'s rows under the new heading', async () => {
+      const warehouseGrid = pendingRefresh()
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030')]).mockReturnValueOnce(warehouseGrid.promise)
+
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: 2027 }} />)
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+
+      switchDepartment('Warehouse')
+      await waitFor(() => expect(screen.getByText(LOADING_TEXT)).toBeInTheDocument())
+      expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument()
+      expect(gridTable()).toBeNull()
+
+      warehouseGrid.handle.resolve([makeRow('CC2', '5211800030', { department: 'Warehouse' })])
+      expect(await screen.findByTestId('txn-CC2-5211800030')).toBeInTheDocument()
+      expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+    })
+
+    it('a year switch still shows the loading placeholder and never the previous year\'s rows', async () => {
+      const nextYearGrid = pendingRefresh()
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([makeRow('CC1', '5211800030')]).mockReturnValueOnce(nextYearGrid.promise)
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText(YEAR_PICKER_LABEL), { target: { value: '2026' } })
+      await waitFor(() => expect(screen.getByText(LOADING_TEXT)).toBeInTheDocument())
+      expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument()
+      expect(gridTable()).toBeNull()
+
+      nextYearGrid.handle.resolve([makeRow('CC1', '5211800030')])
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+      expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+    })
+
+    it('an admin-hat toggle is a view switch too — placeholder, never the other hat\'s rows even for the SAME ฝ่าย', async () => {
+      const dualRoleScope: ScopeState = { ...SCOPE, isAdmin: true, role: 'admin', fillCostCenters: ['CC1'], seeCostCenters: ['CC1'] }
+      const adminGrid = pendingRefresh()
+      // Both hats resolve to the same ฝ่าย: year and ฝ่าย are unchanged, ONLY adminViewEnabled differs.
+      vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValueOnce([sapRow(100)]).mockReturnValueOnce(adminGrid.promise)
+
+      render(<BudgetGrid scope={dualRoleScope} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(sapCell()).toHaveTextContent('100'))
+
+      fireEvent.click(screen.getByTestId('admin-mode-checkbox'))
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(screen.getByText(LOADING_TEXT)).toBeInTheDocument())
+      expect(screen.queryByTestId('sap-value-CC1-5211800030-m01')).not.toBeInTheDocument()
+      expect(gridTable()).toBeNull()
+
+      adminGrid.handle.resolve([sapRow(250)])
+      await waitFor(() => expect(sapCell()).toHaveTextContent('250'))
+    })
+
+    it('a FAILED ฝ่าย switch keeps today\'s behaviour: the error alone, never the previous ฝ่าย\'s rows or table', async () => {
+      vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+      vi.mocked(budgetApi.fetchBudgetGrid)
+        .mockResolvedValueOnce([makeRow('CC1', '5211800030')])
+        .mockRejectedValueOnce(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'))
+
+      render(<BudgetGrid scope={twoDeptScope} initialFilter={{ dept: null, year: 2027 }} />)
+      expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+
+      switchDepartment('Warehouse')
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+      expect(gridTable()).toBeNull()
+      expect(screen.queryByTestId('txn-CC1-5211800030')).not.toBeInTheDocument()
+    })
+
+    it('a same-view refresh that FAILS keeps the rows on screen with the error + retry, and the retry updates them in place', async () => {
+      vi.mocked(budgetApi.fetchBudgetGrid)
+        .mockResolvedValueOnce([sapRow(100)])
+        .mockRejectedValueOnce(new ApiError(502, 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'))
+        .mockResolvedValueOnce([sapRow(250)])
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      await waitFor(() => expect(sapCell()).toHaveTextContent('100'))
+      const tableBefore = gridTable()
+
+      fireEvent(window, new Event('focus')) // -> same-view reload -> 502
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('เซิร์ฟเวอร์ขัดข้อง'))
+      expect(gridTable()).toBe(tableBefore)
+      expect(sapCell()).toHaveTextContent('100')
+      expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }))
+      await waitFor(() => expect(sapCell()).toHaveTextContent('250'))
+      expect(gridTable()).toBe(tableBefore)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    // Data safety created by keeping the inputs mounted during a refresh (the
+    // table used to vanish during every reload, so neither race could happen).
+    it('a cell being typed in when a refresh lands keeps its text and its focus, and still commits against the refreshed lock token', async () => {
+      const refresh = pendingRefresh()
+      vi.mocked(budgetApi.fetchBudgetGrid)
+        .mockResolvedValueOnce([makeRow('CC1', '5211800030', { sap: sapLayer({ m01: 100 }), pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: 'T1' } })])
+        .mockReturnValueOnce(refresh.promise)
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+      vi.mocked(budgetApi.saveRow).mockResolvedValue({
+        cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 5000, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 5000, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: 'T3', editable: true, lock_reason: 'none',
+      })
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+      input.focus()
+      fireEvent.change(input, { target: { value: '5000' } }) // typed, not yet committed
+      expect(input).toHaveValue('5,000')
+
+      fireEvent(window, new Event('focus'))
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+      // Someone else touched ANOTHER month of this row: same m01, fresh updated_at, new SAP figure.
+      refresh.handle.resolve([makeRow('CC1', '5211800030', { sap: sapLayer({ m01: 250 }), pending: { ...makeRow('x', 'y').pending, m01: 100, total_year: 100, updated_at: 'T2' } })])
+      await waitFor(() => expect(sapCell()).toHaveTextContent('250')) // the refresh really landed
+
+      const sameInput = screen.getByTestId('pending-input-CC1-5211800030-m01')
+      expect(sameInput).toBe(input)
+      expect(sameInput).toHaveValue('5,000')
+      expect(document.activeElement).toBe(sameInput)
+
+      fireEvent.blur(sameInput)
+      await waitFor(() =>
+        expect(budgetApi.saveRow).toHaveBeenCalledWith(expect.objectContaining({ m01: 5000, expected_updated_at: 'T2' })),
+      )
+    })
+
+    it('a save that completes WHILE a background refresh is in flight is never reverted by that refresh\'s older snapshot', async () => {
+      const staleRefresh = pendingRefresh()
+      let resolveSave: (saved: Awaited<ReturnType<typeof budgetApi.saveRow>>) => void = () => {}
+      vi.mocked(budgetApi.fetchBudgetGrid)
+        .mockResolvedValueOnce([pendingRow(100, 'T1')])
+        .mockReturnValueOnce(staleRefresh.promise)
+        .mockResolvedValueOnce([pendingRow(900, 'T2')]) // the re-run once the stale snapshot is discarded
+      vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+      vi.mocked(budgetApi.saveRow).mockImplementation(() => new Promise((resolve) => { resolveSave = resolve }))
+
+      render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+      const input = await screen.findByTestId('pending-input-CC1-5211800030-m01')
+      fireEvent.change(input, { target: { value: '900' } })
+      fireEvent.blur(input) // persistRow: the save is in flight
+
+      fireEvent(window, new Event('focus')) // a background refresh starts while the save is still in flight
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2))
+
+      resolveSave({
+        cost_center: 'CC1', gl_account: '5211800030', fiscal_year: 2027,
+        m01: 900, m02: 0, m03: 0, m04: 0, m05: 0, m06: 0, m07: 0, m08: 0, m09: 0, m10: 0, m11: 0, m12: 0,
+        total_year: 900, remark: null, template: 'USER', gl_name: null, gl_group: null, c_level: null, division: null, department: null,
+        updated_at: 'T2', editable: true, lock_reason: 'none',
+      })
+      await tick() // persistRow settles first...
+      staleRefresh.handle.resolve([pendingRow(100, 'T1')]) // ...then the refresh's OLDER snapshot lands
+      await tick()
+
+      expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('900') // never reverted to 100
+      await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(3)) // discarded snapshot -> one re-run
+      await waitFor(() => expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toHaveValue('900'))
+      expect(screen.getByTestId('pending-input-CC1-5211800030-m01')).toBeInTheDocument()
+    })
+
+    // `GET /approval/locked-departments` returns only the caller's OWN Fill ฝ่าย,
+    // while `GET /approval/status.locked` answers for ANY ฝ่าย — comparing the two
+    // for a ฝ่าย the caller does not fill never agrees, so every approver/see-only
+    // viewer of a locked ฝ่าย used to reload the whole grid on EVERY tab focus.
+    describe('focus/visibility lock revalidation compares like with like (own Fill ฝ่าย only)', () => {
+      function fireFocusAndVisibility(times: number) {
+        Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+        for (let i = 0; i < times; i++) {
+          fireEvent(window, new Event('focus'))
+          fireEvent(document, new Event('visibilitychange'))
+        }
+      }
+
+      it('a see-only caller viewing a LOCKED ฝ่าย never revalidates: no GET /approval/status, no grid reload', async () => {
+        const seeOnlyScope: ScopeState = { ...SCOPE, role: 'see_only', fillCostCenters: [], seeCostCenters: ['CC1'] }
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030', { editable: false })])
+        // The server's real answer for an approver: nothing locked among THEIR (empty) Fill ฝ่าย.
+        vi.mocked(approvalApi.fetchLockedDepartments).mockResolvedValue({ departments: [], year_not_open: false })
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+
+        render(<BudgetGrid scope={seeOnlyScope} initialFilter={{ dept: null, year: 2027 }} />)
+        expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+        // ApprovalActionBar fetches its own status once on mount — settle on that
+        // baseline so the assertions below isolate what focus itself triggers.
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
+        vi.mocked(budgetApi.fetchBudgetGrid).mockClear()
+
+        fireFocusAndVisibility(3)
+        await tick()
+
+        expect(approvalApi.fetchApprovalStatus).not.toHaveBeenCalled()
+        expect(budgetApi.fetchBudgetGrid).not.toHaveBeenCalled()
+      })
+
+      it('revalidates only while the selected ฝ่าย is one the caller FILLS — and follows the picker', async () => {
+        // Fills Warehouse (CC2), only sees Solution Delivery (CC1) — which sorts first and is auto-selected.
+        const mixedScope: ScopeState = { ...SCOPE, fillCostCenters: ['CC2'], seeCostCenters: ['CC1', 'CC2'] }
+        vi.mocked(budgetApi.fetchDepartments).mockResolvedValue(twoDepartments)
+        vi.mocked(budgetApi.fetchBudgetGrid).mockImplementation(({ department }) =>
+          Promise.resolve([department === 'Warehouse' ? makeRow('CC2', '5211800030', { department: 'Warehouse' }) : makeRow('CC1', '5211800030')]),
+        )
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+
+        render(<BudgetGrid scope={mixedScope} initialFilter={{ dept: null, year: 2027 }} />)
+        expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1))
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
+
+        fireFocusAndVisibility(1) // Solution Delivery: seen, not filled -> nothing to compare against
+        await tick()
+        expect(approvalApi.fetchApprovalStatus).not.toHaveBeenCalled()
+
+        switchDepartment('Warehouse')
+        expect(await screen.findByTestId('txn-CC2-5211800030')).toBeInTheDocument()
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledTimes(1)) // the bar's own fetch for Warehouse
+        vi.mocked(approvalApi.fetchApprovalStatus).mockClear()
+        vi.mocked(budgetApi.fetchBudgetGrid).mockClear()
+
+        fireFocusAndVisibility(1) // Warehouse: filled -> revalidation is live again
+        await waitFor(() => expect(approvalApi.fetchApprovalStatus).toHaveBeenCalledWith('Warehouse', 2027))
+        await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalled()) // locked on the server, open on this tab -> reload
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenLastCalledWith(expect.objectContaining({ department: 'Warehouse' }))
+      })
+
+      it('a filler\'s OWN ฝ่าย that just became locked reloads once on focus, then later focus/visibility events do not reload again', async () => {
+        vi.mocked(budgetApi.fetchBudgetGrid).mockResolvedValue([makeRow('CC1', '5211800030')])
+        vi.mocked(approvalApi.fetchLockedDepartments)
+          .mockResolvedValueOnce({ departments: [], year_not_open: false }) // mount: open
+          .mockResolvedValue({ departments: ['Solution Delivery'], year_not_open: false }) // once the lock is discovered
+        vi.mocked(approvalApi.fetchApprovalStatus).mockResolvedValue(approvalStatus(true))
+
+        render(<BudgetGrid scope={SCOPE} initialFilter={{ dept: null, year: 2027 }} />)
+        expect(await screen.findByTestId('txn-CC1-5211800030')).toBeInTheDocument()
+        await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(1))
+
+        fireEvent(window, new Event('focus'))
+        await waitFor(() => expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2)) // the ONE reload
+        // The refreshed lock list reaches the tab: "+ เพิ่ม Transaction" locks itself.
+        await waitFor(() => expect(screen.getByRole('button', { name: /เพิ่ม transaction/i })).toBeDisabled())
+        const statusCallsSoFar = vi.mocked(approvalApi.fetchApprovalStatus).mock.calls.length
+
+        fireFocusAndVisibility(2) // converged: server and tab now agree the ฝ่าย is locked
+        await waitFor(() => expect(vi.mocked(approvalApi.fetchApprovalStatus).mock.calls.length).toBeGreaterThan(statusCallsSoFar))
+        await tick()
+        expect(budgetApi.fetchBudgetGrid).toHaveBeenCalledTimes(2)
+      })
     })
   })
 })

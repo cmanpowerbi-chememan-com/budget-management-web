@@ -2,7 +2,7 @@
  * approve/reject, required reject reason, resubmit chain-reset, and a
  * concurrent-approve 409. The approver here is `see_only` (not necessarily a
  * Filler of the department they approve) per the project's own decision. */
-import { approvalState, approverWorld, DEEP_LINK_YEAR, DEPT, DEPT2, err, installMocks, ok, PLANNING_YEAR, test, expect } from './fixtures'
+import { approvalState, approverWorld, CC, DEEP_LINK_YEAR, DEPT, DEPT2, err, GL_OFFICE_COST, installMocks, makeBudgetRow, ok, PLANNING_YEAR, test, expect } from './fixtures'
 
 test.describe('approver journey', () => {
   test('2.1 the Pending badge marks only the department pending on this approver', async ({ page }) => {
@@ -156,5 +156,36 @@ test.describe('approver journey', () => {
     await expect(page.getByTestId('approval-action-message')).toContainText('ข้อมูลนี้ถูกแก้ไขโดยผู้อื่น')
     // load() ran again after the 409 — the chip reflects the FRESH (position 2) truth.
     await expect(page.getByTestId('approval-status-chip')).toContainText('Step 2')
+  })
+
+  // prd report 2026-10-07 "หน้าจอกระพริบ + เลื่อนขึ้นบนสุด": the focus-revalidation
+  // compared `GET /approval/status.locked` (any ฝ่าย) with `GET /approval/locked-
+  // departments` (the caller's OWN Fill ฝ่าย only). An approver fills none, so for
+  // a locked ฝ่าย the two never agreed and EVERY tab focus reloaded the whole grid.
+  test('2.6 an approver on a LOCKED ฝ่าย returning to the tab never reloads the grid', async ({ page }) => {
+    const world = approverWorld({
+      budgetGridQueue: [[makeBudgetRow({ costCenter: CC, glAccount: GL_OFFICE_COST, editable: false, pending: { m01: 100 }, pendingUpdatedAt: 'PEND-1' })]],
+      lockedDepartments: [], // the real answer for an approver: they fill nothing, so nothing of theirs is locked...
+      approvalStatusByDept: {
+        // ...while the ฝ่าย on screen IS locked (mid-approval).
+        [DEPT]: approvalState({ department: DEPT, status: 'PENDING_APPROVER2', current_position: 2, current_approver_empcode: '999999', locked: true }),
+      },
+    })
+    await installMocks(page, world)
+    const gridFetches = () => world.captured.budgetQueries.filter((q) => q.department === DEPT).length
+
+    await page.goto(`/?dept=${encodeURIComponent(DEPT)}&year=${DEEP_LINK_YEAR}`)
+    await expect(page.getByTestId(`pending-cell-${CC}-${GL_OFFICE_COST}-m01`)).toBeVisible()
+    await expect(page.getByTestId('approval-status-chip')).toContainText('Pending')
+    await expect.poll(gridFetches).toBe(1)
+    const statusCallsBefore = world.captured.approvalStatusQueries.length
+
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+      await page.waitForTimeout(300) // far longer than a mocked round trip: a revalidation (and its reload) would have landed
+    }
+
+    expect(gridFetches(), 'grid reloads caused by 3 tab focuses').toBe(1)
+    expect(world.captured.approvalStatusQueries.length, 'revalidation requests for a ฝ่าย the approver does not fill').toBe(statusCallsBefore)
   })
 })

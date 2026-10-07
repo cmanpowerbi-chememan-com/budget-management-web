@@ -280,6 +280,14 @@ export interface World {
    * status changed", either mutate this map directly in the test body, or
    * attach an `onServed` hook to a submit/approve/reject queue entry. */
   approvalStatusByDept: Record<string, ApprovalStatusState>
+  /** `GET /approval/locked-departments` — the caller's OWN Fill ฝ่าย that are
+   * currently locked (a see-only/approver caller fills none, so the real
+   * endpoint answers `[]` even for a ฝ่าย whose `/approval/status` says
+   * `locked: true`). Opt-in (2026-10-07): left `undefined` the endpoint stays
+   * UNMOCKED (404), exactly what every spec written before this field ran
+   * against, so only a spec that needs the real answer sets it (mutable, not a
+   * queue — mount-triggered, same StrictMode reasoning as above). */
+  lockedDepartments?: string[]
   submitQueue: Result<ApprovalStatusState>[]
   approveQueue: Result<ApprovalStatusState>[]
   rejectQueue: Result<ApprovalStatusState>[]
@@ -559,6 +567,10 @@ export async function installMocks(page: Page, world: World): Promise<void> {
       const department = url.searchParams.get('department') ?? ''
       const current = world.approvalStatusByDept[department] ?? approvalState({ department })
       return fulfillJson(route, 200, current)
+    }
+
+    if (path === '/approval/locked-departments' && method === 'GET' && world.lockedDepartments) {
+      return fulfillJson(route, 200, { departments: world.lockedDepartments, year_not_open: false })
     }
 
     if (path === '/approval/submit' && method === 'POST') {

@@ -1,4 +1,13 @@
-# Current Phase (2026-10-02)
+# Current Phase (2026-10-07)
+
+## Grid flickers and jumps to the top after a reload — FIXED (prd user report 2026-10-07, frontend only, TDD, committed locally, NOT deployed)
+- [x] **Why:** users reported the grid "flickers and jumps to the very top" (หน้าจอกระพริบ + เลื่อนขึ้นบนสุด); a filler lost their place on every special-GL save.
+- [x] **Root cause:** `loadGrid()` set `loading=true` on every reload and the render swapped `GridTable` for the `.grid-loading` placeholder, so the table and its `.table-wrap` scroller unmounted and came back at the top (repro on a prd-equivalent static build: window scroll 414 → 0, `.table-wrap` 4338 → 0). Triggers: a special-GL subform / Trip Manager save (`handleSpecialSaved`), and the focus/visibility lock revalidation, which compared `/approval/status.locked` (any ฝ่าย) with `/approval/locked-departments` (the caller's OWN fill ฝ่าย only) — for a locked ฝ่าย outside the caller's fill scope (every approver) the two never agreed, so every tab focus reloaded the whole grid.
+- [x] **Fix:** a same-view refresh keeps `GridTable` mounted (`loadedView` / `rowsAreForThisView`; the placeholder only on first load or a year / ฝ่าย / admin-hat switch; a failed refresh keeps the rows plus the error banner); a row write that lands during a refresh discards the older snapshot and re-runs once (`rowWritesRef`); `aria-busy` on the grid; lock revalidation only for a ฝ่าย the caller fills.
+- [x] **Gate:** combined 06/07/08 APPROVE_WITH_SUGGESTIONS; vitest 1056 (+12 new), raw `next build` OK, oxlint OK, Playwright filler + approver 26/26 (new 1.6c, 2.6), mutation matrix 9/9 killed; the real-browser repro harness went from red to 4/4 green.
+- [ ] **Deploy** — awaits jakkaritw approval (side branch off live `2f3fd55` + this frontend; main carries code that must not reach prd yet).
+- [ ] **Follow-up (gate MED):** an approver on a ฝ่าย they do not fill no longer gets any focus-triggered refresh (the old reload loop was what refreshed their ApprovalActionBar) — candidate: refresh only the action bar's status on focus.
+- [ ] **Accepted LOWs:** the pre-existing admin-hat-toggle window can show the old hat's rows under "— เลือกฝ่าย —" while `/scope/departments` loads (server-safe); a refresh landing while a cell's save is still in flight can show the older value until the save's merge restores it (transient).
 
 ## Phase-2 BI concept grilled → NotebookLM one-page 16:9 prompt (2026-10-02, docs only — no code)
 - [x] **Why:** jakkaritw's Phase-2 BI concept (C-Level / AVP branch view, Admin all-GL + subsidiaries, user tracking + planning) was sharpened before generating a one-page management summary in NotebookLM.
