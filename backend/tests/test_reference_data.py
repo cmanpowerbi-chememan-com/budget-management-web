@@ -5,6 +5,8 @@ mocked, no live connection."""
 import logging
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.reference_data import fetch_countries, fetch_departments, fetch_gl_accounts, fetch_travelers
 
 
@@ -384,3 +386,86 @@ def test_fetch_travelers_closes_cursor():
     conn.cursor.return_value.fetchall.return_value = []
     fetch_travelers(conn, "CC1", "a@b.com")
     conn.cursor.return_value.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# fetch_travelers — v_traveler_picker widening (2026-10-12). The view now also
+# emits pick_reason 'peer' / 'skip_report' / 'peer_report'. _PICK_REASON_RANK
+# deliberately still lists only the original four reasons, so these three take
+# _dedupe_picker_rows' default rank 99: their rows are KEPT (never dropped),
+# lose every tie against an original reason, and pick_reason itself is never
+# part of the API output.
+# ---------------------------------------------------------------------------
+
+def test_fetch_travelers_keeps_rows_with_widening_pick_reasons():
+    """A traveler reached only via peer / skip_report / peer_report is
+    returned like any other (not dropped as an unknown reason), sorted by
+    name."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("filler@example.com",)],
+        [
+            _picker_row("E3", "Charlie PeerReport", "Officer", "charlie@example.com", "peer_report"),
+            _picker_row("E1", "Alpha Peer", "Manager", "alpha@example.com", "peer"),
+            _picker_row("E2", "Bravo SkipReport", "Officer", "bravo@example.com", "skip_report"),
+        ],
+    ]
+    rows = fetch_travelers(conn, "CC1", "filler@example.com")
+    assert rows == [
+        {"empcode": "E1", "name": "Alpha Peer", "position": "Manager", "email": "alpha@example.com"},
+        {"empcode": "E2", "name": "Bravo SkipReport", "position": "Officer", "email": "bravo@example.com"},
+        {"empcode": "E3", "name": "Charlie PeerReport", "position": "Officer", "email": "charlie@example.com"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "reasons_in_query_order",
+    [("peer", "manager"), ("manager", "peer")],
+    ids=["peer-row-first", "manager-row-first"],
+)
+def test_fetch_travelers_manager_row_beats_peer_row_for_same_empcode(reasons_in_query_order):
+    """2 Fillers of one cost center reach the same traveler as 'manager' and
+    as 'peer' — the original reason wins whichever row the query returns
+    first. (The emails differ only to make the surviving row observable.)"""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("fillera@example.com",), ("fillerb@example.com",)],
+        [_picker_row("E1", "Alpha Lead", "Manager", f"via-{reason}@example.com", reason) for reason in reasons_in_query_order],
+    ]
+    rows = fetch_travelers(conn, "CC-MULTI", "fillera@example.com")
+    assert rows == [{"empcode": "E1", "name": "Alpha Lead", "position": "Manager", "email": "via-manager@example.com"}]
+
+
+def test_fetch_travelers_widening_reasons_tie_collapses_to_one_row_per_empcode():
+    """The same traveler reached via several widening reasons ties at the
+    default rank 99 — still exactly one row, and the output is identical
+    whichever row wins (every field comes from the traveler row)."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("fillera@example.com",), ("fillerb@example.com",)],
+        [
+            _picker_row("E1", "Alpha Peer", "Officer", "alpha@example.com", "peer"),
+            _picker_row("E1", "Alpha Peer", "Officer", "alpha@example.com", "skip_report"),
+            _picker_row("E1", "Alpha Peer", "Officer", "alpha@example.com", "peer_report"),
+        ],
+    ]
+    rows = fetch_travelers(conn, "CC-MULTI", "fillera@example.com")
+    assert rows == [{"empcode": "E1", "name": "Alpha Peer", "position": "Officer", "email": "alpha@example.com"}]
+
+
+def test_fetch_travelers_output_never_exposes_pick_reason():
+    """pick_reason is an internal ranking input only — no output row carries
+    it, for the original reasons or the widening ones."""
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.side_effect = [
+        [("filler@example.com",)],
+        [
+            _picker_row("E1", "Alpha Lead", "Manager", "alpha@example.com", "manager"),
+            _picker_row("E2", "Bravo Peer", "Manager", "bravo@example.com", "peer"),
+            _picker_row("E3", "Charlie SkipReport", "Officer", "charlie@example.com", "skip_report"),
+            _picker_row("E4", "Delta PeerReport", "Officer", "delta@example.com", "peer_report"),
+        ],
+    ]
+    rows = fetch_travelers(conn, "CC1", "filler@example.com")
+    assert len(rows) == 4
+    assert all("pick_reason" not in row for row in rows)

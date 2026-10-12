@@ -15,8 +15,11 @@ master read:
   COST CENTER BEING EDITED (2026-08-04) — the ฝ่าย/CC the grid has open,
   never the caller's own department (an admin has none). Resolves
   `cost_center` -> its Filler email(s) in `dbo.cc_filler_map` -> the UNION of
-  `dbo.v_traveler_picker` rows for those Fillers (same department + direct
-  manager + manager's manager + direct reports — see
+  `dbo.v_traveler_picker` rows for those Fillers (six relations, widened
+  from three on 2026-10-12: same department; manager chain = direct manager
+  + manager's manager; direct reports; peers = same direct manager;
+  skip-level reports = reports' reports; peers' reports = the reports of
+  the Filler's peers — see
   db/ddl/traveler_picker_views.sql), a SUBSET of `dbo.v_employee_primary`
   which `write_model._lookup_traveler` validates against, so every pickable
   traveler stays save-able. Falls back to the CALLER's own picker rows when
@@ -141,7 +144,14 @@ def fetch_departments(conn: pyodbc.Connection, cost_centers: list[str] | None) -
 # v_traveler_picker's own dedup (view 2 of traveler_picker_views.sql) only
 # collapses ONE filler's rows. Unioning several fillers of the same cost
 # center can reintroduce the same traveler via more than one leg — this
-# keeps the single strongest reason, same priority order as the view.
+# keeps the single strongest reason.
+# The map covers the ORIGINAL four reasons, in the same relative order as the
+# view. The three reasons added by the 2026-10-12 widening (peer /
+# skip_report / peer_report) are intentionally NOT listed: they fall to the
+# default rank 99 in `_dedupe_picker_rows`, which KEEPS the row (ranked below
+# all four listed reasons, as in the view). Ties among them cannot change the
+# response: pick_reason is never returned and every output field comes from
+# the traveler's own row.
 _PICK_REASON_RANK = {"manager": 0, "skip_manager": 1, "direct_report": 2, "same_department": 3}
 
 
@@ -187,7 +197,8 @@ def fetch_travelers(conn: pyodbc.Connection, cost_center: str, caller_email: str
     old caller-only lookup returned rows):
     1. `dbo.cc_filler_map` -> every Filler email mapped to `cost_center` ->
        the UNION of their `dbo.v_traveler_picker` rows (dept + manager chain
-       + direct reports, deduped by empcode — see `_dedupe_picker_rows`).
+       + direct reports + peers + skip-level reports + peers' reports,
+       deduped by empcode — see `_dedupe_picker_rows`).
     2. No Filler mapped to `cost_center` (or the mapped Fillers matched 0
        picker rows) -> the CALLER's own picker rows (today's pre-scoping
        behavior) — e.g. an admin browsing a CC they don't fill.

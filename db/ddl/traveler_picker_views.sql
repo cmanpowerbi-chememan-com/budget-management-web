@@ -20,15 +20,36 @@
 --
 -- Validation vs all 99 distinct cc_filler_map.filler_email (2026-07-19):
 --   99/99 resolve to an employee row; mgr1+mgr2 resolve 100%;
---   picker size min=3 median=7 p75=9 max=46 (3 legs below).
+--   picker size min=3 median=7 p75=9 max=46 (the original 3 legs; widened
+--   2026-10-12, see below).
 --   24 fillers sit in head-seat orgs whose team lives in differently-named
 --   orgs (e.g. 'Fleet Management Department' vs 'Fleet Management Finished
 --   Product') → leg 3 (direct reports) covers them; the 10 genuinely tiny
 --   teams (≤2 people, no reports) still get ≥3 rows (self + mgr1 + mgr2).
 --
+-- 2026-10-12 widening (view 2 only — view 1 untouched). The picker went UP two
+-- levels (mgr1, mgr2) and DOWN one (direct reports) but never sideways, so a
+-- filler could not pick: (a) a peer — someone with the same direct manager,
+-- e.g. a de-facto department head sitting in a differently-named org; (b) a
+-- peer's report — someone whose mgr2 is the filler's mgr1; (c) their own
+-- skip-level reports — someone whose mgr2 is the filler. Three legs added
+-- after leg 3, all on the resolved mgr1_empcode / mgr2_empcode (a NULL manager
+-- matches nothing):
+--   leg 4 'peer'         t.mgr1_empcode = f.mgr1_empcode
+--   leg 5 'skip_report'  t.mgr2_empcode = f.employee_code
+--   leg 6 'peer_report'  t.mgr2_empcode = f.mgr1_empcode
+-- The new reasons rank BELOW every existing one (see the ROW_NUMBER order), so
+-- every (filler, traveler) pair the old view returned keeps its exact
+-- pick_reason: the new view is a strict superset of the old rows. The backend
+-- tolerates unknown reasons (rank 99, row kept) and the API never exposes
+-- pick_reason.
+-- Rollback: db/ddl/rollback/traveler_picker_views_2026-10-12.sql restores the
+-- previous view 2 text (a view holds no data — instant and lossless).
+--
 -- Run order: view 1 then view 2 (v_traveler_picker depends on
 -- v_employee_orgmap). No GO batch separators — Fabric portal query editor
--- runs one statement at a time. Reversible: DROP VIEW both.
+-- runs one statement at a time; to apply only the 2026-10-12 widening, run the
+-- view 2 statement alone. Reversible: DROP VIEW both.
 -- ============================================================================
 
 -- VIEW 1 — one row per employee: normalized dept key + resolved manager chain.
@@ -61,7 +82,8 @@ LEFT JOIN dbo.v_employee_primary m2 ON m2.employee_code = m1.manager_employee_co
 -- several legs (e.g. a direct report who is also a same-dept colleague)
 -- would surface once per leg since pick_reason differs — ROW_NUMBER keeps
 -- exactly one row, priority manager > skip_manager > direct_report >
--- same_department.
+-- same_department > peer > skip_report > peer_report (the 2026-10-12 legs
+-- rank last, so they only ever ADD pairs, never change an existing reason).
 CREATE OR ALTER VIEW dbo.v_traveler_picker AS
 WITH u AS (
     -- leg 1: same department
@@ -86,15 +108,44 @@ WITH u AS (
            'direct_report'
     FROM dbo.v_employee_orgmap f
     JOIN dbo.v_employee_orgmap r ON r.manager_employee_code = f.employee_code
+    UNION ALL
+    -- leg 4 (2026-10-12): peers — same direct manager as the filler (e.g. the
+    -- HR peer / de-facto department head in a differently-named org). Uses the
+    -- resolved mgr1_empcode on both sides: a NULL manager matches nothing.
+    SELECT f.email, f.dept_name, f.division_key,
+           t.employee_code, t.full_name_th, t.job_level_name_en, t.email,
+           'peer'
+    FROM dbo.v_employee_orgmap f
+    JOIN dbo.v_employee_orgmap t ON t.mgr1_empcode = f.mgr1_empcode
+    UNION ALL
+    -- leg 5 (2026-10-12): skip-level reports — people whose manager's manager
+    -- is the filler.
+    SELECT f.email, f.dept_name, f.division_key,
+           t.employee_code, t.full_name_th, t.job_level_name_en, t.email,
+           'skip_report'
+    FROM dbo.v_employee_orgmap f
+    JOIN dbo.v_employee_orgmap t ON t.mgr2_empcode = f.employee_code
+    UNION ALL
+    -- leg 6 (2026-10-12): peers' reports — people whose manager's manager is
+    -- the filler's own manager.
+    SELECT f.email, f.dept_name, f.division_key,
+           t.employee_code, t.full_name_th, t.job_level_name_en, t.email,
+           'peer_report'
+    FROM dbo.v_employee_orgmap f
+    JOIN dbo.v_employee_orgmap t ON t.mgr2_empcode = f.mgr1_empcode
 ),
 ranked AS (
     SELECT u.*,
            ROW_NUMBER() OVER (
                PARTITION BY filler_email, traveler_empcode
-               ORDER BY CASE pick_reason WHEN 'manager'        THEN 1
-                                         WHEN 'skip_manager'   THEN 2
-                                         WHEN 'direct_report'  THEN 3
-                                         ELSE 4 END
+               ORDER BY CASE pick_reason WHEN 'manager'         THEN 1
+                                         WHEN 'skip_manager'    THEN 2
+                                         WHEN 'direct_report'   THEN 3
+                                         WHEN 'same_department' THEN 4
+                                         WHEN 'peer'            THEN 5
+                                         WHEN 'skip_report'     THEN 6
+                                         WHEN 'peer_report'     THEN 7
+                                         ELSE 8 END
            ) AS rn
     FROM u
 )
@@ -104,10 +155,13 @@ FROM ranked
 WHERE rn = 1;
 
 -- ============================================================================
--- Verify (expected: 612 / 8 rows for suchanyay):
---   SELECT COUNT(*) FROM dbo.v_employee_orgmap;
+-- Verify:
+--   SELECT COUNT(*) FROM dbo.v_employee_orgmap;   -- 612 on 2026-07-19 (tracks the HR roster); unchanged by the widening
+--   SELECT pick_reason, COUNT(*) AS n FROM dbo.v_traveler_picker GROUP BY pick_reason;
+--   -- the 4 original reasons keep EXACTLY their pre-widening row counts;
+--   -- only peer / skip_report / peer_report rows are new.
 --   SELECT traveler_name, traveler_position, traveler_email, pick_reason
 --   FROM dbo.v_traveler_picker
---   WHERE filler_email = 'suchanyay@chememan.com'
+--   WHERE filler_email = '<filler_email>'
 --   ORDER BY pick_reason, traveler_name;
 -- ============================================================================

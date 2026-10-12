@@ -1,4 +1,11 @@
-# Current Phase (2026-10-07)
+# Current Phase (2026-10-12)
+
+## Trip traveler picker widened — peers, skip-level reports, peers' reports (2026-10-12, DB view only, committed locally, NOT deployed — awaits jakkaritw deploy approval)
+- [x] **Why:** 3 reports in 5 days (2026-10-08 TK Quarry, 10-09 Commercial Market, 10-12 Safety) of a traveler missing from the Trip Manager picker. The view reached only the filler's HR unit, manager chain (2 levels up) and direct reports (1 level down), so it missed the filler's HR peer (a de-facto department head), a peer's report, and the filler's skip-level reports. Interim fix used by the budget admin: add the person as a filler in `cc dept.xlsx` + an on-demand `cc_filler_map` sync.
+- [x] **Change:** `dbo.v_traveler_picker` (`db/ddl/traveler_picker_views.sql`, view 2 only) gains legs `peer` (same direct manager), `skip_report` (reports' reports), `peer_report` (peers' reports), ranked below the 4 original reasons so every existing pair keeps its reason. No backend/frontend logic change (`pick_reason` never leaves the backend; unknown reasons rank 99, now pinned by 4 unit tests); docstrings + `docs/specs/budget-transactional-data-model.md` updated.
+- [x] **Measure (read-only, live, 2026-10-12 22:19):** live view == rollback text (PRE-CHANGE); superset PASS (0 lost / 0 changed pairs); the 3 reported cases RED -> GREEN 6/6; list size per cost center median 11 -> 45, p90 28 -> 82, max 52 -> 115 (PDPA cap: max <= 150, p90 <= 100 — met).
+- [x] **Gate:** combined 06/07/08 APPROVE-WITH-CONDITIONS (conditions: commit locally before deploy; sha-pinned deploy, no `--force`); offline view harness 37/37, runner harness 153/153, backend reference tests 53 passed.
+- [ ] **Deploy (awaits jakkaritw):** pinned `CREATE OR ALTER` of view 2 on the Fabric SQL DB shared by stg + prd; verify-back + re-measure (4 original reason counts unchanged, targets 6/6). Rollback = `db/ddl/rollback/traveler_picker_views_2026-10-12.sql` (instant, lossless — a view holds no data).
 
 ## Grid flickers and jumps to the top after a reload — FIXED, LIVE on prd 2026-10-07 (rev 0000067, image `budget-web:9a97639`)
 - [x] **Why:** users reported the grid "flickers and jumps to the very top" (หน้าจอกระพริบ + เลื่อนขึ้นบนสุด); a filler lost their place on every special-GL save.
