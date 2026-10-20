@@ -86,3 +86,14 @@ grid-vs-subform lag. Domestic trips (`country_group=1`) are skipped (FX=1, never
 affected) and a per-trip data gap (no `dbo.per_diem_rate` row, or malformed stored trip
 data) is skipped+logged rather than aborting the run. See ADR-0013's addendum
 (2026-07-24) for how this reconciles with the user edit-lock.
+
+## Addendum (2026-10-20) — a per-diem RATE master correction is re-persisted with the same job
+
+The same stored-vs-live gap appears when `dbo.per_diem_rate` is corrected after trips were
+saved: the Trip Manager re-derives with the current rate, while the stored per-diem line
+(read by the grid, approval and exports) stays at the value computed at save time. The fix
+reuses `backend/jobs/repersist_perdiem_fx.py` with `--include-domestic` (most affected trips
+are domestic, which the FX-only run skips). It re-prices all trips including APPROVED
+departments, with approval status unchanged (owner decision 2026-10-20, same rationale
+as the 2026-07-24 FX addendum). The job now writes only trips whose stored months or total
+differ from the fresh derivation, so untouched lines keep their last-editor audit columns.

@@ -427,3 +427,128 @@ def test_invalid_side_between_valid_trips_is_skipped_batch_continues_and_main_ex
     with patch("jobs.repersist_perdiem_fx.run", return_value=summary):
         code = main()
     assert code == 1
+
+
+# ---------------------------------------------------------------------------
+# --include-domestic (per-diem RATE master correction) + skip-unchanged
+# ---------------------------------------------------------------------------
+
+_DOMESTIC_RATE_ROW = {"rate_domestic": Decimal("50"), "rate_asian": None, "rate_other": None}
+_DIMS = {"gl_name": None, "gl_group": None, "c_level": None, "division": None, "department": None}
+
+
+def _stored_row(total, **months):
+    """Stored-line row shaped like the job's query: (total_year, m01..m12)."""
+    return (total,) + tuple(months.get(f"m{i:02d}", 0.0) for i in range(1, 13))
+
+
+def _run_domestic(conn, *, dry_run, include_domestic, rate_row=_DOMESTIC_RATE_ROW):
+    with patch("jobs.repersist_perdiem_fx._lookup_fx", return_value=Decimal("40")), patch(
+        "jobs.repersist_perdiem_fx._lookup_per_diem_rate", return_value=rate_row
+    ) as mock_rate, patch("jobs.repersist_perdiem_fx._upsert_trip_detail_line") as mock_upsert, patch(
+        "jobs.repersist_perdiem_fx._derive_dim_snapshot", return_value=_DIMS
+    ), patch("jobs.repersist_perdiem_fx._recompute_parent_cell") as mock_recompute:
+        summary = _run_with_conn_flag(conn, dry_run, include_domestic)
+    return summary, mock_rate, mock_upsert, mock_recompute
+
+
+def _run_with_conn_flag(conn, dry_run, include_domestic):
+    with patch("jobs.repersist_perdiem_fx.get_fabric_conn") as mock_conn:
+        mock_conn.return_value.__enter__.return_value = conn
+        return run(fiscal_year=2027, dry_run=dry_run, include_domestic=include_domestic)
+
+
+def test_default_mode_still_skips_domestic_and_reports_flags():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    summary, mock_rate, mock_upsert, _ = _run_domestic(conn, dry_run=False, include_domestic=False)
+    mock_rate.assert_not_called()
+    mock_upsert.assert_not_called()
+    assert summary["skipped_domestic"] == 1
+    assert summary["include_domestic"] is False
+    assert summary["unchanged"] == 0
+
+
+def test_include_domestic_reprices_domestic_trip_with_all_zero_stored_line():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    conn.cursor.return_value.fetchone.return_value = _stored_row(0.0)
+    summary, _, mock_upsert, mock_recompute = _run_domestic(conn, dry_run=False, include_domestic=True)
+    mock_upsert.assert_called_once()
+    assert mock_upsert.call_args.args[5]["m01"] == 150.00  # 3 days x 50 domestic, FX ignored
+    mock_recompute.assert_called_once()
+    assert summary["repriced"] == 1
+    assert summary["skipped_domestic"] == 0
+    assert summary["include_domestic"] is True
+    assert summary["total_delta_thb"] == pytest.approx(150.00)
+
+
+def test_unchanged_trip_is_not_written_nor_recomputed_nor_previewed():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    conn.cursor.return_value.fetchone.return_value = _stored_row(150.00, m01=150.00)
+    summary, _, mock_upsert, mock_recompute = _run_domestic(conn, dry_run=False, include_domestic=True)
+    mock_upsert.assert_not_called()
+    mock_recompute.assert_not_called()
+    conn.commit.assert_not_called()
+    assert summary["unchanged"] == 1
+    assert summary["repriced"] == 0
+    assert summary["preview"] == []
+
+
+def test_unchanged_overseas_trip_is_skipped_in_default_mode_too():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(days=5, travel_months="03")]
+    conn.cursor.return_value.fetchone.return_value = _stored_row(20000.00, m03=20000.00)
+    summary, _, mock_upsert, mock_recompute = _run_domestic(
+        conn, dry_run=False, include_domestic=False, rate_row=_ASIAN_RATE_ROW
+    )
+    mock_upsert.assert_not_called()
+    mock_recompute.assert_not_called()
+    assert summary["unchanged"] == 1
+    assert summary["repriced"] == 0
+
+
+def test_changed_month_with_same_total_is_still_written():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    conn.cursor.return_value.fetchone.return_value = _stored_row(150.00, m02=150.00)  # wrong month, same total
+    summary, _, mock_upsert, _ = _run_domestic(conn, dry_run=False, include_domestic=True)
+    mock_upsert.assert_called_once()
+    assert summary["repriced"] == 1
+    assert summary["unchanged"] == 0
+
+
+def test_dry_run_with_include_domestic_writes_nothing():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    conn.cursor.return_value.fetchone.return_value = _stored_row(0.0)
+    summary, _, mock_upsert, mock_recompute = _run_domestic(conn, dry_run=True, include_domestic=True)
+    mock_upsert.assert_not_called()
+    mock_recompute.assert_not_called()
+    conn.commit.assert_not_called()
+    assert summary["repriced"] == 1
+    assert summary["preview"][0]["new_total"] == 150.00
+
+
+def test_trip_with_no_stored_line_is_still_written():
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [_trip_row(country_group=1, days=3, travel_months="01")]
+    conn.cursor.return_value.fetchone.return_value = None
+    summary, _, mock_upsert, mock_recompute = _run_domestic(conn, dry_run=False, include_domestic=True)
+    mock_upsert.assert_called_once()
+    mock_recompute.assert_called_once()
+    assert summary["repriced"] == 1
+    assert summary["preview"][0]["old_total"] == 0.0
+
+
+def test_main_passes_include_domestic_flag(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["repersist_perdiem_fx", "--fiscal-year", "2027", "--include-domestic"])
+    fake_summary = {
+        "fiscal_year": 2027, "fx_rate": 40.0, "scanned": 0, "repriced": 0, "unchanged": 0,
+        "skipped_domestic": 0, "skipped_missing_rate": 0, "skipped_invalid": 0,
+        "total_delta_thb": 0.0, "preview": [], "include_domestic": True,
+    }
+    with patch("jobs.repersist_perdiem_fx.run", return_value=fake_summary) as mock_run:
+        assert main() == 0
+    assert mock_run.call_args.kwargs["include_domestic"] is True

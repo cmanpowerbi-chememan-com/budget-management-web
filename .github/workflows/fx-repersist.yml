@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      include_domestic:
+        description: "Also re-price domestic trips (use after a per-diem rate master correction)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   fx-repersist:
@@ -62,4 +67,5 @@ jobs:
         run: |
           ARGS="--fiscal-year ${{ inputs.fiscal_year }}"
           if [ "${{ inputs.execute }}" = "true" ]; then ARGS="$ARGS --run"; fi
+          if [ "${{ inputs.include_domestic }}" = "true" ]; then ARGS="$ARGS --include-domestic"; fi
           python -m jobs.repersist_perdiem_fx $ARGS

@@ -47,12 +47,20 @@ reason to abort the whole fiscal year's re-price — caught the same way as
 as `skipped_invalid`, logged, and the batch continues.
 
 Domestic trips (`country_group=1`, decision 4) always use FX=1, so a
-USD-rate change never affects them — skipped for every run, reported
-separately so "0 domestic touched" is visibly a choice, not a miss.
+USD-rate change never affects them — skipped by default, reported separately
+so "0 domestic touched" is visibly a choice, not a miss.
+
+The job also closes the gap after a `dbo.per_diem_rate` master edit (a RATE
+change, not only FX): a trip saved while the rate was wrong keeps a stale
+stored line. That case needs `--include-domestic`, because most such trips are
+domestic. Skip-unchanged keeps the write set to exactly the trips whose stored
+value (all 12 months and the total, at 2 dp) differs from the fresh derivation,
+so untouched lines keep their last-editor audit columns.
 
 Run (from `backend/`):
     python -m jobs.repersist_perdiem_fx --fiscal-year 2027         # dry-run preview (default)
     python -m jobs.repersist_perdiem_fx --fiscal-year 2027 --run   # actually write
+    python -m jobs.repersist_perdiem_fx --fiscal-year 2027 --include-domestic --run  # rate-master fix
 """
 import argparse
 import logging
@@ -109,25 +117,37 @@ def _fetch_trips_for_year(conn, fiscal_year: int) -> list[dict]:
     return trips
 
 
-def _fetch_current_total(conn, trip_id: int, gl_account: str) -> float:
-    """The per-diem detail line's currently-stored `total_year` for
-    (trip_id, gl_account), or 0.0 if no line exists yet — the "old" side of
-    the old->new report and the THB-delta calculation."""
+_MONTH_KEYS: tuple[str, ...] = tuple(f"m{i:02d}" for i in range(1, 13))
+_CENT = Decimal("0.01")
+
+
+def _cents(value) -> Decimal:
+    return Decimal(str(value or 0)).quantize(_CENT)
+
+
+def _fetch_stored_line(conn, trip_id: int, gl_account: str) -> tuple[Decimal, list[Decimal]] | None:
+    """The per-diem detail line's currently-stored `(total_year, [m01..m12])`
+    for (trip_id, gl_account), or None if no line exists yet. Feeds both the
+    "old" side of the old->new report and the skip-unchanged comparison."""
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT total_year FROM budget.pending_budget_detail WHERE trip_id = ? AND gl_account = ?",
+            f"SELECT total_year, {', '.join(_MONTH_KEYS)} FROM budget.pending_budget_detail "
+            "WHERE trip_id = ? AND gl_account = ?",
             trip_id, gl_account,
         )
         row = cursor.fetchone()
     finally:
         cursor.close()
-    return float(row[0]) if row else 0.0
+    if not row:
+        return None
+    return _cents(row[0]), [_cents(v) for v in row[1:]]
 
 
-def run(fiscal_year: int, dry_run: bool) -> dict:
-    """Re-persist per-diem for every overseas trip of `fiscal_year`. Returns
-    a summary dict: `scanned, repriced, skipped_domestic,
+def run(fiscal_year: int, dry_run: bool, include_domestic: bool = False) -> dict:
+    """Re-persist per-diem for every trip of `fiscal_year` (overseas only unless
+    `include_domestic`). Returns a summary dict: `scanned, repriced, unchanged,
+    include_domestic, skipped_domestic,
     skipped_missing_rate, skipped_invalid, total_delta_thb, preview`
     (preview = per-trip old->new for up to `_PREVIEW_LIMIT` trips, populated
     in both modes).
@@ -147,6 +167,7 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
         trips = _fetch_trips_for_year(conn, fiscal_year)
         scanned = len(trips)
         repriced = 0
+        unchanged = 0
         skipped_domestic = 0
         skipped_missing_rate = 0
         skipped_invalid = 0
@@ -158,7 +179,7 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
         for trip in trips:
             trip_id = trip["trip_id"]
 
-            if trip["country_group"] == _DOMESTIC_COUNTRY_GROUP:
+            if trip["country_group"] == _DOMESTIC_COUNTRY_GROUP and not include_domestic:
                 skipped_domestic += 1
                 continue
 
@@ -205,7 +226,11 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
                 continue
 
             new_total = round(sum(months.values()), 2)
-            old_total = _fetch_current_total(conn, trip_id, gl_account)
+            stored = _fetch_stored_line(conn, trip_id, gl_account)
+            if stored is not None and stored[0] == _cents(new_total) and stored[1] == [_cents(months[k]) for k in _MONTH_KEYS]:
+                unchanged += 1
+                continue
+            old_total = float(stored[0]) if stored else 0.0
             delta = Decimal(str(new_total)) - Decimal(str(old_total))
 
             if len(preview) < _PREVIEW_LIMIT:
@@ -249,6 +274,8 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
             "fx_rate": float(fx),
             "scanned": scanned,
             "repriced": repriced,
+            "unchanged": unchanged,
+            "include_domestic": include_domestic,
             "skipped_domestic": skipped_domestic,
             "skipped_missing_rate": skipped_missing_rate,
             "skipped_invalid": skipped_invalid,
@@ -256,10 +283,10 @@ def run(fiscal_year: int, dry_run: bool) -> dict:
             "preview": preview,
         }
         logger.info(
-            "fiscal_year=%s fx=%s: scanned=%d repriced=%d skipped_domestic=%d skipped_missing_rate=%d "
-            "skipped_invalid=%d total_delta_thb=%.2f dry_run=%s",
-            fiscal_year, fx, scanned, repriced, skipped_domestic, skipped_missing_rate, skipped_invalid,
-            float(total_delta), dry_run,
+            "fiscal_year=%s fx=%s: scanned=%d repriced=%d unchanged=%d skipped_domestic=%d skipped_missing_rate=%d "
+            "skipped_invalid=%d total_delta_thb=%.2f dry_run=%s include_domestic=%s",
+            fiscal_year, fx, scanned, repriced, unchanged, skipped_domestic, skipped_missing_rate, skipped_invalid,
+            float(total_delta), dry_run, include_domestic,
         )
         return summary
 
@@ -270,7 +297,9 @@ def main() -> int:
         description=(
             "FX reconciliation: re-persist every fiscal_year trip's stored per-diem with the "
             "CURRENT dbo.master_currency_rate FX. Re-prices ALL trips regardless of approval "
-            "status (GATE decision 2026-07-24) — see module docstring."
+            "status (GATE decision 2026-07-24). Writes only trips whose stored value differs; "
+            "with --include-domestic it also fixes domestic trips after a dbo.per_diem_rate master "
+            "correction — see module docstring."
         )
     )
     parser.add_argument("--fiscal-year", type=int, required=True, help="the fiscal year to re-persist (no auto-detect)")
@@ -278,12 +307,16 @@ def main() -> int:
         "--run", action="store_true",
         help="actually write (default: dry-run preview only, never-cut safety rule)",
     )
+    parser.add_argument(
+        "--include-domestic", action="store_true",
+        help="also re-price domestic trips (needed after a dbo.per_diem_rate master correction)",
+    )
     args = parser.parse_args()
     dry_run = not args.run
 
     logger.info("starting repersist_perdiem_fx fiscal_year=%s dry_run=%s", args.fiscal_year, dry_run)
     try:
-        summary = run(args.fiscal_year, dry_run=dry_run)
+        summary = run(args.fiscal_year, dry_run=dry_run, include_domestic=args.include_domestic)
     except FxRateMissingError as exc:
         logger.error(str(exc))
         return 1
