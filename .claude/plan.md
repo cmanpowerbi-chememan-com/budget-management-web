@@ -1,4 +1,11 @@
-# Current Phase (2026-10-12)
+# Current Phase (2026-10-20)
+
+## Per-diem stuck at 0 after the rate-master fix — FIXED on prd 2026-10-20 13:4x BKK (data re-persist, commit `a59c4dc`, not pushed)
+- [x] **Why:** the budget officer saw per-diem GL lines at 0 in the officer-review file while the Trip Manager showed money for the same trips.
+- [x] **Root cause:** trips saved while `dbo.per_diem_rate` held 0.00 for Driver/Operator levels (saves 2026-10-01..10-16) stored a 0 per-diem line; the rate master was corrected afterwards. The Trip Manager re-derives on read (ADR-0015); grid, approval, exports and the officer file read the stored line, so the reconcile (file = web = Fabric) agreed on 0. All affected departments were APPROVED (edit-locked).
+- [x] **Fix:** `jobs/repersist_perdiem_fx.py` gains `--include-domestic` + skip-unchanged (writes only trips whose stored months/total differ); workflow input `include_domestic`; ADR-0015 addendum. One trip was fixed first by an admin re-save (proves that path works, status stays APPROVED); the job re-persisted the other 8 locally (never via Actions — the job logs amounts, repo is public), 202 unchanged.
+- [x] **Gate + verify:** combined 06/07/08 APPROVE_WITH_SUGGESTIONS, full backend suite 1370 passed; after the run: 0 trips with stored != derived, parent cells == detail sums on all 4 cost centers; officer-review file re-published + mailed (run 39381523553).
+- [ ] **Follow-ups (optional, not done):** gate LOWs — `_MONTH_KEYS` duplicates `MONTH_COLUMNS`; tests lack Decimal odd-split / total-only / mixed-batch cases; `fiscal_year` still inlined in `fx-repersist.yml` `run:`. Domestic rates for CEO / C-Level / VP / AVP are still 0 — if that master is corrected, re-run the job with `--include-domestic` (locally).
 
 ## Trip traveler picker widened — peers, skip-level reports, peers' reports — LIVE 2026-10-12 22:22 BKK (DB view only, commit `ec4ed69`, not pushed)
 - [x] **Why:** 3 reports in 5 days (2026-10-08 TK Quarry, 10-09 Commercial Market, 10-12 Safety) of a traveler missing from the Trip Manager picker. The view reached only the filler's HR unit, manager chain (2 levels up) and direct reports (1 level down), so it missed the filler's HR peer (a de-facto department head), a peer's report, and the filler's skip-level reports. Interim fix used by the budget admin: add the person as a filler in `cc dept.xlsx` + an on-demand `cc_filler_map` sync.
