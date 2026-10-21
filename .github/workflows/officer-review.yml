@@ -2,9 +2,11 @@
 #
 # Purpose: runs daily at 04:40 Bangkok time (PRD #36 — moved from 07:10 to
 # absorb GitHub's own scheduling lag; see the schedule note below). A
-# SCHEDULED run only proceeds on a Friday (Bangkok), or on any day up to the
-# DAILY WINDOW date below; on other days it skips after the guard step (no
-# build, no publish, no mail) and exits green. A run that proceeds builds the
+# SCHEDULED run proceeds on a Friday (Bangkok), or on any day up to and
+# including the planning year's submission deadline
+# (`dbo.submission_deadline.deadline_date`, loaded from the closing-date
+# master owned by budget staff). The job decides (`--scheduled`); skipped days
+# exit green with no build, no publish, no mail. A run that proceeds builds the
 # officer-review budget workbook from live production data, gates it on the
 # file=web=Fabric reconcile, and — only on a live run — overwrites ONE file in
 # the `officer review/` SharePoint folder and mails the budget officers ONE
@@ -16,10 +18,7 @@
 # false — no commit, no redeploy. That takes the SCHEDULE back to a preview
 # only; a human can still reach a real run via workflow_dispatch `execute`.
 #
-# DAILY WINDOW: set the repo variable OFFICER_REVIEW_DAILY_UNTIL=YYYY-MM-DD
-# to run every day up to and including that Bangkok date (e.g. the
-# submission deadline); unset, malformed or past -> back to Friday only. No
-# commit needed. workflow_dispatch runs are never skipped by this guard.
+# Manual workflow_dispatch runs are never skipped by the daily window.
 #
 # Required secrets: FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE, GOLD_SQL_SERVER,
 # GOLD_SQL_DATABASE, FABRIC_AAD_CLIENT_ID, FABRIC_AAD_CLIENT_SECRET,
@@ -31,9 +30,7 @@
 # Actions run page; a REAL run with none configured FAILs before publishing,
 # never sends nothing silently — fix round 2026-09-24, R3).
 # Required vars: AUTOMATION_FISCAL_YEAR (shared with budget-automations.yml),
-# OFFICER_REVIEW_LIVE (kill switch, unset/false = schedule stays PREVIEW),
-# OFFICER_REVIEW_DAILY_UNTIL (optional, YYYY-MM-DD daily-window end date,
-# unset = Friday only).
+# OFFICER_REVIEW_LIVE (kill switch, unset/false = schedule stays PREVIEW).
 #
 # This workflow is DELIBERATELY separate from budget-automations.yml (PRD
 # story 29) — reminders are ARMED for real sends 30 Sep-15 Oct 2026, and this
@@ -49,14 +46,14 @@
 # scheduled run (2026-09-25) started 4 h 39 min late. PRD #36 moved the cron
 # from 07:10 to 04:40 Bangkok specifically to absorb that lag and still
 # usually land before the working day starts (the cron now fires daily at
-# 04:40; the guard step turns non-window days into a no-op) — it is not
+# 04:40; the job turns non-window days into a no-op) — it is not
 # guaranteed before 07:10 on every run. A manual workflow_dispatch starts
 # within seconds and is the fallback for a late or dropped run.
 name: Officer Review Weekly
 
 on:
   schedule:
-    - cron: "40 21 * * *"  # daily 21:40 UTC = 04:40 Bangkok (UTC+7) — PRD #36; the guard step decides whether a scheduled run proceeds (Friday always; other days only up to OFFICER_REVIEW_DAILY_UNTIL)
+    - cron: "40 21 * * *"  # daily 21:40 UTC = 04:40 Bangkok (UTC+7) — PRD #36; the job (--scheduled) decides: Friday always, other days only up to the submission deadline
   workflow_dispatch:
     inputs:
       fiscal_year:
@@ -95,44 +92,12 @@ jobs:
       EXECUTE_INPUT: ${{ inputs.execute }}
       PROBE_INPUT: ${{ inputs.probe }}
       EVENT_NAME: ${{ github.event_name }}
-      DAILY_UNTIL: ${{ vars.OFFICER_REVIEW_DAILY_UNTIL }}
 
     steps:
-      - name: Daily window guard (scheduled runs only)
-        id: window
-        run: |
-          TODAY=$(TZ=Asia/Bangkok date +%F)
-          DOW=$(TZ=Asia/Bangkok date +%u)
-          if [ "$EVENT_NAME" != "schedule" ]; then
-            RUN=true
-            REASON="manual dispatch"
-          else
-            DAILY_UNTIL="${DAILY_UNTIL//[[:space:]]/}"
-            if [ -n "$DAILY_UNTIL" ] && [[ ! "$DAILY_UNTIL" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-              echo "::warning::OFFICER_REVIEW_DAILY_UNTIL is not YYYY-MM-DD — treating it as unset (Friday only)."
-              DAILY_UNTIL=""
-            fi
-            if [ "$DOW" = "5" ]; then
-              RUN=true
-              REASON="weekly Friday run"
-            elif [ -n "$DAILY_UNTIL" ] && ! [[ "$TODAY" > "$DAILY_UNTIL" ]]; then
-              RUN=true
-              REASON="daily window (up to and including $DAILY_UNTIL)"
-            else
-              RUN=false
-              REASON="outside the daily window"
-              echo "::notice::Bangkok date $TODAY is outside the daily window — skipping (no publish, no mail)."
-            fi
-          fi
-          echo "run=$RUN" >> "$GITHUB_OUTPUT"
-          echo "Window decision: TODAY=$TODAY DOW=$DOW DAILY_UNTIL=${DAILY_UNTIL:-unset} event=$EVENT_NAME run=$RUN — $REASON"
-
       - name: Checkout code
-        if: steps.window.outputs.run == 'true'
         uses: actions/checkout@v4
 
       - name: Resolve fiscal year (fail loudly rather than act on the wrong year)
-        if: steps.window.outputs.run == 'true'
         run: |
           if [ -z "$FISCAL_YEAR" ]; then
             echo "::error::No planning fiscal year. Pass the workflow_dispatch input, or set the AUTOMATION_FISCAL_YEAR repo variable for scheduled runs."
@@ -145,25 +110,22 @@ jobs:
           echo "Acting on planning fiscal year: $FISCAL_YEAR (execute=$EXECUTE_INPUT, probe=$PROBE_INPUT)"
 
       - name: Install ODBC Driver 17 for SQL Server
-        if: steps.window.outputs.run == 'true'
         run: |
           sudo apt-get update -qq
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
 
       - name: Set up Python
-        if: steps.window.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install Python dependencies
-        if: steps.window.outputs.run == 'true'
         working-directory: backend
         run: pip install -r requirements.txt
 
       - name: "Probe: permissions + connectivity (read-only)"
-        if: steps.window.outputs.run == 'true' && inputs.probe == true
+        if: inputs.probe == true
         working-directory: backend
         env:
           FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
@@ -176,7 +138,7 @@ jobs:
         run: python -m jobs.officer_review --fiscal-year "$FISCAL_YEAR" --probe
 
       - name: Build + reconcile + (real run only) publish and mail
-        if: steps.window.outputs.run == 'true' && inputs.probe != true
+        if: inputs.probe != true
         working-directory: backend
         env:
           FABRIC_SQL_SERVER: ${{ secrets.FABRIC_SQL_SERVER }}
@@ -216,5 +178,8 @@ jobs:
           ARGS=(--fiscal-year "$FISCAL_YEAR")
           if [ "$MODE" = "REAL" ]; then
             ARGS+=(--execute)
+          fi
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            ARGS+=(--scheduled)
           fi
           python -m jobs.officer_review "${ARGS[@]}"

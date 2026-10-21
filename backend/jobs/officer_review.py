@@ -30,7 +30,7 @@ import os
 import re
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -40,6 +40,7 @@ from app import notifications
 from app.attachments import GRAPH_BASE, _resolve_site_and_drive
 from app.config import Settings, get_settings
 from app.db import get_fabric_conn, get_gold_conn
+from app.deadline import bangkok_today, get_deadline_date
 from app.officer_notify import notify_officer_review
 from app.officer_publisher import OFFICER_FOLDER_NAME, OfficerPublishError, publish_officer_workbook
 from app.officer_reconcile import ReconcileResult, reconcile
@@ -159,6 +160,40 @@ def parse_recipients(raw: str) -> tuple[list[str], int]:
         seen.add(key)
         out.append(addr)
     return out, dropped
+
+
+def _today() -> date:
+    """Bangkok "today" — a seam so tests can freeze the day."""
+    return bangkok_today()
+
+
+def decide_window(settings: Settings, planning_year: int) -> bool:
+    """`--scheduled` daily window: proceed on a Bangkok Friday, or on any day
+    up to and including the planning year's submission deadline. Fails toward
+    NOT sending (a DB error or missing deadline row skips); the Friday run
+    needs no DB read and is the guaranteed one. Returns True to proceed."""
+    today = _today()
+    if today.isoweekday() == 5:
+        logger.info("WINDOW: proceed — weekly Friday run (today=%s)", today)
+        return True
+    try:
+        with get_fabric_conn(settings) as conn:
+            deadline = get_deadline_date(conn, planning_year)
+    except Exception as exc:  # noqa: BLE001 — never log the message (may carry connection detail)
+        logger.warning("WINDOW: skip — could not read deadline (%s)", type(exc).__name__)
+        print(
+            f"::warning::officer-review daily window skipped: could not read the submission deadline ({type(exc).__name__})",
+            flush=True,
+        )
+        return False
+    if deadline is None:
+        logger.info("WINDOW: skip — no submission deadline row (today=%s, deadline=none)", today)
+        return False
+    if today > deadline:
+        logger.info("WINDOW: skip — past the submission deadline (today=%s, deadline=%s)", today, deadline)
+        return False
+    logger.info("WINDOW: proceed — up to the submission deadline (today=%s, deadline=%s)", today, deadline)
+    return True
 
 
 def _ensure_gold_configured(settings: Settings) -> None:
@@ -441,6 +476,7 @@ def main() -> int:
     add_common_args(parser)
     parser.add_argument("--probe", action="store_true", help="read-only permission check only; no build, no write")
     parser.add_argument("--out", type=str, default=None, help="local path to also write the built xlsx bytes to (never passed in CI)")
+    parser.add_argument("--scheduled", action="store_true", help="scheduled run: proceed only on Friday or up to the submission deadline; else exit 0 without building")
     args = parser.parse_args()
 
     # OPS-9 fix round 2026-09-24: `get_settings()` now runs INSIDE the try —
@@ -459,6 +495,9 @@ def main() -> int:
 
         if args.probe:
             return run_probe(settings)
+
+        if args.scheduled and not decide_window(settings, args.fiscal_year):
+            return 0
 
         recipients, dropped = parse_recipients(os.getenv("OFFICER_REVIEW_RECIPIENTS", ""))
         logger.info("RECIPIENTS: valid=%d dropped=%d", len(recipients), dropped)

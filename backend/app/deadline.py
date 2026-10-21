@@ -79,6 +79,20 @@ def bangkok_today() -> date:
     return datetime.now(_BANGKOK_TZ).date()
 
 
+def get_deadline_date(conn: pyodbc.Connection, fiscal_year: int) -> date | None:
+    """Return the year's `deadline_date`, or None when there is no row or the
+    column is NULL. Used by the officer-review daily window only — the budget
+    write gate keeps its own query in `fiscal_year_state` on purpose
+    (behaviour must not change)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT deadline_date FROM dbo.submission_deadline WHERE fiscal_year = ?", fiscal_year)
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    return None if row is None else row[0]
+
+
 def fiscal_year_state(conn: pyodbc.Connection, fiscal_year: int) -> FiscalYearState:
     """ONE query, ONE source of truth for where `fiscal_year` sits relative
     to `dbo.submission_deadline` (see the module docstring's 3-state table).
